@@ -46,8 +46,17 @@ jobs:
           Write-Host "Release tag will be: $tag"
           "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
+          # Look up the existing release for this tag, if any.
+          # `gh release view` exits non-zero when not found — that's expected,
+          # so swallow the error and reset $LASTEXITCODE so the step doesn't fail.
+          $json = gh release view $tag --json isDraft 2>$null
+          $existing = $null
+          if ($LASTEXITCODE -eq 0 -and $json) {
+            $existing = $json | ConvertFrom-Json
+          }
+          $global:LASTEXITCODE = 0
+
           # Refuse to overwrite a release that is already published.
-          $existing = gh release view $tag --json isDraft 2>$null | ConvertFrom-Json
           if ($existing -and -not $existing.isDraft) {
             Write-Error "Release $tag is already published. Bump the version in package.json before re-running."
             exit 1
