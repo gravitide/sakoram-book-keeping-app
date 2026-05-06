@@ -1,7 +1,16 @@
 name: Release
 
-# Triggers when a tag matching v*.*.* is pushed (e.g. v0.9.0).
-# Builds the Windows installers and uploads them to a GitHub Release.
+# Two ways to trigger this:
+#
+# 1. Push a v*.*.* git tag — uses that tag as the release version.
+#       git tag -a v0.10.1 -m "..." && git push origin v0.10.1
+#
+# 2. Manual run from the Actions tab (workflow_dispatch) — derives the
+#    version from package.json and creates a matching git tag automatically.
+#
+# Either way, the release tag is ALWAYS v<package.json version>, so each
+# version gets its own release. The job refuses to overwrite a release
+# that is already published.
 
 on:
   push:
@@ -18,6 +27,54 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so we can push a tag back
+
+      - name: Resolve release tag
+        id: tag
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # On tag push: use the pushed tag. Otherwise: read package.json.
+          if ($env:GITHUB_REF -like 'refs/tags/*') {
+            $tag = $env:GITHUB_REF -replace 'refs/tags/',''
+          } else {
+            $version = (Get-Content package.json | ConvertFrom-Json).version
+            $tag = "v$version"
+          }
+          Write-Host "Release tag will be: $tag"
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+          # Refuse to overwrite a release that is already published.
+          $existing = gh release view $tag --json isDraft 2>$null | ConvertFrom-Json
+          if ($existing -and -not $existing.isDraft) {
+            Write-Error "Release $tag is already published. Bump the version in package.json before re-running."
+            exit 1
+          }
+          # If a stale draft exists for this tag, delete it so this run starts clean.
+          if ($existing -and $existing.isDraft) {
+            Write-Host "Deleting stale draft release $tag so this run starts clean..."
+            gh release delete $tag --yes --cleanup-tag
+          }
+
+      - name: Create git tag (manual runs only)
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ steps.tag.outputs.tag }}"
+          # Skip if the tag already exists on the remote.
+          $remote = git ls-remote --tags origin "refs/tags/$tag"
+          if ($remote) {
+            Write-Host "Tag $tag already exists on remote, skipping creation."
+          } else {
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a $tag -m "Release $tag"
+            git push origin $tag
+          }
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -49,11 +106,11 @@ jobs:
       - name: Build Tauri app
         run: bun run tauri:build
 
-      - name: Upload installers to release
+      - name: Create draft release with installers
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
           draft: true
           prerelease: false
           generate_release_notes: true
