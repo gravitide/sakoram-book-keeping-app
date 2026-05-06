@@ -50,7 +50,7 @@
 			<table v-else class="w-full text-sm">
 				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
 					<tr>
-						<th class="py-2 pr-2 font-medium">
+						<th class="py-2 pl-3 pr-2 font-medium">
 							Number
 						</th>
 						<th class="py-2 px-2 font-medium">
@@ -68,7 +68,7 @@
 						<th class="py-2 px-2 font-medium text-right">
 							Total
 						</th>
-						<th class="py-2 pl-2 font-medium">
+						<th class="py-2 pl-2 pr-3 font-medium">
 							Status
 						</th>
 					</tr>
@@ -80,7 +80,7 @@
 						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
 						@click="open(q)"
 					>
-						<td class="py-2 pr-2 font-medium tabular-nums">
+						<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
 							{{ q.number }}
 						</td>
 						<td class="py-2 px-2">
@@ -98,7 +98,7 @@
 						<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap">
 							{{ formatLKR(q.total_cents) }}
 						</td>
-						<td class="py-2 pl-2">
+						<td class="py-2 pl-2 pr-3">
 							<StatusBadge :status="q.status" />
 						</td>
 					</tr>

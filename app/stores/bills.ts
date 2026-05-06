@@ -311,6 +311,22 @@ export const useBillsStore = defineStore("bills", () => {
 		await load();
 	};
 
+	// Universal delete — removes a bill regardless of payment state. Used by
+	// the typed-name confirm flow on the detail page when the user genuinely
+	// needs to scrub a record. `vouchers.related_bill_id` has no ON DELETE
+	// clause, so we null it out first; otherwise the DELETE would fail with
+	// an FK violation when payment vouchers reference this bill.
+	const remove = async (id: number): Promise<void> => {
+		const row = await get(id);
+		if (!row) return;
+		await execute(
+			"UPDATE vouchers SET related_bill_id = NULL WHERE related_bill_id = ?",
+			[id]
+		);
+		await execute("DELETE FROM bills WHERE id = ?", [id]);
+		await load();
+	};
+
 	const flagOverdue = async (): Promise<number> => {
 		const today = todayISO();
 		const result = await execute(
@@ -342,6 +358,7 @@ export const useBillsStore = defineStore("bills", () => {
 		setPaidAmount,
 		setStatus,
 		deleteBill,
+		remove,
 		flagOverdue
 	};
 });

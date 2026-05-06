@@ -60,13 +60,12 @@
 					</UButton>
 				</UDropdownMenu>
 				<UButton
-					v-if="isDraft"
 					color="error"
 					variant="ghost"
 					icon="i-lucide-trash-2"
-					@click="askDeleteDraft"
+					@click="askDelete"
 				>
-					Delete draft
+					{{ isDraft ? "Delete draft" : "Delete" }}
 				</UButton>
 			</div>
 		</header>
@@ -301,22 +300,45 @@
 			</UCard>
 		</div>
 
-		<UModal v-model:open="showDeleteDialog" :title="`Delete draft ${invoice.number}?`">
+		<UModal v-model:open="showDeleteDialog" :title="`Delete ${invoice.number}?`">
 			<template #body>
-				<p class="text-sm text-(--ui-text-muted)">
-					This permanently removes the draft, its line items, and any
-					payments. The invoice number {{ invoice.number }} will not be
-					reused — it'll show as a gap in your sequence. Issued invoices
-					(sent or later) cannot be deleted.
-				</p>
+				<div class="space-y-3 text-sm">
+					<p class="text-(--ui-text-muted)">
+						This permanently removes the invoice, its line items, and all
+						payment records. The number {{ invoice.number }} will not be
+						reused — it'll show as a gap in your sequence.
+					</p>
+					<div v-if="!isDraft" class="rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/10 p-3 space-y-2">
+						<p class="font-medium text-(--ui-text)">
+							This invoice has been issued ({{ status }}<span v-if="paidCents > 0">, {{ formatLKR(paidCents) }} paid</span>).
+						</p>
+						<p class="text-(--ui-text-muted)">
+							Deleting issued documents breaks the rule that issued
+							records are immutable.
+							<span v-if="payments.length > 0">All {{ payments.length }} payment record(s) will be lost.</span>
+							<span v-if="invoice.source_quote_id">The source quote's link to this invoice will be cleared.</span>
+							Vouchers that reference this invoice will be kept but
+							unlinked. Only do this if it's a real mistake to scrub
+							from your books.
+						</p>
+						<UFormField :label="`Type ${invoice.number} to confirm`">
+							<UInput v-model="deleteConfirmInput" :placeholder="invoice.number" autofocus />
+						</UFormField>
+					</div>
+				</div>
 			</template>
 			<template #footer>
 				<div class="flex justify-end gap-2 w-full">
 					<UButton color="neutral" variant="outline" @click="showDeleteDialog = false">
 						Cancel
 					</UButton>
-					<UButton color="error" icon="i-lucide-trash-2" @click="confirmDeleteDraft">
-						Delete draft
+					<UButton
+						color="error"
+						icon="i-lucide-trash-2"
+						:disabled="!canConfirmDelete"
+						@click="confirmDelete"
+					>
+						{{ isDraft ? "Delete draft" : "Delete anyway" }}
 					</UButton>
 				</div>
 			</template>
@@ -592,15 +614,28 @@
 	});
 
 	const showDeleteDialog = ref(false);
-	const askDeleteDraft = () => {
+	const deleteConfirmInput = ref("");
+	const askDelete = () => {
+		deleteConfirmInput.value = "";
 		showDeleteDialog.value = true;
 	};
-	const confirmDeleteDraft = async () => {
+	// Drafts: plain confirmation. Issued: typed-name confirmation, since this
+	// also wipes the payment ledger and detaches reverse FKs.
+	const canConfirmDelete = computed(() => {
+		if (!invoice.value) return false;
+		if (isDraft.value) return true;
+		return deleteConfirmInput.value.trim() === invoice.value.number;
+	});
+	const confirmDelete = async () => {
+		if (!invoice.value || !canConfirmDelete.value) return;
 		showDeleteDialog.value = false;
-		if (!invoice.value || !isDraft.value) return;
 		try {
-			await invoicesStore.deleteDraft(invoiceId);
-			toast.add({ title: "Draft deleted", color: "info", icon: "i-lucide-trash-2" });
+			await invoicesStore.remove(invoiceId);
+			toast.add({
+				title: isDraft.value ? "Draft deleted" : "Invoice deleted",
+				color: "info",
+				icon: "i-lucide-trash-2"
+			});
 			await router.replace("/invoices");
 		} catch (err) {
 			toast.add({

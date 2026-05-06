@@ -513,6 +513,27 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		await load();
 	};
 
+	// Universal delete — removes an invoice regardless of status, including
+	// any payment ledger entries (cascaded). Used by the typed-name confirm
+	// flow on the detail page when the user genuinely needs to scrub a
+	// record. Reverse FKs without an ON DELETE clause are nulled first:
+	//   - quotes.converted_invoice_id (back-link from a converted quote)
+	//   - vouchers.related_invoice_id (loose link from receipts)
+	const remove = async (id: number): Promise<void> => {
+		const row = await get(id);
+		if (!row) return;
+		await execute(
+			"UPDATE quotes SET converted_invoice_id = NULL WHERE converted_invoice_id = ?",
+			[id]
+		);
+		await execute(
+			"UPDATE vouchers SET related_invoice_id = NULL WHERE related_invoice_id = ?",
+			[id]
+		);
+		await execute("DELETE FROM invoices WHERE id = ?", [id]);
+		await load();
+	};
+
 	// Run on app boot / list load. Flips sent|partial invoices past their
 	// due_date to 'overdue'. Doesn't touch paid/draft/cancelled.
 	const flagOverdue = async (): Promise<number> => {
@@ -548,6 +569,7 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		deletePayment,
 		setStatus,
 		deleteDraft,
+		remove,
 		flagOverdue,
 		buildClientSnapshot
 	};

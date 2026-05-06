@@ -48,7 +48,7 @@
 			<table v-else class="w-full text-sm">
 				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
 					<tr>
-						<th class="py-2 pr-2 font-medium">
+						<th class="py-2 pl-3 pr-2 font-medium">
 							Name
 						</th>
 						<th class="py-2 px-2 font-medium">
@@ -63,7 +63,7 @@
 						<th class="py-2 px-2 font-medium">
 							Tax ID
 						</th>
-						<th class="py-2 pl-2 w-10" />
+						<th class="py-2 pl-2 pr-3 w-10" />
 					</tr>
 				</thead>
 				<tbody>
@@ -73,7 +73,7 @@
 						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
 						@click="openClient(c)"
 					>
-						<td class="py-2 pr-2 font-medium">
+						<td class="py-2 pl-3 pr-2 font-medium">
 							<span class="flex items-center gap-2">
 								{{ c.name }}
 								<UBadge v-if="c.is_archived === 1" color="neutral" variant="subtle" size="sm">
@@ -93,7 +93,7 @@
 						<td class="py-2 px-2 text-(--ui-text-muted)">
 							{{ c.tax_id || "—" }}
 						</td>
-						<td class="py-2 pl-2 text-right" @click.stop>
+						<td class="py-2 pl-2 pr-3 text-right" @click.stop>
 							<UDropdownMenu :items="itemsFor(c)">
 								<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
 							</UDropdownMenu>

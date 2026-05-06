@@ -54,7 +54,7 @@
 			<table v-else class="w-full text-sm">
 				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
 					<tr>
-						<th class="py-2 pr-2 font-medium">
+						<th class="py-2 pl-3 pr-2 font-medium">
 							Number
 						</th>
 						<th class="py-2 px-2 font-medium">
@@ -72,7 +72,7 @@
 						<th class="py-2 px-2 font-medium">
 							Reference
 						</th>
-						<th class="py-2 pl-2 font-medium text-right">
+						<th class="py-2 pl-2 pr-3 font-medium text-right">
 							Amount
 						</th>
 					</tr>
@@ -84,7 +84,7 @@
 						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
 						@click="open(v)"
 					>
-						<td class="py-2 pr-2 font-medium tabular-nums">
+						<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
 							{{ v.number }}
 						</td>
 						<td class="py-2 px-2">
@@ -104,7 +104,7 @@
 						<td class="py-2 px-2 text-(--ui-text-muted)">
 							{{ v.reference || "—" }}
 						</td>
-						<td class="py-2 pl-2 text-right tabular-nums whitespace-nowrap font-medium" :class="v.voucher_type === 'receipt' ? 'text-(--ui-success)' : 'text-(--ui-error)'">
+						<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap font-medium" :class="v.voucher_type === 'receipt' ? 'text-(--ui-success)' : 'text-(--ui-error)'">
 							{{ v.voucher_type === 'receipt' ? '+' : '−' }} {{ formatLKR(v.amount_cents) }}
 						</td>
 					</tr>
