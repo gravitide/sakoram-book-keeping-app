@@ -1,116 +1,171 @@
 <p align="center">
-    <img width="150" src="./public/logo.png" alt="logo">
+	<img width="140" src="./src-tauri/icons/icon.png" alt="Sakoram Book Keeping app icon">
 </p>
-<h1 align="center">NUXTOR</h1>
+
+<h1 align="center">Sakoram Book Keeping</h1>
+
 <p align="center">
-A spiritual successor of <a href="https://github.com/NicolaSpadari/vitauri">ViTauri</a>, made with <a href="https://nuxt.com">Nuxt 4</a> and <a href="https://v2.tauri.app">Tauri 2</a>
-<br>
-Build super fast desktop applications!
+	<img src="./docs/sakoram-logo.png" alt="Sakoram brand logo">
 </p>
 
-<br />
-
-<p float="left">
-	<img src="https://img.shields.io/github/package-json/v/NicolaSpadari/nuxtor" />
-	<img src="https://img.shields.io/github/license/NicolaSpadari/nuxtor" />
+<p align="center">
+	A fast, fully offline desktop bookkeeping app for small Sri Lankan businesses.<br/>
+	Manage clients, quotes, invoices, bills, and vouchers — and produce
+	professional PDFs — all from a single local SQLite file.
 </p>
 
-<br />
+<p align="center">
+	<img src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white" alt="Tauri 2" />
+	<img src="https://img.shields.io/badge/Nuxt-4-00DC82?logo=nuxt&logoColor=white" alt="Nuxt 4" />
+	<img src="https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
+	<img src="https://img.shields.io/badge/SQLite-local-003B57?logo=sqlite&logoColor=white" alt="SQLite" />
+	<img src="https://img.shields.io/badge/PDF-Typst-239DAD" alt="Typst" />
+	<img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license" />
+</p>
 
-<div align="center">
-<img src="./public/screenshot.png">
-</div>
+---
 
-<p align="center">Powered by Nuxt 4</p>
+## ✨ Features
 
-Check more screenshots at [preview](https://github.com/NicolaSpadari/nuxtor/blob/main/preview.md)
+- **Clients** — full CRUD with archived state, contact info, and search.
+- **Quotations** — draftable line-item editor (bundle or itemized pricing),
+  status FSM (`draft → sent → accepted → converted`), one-click conversion
+  to invoice.
+- **Invoices** — issue, track, and record payments via a full per-invoice
+  payment ledger (date, method, reference, notes). Auto-overdue handling.
+- **Bills** — log vendor invoices with simple paid/unpaid tracking.
+- **Vouchers** — money-in (receipts) and money-out (payments), optionally
+  linked to an invoice or bill.
+- **Professional PDFs** — rendered with [Typst](https://typst.app) using a
+  bundled sidecar binary. Ships with the **Miriam Libre** font for
+  consistent typography across machines.
+- **Theme & font customization** — pick from an 8-color theme palette and
+  set a custom UI font; both apply to the app *and* generated PDFs.
+- **Multi-tenant** — manage multiple businesses, each in its own isolated
+  SQLite file. Switch between them from the header.
+- **Export / Import** — one-click `.zip` backup of any business
+  (database + logo + manifest), restorable on the same or another
+  machine.
+- **Sri Lanka–first defaults** — LKR currency, April–March fiscal year,
+  integer-cents money math (no float drift, banker's rounding).
+- **Fully offline** — no servers, no accounts, no telemetry. Your data
+  lives in `%APPDATA%\com.sakoram.billing\`.
 
-<br />
+## 🛠 Tech stack
 
-## Technologies run-down
+| Layer            | Choice                                                      |
+| ---------------- | ----------------------------------------------------------- |
+| Desktop shell    | [Tauri 2](https://v2.tauri.app) (Rust)                      |
+| Frontend         | [Nuxt 4](https://nuxt.com) — SSG (`ssr: false`)             |
+| UI               | [NuxtUI 4](https://ui.nuxt.com) + [Tailwind CSS 4](https://tailwindcss.com) |
+| Language         | TypeScript (strict)                                         |
+| State management | [Pinia](https://pinia.vuejs.org) (composition stores)       |
+| Validation       | [Zod](https://zod.dev)                                      |
+| Database         | SQLite via `tauri-plugin-sql` (sqlx 0.8 underneath)         |
+| PDF engine       | [Typst](https://typst.app) sidecar binary                   |
+| Testing          | [Vitest](https://vitest.dev)                                |
+| Package manager  | [Bun](https://bun.sh) (enforced via `preinstall` hook)      |
 
-- Nuxt v4
-- Tauri v2
-- NuxtUI v4
-- TailwindCSS v4
-- Typescript
-- ESLint
-- Auto imports (for Tauri api too!)
+## 📁 Where your data lives
 
-## Functionalities
+Each business is a separate SQLite file under your OS app-data directory:
 
-- Run shell commands from the app
-- Send custom notifications to the client (remember to turn on/grant notifications in your computer settings)
-- Display OS related informations
-- Store and retrieve data locally
-- Show tray icon
-- Support all Nuxt functionalities (routing/layout/middleware/modules/etc...)
+```
+%APPDATA%\com.sakoram.billing\        (Windows)
+~/Library/Application Support/com.sakoram.billing/   (macOS)
+  ├─ tenants.json          # registry of businesses
+  ├─ businesses/
+  │   └─ {tenant_id}.db    # one SQLite file per business
+  └─ logos/
+      └─ {tenant_id}.{ext} # one logo per business
+```
 
-## Setup
+This means **backups are file-level** — exporting a business is just
+zipping its SQLite + logo. Switching businesses is a context change, not
+a database query filter.
 
-  - Before running this app, you need to configure your environment with Rust. Take a look at the [Tauri docs](https://tauri.app/start/prerequisites).
-  - This project enforces [bun](https://bun.sh). In order to use another package manager you need to update `package.json` and `tauri.conf.json`
-  - The frontend runs on the usual port `3000` of Nuxt, the Tauri server uses the port `3001`. This settings are customizable in the `nuxt.config.ts` and `tauri.conf.json`.
-  - Once ready, follow these commands:
+## 🚀 Getting started
 
-  ```sh
-  # use this template
-  $ npx degit NicolaSpadari/nuxtor my-nuxtor-app
+### Prerequisites
 
-  # go into the folder
-  $ cd my-nuxtor-app
+- [Bun](https://bun.sh) (required — npm/yarn/pnpm are blocked)
+- [Rust toolchain](https://www.rust-lang.org/tools/install) — see the
+  [Tauri prerequisites](https://tauri.app/start/prerequisites/) for
+  platform-specific deps (Visual Studio Build Tools on Windows, Xcode on
+  macOS, etc.)
 
-  # install dependencies
-  $ bun install
+### Run in development
 
-  # start the project
-  $ bun run tauri:dev
-  ```
+```bash
+# install dependencies
+bun install
 
-  This will run the Nuxt frontend and will launch the Tauri window.
+# launch the app with hot reload (Rust + Vite + Webview)
+bun run tauri:dev
+```
 
-## Build
+### Build production installers
 
-  ```sh
-  $ bun run tauri:build
-  ```
+```bash
+bun run tauri:build
+```
 
-This command will generate the Nuxt static output and bundle the project under `src-tauri/target`.
+Outputs Windows installers to:
 
-## Debug
+```
+src-tauri/target/release/bundle/
+  ├─ msi/Sakoram Book Keeping_<version>_x64_en-US.msi
+  └─ nsis/Sakoram Book Keeping_<version>_x64-setup.exe
+```
 
-  ```sh
-  $ bun run tauri:build:debug
-  ```
+> ⚠️ The build is currently **unsigned**, so Windows SmartScreen will
+> warn on first run. Code-signing requires a CA certificate.
 
-The same Tauri bundle will generate under `src-tauri/target`, but with the ability to open the console.
+### Quality gates
 
-## iOS development
+```bash
+bun run lint     # eslint --fix
+bun run test     # vitest run
+```
 
-- Requires a MacOS system, XCode installed
-- You must first setup your environment and XCode, as per [documentation](https://tauri.app/develop/#developing-your-mobile-application)
-- Make sure to have created a development team in XCode and you have choosen command line tools location in settings
-- You must install homebrew and through that install `cocoapods`
-- First time only, run `tauri ios init`
-- If everything is installed correctly, running `bun tauri:ios:dev` should fire up the iOS simulator and install Nuxtor
-- In XCode you should set All, Debug, Release "Automatically manage signing" and choose yout personal Team
-- Running `bun tauri:build:ios` will generate the .ipa file
+## 🧭 Architecture highlights
 
-## Android development
+A few load-bearing decisions worth knowing:
 
-- Requires Android Studio installed
-- You must first setup your environment and Android SDK, as per [documentation](https://tauri.app/develop/#developing-your-mobile-application)
-- Make sure to have installed all SDK components and NDK as indicated
-- First time only, run `tauri android init`
-- If everything is installed correctly, running `bun tauri:android:dev` should fire up the Android emulator and install Nuxtor
-- Running `bun tauri:build:android` will generate the .apk file
+- **Money is integer cents.** All money math uses integer cents of LKR
+  with banker's (half-even) rounding — no floats, ever. See
+  `app/lib/money.ts`.
+- **Issued documents are immutable.** Once a quote/invoice is `sent`,
+  totals are frozen. Client info is snapshotted as JSON at issue time
+  so historical documents don't change when a client is later edited.
+- **Document numbering is atomic and gapless.** Implemented as a single
+  `INSERT … ON CONFLICT … DO UPDATE … RETURNING` per
+  `(document_type, fiscal_year)` — see `app/lib/numbering.ts`.
+- **DB-per-business.** Each tenant is a complete SQLite file rather than
+  a `business_id` column. Simpler queries, cleaner backups, naturally
+  isolated number sequences.
 
-## Notes
+For a deeper tour of the codebase (state machines, capability layer,
+PDF render pipeline, gotchas), see [`CLAUDE.md`](./CLAUDE.md) — the
+project handoff doc.
 
-- Tauri v2 brings some big refactors, such as packages names and permission management. New permissions have to be granted under `src-tauri/capabilities/main.json`
-- Tauri functions are auto imported with the help of a custom module, named like `useTauri<LibraryName>`. If another Tauri plugin is added, then the module has to be updated to support its functions under `app/modules/tauri.ts`
-- As per [documentation](https://tauri.app/start/frontend/nuxt/#checklist), Nuxt SSR must be disabled in order for Tauri to act as the backend. Still, all Nuxt goodies will be functional.
+## 🗺 Project layout
 
-## License
+```
+sakoram_app/
+├─ app/                  # Nuxt frontend (pages, components, stores, libs)
+├─ src-tauri/
+│  ├─ src/               # Rust backend (commands, tenant registry, PDF)
+│  ├─ migrations/        # SQL schema, applied per-DB on tenant init
+│  ├─ templates/         # Typst PDF templates
+│  ├─ binaries/          # Bundled Typst sidecar (gitignored, ~48 MB)
+│  ├─ fonts/             # Bundled Miriam Libre fonts
+│  └─ icons/             # App icons
+├─ tests/                # Vitest specs (money math, numbering)
+└─ CLAUDE.md             # detailed handoff / architecture notes
+```
 
-MIT License © 2024-PRESENT [NicolaSpadari](https://github.com/NicolaSpadari)
+## 📜 License
+
+[MIT](./LICENSE) © Sakoram
+
