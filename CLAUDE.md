@@ -513,3 +513,15 @@ The user's `~/.claude/CLAUDE.md` says:
 
 The project itself doesn't enforce a commit-message format — match the
 existing `git log` style if making commits.
+
+**Bump the version on every PR.** Pre-1.0, use a minor bump (`0.X.0`)
+for new features and a patch bump (`0.X.Y`) for fixes / chores. Three
+files must stay in sync:
+
+- `package.json` → `version`
+- `src-tauri/Cargo.toml` → `[package].version`
+- `src-tauri/tauri.conf.json` → `version`
+
+`src-tauri/Cargo.lock` picks up the new version automatically the next
+time cargo runs (rust-analyzer in the editor usually does it for you);
+commit it alongside the other three.
