@@ -1,8 +1,12 @@
 <p align="center">
-	<img width="140" src="./src-tauri/icons/icon.png" alt="Sakoram Book Keeping logo">
+	<img width="140" src="./src-tauri/icons/icon.png" alt="Sakoram Book Keeping app icon">
 </p>
 
 <h1 align="center">Sakoram Book Keeping</h1>
+
+<p align="center">
+	<img src="./docs/sakoram-logo.png" alt="Sakoram brand logo">
+</p>
 
 <p align="center">
 	A fast, fully offline desktop bookkeeping app for small Sri Lankan businesses.<br/>
