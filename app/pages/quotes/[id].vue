@@ -58,13 +58,12 @@
 					</UButton>
 				</UDropdownMenu>
 				<UButton
-					v-if="isDraft"
 					color="error"
 					variant="ghost"
 					icon="i-lucide-trash-2"
-					@click="askDeleteDraft"
+					@click="askDelete"
 				>
-					Delete draft
+					{{ isDraft ? "Delete draft" : "Delete" }}
 				</UButton>
 			</div>
 		</header>
@@ -263,21 +262,44 @@
 			</template>
 		</UModal>
 
-		<UModal v-model:open="showDeleteDialog" :title="`Delete draft ${quote.number}?`">
+		<UModal v-model:open="showDeleteDialog" :title="`Delete ${quote.number}?`">
 			<template #body>
-				<p class="text-sm text-(--ui-text-muted)">
-					This permanently removes the draft and its line items. The quote
-					number {{ quote.number }} will not be reused — it'll show as a gap
-					in your sequence. Issued documents (sent or later) cannot be deleted.
-				</p>
+				<div class="space-y-3 text-sm">
+					<p class="text-(--ui-text-muted)">
+						This permanently removes the quote and its line items. The
+						number {{ quote.number }} will not be reused — it'll show as a
+						gap in your sequence.
+					</p>
+					<div v-if="!isDraft" class="rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/10 p-3 space-y-2">
+						<p class="font-medium text-(--ui-text)">
+							This quote has been issued ({{ status }}).
+						</p>
+						<p class="text-(--ui-text-muted)">
+							Deleting issued documents breaks the rule that issued
+							records are immutable. Only do this if it's a real
+							mistake you need to scrub from your books.
+							<span v-if="quote.converted_invoice_id">
+								The linked invoice will be unlinked but kept.
+							</span>
+						</p>
+						<UFormField :label="`Type ${quote.number} to confirm`">
+							<UInput v-model="deleteConfirmInput" :placeholder="quote.number" autofocus />
+						</UFormField>
+					</div>
+				</div>
 			</template>
 			<template #footer>
 				<div class="flex justify-end gap-2 w-full">
 					<UButton color="neutral" variant="outline" @click="showDeleteDialog = false">
 						Cancel
 					</UButton>
-					<UButton color="error" icon="i-lucide-trash-2" @click="confirmDeleteDraft">
-						Delete draft
+					<UButton
+						color="error"
+						icon="i-lucide-trash-2"
+						:disabled="!canConfirmDelete"
+						@click="confirmDelete"
+					>
+						{{ isDraft ? "Delete draft" : "Delete anyway" }}
 					</UButton>
 				</div>
 			</template>
@@ -631,16 +653,31 @@
 	};
 
 	const showDeleteDialog = ref(false);
-	const askDeleteDraft = () => {
+	const deleteConfirmInput = ref("");
+	const askDelete = () => {
+		deleteConfirmInput.value = "";
 		showDeleteDialog.value = true;
 	};
 
-	const confirmDeleteDraft = async () => {
+	// For drafts, no typed confirmation needed. For issued quotes, require
+	// the user to type the document number — this is a deliberately
+	// destructive escape hatch.
+	const canConfirmDelete = computed(() => {
+		if (!quote.value) return false;
+		if (isDraft.value) return true;
+		return deleteConfirmInput.value.trim() === quote.value.number;
+	});
+
+	const confirmDelete = async () => {
+		if (!quote.value || !canConfirmDelete.value) return;
 		showDeleteDialog.value = false;
-		if (!quote.value || !isDraft.value) return;
 		try {
-			await quotesStore.deleteDraft(quoteId);
-			toast.add({ title: "Draft deleted", color: "info", icon: "i-lucide-trash-2" });
+			await quotesStore.remove(quoteId);
+			toast.add({
+				title: isDraft.value ? "Draft deleted" : "Quote deleted",
+				color: "info",
+				icon: "i-lucide-trash-2"
+			});
 			await router.replace("/quotes");
 		} catch (err) {
 			toast.add({

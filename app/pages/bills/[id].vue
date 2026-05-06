@@ -53,7 +53,6 @@
 					</UButton>
 				</UDropdownMenu>
 				<UButton
-					v-if="canDelete"
 					color="error"
 					variant="ghost"
 					icon="i-lucide-trash-2"
@@ -232,19 +231,39 @@
 
 		<UModal v-model:open="showDeleteDialog" :title="`Delete ${bill.number}?`">
 			<template #body>
-				<p class="text-sm text-(--ui-text-muted)">
-					This permanently removes the bill and its line items. Only allowed
-					when no payments have been recorded — for paid or partially paid
-					bills, mark them as Cancelled instead.
-				</p>
+				<div class="space-y-3 text-sm">
+					<p class="text-(--ui-text-muted)">
+						This permanently removes the bill and its line items. The
+						number {{ bill.number }} will not be reused — it'll show as a
+						gap in your sequence.
+					</p>
+					<div v-if="needsTypedConfirm" class="rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/10 p-3 space-y-2">
+						<p class="font-medium text-(--ui-text)">
+							This bill has {{ formatLKR(paidCents) }} in recorded payments.
+						</p>
+						<p class="text-(--ui-text-muted)">
+							Deleting it removes that payment history from your books.
+							Vouchers that reference this bill will be kept but
+							unlinked. Consider marking it Cancelled instead.
+						</p>
+						<UFormField :label="`Type ${bill.number} to confirm`">
+							<UInput v-model="deleteConfirmInput" :placeholder="bill.number" autofocus />
+						</UFormField>
+					</div>
+				</div>
 			</template>
 			<template #footer>
 				<div class="flex justify-end gap-2 w-full">
 					<UButton color="neutral" variant="outline" @click="showDeleteDialog = false">
 						Cancel
 					</UButton>
-					<UButton color="error" icon="i-lucide-trash-2" @click="confirmDelete">
-						Delete bill
+					<UButton
+						color="error"
+						icon="i-lucide-trash-2"
+						:disabled="!canConfirmDelete"
+						@click="confirmDelete"
+					>
+						{{ needsTypedConfirm ? "Delete anyway" : "Delete bill" }}
 					</UButton>
 				</div>
 			</template>
@@ -519,14 +538,25 @@
 	});
 
 	const showDeleteDialog = ref(false);
+	const deleteConfirmInput = ref("");
 	const askDelete = () => {
+		deleteConfirmInput.value = "";
 		showDeleteDialog.value = true;
 	};
+	// Bills with recorded payments require typed-name confirmation, since
+	// removing them scrubs payment history. Unpaid bills delete on a single
+	// click — there's nothing destructive about it.
+	const needsTypedConfirm = computed(() => (bill.value?.paid_cents ?? 0) > 0);
+	const canConfirmDelete = computed(() => {
+		if (!bill.value) return false;
+		if (!needsTypedConfirm.value) return true;
+		return deleteConfirmInput.value.trim() === bill.value.number;
+	});
 	const confirmDelete = async () => {
+		if (!bill.value || !canConfirmDelete.value) return;
 		showDeleteDialog.value = false;
-		if (!bill.value) return;
 		try {
-			await store.deleteBill(billId);
+			await store.remove(billId);
 			toast.add({ title: "Bill deleted", color: "info", icon: "i-lucide-trash-2" });
 			await router.replace("/bills");
 		} catch (err) {
@@ -538,7 +568,6 @@
 			});
 		}
 	};
-	const canDelete = computed(() => bill.value?.paid_cents === 0 && bill.value?.status !== "cancelled");
 
 	// ---- PDF export ----------------------------------------------------------
 	// Bills are an internal record of vendor invoices we received. The PDF is

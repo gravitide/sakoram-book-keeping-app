@@ -352,6 +352,25 @@ export const useQuotesStore = defineStore("quotes", () => {
 		await load();
 	};
 
+	// Universal delete — removes a quote regardless of status. Used by the
+	// "Delete" action on the detail page once the user has confirmed via the
+	// typed-name modal. Issued documents are normally immutable; this is the
+	// escape hatch when the user genuinely needs to scrub a record.
+	//
+	// `invoices.source_quote_id` has no ON DELETE clause (defaults to NO
+	// ACTION), so we null it out first; otherwise the DELETE fails with a
+	// foreign-key violation when the quote was converted into an invoice.
+	const remove = async (id: number): Promise<void> => {
+		const row = await get(id);
+		if (!row) return;
+		await execute(
+			"UPDATE invoices SET source_quote_id = NULL WHERE source_quote_id = ?",
+			[id]
+		);
+		await execute("DELETE FROM quotes WHERE id = ?", [id]);
+		await load();
+	};
+
 	// Run on app boot. Marks any 'sent' quote past its valid_until as 'expired'.
 	const expireOverdue = async (): Promise<number> => {
 		const today = todayISO();
@@ -381,6 +400,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 		setStatus,
 		markConverted,
 		deleteDraft,
+		remove,
 		expireOverdue,
 		buildClientSnapshot,
 		buildBankSnapshot

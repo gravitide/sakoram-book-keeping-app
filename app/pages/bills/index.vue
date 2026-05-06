@@ -53,7 +53,7 @@
 			<table v-else class="w-full text-sm">
 				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
 					<tr>
-						<th class="py-2 pr-2 font-medium">
+						<th class="py-2 pl-3 pr-2 font-medium">
 							Number
 						</th>
 						<th class="py-2 px-2 font-medium">
@@ -77,7 +77,7 @@
 						<th class="py-2 px-2 font-medium text-right">
 							Balance
 						</th>
-						<th class="py-2 pl-2 font-medium">
+						<th class="py-2 pl-2 pr-3 font-medium">
 							Status
 						</th>
 					</tr>
@@ -89,7 +89,7 @@
 						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
 						@click="open(b)"
 					>
-						<td class="py-2 pr-2 font-medium tabular-nums">
+						<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
 							{{ b.number }}
 						</td>
 						<td class="py-2 px-2">
@@ -114,7 +114,7 @@
 							<span v-if="balanceOf(b) === 0" class="text-(--ui-text-muted)">—</span>
 							<span v-else>{{ formatLKR(balanceOf(b)) }}</span>
 						</td>
-						<td class="py-2 pl-2">
+						<td class="py-2 pl-2 pr-3">
 							<StatusBadge :status="b.status" />
 						</td>
 					</tr>
