@@ -6,7 +6,7 @@
 //   businesses/{id}.db           ← per-tenant SQLite database
 //   logos/{id}.{ext}             ← per-tenant logo file
 //
-// `id` is a slug ("gravitide", "acme-co"). It's stable: renaming a tenant
+// `id` is a slug ("acme", "acme-co"). It's stable: renaming a tenant
 // changes display name only — the slug, DB filename, and logo filename
 // stay put so we don't have to move files around.
 //

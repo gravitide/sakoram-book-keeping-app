@@ -68,7 +68,7 @@
 				<UFormField label="Business name" required>
 					<UInput
 						v-model="newName"
-						placeholder="e.g. Gravitide"
+						placeholder="e.g. Acme Co"
 						autofocus
 						@keydown.enter="onCreate"
 					/>

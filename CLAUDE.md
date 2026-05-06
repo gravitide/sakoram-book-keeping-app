@@ -427,7 +427,7 @@ Notable allowances:
 - ✅ Vouchers (money in/out, PDF, big amount card layout)
 - ✅ Dashboard (KPI tiles, recent activity, overdue list, quick actions)
 - ✅ PDF generation via bundled Typst sidecar (Miriam Libre font,
-  Gravitide-style layout, theme color from settings)
+  branded layout, theme color from settings)
 - ✅ PDF preview modal (iframe-embedded, save-as via temp file copy)
 - ✅ Settings split: `/settings/company`, `/settings/appearance`,
   `/settings/businesses`

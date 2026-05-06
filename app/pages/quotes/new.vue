@@ -20,7 +20,7 @@
 				</UFormField>
 
 				<UFormField label="Project title" hint="The centred subtitle on the PDF (optional)">
-					<UInput v-model="projectTitle" placeholder="e.g. Travcal Web App Development - Improvements" />
+					<UInput v-model="projectTitle" placeholder="e.g. Website redesign — Phase 1" />
 				</UFormField>
 			</div>
 
