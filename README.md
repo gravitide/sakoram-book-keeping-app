@@ -1,7 +1,3 @@
-<p align="center">
-	<img width="140" src="./src-tauri/icons/icon.png" alt="Sakoram Book Keeping app icon">
-</p>
-
 <h1 align="center">Sakoram Book Keeping</h1>
 
 <p align="center">
