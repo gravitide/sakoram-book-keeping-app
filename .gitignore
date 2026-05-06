@@ -1,0 +1,17 @@
+node_modules
+.DS_Store
+*.log*
+.data
+.nuxt
+.nitro
+.cache
+.output
+.env
+.cargo
+dist
+src-tauri/target
+src-tauri/.tools
+# Keep the binaries dir tracked but ignore the actual ~50 MB exe;
+# rebuild via `cargo install --locked typst-cli --root src-tauri/.tools`
+# then copy bin/typst.exe → binaries/typst-<target-triple>.exe
+src-tauri/binaries/*.exe

@@ -1,0 +1,193 @@
+<template>
+	<div class="w-full max-w-3xl">
+		<header class="text-center mb-8">
+			<div class="mx-auto size-12 rounded-md bg-(--ui-primary)/10 flex items-center justify-center mb-3">
+				<UIcon name="i-lucide-receipt-text" class="size-6 text-(--ui-primary)" />
+			</div>
+			<h1 class="text-2xl font-semibold">
+				{{ tenants.tenants.length === 0 ? "Welcome to Sakoram Book Keeping" : "Pick a business" }}
+			</h1>
+			<p class="text-sm text-(--ui-text-muted) mt-1">
+				{{
+					tenants.tenants.length === 0
+						? "Set up your first business to start managing quotes, invoices, bills, and vouchers."
+						: "Each business has its own clients, document numbers, and settings."
+				}}
+			</p>
+		</header>
+
+		<!-- Existing businesses -->
+		<div v-if="tenants.tenants.length > 0" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+			<button
+				v-for="t in tenants.tenants"
+				:key="t.id"
+				type="button"
+				class="text-left p-4 bg-(--ui-bg) border border-(--ui-border) rounded-lg hover:border-(--ui-primary) transition flex items-center gap-3 group"
+				:disabled="switchingId !== null"
+				@click="switchTo(t.id)"
+			>
+				<div class="size-12 shrink-0 rounded-md bg-(--ui-bg-muted) border border-(--ui-border) flex items-center justify-center overflow-hidden">
+					<img
+						v-if="logoSrcs[t.id]"
+						:src="logoSrcs[t.id]!"
+						:alt="t.name"
+						class="max-w-full max-h-full object-contain"
+					>
+					<UIcon v-else name="i-lucide-building-2" class="size-5 text-(--ui-text-muted)" />
+				</div>
+				<div class="min-w-0 flex-1">
+					<div class="font-medium truncate">
+						{{ t.name }}
+					</div>
+					<div class="text-xs text-(--ui-text-muted) truncate">
+						{{ t.id }}.db
+					</div>
+				</div>
+				<UIcon
+					v-if="switchingId === t.id"
+					name="i-lucide-loader-circle"
+					class="size-5 text-(--ui-text-muted) animate-spin"
+				/>
+				<UIcon v-else name="i-lucide-chevron-right" class="size-5 text-(--ui-text-muted) group-hover:text-(--ui-primary)" />
+			</button>
+		</div>
+
+		<!-- Add new business -->
+		<div class="bg-(--ui-bg) border border-(--ui-border) rounded-lg p-4">
+			<div v-if="!showCreate" class="text-center">
+				<UButton
+					icon="i-lucide-plus"
+					:variant="tenants.tenants.length === 0 ? 'solid' : 'outline'"
+					@click="showCreate = true"
+				>
+					{{ tenants.tenants.length === 0 ? "Create your first business" : "Add another business" }}
+				</UButton>
+			</div>
+
+			<div v-else class="space-y-3">
+				<UFormField label="Business name" required>
+					<UInput
+						v-model="newName"
+						placeholder="e.g. Gravitide"
+						autofocus
+						@keydown.enter="onCreate"
+					/>
+				</UFormField>
+				<div class="flex justify-end gap-2">
+					<UButton
+						color="neutral"
+						variant="outline"
+						:disabled="creating"
+						@click="cancelCreate"
+					>
+						Cancel
+					</UButton>
+					<UButton
+						:loading="creating"
+						:disabled="!newName.trim() || creating"
+						icon="i-lucide-plus"
+						@click="onCreate"
+					>
+						Create
+					</UButton>
+				</div>
+			</div>
+		</div>
+
+		<div class="text-center text-xs text-(--ui-text-muted) mt-6">
+			v{{ pkg.version }}
+		</div>
+	</div>
+</template>
+
+<script setup lang="ts">
+// Welcome / business picker — the app's landing screen when no business
+// is active (or when the user navigates here explicitly to switch).
+
+	import { convertFileSrc } from "@tauri-apps/api/core";
+	import pkg from "~~/package.json";
+	import { useTenantsStore } from "~/stores/tenants";
+
+	definePageMeta({
+		layout: "welcome",
+		title: "Welcome"
+	});
+
+	const tenants = useTenantsStore();
+	const toast = useToast();
+
+	await tenants.ensureLoaded();
+
+	// Cache of webview-safe URLs for each tenant's logo. We resolve them
+	// once on mount via a Rust command (the registry stores filenames,
+	// not absolute paths — Rust knows where logos/ lives).
+	const logoSrcs = ref<Record<string, string | null>>({});
+	onMounted(async () => {
+		for (const t of tenants.tenants) {
+			if (!t.logo_file) {
+				logoSrcs.value[t.id] = null;
+				continue;
+			}
+			try {
+				const path = await tenants.logoPath(t.id);
+				logoSrcs.value[t.id] = path ? convertFileSrc(path) : null;
+			} catch {
+				logoSrcs.value[t.id] = null;
+			}
+		}
+	});
+
+	const showCreate = ref(tenants.tenants.length === 0);
+	const newName = ref("");
+	const creating = ref(false);
+	const switchingId = ref<string | null>(null);
+
+	const cancelCreate = () => {
+		showCreate.value = false;
+		newName.value = "";
+	};
+
+	// Hard reload on switch — wipes every Pinia store's in-memory state
+	// so the dashboard re-hydrates against the new DB without any
+	// per-store $reset() bookkeeping.
+	const switchTo = async (id: string) => {
+		if (switchingId.value) return;
+		switchingId.value = id;
+		try {
+			await tenants.activate(id);
+			window.location.assign("/");
+		} catch (err) {
+			switchingId.value = null;
+			toast.add({
+				title: "Could not open business",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	const onCreate = async () => {
+		const name = newName.value.trim();
+		if (!name || creating.value) return;
+		creating.value = true;
+		try {
+			const t = await tenants.create(name);
+			toast.add({ title: `${t.name} created`, color: "success", icon: "i-lucide-check" });
+			newName.value = "";
+			showCreate.value = false;
+			// Auto-enter the new business — the most likely thing the user
+			// wants right after creating it.
+			await switchTo(t.id);
+		} catch (err) {
+			toast.add({
+				title: "Could not create business",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		} finally {
+			creating.value = false;
+		}
+	};
+</script>
