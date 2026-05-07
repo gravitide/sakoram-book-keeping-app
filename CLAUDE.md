@@ -561,6 +561,14 @@ Notable allowances:
   `@tauri-apps/api/path`.
 - **Don't put `font-family` on a layout `<div>`** — overlays teleport
   to `<body>` and miss it. Set `--font-sans` on `:root` instead.
+- **A new migration file isn't enough** — the SQL is `include_str!`'d
+  into the `MIGRATIONS` array in `src-tauri/src/tenants.rs`. Drop a new
+  `0009_*.sql` into `migrations/` and forget to add it to that array
+  and the migration silently never runs (queries against the new
+  tables explode at first call). Bump `SCHEMA_VERSION` in
+  `src-tauri/src/data_io.rs` too — and if the migration adds a table
+  the user will want exported, append it to the `TABLES` list in the
+  same file.
 - **Don't expose new Tauri commands without registering them** in
   `src-tauri/src/lib.rs` `invoke_handler!`. The error message ("command X
   not allowed") looks like a permissions issue but is just a missing
