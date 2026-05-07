@@ -191,7 +191,8 @@
 			divider: true,
 			children: [
 				{ to: "/clients", label: "Clients", icon: "i-lucide-users" },
-				{ to: "/vendors", label: "Vendors", icon: "i-lucide-store" }
+				{ to: "/vendors", label: "Vendors", icon: "i-lucide-store" },
+				{ to: "/categories", label: "Bill categories", icon: "i-lucide-tags" }
 			]
 		},
 		{

@@ -99,7 +99,16 @@
 							{{ b.vendor_invoice_number || "—" }}
 						</td>
 						<td class="py-2 px-2 text-(--ui-text-muted)">
-							{{ b.category || "—" }}
+							<span v-if="categoryOf(b)" class="inline-flex items-center gap-1.5">
+								<span
+									class="inline-flex size-5 rounded items-center justify-center text-white shrink-0"
+									:style="{ backgroundColor: themeHex(categoryOf(b)!.color) }"
+								>
+									<UIcon :name="categoryOf(b)!.icon" class="size-3" />
+								</span>
+								<span class="text-(--ui-text)">{{ categoryOf(b)!.name }}</span>
+							</span>
+							<span v-else>—</span>
 						</td>
 						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
 							{{ b.issue_date }}
@@ -127,6 +136,7 @@
 <script setup lang="ts">
 	import type { BillRow, BillStatus, VendorSnapshot } from "~/stores/bills";
 	import { formatLKR } from "~/lib/money";
+	import { themeHex } from "~/lib/theme";
 	import { useBillsStore } from "~/stores/bills";
 
 	definePageMeta({ title: "Bills" });
@@ -159,6 +169,18 @@
 			return (JSON.parse(b.vendor_snapshot) as VendorSnapshot).name || "(no vendor)";
 		} catch {
 			return "(no vendor)";
+		}
+	};
+
+	// Category name/color/icon also live in a frozen snapshot, so renames or
+	// recolors don't rewrite older bill rows. Returns null when the bill has
+	// no category (or the snapshot is malformed).
+	const categoryOf = (b: BillRow): { name: string, color: string, icon: string } | null => {
+		if (!b.category_snapshot) return null;
+		try {
+			return JSON.parse(b.category_snapshot) as { name: string, color: string, icon: string };
+		} catch {
+			return null;
 		}
 	};
 </script>

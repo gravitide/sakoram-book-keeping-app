@@ -230,7 +230,8 @@ sakoram_app/
    │  ├─ 0005_default_font_google_sans.sql ← flips Miriam Libre default → Google Sans Flex
    │  ├─ 0006_pdf_font.sql            ← adds pdf_font column (separate from ui_font)
    │  ├─ 0007_vendors.sql             ← vendors table (mirrors clients shape)
-   │  └─ 0008_bills_use_vendors.sql   ← drop+recreate bills with vendor_id FK + vendor_snapshot
+   │  ├─ 0008_bills_use_vendors.sql   ← drop+recreate bills with vendor_id FK + vendor_snapshot
+   │  └─ 0009_bill_categories.sql     ← bill_categories lookup; bills get category_id FK + category_snapshot
    ├─ templates/
    │  ├─ document.typ                 ← unified Typst template for quotes/invoices/bills
    │  └─ voucher.typ                  ← simpler one-page receipt layout
@@ -489,7 +490,7 @@ Notable allowances:
 
 ### Done
 
-- ✅ DB schema, migrations, foundations (8 migrations, SCHEMA_VERSION 8)
+- ✅ DB schema, migrations, foundations (9 migrations, SCHEMA_VERSION 9)
 - ✅ Clients CRUD
 - ✅ Vendors CRUD (mirrors clients)
 - ✅ Quotes (full lifecycle, PDF, convert-to-invoice)
