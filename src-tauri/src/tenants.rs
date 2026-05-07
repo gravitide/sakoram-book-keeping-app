@@ -31,6 +31,7 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(3, "bills, vouchers", include_str!("../migrations/0003_bills_vouchers.sql")),
 	(4, "appearance", include_str!("../migrations/0004_appearance.sql")),
 	(5, "default font google sans", include_str!("../migrations/0005_default_font_google_sans.sql")),
+	(6, "pdf font", include_str!("../migrations/0006_pdf_font.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -5,7 +5,8 @@
 				Appearance
 			</h1>
 			<p class="text-sm text-(--ui-text-muted)">
-				Pick the UI font and the accent color used across the app and on PDFs.
+				Pick the UI font, the PDF font, and the accent color used across the
+				app and on rendered documents.
 			</p>
 		</header>
 
@@ -16,9 +17,9 @@
 						UI font
 					</div>
 					<div class="text-xs text-(--ui-text-muted) mt-1">
-						Type any font installed on your system. If we can't find it, we
-						fall back to Google Sans Flex (bundled with the app) and then
-						your system default.
+						Used in the app interface. Three fonts (Google Sans Flex, Inter,
+						Miriam Libre) ship with the app; anything else falls through to
+						what's installed on your system.
 					</div>
 				</template>
 
@@ -28,11 +29,26 @@
 
 				<div class="mt-4">
 					<div class="text-xs text-(--ui-text-muted) mb-2">
-						Common choices — click to use:
+						Bundled fonts (always available):
+					</div>
+					<div class="flex flex-wrap gap-2 mb-3">
+						<UButton
+							v-for="suggestion in bundledFonts"
+							:key="suggestion"
+							size="xs"
+							variant="soft"
+							color="primary"
+							@click="uiFont = suggestion"
+						>
+							{{ suggestion }}
+						</UButton>
+					</div>
+					<div class="text-xs text-(--ui-text-muted) mb-2">
+						System fonts (only if installed):
 					</div>
 					<div class="flex flex-wrap gap-2">
 						<UButton
-							v-for="suggestion in fontSuggestions"
+							v-for="suggestion in systemFonts"
 							:key="suggestion"
 							size="xs"
 							variant="soft"
@@ -54,6 +70,56 @@
 						</div>
 						<div class="text-sm">
 							Sphinx of black quartz, judge my vow. 0123456789
+						</div>
+					</div>
+				</div>
+			</UCard>
+
+			<UCard>
+				<template #header>
+					<div class="font-medium">
+						PDF font
+					</div>
+					<div class="text-xs text-(--ui-text-muted) mt-1">
+						Used when rendering quotes, invoices, bills, and vouchers. Pick
+						a bundled font for guaranteed availability — Typst will fall back
+						to the bundled Google Sans Flex if it can't resolve your choice.
+					</div>
+				</template>
+
+				<UFormField label="Font family">
+					<UInput v-model="pdfFont" placeholder="e.g. Google Sans Flex" />
+				</UFormField>
+
+				<div class="mt-4">
+					<div class="text-xs text-(--ui-text-muted) mb-2">
+						Bundled fonts:
+					</div>
+					<div class="flex flex-wrap gap-2">
+						<UButton
+							v-for="suggestion in bundledFonts"
+							:key="suggestion"
+							size="xs"
+							variant="soft"
+							color="primary"
+							@click="pdfFont = suggestion"
+						>
+							{{ suggestion }}
+						</UButton>
+					</div>
+				</div>
+
+				<div class="mt-6 p-4 border border-(--ui-border) rounded-md bg-(--ui-bg-muted)">
+					<div class="text-xs text-(--ui-text-muted) uppercase tracking-wide mb-2">
+						Preview (uses the font's webview-rendered version — the PDF
+						will look identical since both pull the same TTF)
+					</div>
+					<div :style="{ fontFamily: pdfPreviewFontStack }" class="space-y-1">
+						<div class="text-2xl font-semibold">
+							INVOICE INV-2026-0042
+						</div>
+						<div class="text-sm">
+							Total: LKR 12,345.00 — due 2026-06-15
 						</div>
 					</div>
 				</div>
@@ -126,13 +192,17 @@
 	await store.ensureLoaded();
 
 	const colors = THEME_COLORS;
-	// Google Sans Flex first — it's bundled with the app, so it always
-	// renders. The rest are common system fonts the user can pick if they
-	// have them installed.
-	const fontSuggestions = [
+	// Bundled fonts ship with the app via @font-face (UI) and Typst's
+	// --font-path arg (PDF) — guaranteed to render regardless of what's
+	// installed locally. System fonts are common picks but only render
+	// when present on the user's machine; the cascade falls back to the
+	// bundled Google Sans Flex if not.
+	const bundledFonts = [
 		"Google Sans Flex",
-		"Miriam Libre",
 		"Inter",
+		"Miriam Libre"
+	];
+	const systemFonts = [
 		"system-ui",
 		"Georgia",
 		"Times New Roman",
@@ -140,15 +210,18 @@
 	];
 
 	const uiFont = ref<string>(store.settings?.ui_font ?? "Google Sans Flex");
+	const pdfFont = ref<string>(store.settings?.pdf_font ?? "Google Sans Flex");
 	const themeColor = ref<ThemeColor>(
 		isValidThemeColor(store.settings?.theme_color) ? store.settings!.theme_color : "red"
 	);
 
-	const initialFont = ref<string>(uiFont.value);
+	const initialUiFont = ref<string>(uiFont.value);
+	const initialPdfFont = ref<string>(pdfFont.value);
 	const initialColor = ref<ThemeColor>(themeColor.value);
 
 	const dirty = computed(() =>
-		uiFont.value.trim() !== initialFont.value
+		uiFont.value.trim() !== initialUiFont.value
+		|| pdfFont.value.trim() !== initialPdfFont.value
 		|| themeColor.value !== initialColor.value
 	);
 
@@ -157,6 +230,11 @@
 	// last-saved values if they cancel.
 	const previewFontStack = computed(() =>
 		`'${uiFont.value || "Google Sans Flex"}', 'Google Sans Flex', system-ui, sans-serif`
+	);
+	// PDF preview uses the same cascade so the user sees roughly what Typst
+	// will render. No effect on the actual app UI.
+	const pdfPreviewFontStack = computed(() =>
+		`'${pdfFont.value || "Google Sans Flex"}', 'Google Sans Flex', serif`
 	);
 
 	// Live preview: override Tailwind's --font-sans on :root + flip the
@@ -174,11 +252,15 @@
 	const onSave = async () => {
 		saving.value = true;
 		try {
+			const u = uiFont.value.trim() || "Google Sans Flex";
+			const p = pdfFont.value.trim() || "Google Sans Flex";
 			await store.save({
-				ui_font: uiFont.value.trim() || "Google Sans Flex",
+				ui_font: u,
+				pdf_font: p,
 				theme_color: themeColor.value
 			});
-			initialFont.value = uiFont.value.trim() || "Google Sans Flex";
+			initialUiFont.value = u;
+			initialPdfFont.value = p;
 			initialColor.value = themeColor.value;
 			toast.add({ title: "Appearance saved", color: "success", icon: "i-lucide-check" });
 		} catch (err) {
@@ -194,7 +276,8 @@
 	};
 
 	const reset = () => {
-		uiFont.value = initialFont.value;
+		uiFont.value = initialUiFont.value;
+		pdfFont.value = initialPdfFont.value;
 		themeColor.value = initialColor.value;
 	};
 </script>

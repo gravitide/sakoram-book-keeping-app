@@ -727,6 +727,7 @@
 			number: inv.number,
 			title: "INVOICE",
 			theme_color: themeHex(settingsStore.settings?.theme_color),
+			font_family: settingsStore.settings?.pdf_font ?? "Google Sans Flex",
 			primary_label: "Invoice",
 			date_label: "Date",
 			date_value: inv.issue_date,

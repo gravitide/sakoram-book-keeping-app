@@ -30,6 +30,7 @@ export interface CompanySettingsRow {
 	quote_footer_notes: string | null
 	fiscal_year_start_month: number
 	ui_font: string
+	pdf_font: string
 	theme_color: string
 	updated_at: string
 }
@@ -59,6 +60,7 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"quote_footer_notes",
 	"fiscal_year_start_month",
 	"ui_font",
+	"pdf_font",
 	"theme_color"
 ];
 
