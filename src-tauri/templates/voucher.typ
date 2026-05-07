@@ -20,7 +20,7 @@
     ])
   ],
 )
-#set text(font: ("Miriam Libre", "Inter"), size: 10pt, lang: "en")
+#set text(font: ("Google Sans Flex", "Miriam Libre", "Inter"), size: 10pt, lang: "en")
 #set par(leading: 0.6em, spacing: 0.7em)
 
 // ============================================================
