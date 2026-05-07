@@ -169,7 +169,15 @@
 	// always visible (no click-to-expand) since the tree is small.
 	const nav = [
 		{ to: "/", label: "Dashboard", icon: "i-lucide-layout-dashboard" },
-		{ to: "/clients", label: "Clients", icon: "i-lucide-users" },
+		{
+			to: "/clients",
+			label: "Contacts",
+			icon: "i-lucide-contact",
+			children: [
+				{ to: "/clients", label: "Clients", icon: "i-lucide-users" },
+				{ to: "/vendors", label: "Vendors", icon: "i-lucide-store" }
+			]
+		},
 		{ to: "/quotes", label: "Quotes", icon: "i-lucide-file-text" },
 		{ to: "/invoices", label: "Invoices", icon: "i-lucide-receipt" },
 		{ to: "/bills", label: "Bills", icon: "i-lucide-file-input" },
