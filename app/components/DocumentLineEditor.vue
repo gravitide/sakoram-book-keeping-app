@@ -67,7 +67,7 @@
 					<th class="py-2 pr-2 font-medium text-right w-32">
 						Unit price
 					</th>
-					<th class="py-2 pr-2 font-medium text-right w-20">
+					<th class="py-2 pr-2 font-medium text-right w-32">
 						VAT %
 					</th>
 					<th class="py-2 pr-2 font-medium text-right w-32">
@@ -118,22 +118,18 @@
 						/>
 					</td>
 					<td class="py-2 pr-2">
-						<UInput
-							:model-value="priceDisplay(idx)"
-							placeholder="0.00"
-							class="text-right"
+						<MoneyInput
+							:model-value="line.unit_price_cents"
 							:disabled="disabled"
-							@update:model-value="onPrice(idx, String($event))"
+							@update:model-value="updateField(idx, 'unit_price_cents', $event)"
 						/>
 					</td>
 					<td class="py-2 pr-2">
-						<UInput
-							type="number"
+						<UInputNumber
 							:model-value="ratePct(idx)"
 							:step="0.01"
 							:min="0"
 							:max="100"
-							class="text-right"
 							:disabled="disabled"
 							@update:model-value="onRate(idx, $event)"
 						/>
@@ -189,7 +185,7 @@
 // emit changes back. Totals are recomputed on every change so the parent
 // can show live grand totals.
 
-	import { computeLineTotals, formatLKR, formatRate, sumCents, toCents, toMilli } from "~/lib/money";
+	import { computeLineTotals, formatLKR, formatRate, sumCents, toMilli } from "~/lib/money";
 
 	export interface LineDraft {
 		item_label: string
@@ -266,21 +262,6 @@
 		try {
 			updateField(idx, "quantity_milli", toMilli(raw));
 		} catch { /* invalid in-flight, ignore */ }
-	};
-
-	const priceDisplay = (idx: number) => {
-		const row = lines.value[idx];
-		if (!row) return "";
-		const c = row.unit_price_cents;
-		if (c === 0) return "";
-		const r = Math.floor(c / 100);
-		const cs = c % 100;
-		return `${r}.${cs.toString().padStart(2, "0")}`;
-	};
-	const onPrice = (idx: number, raw: string) => {
-		try {
-			updateField(idx, "unit_price_cents", toCents(raw));
-		} catch { /* ignore */ }
 	};
 
 	const ratePct = (idx: number) => {

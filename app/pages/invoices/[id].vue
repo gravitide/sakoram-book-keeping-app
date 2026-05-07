@@ -420,6 +420,7 @@
 	const payments = ref<InvoicePaymentRow[]>([]);
 	const saving = ref(false);
 	const dirty = ref(false);
+	const hydrating = ref(false);
 
 	const bundleSubtotalCents = ref<number>(0);
 	const bundleSubtotalDisplay = ref<string>("");
@@ -455,8 +456,10 @@
 	await Promise.all([settingsStore.ensureLoaded(), clientsStore.load()]);
 
 	const hydrate = async () => {
+		hydrating.value = true;
 		const row = await invoicesStore.get(invoiceId);
 		if (!row) {
+			hydrating.value = false;
 			throw createError({ statusCode: 404, statusMessage: "Invoice not found" });
 		}
 		invoice.value = row;
@@ -482,9 +485,24 @@
 
 		payments.value = await invoicesStore.getPayments(invoiceId);
 		dirty.value = false;
+		// Let the form-field watcher's queued run flush before unsetting the
+		// guard, so re-hydrate after save doesn't immediately re-dirty.
+		await nextTick();
+		hydrating.value = false;
 	};
 
 	await hydrate();
+
+	// Mark dirty when any of the directly v-model'd form fields change.
+	// Registered after the initial hydrate so the population pass doesn't trip
+	// it. Re-runs of hydrate() reset dirty to false at the end, so the watcher
+	// firing during a re-hydrate is harmless.
+	watch(
+		[formProjectTitle, formIssueDate, formDueDate, formNotes, formTerms, formPreparedBy, vatRatePct],
+		() => {
+			if (editable.value && !hydrating.value) dirty.value = true;
+		}
+	);
 
 	function centsToRupees(c: number): string {
 		if (!Number.isInteger(c) || c === 0) return "";

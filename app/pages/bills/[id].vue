@@ -361,6 +361,7 @@
 	const lines = ref<LineDraft[]>([]);
 	const saving = ref(false);
 	const dirty = ref(false);
+	const hydrating = ref(false);
 
 	const bundleSubtotalCents = ref<number>(0);
 	const bundleSubtotalDisplay = ref<string>("");
@@ -387,8 +388,10 @@
 	const balanceCents = computed(() => Math.max(0, totalCents.value - paidCents.value));
 
 	const hydrate = async () => {
+		hydrating.value = true;
 		const row = await store.get(billId);
 		if (!row) {
+			hydrating.value = false;
 			throw createError({ statusCode: 404, statusMessage: "Bill not found" });
 		}
 		bill.value = row;
@@ -417,9 +420,20 @@
 			tax_rate_basis_points: l.tax_rate_basis_points
 		}));
 		dirty.value = false;
+		await nextTick();
+		hydrating.value = false;
 	};
 
 	await hydrate();
+
+	// Mark dirty when any directly v-model'd form field changes. Registered
+	// after the initial hydrate; hydrating-flag guards re-hydrate paths.
+	watch(
+		[formVendorInvoiceNumber, formIssueDate, formDueDate, formCategory, formNotes, vatRatePct],
+		() => {
+			if (editable.value && !hydrating.value) dirty.value = true;
+		}
+	);
 
 	function centsToRupees(c: number): string {
 		if (!Number.isInteger(c) || c === 0) return "";

@@ -359,6 +359,7 @@
 	const lines = ref<LineDraft[]>([]);
 	const saving = ref(false);
 	const dirty = ref(false);
+	const hydrating = ref(false);
 
 	// Bundle-mode subtotal entered directly (in cents).
 	const bundleSubtotalCents = ref<number>(0);
@@ -390,8 +391,10 @@
 	await Promise.all([settingsStore.ensureLoaded(), clientsStore.load()]);
 
 	const hydrate = async () => {
+		hydrating.value = true;
 		const row = await quotesStore.get(quoteId);
 		if (!row) {
+			hydrating.value = false;
 			throw createError({ statusCode: 404, statusMessage: "Quote not found" });
 		}
 		quote.value = row;
@@ -415,9 +418,20 @@
 			tax_rate_basis_points: l.tax_rate_basis_points
 		}));
 		dirty.value = false;
+		await nextTick();
+		hydrating.value = false;
 	};
 
 	await hydrate();
+
+	// Mark dirty when any directly v-model'd form field changes. Registered
+	// after the initial hydrate; hydrating-flag guards re-hydrate paths.
+	watch(
+		[formProjectTitle, formIssueDate, formValidUntil, formNotes, formTerms, formPreparedBy, vatRatePct],
+		() => {
+			if (editable.value && !hydrating.value) dirty.value = true;
+		}
+	);
 
 	function centsToRupees(c: number): string {
 		if (!Number.isInteger(c) || c === 0) return "";
