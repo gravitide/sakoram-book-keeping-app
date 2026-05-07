@@ -25,9 +25,8 @@ export type PricingMode = "bundle" | "itemized";
 export interface BillRow {
 	id: number
 	number: string
-	vendor_name: string
-	vendor_tax_id: string | null
-	vendor_address: string | null
+	vendor_id: number
+	vendor_snapshot: string // JSON-serialised
 	vendor_invoice_number: string | null
 	issue_date: string
 	due_date: string
@@ -43,6 +42,23 @@ export interface BillRow {
 	attachment_path: string | null
 	created_at: string
 	updated_at: string
+}
+
+// Frozen copy of the vendor info as it was at bill-creation time.
+// Mirrors quotes/invoices client_snapshot — keeps historical bills
+// rendering with the vendor address they had on the day, even if the
+// vendors row is later edited or archived.
+export interface VendorSnapshot {
+	name: string
+	contact_person: string | null
+	email: string | null
+	phone: string | null
+	address_line1: string | null
+	address_line2: string | null
+	city: string | null
+	postal_code: string | null
+	country: string | null
+	tax_id: string | null
 }
 
 export interface BillLineRow {
@@ -96,9 +112,13 @@ export const useBillsStore = defineStore("bills", () => {
 				return false;
 			}
 			if (!q) return true;
+			let snapName = "";
+			try {
+				snapName = (JSON.parse(row.vendor_snapshot) as VendorSnapshot).name?.toLowerCase() ?? "";
+			} catch { /* ignore */ }
 			return (
 				row.number.toLowerCase().includes(q)
-				|| row.vendor_name.toLowerCase().includes(q)
+				|| snapName.includes(q)
 				|| (row.vendor_invoice_number ?? "").toLowerCase().includes(q)
 				|| (row.category ?? "").toLowerCase().includes(q)
 			);
@@ -143,26 +163,45 @@ export const useBillsStore = defineStore("bills", () => {
 			[billId]
 		);
 
-	const createBill = async (input: { vendor_name: string }): Promise<number> => {
+	// Build a snapshot from a vendor row, freezing the vendor's identity at
+	// bill-creation time. Same shape as the client snapshot used on
+	// quotes/invoices.
+	const buildVendorSnapshot = (
+		v: { name: string, contact_person?: string | null, email?: string | null, phone?: string | null, address_line1?: string | null, address_line2?: string | null, city?: string | null, postal_code?: string | null, country?: string | null, tax_id?: string | null }
+	): string => JSON.stringify({
+		name: v.name,
+		contact_person: v.contact_person ?? null,
+		email: v.email ?? null,
+		phone: v.phone ?? null,
+		address_line1: v.address_line1 ?? null,
+		address_line2: v.address_line2 ?? null,
+		city: v.city ?? null,
+		postal_code: v.postal_code ?? null,
+		country: v.country ?? null,
+		tax_id: v.tax_id ?? null
+	} satisfies VendorSnapshot);
+
+	const createBill = async (input: { vendor: VendorSnapshot & { id: number } }): Promise<number> => {
 		const issue = todayISO();
 		const allocation = await allocateDocumentNumber("bill", issue);
+		const snap = buildVendorSnapshot(input.vendor);
 		// Default due_date = today (vendor probably wants payment "now"); user
 		// can change it on the editor. We don't depend on company_settings here
 		// because bill due dates are dictated by the vendor, not our terms.
 		const result = await execute(
 			`INSERT INTO bills (
-				number, vendor_name,
+				number, vendor_id, vendor_snapshot,
 				issue_date, due_date, status, pricing_mode,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents, paid_cents
-			) VALUES (?, ?, ?, ?, 'unpaid', 'bundle', 0, 0, 0, 0, 0)`,
-			[allocation.number, input.vendor_name, issue, issue]
+			) VALUES (?, ?, ?, ?, ?, 'unpaid', 'bundle', 0, 0, 0, 0, 0)`,
+			[allocation.number, input.vendor.id, snap, issue, issue]
 		);
 		if (result.lastInsertId === undefined) throw new Error("createBill: no lastInsertId");
 		await load();
 		return result.lastInsertId;
 	};
 
-	type BillUpdate = Partial<Pick<BillRow, | "vendor_name" | "vendor_tax_id" | "vendor_address" | "vendor_invoice_number"
+	type BillUpdate = Partial<Pick<BillRow, | "vendor_id" | "vendor_snapshot" | "vendor_invoice_number"
 		| "issue_date" | "due_date"
 		| "pricing_mode"
 		| "vat_rate_basis_points"
@@ -170,9 +209,8 @@ export const useBillsStore = defineStore("bills", () => {
 		| "category" | "notes" | "attachment_path">>;
 
 	const UPDATABLE: ReadonlyArray<keyof BillUpdate> = [
-		"vendor_name",
-		"vendor_tax_id",
-		"vendor_address",
+		"vendor_id",
+		"vendor_snapshot",
 		"vendor_invoice_number",
 		"issue_date",
 		"due_date",
@@ -359,6 +397,7 @@ export const useBillsStore = defineStore("bills", () => {
 		setStatus,
 		deleteBill,
 		remove,
-		flagOverdue
+		flagOverdue,
+		buildVendorSnapshot
 	};
 });

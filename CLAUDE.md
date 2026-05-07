@@ -32,6 +32,24 @@ on Windows** (Git Bash) — give shell commands accordingly.
 
 ---
 
+## Pre-1.0 status
+
+**The app is pre-production.** No real users have data on this build.
+That has two practical consequences:
+
+- **Schema redesigns are fair game.** When a refactor wants different
+  columns (e.g. swapping free-text vendor fields for a `vendor_id` FK
+  + `vendor_snapshot` JSON), write a migration that *drops and
+  recreates* the affected tables rather than ALTER-ing into a wonky
+  intermediate state. Any data on dev machines is disposable.
+- **No backfill / data-preservation migrations.** Don't bend over
+  backwards to keep test data working — the user explicitly opted out.
+  Once we ship 1.0 this rule flips and migrations must preserve data.
+
+This applies to the `migrations/` directory and to `SCHEMA_VERSION` in
+`data_io.rs`. Every breaking schema change still bumps SCHEMA_VERSION
+so backups stay version-aligned.
+
 ## Golden rules
 
 These are invariants, not guidelines. Breaking them silently corrupts

@@ -93,7 +93,7 @@
 							{{ b.number }}
 						</td>
 						<td class="py-2 px-2">
-							{{ b.vendor_name }}
+							{{ vendorNameOf(b) }}
 						</td>
 						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
 							{{ b.vendor_invoice_number || "—" }}
@@ -125,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-	import type { BillRow, BillStatus } from "~/stores/bills";
+	import type { BillRow, BillStatus, VendorSnapshot } from "~/stores/bills";
 	import { formatLKR } from "~/lib/money";
 	import { useBillsStore } from "~/stores/bills";
 
@@ -151,4 +151,14 @@
 	];
 
 	const balanceOf = (b: BillRow) => Math.max(0, b.total_cents - b.paid_cents);
+
+	// Vendor name lives in the JSON snapshot frozen at creation time.
+	// Falls back gracefully if the snapshot is missing or malformed.
+	const vendorNameOf = (b: BillRow): string => {
+		try {
+			return (JSON.parse(b.vendor_snapshot) as VendorSnapshot).name || "(no vendor)";
+		} catch {
+			return "(no vendor)";
+		}
+	};
 </script>
