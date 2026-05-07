@@ -54,14 +54,31 @@
 
 		<!-- Add new business -->
 		<div class="bg-(--ui-bg) border border-(--ui-border) rounded-lg p-4">
-			<div v-if="!showCreate" class="text-center">
+			<div v-if="!showCreate" class="text-center space-y-3">
 				<UButton
 					icon="i-lucide-plus"
 					:variant="tenants.tenants.length === 0 ? 'solid' : 'outline'"
+					:disabled="seedingDemo"
 					@click="showCreate = true"
 				>
 					{{ tenants.tenants.length === 0 ? "Create your first business" : "Add another business" }}
 				</UButton>
+				<div class="text-xs text-(--ui-text-muted)">
+					or
+					<button
+						type="button"
+						class="text-(--ui-primary) hover:underline disabled:opacity-50 disabled:hover:no-underline"
+						:disabled="seedingDemo"
+						@click="onAddDemo"
+					>
+						<UIcon
+							v-if="seedingDemo"
+							name="i-lucide-loader-circle"
+							class="size-3 inline-block animate-spin align-middle"
+						/>
+						{{ seedingDemo ? "Setting up demo data…" : "try a demo business with sample data" }}
+					</button>
+				</div>
 			</div>
 
 			<div v-else class="space-y-3">
@@ -106,6 +123,7 @@
 
 	import { convertFileSrc } from "@tauri-apps/api/core";
 	import pkg from "~~/package.json";
+	import { createDemoBusiness } from "~/lib/demo-seed";
 	import { useTenantsStore } from "~/stores/tenants";
 
 	definePageMeta({
@@ -160,6 +178,35 @@
 			switchingId.value = null;
 			toast.add({
 				title: "Could not open business",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	// "Try with sample data" — creates a demo tenant with realistic
+	// clients/vendors/quotes/invoices/bills/vouchers pre-loaded so the
+	// dashboard, lists, and PDFs all have something interesting to show
+	// the moment the user lands. Hard-reloads on success so every
+	// store re-hydrates against the new DB.
+	const seedingDemo = ref(false);
+	const onAddDemo = async () => {
+		if (seedingDemo.value) return;
+		seedingDemo.value = true;
+		try {
+			const t = await createDemoBusiness();
+			toast.add({
+				title: `${t.name} created`,
+				description: "Sample clients, invoices, bills, and vouchers are ready to explore.",
+				color: "success",
+				icon: "i-lucide-check"
+			});
+			window.location.assign("/");
+		} catch (err) {
+			seedingDemo.value = false;
+			toast.add({
+				title: "Could not create the demo business",
 				description: err instanceof Error ? err.message : String(err),
 				color: "error",
 				icon: "i-lucide-circle-alert"
