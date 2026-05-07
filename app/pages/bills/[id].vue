@@ -14,7 +14,7 @@
 					</span>
 				</h1>
 				<p class="text-sm text-(--ui-text-muted) mt-1">
-					From {{ formVendor || "(no vendor)" }}
+					From {{ vendorSnapshot?.name || "(no vendor)" }}
 					<span v-if="formVendorInvoiceNumber"> · #{{ formVendorInvoiceNumber }}</span>
 				</p>
 			</div>
@@ -66,32 +66,69 @@
 		<div class="space-y-6">
 			<UCard>
 				<template #header>
-					<div class="font-medium">
-						Vendor &amp; reference
+					<div class="flex items-center justify-between">
+						<div class="font-medium">
+							Vendor &amp; reference
+						</div>
+						<UButton
+							v-if="editable"
+							size="xs"
+							variant="ghost"
+							color="neutral"
+							icon="i-lucide-refresh-ccw"
+							@click="refreshVendorSnapshot"
+						>
+							Refresh vendor snapshot
+						</UButton>
 					</div>
 				</template>
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<UFormField label="Vendor" required>
-						<UInput v-model="formVendor" :disabled="!editable" />
-					</UFormField>
-					<UFormField label="Vendor tax ID">
-						<UInput v-model="formVendorTaxId" :disabled="!editable" />
-					</UFormField>
-					<UFormField label="Vendor address" class="md:col-span-2">
-						<UTextarea v-model="formVendorAddress" :rows="2" :disabled="!editable" />
-					</UFormField>
-					<UFormField label="Vendor invoice #" hint="The number on THEIR invoice (e.g. INV-2024-9821).">
-						<UInput v-model="formVendorInvoiceNumber" :disabled="!editable" />
-					</UFormField>
-					<UFormField label="Category" hint="e.g. utilities, rent, supplies, services">
-						<UInput v-model="formCategory" :disabled="!editable" />
-					</UFormField>
-					<UFormField label="Issue date">
-						<DateField v-model="formIssueDate" :disabled="!editable" />
-					</UFormField>
-					<UFormField label="Due date">
-						<DateField v-model="formDueDate" :disabled="!editable" />
-					</UFormField>
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+					<div class="space-y-3">
+						<UFormField label="Vendor" required>
+							<VendorPicker
+								v-model="formVendorId"
+								:disabled="!editable"
+								required
+								@select="onVendorPicked"
+							/>
+						</UFormField>
+						<div class="text-sm">
+							<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) mb-1">
+								Bill from (snapshot)
+							</div>
+							<div class="font-medium">
+								{{ vendorSnapshot?.name || "(no vendor)" }}
+							</div>
+							<div v-if="vendorSnapshot?.address_line1" class="text-(--ui-text-muted)">
+								{{ vendorSnapshot.address_line1 }}
+							</div>
+							<div v-if="vendorSnapshot?.address_line2" class="text-(--ui-text-muted)">
+								{{ vendorSnapshot.address_line2 }}
+							</div>
+							<div v-if="vendorSnapshot?.city || vendorSnapshot?.country" class="text-(--ui-text-muted)">
+								{{ [vendorSnapshot.city, vendorSnapshot.postal_code, vendorSnapshot.country].filter(Boolean).join(", ") }}
+							</div>
+							<div v-if="vendorSnapshot?.tax_id" class="text-(--ui-text-muted) mt-1 text-xs">
+								Tax ID: {{ vendorSnapshot.tax_id }}
+							</div>
+						</div>
+					</div>
+					<div class="space-y-3">
+						<UFormField label="Vendor invoice #" hint="The number on THEIR invoice (e.g. INV-2024-9821).">
+							<UInput v-model="formVendorInvoiceNumber" :disabled="!editable" />
+						</UFormField>
+						<UFormField label="Category" hint="e.g. utilities, rent, supplies, services">
+							<UInput v-model="formCategory" :disabled="!editable" />
+						</UFormField>
+						<div class="grid grid-cols-2 gap-3">
+							<UFormField label="Issue date">
+								<DateField v-model="formIssueDate" :disabled="!editable" />
+							</UFormField>
+							<UFormField label="Due date">
+								<DateField v-model="formDueDate" :disabled="!editable" />
+							</UFormField>
+						</div>
+					</div>
 				</div>
 			</UCard>
 
@@ -291,12 +328,14 @@
 // bundle: just total, due date, vendor invoice number, attachment.
 
 	import type { LineDraft } from "~/components/DocumentLineEditor.vue";
-	import type { BillLineRow, BillRow, BillStatus } from "~/stores/bills";
+	import type { BillLineRow, BillRow, BillStatus, VendorSnapshot } from "~/stores/bills";
 	import type { PricingMode } from "~/stores/quotes";
+	import type { VendorRow } from "~/stores/vendors";
 	import { computeLineTotals, formatLKR, formatQty, formatRate, sumCents, toCents } from "~/lib/money";
 	import { themeHex } from "~/lib/theme";
 	import { canTransition, useBillsStore } from "~/stores/bills";
 	import { useSettingsStore } from "~/stores/settings";
+	import { useVendorsStore } from "~/stores/vendors";
 
 	definePageMeta({ title: "Bill" });
 
@@ -306,7 +345,12 @@
 
 	const store = useBillsStore();
 	const settingsStore = useSettingsStore();
+	const vendorsStore = useVendorsStore();
 	settingsStore.ensureLoaded().catch(() => { /* surfaced elsewhere */ });
+	// Vendors might not be loaded yet if the user lands here via deep link.
+	if (vendorsStore.vendors.length === 0) {
+		vendorsStore.load().catch(() => { /* surfaced via picker empty state */ });
+	}
 
 	const billId = Number(route.params.id);
 	if (!Number.isFinite(billId)) {
@@ -322,14 +366,17 @@
 	const bundleSubtotalDisplay = ref<string>("");
 	const vatRatePct = ref<number>(0);
 
-	const formVendor = ref("");
-	const formVendorTaxId = ref("");
-	const formVendorAddress = ref("");
+	const formVendorId = ref<number | null>(null);
 	const formVendorInvoiceNumber = ref("");
 	const formIssueDate = ref("");
 	const formDueDate = ref("");
 	const formCategory = ref("");
 	const formNotes = ref("");
+
+	// The frozen-at-creation snapshot. Edited indirectly: picking a different
+	// vendor swaps in a fresh copy, the "Refresh vendor snapshot" button
+	// re-snapshots from the live vendors row.
+	const vendorSnapshot = ref<VendorSnapshot | null>(null);
 
 	const pricingMode = computed<PricingMode>(() => bill.value?.pricing_mode ?? "bundle");
 	const status = computed<BillStatus>(() => bill.value?.status ?? "unpaid");
@@ -345,9 +392,12 @@
 			throw createError({ statusCode: 404, statusMessage: "Bill not found" });
 		}
 		bill.value = row;
-		formVendor.value = row.vendor_name;
-		formVendorTaxId.value = row.vendor_tax_id ?? "";
-		formVendorAddress.value = row.vendor_address ?? "";
+		formVendorId.value = row.vendor_id;
+		try {
+			vendorSnapshot.value = JSON.parse(row.vendor_snapshot) as VendorSnapshot;
+		} catch {
+			vendorSnapshot.value = null;
+		}
 		formVendorInvoiceNumber.value = row.vendor_invoice_number ?? "";
 		formIssueDate.value = row.issue_date;
 		formDueDate.value = row.due_date;
@@ -412,6 +462,41 @@
 		dirty.value = true;
 	};
 
+	// VendorPicker emits the freshly-picked row — snapshot it on the spot
+	// so the displayed "Bill from" block updates immediately. Persisted
+	// when the user clicks Save.
+	const onVendorPicked = (v: VendorRow) => {
+		if (!editable.value) return;
+		vendorSnapshot.value = {
+			name: v.name,
+			contact_person: v.contact_person,
+			email: v.email,
+			phone: v.phone,
+			address_line1: v.address_line1,
+			address_line2: v.address_line2,
+			city: v.city,
+			postal_code: v.postal_code,
+			country: v.country,
+			tax_id: v.tax_id
+		};
+		dirty.value = true;
+	};
+
+	// If the user has updated the linked vendor record (address change,
+	// new tax ID, etc.), this refreshes the snapshot from the current
+	// vendors row. Doesn't run automatically — historical bills should
+	// keep their original snapshot unless the user explicitly opts in.
+	const refreshVendorSnapshot = () => {
+		if (!editable.value || formVendorId.value === null) return;
+		const v = vendorsStore.vendors.find((x) => x.id === formVendorId.value);
+		if (!v) {
+			toast.add({ title: "Vendor not found", color: "warning", icon: "i-lucide-circle-alert" });
+			return;
+		}
+		onVendorPicked(v);
+		toast.add({ title: "Vendor snapshot refreshed", color: "info", icon: "i-lucide-refresh-ccw" });
+	};
+
 	const save = async () => {
 		if (!bill.value || !editable.value) return;
 		saving.value = true;
@@ -428,11 +513,13 @@
 				? totalsFromLines.total_cents
 				: subtotal + tax;
 
+			if (formVendorId.value === null) {
+				throw new Error("A vendor is required");
+			}
 			await store.update(billId, {
 				pricing_mode: bill.value.pricing_mode,
-				vendor_name: formVendor.value.trim(),
-				vendor_tax_id: formVendorTaxId.value.trim() || null,
-				vendor_address: formVendorAddress.value.trim() || null,
+				vendor_id: formVendorId.value,
+				vendor_snapshot: vendorSnapshot.value ? JSON.stringify(vendorSnapshot.value) : bill.value.vendor_snapshot,
 				vendor_invoice_number: formVendorInvoiceNumber.value.trim() || null,
 				issue_date: formIssueDate.value,
 				due_date: formDueDate.value,
@@ -576,10 +663,10 @@
 	// belong on outbound documents).
 	const buildPdfPayload = (lineRows: BillLineRow[]) => {
 		const b = bill.value!;
-		const addressLines = (b.vendor_address ?? "")
-			.split(/\r?\n/)
-			.map((s) => s.trim())
-			.filter(Boolean);
+		const snap = vendorSnapshot.value;
+		const cityLine = [snap?.city, snap?.postal_code].filter(Boolean).join(" ").trim();
+		const addressLines = [snap?.address_line1, snap?.address_line2, cityLine || null, snap?.country]
+			.filter((s): s is string => Boolean(s && s.trim()));
 		const hasVat = (b.tax_cents ?? 0) !== 0;
 
 		const fmt = (cents: number) => formatLKR(cents);
@@ -601,11 +688,13 @@
 			vendor_invoice_label: b.vendor_invoice_number ? "Vendor inv #" : null,
 			vendor_invoice_value: b.vendor_invoice_number ?? null,
 			party_label: "Bill from",
-			party: {
-				name: b.vendor_name,
-				tax_id: b.vendor_tax_id ?? null,
-				address_lines: addressLines
-			},
+			party: snap
+				? {
+					name: snap.name,
+					tax_id: snap.tax_id ?? null,
+					address_lines: addressLines
+				}
+				: { name: "(no vendor)", tax_id: null, address_lines: [] },
 			project_title: b.category ? `Category: ${b.category}` : "",
 			pricing_mode: b.pricing_mode,
 			has_vat: hasVat,
