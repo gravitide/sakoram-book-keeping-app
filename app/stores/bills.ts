@@ -37,7 +37,8 @@ export interface BillRow {
 	tax_cents: number
 	total_cents: number
 	paid_cents: number
-	category: string | null
+	category_id: number | null
+	category_snapshot: string | null
 	notes: string | null
 	attachment_path: string | null
 	created_at: string
@@ -116,11 +117,17 @@ export const useBillsStore = defineStore("bills", () => {
 			try {
 				snapName = (JSON.parse(row.vendor_snapshot) as VendorSnapshot).name?.toLowerCase() ?? "";
 			} catch { /* ignore */ }
+			let catName = "";
+			try {
+				if (row.category_snapshot) {
+					catName = (JSON.parse(row.category_snapshot) as { name: string }).name?.toLowerCase() ?? "";
+				}
+			} catch { /* ignore */ }
 			return (
 				row.number.toLowerCase().includes(q)
 				|| snapName.includes(q)
 				|| (row.vendor_invoice_number ?? "").toLowerCase().includes(q)
-				|| (row.category ?? "").toLowerCase().includes(q)
+				|| catName.includes(q)
 			);
 		});
 	});
@@ -206,7 +213,7 @@ export const useBillsStore = defineStore("bills", () => {
 		| "pricing_mode"
 		| "vat_rate_basis_points"
 		| "subtotal_cents" | "tax_cents" | "total_cents"
-		| "category" | "notes" | "attachment_path">>;
+		| "category_id" | "category_snapshot" | "notes" | "attachment_path">>;
 
 	const UPDATABLE: ReadonlyArray<keyof BillUpdate> = [
 		"vendor_id",
@@ -219,7 +226,8 @@ export const useBillsStore = defineStore("bills", () => {
 		"subtotal_cents",
 		"tax_cents",
 		"total_cents",
-		"category",
+		"category_id",
+		"category_snapshot",
 		"notes",
 		"attachment_path"
 	];

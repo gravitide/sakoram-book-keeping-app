@@ -20,6 +20,7 @@
 
 import type { Tenant } from "~/stores/tenants";
 import type { VendorRow } from "~/stores/vendors";
+import { buildCategorySnapshot, useBillCategoriesStore } from "~/stores/bill_categories";
 import { useBillsStore } from "~/stores/bills";
 import { useClientsStore } from "~/stores/clients";
 import { useInvoicesStore } from "~/stores/invoices";
@@ -415,6 +416,24 @@ const seedInvoices = async (cs: ClientIds, qs: QuoteIds) => {
 
 // ---------- Bills ---------------------------------------------------------
 
+// ---------- Bill categories -----------------------------------------------
+
+interface CategoryIds {
+	utilities: number
+	supplies: number
+	fees: number
+}
+
+const seedCategories = async (): Promise<CategoryIds> => {
+	const store = useBillCategoriesStore();
+	const ids: CategoryIds = {
+		utilities: await store.create({ name: "Utilities", color: "amber", icon: "i-lucide-zap" }),
+		supplies: await store.create({ name: "Supplies", color: "blue", icon: "i-lucide-package" }),
+		fees: await store.create({ name: "Fees", color: "violet", icon: "i-lucide-briefcase" })
+	};
+	return ids;
+};
+
 interface BillIds {
 	ceb: number
 	office: number
@@ -435,7 +454,13 @@ const vendorRow = (v: VendorRow) => ({
 	tax_id: v.tax_id
 });
 
-const seedBills = async (vs: VendorIds): Promise<BillIds> => {
+const seedBills = async (vs: VendorIds, cats: CategoryIds): Promise<BillIds> => {
+	const categoriesStore = useBillCategoriesStore();
+	const snapshotFor = (id: number): string => {
+		const row = categoriesStore.categories.find((c) => c.id === id);
+		if (!row) throw new Error(`seedBills: category ${id} not found`);
+		return buildCategorySnapshot(row);
+	};
 	const bills = useBillsStore();
 	const vendors = useVendorsStore();
 	const ids = { ceb: 0, office: 0, bank: 0 };
@@ -450,7 +475,8 @@ const seedBills = async (vs: VendorIds): Promise<BillIds> => {
 		issue_date: daysAgo(35),
 		due_date: daysAgo(20),
 		vendor_invoice_number: "CEB-2026-04-7782",
-		category: "utilities",
+		category_id: cats.utilities,
+		category_snapshot: snapshotFor(cats.utilities),
 		pricing_mode: "bundle",
 		vat_rate_basis_points: 1800,
 		subtotal_cents: 3_000_000,
@@ -466,7 +492,8 @@ const seedBills = async (vs: VendorIds): Promise<BillIds> => {
 		issue_date: daysAgo(5),
 		due_date: daysFromNow(25),
 		vendor_invoice_number: "LOS-90213",
-		category: "supplies",
+		category_id: cats.supplies,
+		category_snapshot: snapshotFor(cats.supplies),
 		pricing_mode: "bundle",
 		vat_rate_basis_points: 1800,
 		subtotal_cents: 4_500_000,
@@ -481,7 +508,8 @@ const seedBills = async (vs: VendorIds): Promise<BillIds> => {
 		issue_date: daysAgo(12),
 		due_date: daysFromNow(3),
 		vendor_invoice_number: "HNB-FX-2026-0048",
-		category: "fees",
+		category_id: cats.fees,
+		category_snapshot: snapshotFor(cats.fees),
 		pricing_mode: "bundle",
 		vat_rate_basis_points: 0,
 		subtotal_cents: 1_500_000,
@@ -589,9 +617,10 @@ export const createDemoBusiness = async (
 	await seedSettings();
 	const clients = await seedClients();
 	const vendors = await seedVendors();
+	const categories = await seedCategories();
 	const quotes = await seedQuotes(clients);
 	await seedInvoices(clients, quotes);
-	const bills = await seedBills(vendors);
+	const bills = await seedBills(vendors, categories);
 	await seedVouchers(clients, vendors, bills);
 
 	// Auto-overdue any sent invoices/bills whose due date is already past.

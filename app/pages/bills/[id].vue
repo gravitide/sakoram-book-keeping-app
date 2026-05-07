@@ -117,8 +117,8 @@
 						<UFormField label="Vendor invoice #" hint="The number on THEIR invoice (e.g. INV-2024-9821).">
 							<UInput v-model="formVendorInvoiceNumber" :disabled="!editable" />
 						</UFormField>
-						<UFormField label="Category" hint="e.g. utilities, rent, supplies, services">
-							<UInput v-model="formCategory" :disabled="!editable" />
+						<UFormField label="Category" hint="Manage the list under Contacts → Bill categories.">
+							<CategoryPicker v-model="formCategoryId" :disabled="!editable" />
 						</UFormField>
 						<div class="grid grid-cols-2 gap-3">
 							<UFormField label="Issue date">
@@ -333,6 +333,7 @@
 	import type { VendorRow } from "~/stores/vendors";
 	import { computeLineTotals, formatLKR, formatQty, formatRate, sumCents, toCents } from "~/lib/money";
 	import { themeHex } from "~/lib/theme";
+	import { buildCategorySnapshot, useBillCategoriesStore } from "~/stores/bill_categories";
 	import { canTransition, useBillsStore } from "~/stores/bills";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVendorsStore } from "~/stores/vendors";
@@ -346,10 +347,14 @@
 	const store = useBillsStore();
 	const settingsStore = useSettingsStore();
 	const vendorsStore = useVendorsStore();
+	const categoriesStore = useBillCategoriesStore();
 	settingsStore.ensureLoaded().catch(() => { /* surfaced elsewhere */ });
-	// Vendors might not be loaded yet if the user lands here via deep link.
+	// Vendors / categories might not be loaded yet if the user lands here via deep link.
 	if (vendorsStore.vendors.length === 0) {
 		vendorsStore.load().catch(() => { /* surfaced via picker empty state */ });
+	}
+	if (categoriesStore.categories.length === 0) {
+		categoriesStore.load().catch(() => { /* surfaced via picker empty state */ });
 	}
 
 	const billId = Number(route.params.id);
@@ -371,7 +376,7 @@
 	const formVendorInvoiceNumber = ref("");
 	const formIssueDate = ref("");
 	const formDueDate = ref("");
-	const formCategory = ref("");
+	const formCategoryId = ref<number | null>(null);
 	const formNotes = ref("");
 
 	// The frozen-at-creation snapshot. Edited indirectly: picking a different
@@ -404,7 +409,7 @@
 		formVendorInvoiceNumber.value = row.vendor_invoice_number ?? "";
 		formIssueDate.value = row.issue_date;
 		formDueDate.value = row.due_date;
-		formCategory.value = row.category ?? "";
+		formCategoryId.value = row.category_id;
 		formNotes.value = row.notes ?? "";
 		vatRatePct.value = row.vat_rate_basis_points / 100;
 		bundleSubtotalCents.value = row.subtotal_cents;
@@ -429,7 +434,7 @@
 	// Mark dirty when any directly v-model'd form field changes. Registered
 	// after the initial hydrate; hydrating-flag guards re-hydrate paths.
 	watch(
-		[formVendorInvoiceNumber, formIssueDate, formDueDate, formCategory, formNotes, vatRatePct],
+		[formVendorInvoiceNumber, formIssueDate, formDueDate, formCategoryId, formNotes, vatRatePct],
 		() => {
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
@@ -441,6 +446,21 @@
 		const cs = Math.abs(c) % 100;
 		const sign = c < 0 ? "-" : "";
 		return `${sign}${r}.${cs.toString().padStart(2, "0")}`;
+	}
+
+	function snapshotForSelectedCategory(): string | null {
+		if (formCategoryId.value === null) return null;
+		const c = categoriesStore.categories.find((row) => row.id === formCategoryId.value);
+		return c ? buildCategorySnapshot(c) : null;
+	}
+
+	function categoryNameFromSnapshot(json: string | null): string {
+		if (!json) return "";
+		try {
+			return (JSON.parse(json) as { name?: string }).name ?? "";
+		} catch {
+			return "";
+		}
 	}
 
 	const onBundleSubtotalInput = (raw: string | number) => {
@@ -541,7 +561,8 @@
 				subtotal_cents: subtotal,
 				tax_cents: tax,
 				total_cents: total,
-				category: formCategory.value.trim() || null,
+				category_id: formCategoryId.value,
+				category_snapshot: snapshotForSelectedCategory(),
 				notes: formNotes.value || null
 			});
 			await store.load();
@@ -709,7 +730,9 @@
 					address_lines: addressLines
 				}
 				: { name: "(no vendor)", tax_id: null, address_lines: [] },
-			project_title: b.category ? `Category: ${b.category}` : "",
+			project_title: categoryNameFromSnapshot(b.category_snapshot)
+				? `Category: ${categoryNameFromSnapshot(b.category_snapshot)}`
+				: "",
 			pricing_mode: b.pricing_mode,
 			has_vat: hasVat,
 			notes: b.notes ?? "",
