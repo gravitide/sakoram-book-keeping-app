@@ -20,7 +20,8 @@
     ])
   ],
 )
-#set text(font: ("Google Sans Flex", "Miriam Libre", "Inter"), size: 10pt, lang: "en")
+#let chosen-font = if "font_family" in data and data.font_family != none { data.font_family } else { "Google Sans Flex" }
+#set text(font: (chosen-font, "Google Sans Flex", "Inter", "Miriam Libre"), size: 10pt, lang: "en")
 #set par(leading: 0.6em, spacing: 0.7em)
 
 // ============================================================
