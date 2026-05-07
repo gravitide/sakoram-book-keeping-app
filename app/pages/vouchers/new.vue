@@ -139,14 +139,20 @@
 		{ label: "—", value: null },
 		...billsStore.bills
 			.filter((b) => b.status !== "cancelled")
-			.map((b) => ({ label: `${b.number} · ${b.vendor_name}`, value: b.id }))
+			.map((b) => ({ label: `${b.number} · ${parseSnapshot(b.vendor_snapshot, "(vendor)")}`, value: b.id }))
 	]);
 
 	function parseClient(snap: string): string {
+		return parseSnapshot(snap, "(client)");
+	}
+
+	// Both client and vendor snapshots share the same shape — a JSON
+	// object with at least a `name` field — so one helper covers both.
+	function parseSnapshot(snap: string, fallback: string): string {
 		try {
-			return (JSON.parse(snap) as { name?: string }).name ?? "(client)";
+			return (JSON.parse(snap) as { name?: string }).name ?? fallback;
 		} catch {
-			return "(client)";
+			return fallback;
 		}
 	}
 

@@ -364,6 +364,16 @@
 		}
 	};
 
+	// Bills carry their vendor info in vendor_snapshot (same shape as
+	// client_snapshot — `{ name, ... }`) since the bills→vendors refactor.
+	const parseVendorName = (snap: string): string => {
+		try {
+			return (JSON.parse(snap) as { name?: string }).name ?? "(vendor)";
+		} catch {
+			return "(vendor)";
+		}
+	};
+
 	const formatDate = (iso: string): string => {
 		const [y, m, d] = iso.split(/[\sT-]/).map(Number);
 		if (!y || !m || !d) return iso;
@@ -418,7 +428,7 @@
 				kindLabel: "Bill",
 				id: b.id,
 				number: b.number,
-				subtitle: b.vendor_name,
+				subtitle: parseVendorName(b.vendor_snapshot),
 				dateLabel: formatDate(b.created_at),
 				sortKey: b.created_at,
 				amountCents: b.total_cents,
@@ -490,7 +500,7 @@
 				kind: "bill",
 				id: b.id,
 				number: b.number,
-				subtitle: b.vendor_name,
+				subtitle: parseVendorName(b.vendor_snapshot),
 				dueDate: formatDate(b.due_date),
 				amountCents: Math.max(0, b.total_cents - b.paid_cents),
 				amountClass: "text-(--ui-warning)",
