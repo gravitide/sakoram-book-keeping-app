@@ -238,7 +238,13 @@
 	]);
 	const billOptions = computed(() => [
 		{ label: "—", value: null },
-		...billsStore.bills.map((b) => ({ label: `${b.number} · ${b.vendor_name}`, value: b.id }))
+		...billsStore.bills.map((b) => {
+			let name = "(vendor)";
+			try {
+				name = (JSON.parse(b.vendor_snapshot) as { name?: string }).name ?? name;
+			} catch { /* ignore */ }
+			return { label: `${b.number} · ${name}`, value: b.id };
+		})
 	]);
 
 	const linkedInvoice = computed(() =>
