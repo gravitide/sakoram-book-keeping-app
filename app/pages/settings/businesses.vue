@@ -10,6 +10,17 @@
 				</p>
 			</div>
 			<div class="flex gap-2">
+				<UButton
+					color="neutral"
+					variant="outline"
+					icon="i-lucide-sparkles"
+					:loading="seedingDemo"
+					:disabled="seedingDemo"
+					title="Create a new business pre-filled with realistic sample data"
+					@click="onAddDemo"
+				>
+					Add demo business
+				</UButton>
 				<UButton color="neutral" variant="outline" icon="i-lucide-upload" @click="onImportClick">
 					Import
 				</UButton>
@@ -218,6 +229,7 @@
 	import type { Tenant } from "~/stores/tenants";
 	import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 	import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+	import { createDemoBusiness } from "~/lib/demo-seed";
 	import { useTenantsStore } from "~/stores/tenants";
 
 	interface ExportManifest {
@@ -253,6 +265,35 @@
 	onMounted(refreshLogos);
 
 	const goWelcome = () => router.push("/welcome");
+
+	// ---- Add demo business ----
+	// Spins up a fresh tenant pre-loaded with sample clients, vendors,
+	// quotes, invoices, bills, and vouchers so the user has something
+	// concrete to demo / explore. Hard-reloads on success so every
+	// store re-hydrates against the new DB.
+	const seedingDemo = ref(false);
+	const onAddDemo = async () => {
+		if (seedingDemo.value) return;
+		seedingDemo.value = true;
+		try {
+			const t = await createDemoBusiness();
+			toast.add({
+				title: `${t.name} created`,
+				description: "Sample data ready to explore.",
+				color: "success",
+				icon: "i-lucide-check"
+			});
+			window.location.assign("/");
+		} catch (err) {
+			seedingDemo.value = false;
+			toast.add({
+				title: "Could not create the demo business",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
 
 	// ---- Switch ----
 	const onSwitch = async (id: string) => {
