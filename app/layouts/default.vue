@@ -30,6 +30,13 @@
 
 			<nav class="flex-1 p-2 space-y-1 overflow-y-auto">
 				<template v-for="item in nav" :key="item.to">
+					<!-- Optional rule above this item to break the list into
+					logical groups (documents / contacts / settings). -->
+					<div
+						v-if="item.divider"
+						class="my-2 border-t border-(--ui-border)"
+						aria-hidden="true"
+					/>
 					<NuxtLink
 						:to="item.to"
 						class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
@@ -167,25 +174,31 @@
 
 	// Sidebar nav — Settings is a parent with two children. Sub-items are
 	// always visible (no click-to-expand) since the tree is small.
+	// Group order: Dashboard → documents (quotes/invoices/bills/vouchers)
+	// → contacts (clients/vendors) → settings. `divider: true` draws a thin
+	// rule above the item so the eye can pick out group boundaries without
+	// reading every label.
 	const nav = [
 		{ to: "/", label: "Dashboard", icon: "i-lucide-layout-dashboard" },
+		{ to: "/quotes", label: "Quotes", icon: "i-lucide-file-text", divider: true },
+		{ to: "/invoices", label: "Invoices", icon: "i-lucide-receipt" },
+		{ to: "/bills", label: "Bills", icon: "i-lucide-file-input" },
+		{ to: "/vouchers", label: "Vouchers", icon: "i-lucide-ticket" },
 		{
 			to: "/clients",
 			label: "Contacts",
 			icon: "i-lucide-contact",
+			divider: true,
 			children: [
 				{ to: "/clients", label: "Clients", icon: "i-lucide-users" },
 				{ to: "/vendors", label: "Vendors", icon: "i-lucide-store" }
 			]
 		},
-		{ to: "/quotes", label: "Quotes", icon: "i-lucide-file-text" },
-		{ to: "/invoices", label: "Invoices", icon: "i-lucide-receipt" },
-		{ to: "/bills", label: "Bills", icon: "i-lucide-file-input" },
-		{ to: "/vouchers", label: "Vouchers", icon: "i-lucide-ticket" },
 		{
 			to: "/settings",
 			label: "Settings",
 			icon: "i-lucide-settings",
+			divider: true,
 			children: [
 				{ to: "/settings/company", label: "Company details", icon: "i-lucide-building-2" },
 				{ to: "/settings/appearance", label: "Appearance", icon: "i-lucide-palette" },
