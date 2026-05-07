@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sakoram — Bookkeeping for Sri Lankan businesses</title>
+<meta name="description" content="A fast, fully offline desktop bookkeeping app for small Sri Lankan businesses. Clients, quotes, invoices, bills and vouchers — all in one local SQLite file." />
+<link rel="icon" type="image/png" href="assets/icon.png" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg:        #f4efe6;
+    --bg-2:      #ebe4d4;
+    --bg-card:   #ffffff;
+    --ink:       #14171c;
+    --ink-2:     #2a2e34;
+    --muted:     #6b6f76;
+    --line:      #ddd4bf;
+    --line-soft: #ece7da;
+    --accent:    #c97a3f;
+    --accent-2:  #b46930;
+
+    --dark:      #14171c;
+    --dark-2:    #1c2027;
+    --dark-line: #2a2e34;
+    --dark-mute: #8b9099;
+    --dark-fg:   #f4efe6;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  img { max-width: 100%; display: block; }
+  a { color: inherit; }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px; }
+
+  .serif { font-family: 'Fraunces', Georgia, serif; font-weight: 600; letter-spacing: -0.02em; }
+  .mono  { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .eyebrow {
+    font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase;
+    font-weight: 600; color: var(--muted);
+  }
+
+  /* ------------ NAV ------------ */
+  nav.top {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    background: rgba(244, 239, 230, 0.78);
+    border-bottom: 1px solid transparent;
+    transition: border-color .2s;
+  }
+  nav.top.scrolled { border-bottom-color: var(--line); }
+  .nav-inner {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 0;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .brand .name { font-family: 'Fraunces', serif; font-weight: 600; font-size: 22px; letter-spacing: -0.02em; }
+  .nav-links { display: flex; gap: 28px; align-items: center; }
+  .nav-links a { text-decoration: none; font-size: 14px; color: var(--ink-2); font-weight: 500; }
+  .nav-links a:hover { color: var(--accent-2); }
+  .nav-links a.nav-cta { color: var(--bg); }
+  .nav-links a.nav-cta:hover { color: white; }
+  .nav-cta {
+    background: var(--ink); color: var(--bg);
+    padding: 9px 16px; border-radius: 999px;
+    font-size: 13px; font-weight: 600; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: background .15s;
+  }
+  .nav-cta:hover { background: var(--accent-2); }
+  @media (max-width: 720px) {
+    .nav-links a:not(.nav-cta) { display: none; }
+  }
+
+  /* ------------ HERO ------------ */
+  .hero {
+    padding: 80px 0 60px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle at 20% 18%, rgba(201, 122, 63, 0.10), transparent 42%),
+      radial-gradient(circle at 88% 8%, rgba(20, 23, 28, 0.05), transparent 50%);
+    pointer-events: none;
+  }
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    gap: 64px;
+    align-items: center;
+    position: relative;
+  }
+  @media (max-width: 920px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 40px; }
+  }
+  .hero h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: clamp(44px, 6.4vw, 84px);
+    letter-spacing: -0.03em;
+    line-height: 0.98;
+    margin: 22px 0 22px;
+    text-wrap: balance;
+  }
+  .hero h1 .ink-soft { color: var(--muted); font-style: italic; font-weight: 500; }
+  .hero p.lead {
+    font-size: 18px;
+    color: var(--ink-2);
+    max-width: 52ch;
+    text-wrap: pretty;
+    margin: 0 0 32px;
+  }
+  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 13px 20px; border-radius: 10px;
+    font-size: 14px; font-weight: 600;
+    text-decoration: none;
+    transition: transform .12s, background .15s, box-shadow .15s;
+  }
+  .btn-primary { background: var(--accent); color: white; box-shadow: 0 8px 22px -10px rgba(201,122,63,0.6); }
+  .btn-primary:hover { background: var(--accent-2); transform: translateY(-1px); }
+  .btn-ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  .btn-ghost:hover { border-color: var(--ink); }
+  .meta-row {
+    display: flex; gap: 18px; align-items: center;
+    margin-top: 22px;
+    font-size: 13px; color: var(--muted);
+    flex-wrap: wrap;
+  }
+  .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--line); }
+
+  /* hero visual */
+  .hero-visual {
+    position: relative;
+    aspect-ratio: 16 / 11;
+  }
+  .hero-shot {
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--dark);
+    box-shadow:
+      0 30px 60px -30px rgba(20,23,28,0.45),
+      0 12px 24px -12px rgba(20,23,28,0.25);
+    border: 1px solid var(--line);
+    transform: rotate(-1deg);
+    position: relative;
+  }
+  .hero-shot img { width: 100%; height: auto; display: block; }
+  .hero-badge {
+    position: absolute;
+    bottom: -22px; right: -14px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 18px;
+    box-shadow: 0 18px 40px -18px rgba(20,23,28,0.3);
+    transform: rotate(2deg);
+    display: flex; align-items: center; gap: 12px;
+    font-size: 13px;
+    z-index: 2;
+  }
+  .hero-badge .b-icon {
+    width: 38px; height: 38px; border-radius: 9px;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--accent);
+  }
+  .hero-badge b { display: block; font-weight: 600; color: var(--ink); }
+  .hero-badge span { color: var(--muted); font-size: 12px; }
+
+  /* ------------ MARQUEE / KEY FACTS ------------ */
+  .stripe {
+    background: var(--ink);
+    color: var(--dark-fg);
+    padding: 32px 0;
+    margin-top: 30px;
+  }
+  .stripe-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 32px;
+  }
+  @media (max-width: 720px) { .stripe-grid { grid-template-columns: repeat(2, 1fr); gap: 24px; } }
+  .stripe-item .num {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 32px;
+    letter-spacing: -0.02em;
+    color: var(--bg);
+  }
+  .stripe-item .num em { color: var(--accent); font-style: normal; }
+  .stripe-item .lbl {
+    font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--dark-mute); margin-top: 4px;
+    font-weight: 500;
+  }
+
+  /* ------------ SECTIONS ------------ */
+  section { padding: 100px 0; }
+  .section-head { max-width: 720px; margin-bottom: 56px; }
+  .section-head h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: clamp(34px, 4.4vw, 52px);
+    letter-spacing: -0.025em;
+    line-height: 1.05;
+    margin: 14px 0 18px;
+    text-wrap: balance;
+  }
+  .section-head p {
+    font-size: 17px; color: var(--ink-2);
+    max-width: 56ch;
+    text-wrap: pretty;
+    margin: 0;
+  }
+
+  /* ------------ FEATURES ------------ */
+  .features {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+  @media (max-width: 920px) { .features { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 600px) { .features { grid-template-columns: 1fr; } }
+  .feature {
+    background: var(--bg-card);
+    border: 1px solid var(--line-soft);
+    border-radius: 14px;
+    padding: 28px;
+    display: flex; flex-direction: column; gap: 12px;
+    transition: transform .15s, border-color .15s;
+  }
+  .feature:hover { border-color: var(--line); transform: translateY(-2px); }
+  .feature .icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: rgba(201, 122, 63, 0.12);
+    color: var(--accent-2);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .feature h3 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 22px;
+    letter-spacing: -0.015em;
+    margin: 0;
+  }
+  .feature p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.6; }
+
+  /* ------------ SHOWCASE ------------ */
+  .showcase-row {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 56px;
+    align-items: center;
+    padding: 60px 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .showcase-row:last-child { border-bottom: none; }
+  .showcase-row.flip { grid-template-columns: 1.4fr 1fr; }
+  .showcase-row.flip .showcase-text { order: 2; }
+  @media (max-width: 920px) {
+    .showcase-row, .showcase-row.flip {
+      grid-template-columns: 1fr; gap: 32px;
+    }
+    .showcase-row.flip .showcase-text { order: 0; }
+  }
+  .showcase-text h3 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: clamp(28px, 3.4vw, 38px);
+    letter-spacing: -0.02em;
+    margin: 12px 0 16px;
+    line-height: 1.1;
+  }
+  .showcase-text p {
+    font-size: 16.5px; color: var(--ink-2);
+    margin: 0 0 18px; max-width: 48ch;
+    text-wrap: pretty;
+  }
+  .checks { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+  .checks li {
+    display: flex; gap: 10px; align-items: flex-start;
+    font-size: 14.5px; color: var(--ink-2);
+  }
+  .checks svg { flex-shrink: 0; margin-top: 3px; color: var(--accent); }
+  .showcase-shot {
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--dark);
+    border: 1px solid var(--line);
+    box-shadow: 0 24px 60px -28px rgba(20,23,28,0.4);
+  }
+
+  /* ------------ ARCHITECTURE ------------ */
+  .arch-bg {
+    background: var(--ink);
+    color: var(--dark-fg);
+  }
+  .arch-bg .section-head h2 { color: var(--bg); }
+  .arch-bg .section-head p { color: var(--dark-mute); }
+  .arch-bg .eyebrow { color: var(--accent); }
+  .arch-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+  }
+  @media (max-width: 720px) { .arch-grid { grid-template-columns: 1fr; } }
+  .arch-card {
+    border: 1px solid var(--dark-line);
+    border-radius: 14px;
+    padding: 28px;
+    background: var(--dark-2);
+  }
+  .arch-card h4 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 20px;
+    letter-spacing: -0.015em;
+    margin: 0 0 8px;
+    color: var(--bg);
+  }
+  .arch-card p { margin: 0; color: var(--dark-mute); font-size: 14.5px; line-height: 1.65; }
+  .arch-card code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    background: rgba(201,122,63,0.12);
+    color: var(--accent);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  /* ------------ STACK ------------ */
+  .stack-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+  }
+  @media (max-width: 920px) { .stack-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 600px) { .stack-grid { grid-template-columns: repeat(2, 1fr); } }
+  .stack-item {
+    background: var(--bg-card);
+    border: 1px solid var(--line-soft);
+    border-radius: 12px;
+    padding: 18px 20px;
+  }
+  .stack-item .layer {
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600;
+  }
+  .stack-item .tool {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 19px;
+    letter-spacing: -0.01em;
+    margin-top: 4px;
+  }
+
+  /* ------------ DATA / TERMINAL ------------ */
+  .data-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 56px;
+    align-items: center;
+  }
+  @media (max-width: 920px) { .data-row { grid-template-columns: 1fr; } }
+  .terminal {
+    background: #0e1014;
+    border: 1px solid var(--dark-line);
+    border-radius: 14px;
+    box-shadow: 0 24px 60px -28px rgba(20,23,28,0.5);
+    overflow: hidden;
+  }
+  .terminal-bar {
+    background: #1c2027;
+    padding: 10px 14px;
+    display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid #2a2e34;
+  }
+  .terminal-bar .d { width: 11px; height: 11px; border-radius: 50%; }
+  .terminal-bar .d-r { background: #ff5f56; }
+  .terminal-bar .d-y { background: #ffbd2e; }
+  .terminal-bar .d-g { background: #27c93f; }
+  .terminal-bar .t {
+    margin-left: 10px;
+    color: var(--dark-mute);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+  .terminal pre {
+    margin: 0;
+    padding: 22px 24px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #d6cfbf;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .terminal .c-comment { color: #6b6f76; }
+  .terminal .c-dir    { color: #c97a3f; }
+  .terminal .c-file   { color: #b6c3d6; }
+  .terminal .c-mute   { color: #6b6f76; }
+
+  /* ------------ FAQ ------------ */
+  .faq-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+  }
+  @media (max-width: 720px) { .faq-grid { grid-template-columns: 1fr; } }
+  .faq {
+    background: var(--bg-card);
+    border: 1px solid var(--line-soft);
+    border-radius: 12px;
+    padding: 22px 24px;
+  }
+  .faq h4 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 19px;
+    letter-spacing: -0.01em;
+    margin: 0 0 8px;
+  }
+  .faq p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.65; }
+
+  /* ------------ DOWNLOAD ------------ */
+  .download {
+    background: var(--ink);
+    color: var(--dark-fg);
+    border-radius: 22px;
+    padding: 72px 56px;
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 48px;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .download::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle at 90% 20%, rgba(201,122,63,0.18), transparent 50%);
+    pointer-events: none;
+  }
+  @media (max-width: 800px) {
+    .download { grid-template-columns: 1fr; padding: 48px 28px; }
+  }
+  .download h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: clamp(32px, 4.4vw, 52px);
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin: 0 0 18px;
+    color: var(--bg);
+    text-wrap: balance;
+  }
+  .download p { color: var(--dark-mute); margin: 0 0 28px; font-size: 16.5px; max-width: 46ch; }
+  .download .btn-primary { background: var(--accent); color: white; }
+  .download .btn-ghost   { color: var(--bg); border-color: var(--dark-line); }
+  .download .btn-ghost:hover { border-color: var(--bg); }
+  .platforms {
+    display: flex; flex-direction: column; gap: 12px;
+    background: var(--dark-2);
+    border: 1px solid var(--dark-line);
+    border-radius: 14px;
+    padding: 24px;
+    position: relative;
+  }
+  .platforms .row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--dark-line);
+  }
+  .platforms .row:last-child { border-bottom: none; }
+  .platforms .row .left { display: flex; align-items: center; gap: 14px; font-size: 14.5px; }
+  .platforms .row .left b { display: block; font-weight: 600; color: var(--bg); }
+  .platforms .row .left span { display: block; color: var(--dark-mute); font-size: 12px; }
+  .platforms .pill {
+    background: rgba(201, 122, 63, 0.18);
+    color: var(--accent);
+    font-size: 11px; font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    letter-spacing: 0.04em;
+  }
+  .platforms .pill.muted { background: rgba(255,255,255,0.06); color: var(--dark-mute); }
+  .plat-icon {
+    width: 38px; height: 38px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--bg);
+  }
+
+  /* ------------ FOOTER ------------ */
+  footer {
+    padding: 60px 0 50px;
+    border-top: 1px solid var(--line-soft);
+    background: var(--bg);
+  }
+  .foot-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 1fr;
+    gap: 32px;
+    margin-bottom: 40px;
+  }
+  @media (max-width: 720px) {
+    .foot-grid { grid-template-columns: 1fr 1fr; }
+  }
+  .foot-grid h5 {
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    margin: 0 0 14px; color: var(--muted); font-weight: 600;
+  }
+  .foot-grid ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+  .foot-grid a { text-decoration: none; color: var(--ink-2); font-size: 14px; }
+  .foot-grid a:hover { color: var(--accent-2); }
+  .foot-tag { color: var(--muted); font-size: 14px; max-width: 36ch; margin-top: 12px; }
+  .foot-bottom {
+    display: flex; justify-content: space-between; align-items: center;
+    padding-top: 24px;
+    border-top: 1px solid var(--line-soft);
+    color: var(--muted); font-size: 13px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .foot-bottom .made-with {
+    font-family: 'Fraunces', serif; font-style: italic; font-weight: 500;
+  }
+
+  /* tiny logo svg */
+  .logo-mark { width: 30px; height: 30px; color: var(--ink); }
+
+  /* selection */
+  ::selection { background: var(--accent); color: white; }
+</style>
+</head>
+<body>
+
+<!-- ============= NAV ============= -->
+<nav class="top" id="topNav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#">
+      <svg class="logo-mark" viewBox="0 0 120 120" fill="none" aria-hidden="true">
+        <path d="M22 38 C22 24, 36 14, 60 14 C84 14, 98 24, 98 38 L98 78 C98 96, 84 106, 60 106 C36 106, 22 96, 22 78 Z" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/>
+        <path d="M30 22 L36 10 L42 22 Z" fill="currentColor"/>
+        <path d="M78 22 L84 10 L90 22 Z" fill="currentColor"/>
+        <circle cx="44" cy="50" r="14" stroke="currentColor" stroke-width="6"/>
+        <circle cx="76" cy="50" r="14" stroke="currentColor" stroke-width="6"/>
+        <circle cx="44" cy="50" r="5" fill="currentColor"/>
+        <circle cx="76" cy="50" r="5" fill="currentColor"/>
+        <path d="M56 64 L60 70 L64 64" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="36" y1="80" x2="84" y2="80" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+        <line x1="36" y1="88" x2="84" y2="88" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+        <line x1="36" y1="96" x2="68" y2="96" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+        <path d="M70 96 L74 100 L82 92" stroke="#c97a3f" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </svg>
+      <span class="name">Sakoram</span>
+    </a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#screens">Screens</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#faq">FAQ</a>
+      <a class="nav-cta" href="#download">
+        Download
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- ============= HERO ============= -->
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="eyebrow">Sakoram · சகோரம் · Book Keeping</div>
+      <h1>
+        Bookkeeping that <span class="ink-soft">stays on your desk.</span>
+      </h1>
+      <p class="lead">
+        A fast, fully offline desktop app for small Sri Lankan businesses. Manage clients, quotes, invoices, bills and vouchers — and produce professional PDFs — all from a single local SQLite file. No servers. No accounts. No telemetry.
+      </p>
+      <div class="cta-row">
+        <a href="#download" class="btn btn-primary">
+          Download for Windows
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        </a>
+        <a href="#features" class="btn btn-ghost">See features</a>
+      </div>
+      <div class="meta-row">
+        <span>MIT licensed</span>
+        <span class="dot"></span>
+        <span>LKR-first defaults</span>
+        <span class="dot"></span>
+        <span>April–March fiscal year</span>
+      </div>
+    </div>
+
+    <div class="hero-visual">
+      <div class="hero-shot">
+        <img src="assets/dashboard.png" alt="Sakoram dashboard showing receivables, payables, open quotes and net cash" />
+      </div>
+      <div class="hero-badge">
+        <div class="b-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        </div>
+        <div>
+          <b>Works fully offline</b>
+          <span>Your data lives on your machine</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ============= STRIPE ============= -->
+<section class="stripe" style="padding: 32px 0;">
+  <div class="wrap stripe-grid">
+    <div class="stripe-item">
+      <div class="num"><em>0</em> servers</div>
+      <div class="lbl">No accounts. No cloud.</div>
+    </div>
+    <div class="stripe-item">
+      <div class="num">1 file <em>·</em> 1 business</div>
+      <div class="lbl">Per-tenant SQLite</div>
+    </div>
+    <div class="stripe-item">
+      <div class="num">Rs <em>·</em> integer cents</div>
+      <div class="lbl">Banker's rounding</div>
+    </div>
+    <div class="stripe-item">
+      <div class="num"><em>Typst</em> PDFs</div>
+      <div class="lbl">Bundled font · pixel-stable</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============= FEATURES ============= -->
+<section id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">What's inside</div>
+      <h2>Everything a small business actually books.</h2>
+      <p>
+        Quotes, invoices, bills and vouchers — wired together with status flows that match how the work really moves. No feature bloat, no monthly seats.
+      </p>
+    </div>
+
+    <div class="features">
+      <div class="feature">
+        <div class="icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg>
+        </div>
+        <h3>Clients</h3>
+        <p>Full CRUD with archived state, contact details, and search. Client info is snapshotted onto every issued document so history doesn't drift.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+        </div>
+        <h3>Quotations</h3>
+        <p>Draftable line-item editor with bundle or itemized pricing. Status FSM goes <span class="mono" style="font-size: 12px; color: var(--accent-2);">draft → sent → accepted → converted</span>, then converts to an invoice in one click.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <h3>Invoices &amp; payments</h3>
+        <p>Issue, track, and record payments via a per-invoice ledger — date, method, reference, notes. Auto-overdue handling. Once sent, totals are immutable.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 14h4"/></svg>
+        </div>
+        <h3>Bills &amp; vouchers</h3>
+        <p>Log vendor invoices with simple paid/unpaid tracking. Money-in receipts and money-out payments — vouchers can link to an invoice or bill.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 18 2 2 4-4"/></svg>
+        </div>
+        <h3>Professional PDFs</h3>
+        <p>Rendered with <a href="https://typst.app" style="color: var(--accent-2);">Typst</a> via a bundled sidecar. Ships with the Miriam Libre font so output looks identical on every machine.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v13"/><path d="M3 21h18M9 21V11h6v10M9 11h6"/></svg>
+        </div>
+        <h3>Multi-business</h3>
+        <p>Manage multiple businesses, each in its own isolated SQLite file. Switch between them from the header — naturally separate number sequences.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 7v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V7l-8-5Z"/><path d="m9 12 2 2 4-4"/></svg>
+        </div>
+        <h3>Export &amp; import</h3>
+        <p>One-click <span class="mono" style="font-size: 12px; color: var(--accent-2);">.zip</span> backup of any business — database, logo, manifest. Restorable on the same or another machine. Backups are file-level.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+        </div>
+        <h3>Theme &amp; font</h3>
+        <p>Pick from an 8-color theme palette and set a custom UI font. Both apply to the app <em>and</em> the PDFs you send to clients.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v8m0 0 3-3m-3 3-3-3"/><rect x="3" y="13" width="18" height="8" rx="2"/></svg>
+        </div>
+        <h3>Sri Lanka-first</h3>
+        <p>LKR currency, April–March fiscal year, integer-cents money math (no float drift, banker's half-even rounding). Defaults that just fit.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============= SHOWCASE ============= -->
+<section id="screens" style="background: var(--bg-2); padding: 100px 0;">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">A look inside</div>
+      <h2>Designed to be lived in, not learned.</h2>
+      <p>
+        Dark UI, calm density, keyboard-friendly. Every screen is built around one question: where is the money?
+      </p>
+    </div>
+
+    <div class="showcase-row">
+      <div class="showcase-text">
+        <div class="eyebrow" style="color: var(--accent-2);">Dashboard</div>
+        <h3>The money, at a glance.</h3>
+        <p>Receivables, payables, open quotes, and net cash for the month — right where you open the app. Recent activity and overdue alerts sit a glance away.</p>
+        <ul class="checks">
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Live totals across all four ledgers</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Quick actions: Quote, Invoice, Bill, Voucher</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Overdue panel that politely tells you when there's nothing overdue</li>
+        </ul>
+      </div>
+      <div class="showcase-shot">
+        <img src="assets/dashboard.png" alt="Sakoram dashboard" />
+      </div>
+    </div>
+
+    <div class="showcase-row flip">
+      <div class="showcase-shot">
+        <img src="assets/businesses.png" alt="Multi-business switcher in Sakoram settings" />
+      </div>
+      <div class="showcase-text">
+        <div class="eyebrow" style="color: var(--accent-2);">Multi-tenant</div>
+        <h3>One app, many businesses.</h3>
+        <p>Each business is a complete SQLite file — its own clients, its own number sequences, its own logo. Switching is a context change, not a database query filter.</p>
+        <ul class="checks">
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Add, switch and rename businesses inline</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Per-business export &amp; import as a single .zip</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> No mixing — naturally isolated, naturally backed up</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="showcase-row">
+      <div class="showcase-text">
+        <div class="eyebrow" style="color: var(--accent-2);">Appearance</div>
+        <h3>Theme it once. Everywhere.</h3>
+        <p>Pick a UI font and an accent color from an 8-color palette. The choice carries over to the PDFs your clients receive, so your books and your brand stay aligned.</p>
+        <ul class="checks">
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Type any installed system font, with bundled fallbacks</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Eight curated theme colors — from rust to violet</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Live preview before you save</li>
+        </ul>
+      </div>
+      <div class="showcase-shot">
+        <img src="assets/appearance.png" alt="Appearance settings — UI font and theme color picker" />
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============= ARCHITECTURE ============= -->
+<section id="architecture" class="arch-bg">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Under the hood</div>
+      <h2>Built with the load-bearing decisions a real bookkeeper would want.</h2>
+      <p>
+        These aren't optimizations. They're the kind of choices that separate a toy ledger from a tool you can run a business on.
+      </p>
+    </div>
+
+    <div class="arch-grid">
+      <div class="arch-card">
+        <h4>Money is integer cents</h4>
+        <p>All math uses integer cents of LKR with banker's (half-even) rounding — no floats, ever. No fraction-of-a-rupee drift across thousands of invoices. <code>app/lib/money.ts</code></p>
+      </div>
+      <div class="arch-card">
+        <h4>Issued documents are immutable</h4>
+        <p>Once a quote or invoice is <code>sent</code>, totals are frozen. Client info is snapshotted as JSON at issue time, so historical documents don't change when a client is later edited.</p>
+      </div>
+      <div class="arch-card">
+        <h4>Atomic, gapless numbering</h4>
+        <p>Document numbering is implemented as a single <code>INSERT … ON CONFLICT … DO UPDATE … RETURNING</code> per <code>(document_type, fiscal_year)</code>. No skipped numbers, even under crashes.</p>
+      </div>
+      <div class="arch-card">
+        <h4>DB-per-business</h4>
+        <p>Each tenant is a full SQLite file, not a <code>business_id</code> column. Simpler queries, cleaner backups, isolated number sequences — and you can hand a single file to your accountant.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============= STACK ============= -->
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Tech stack</div>
+      <h2>Boring tools, picked deliberately.</h2>
+      <p>The kind of stack you can come back to in three years and still run.</p>
+    </div>
+
+    <div class="stack-grid">
+      <div class="stack-item"><div class="layer">Desktop shell</div><div class="tool">Tauri 2</div></div>
+      <div class="stack-item"><div class="layer">Frontend</div><div class="tool">Nuxt 4 · SSG</div></div>
+      <div class="stack-item"><div class="layer">UI</div><div class="tool">NuxtUI · Tailwind</div></div>
+      <div class="stack-item"><div class="layer">Language</div><div class="tool">TypeScript · strict</div></div>
+      <div class="stack-item"><div class="layer">State</div><div class="tool">Pinia</div></div>
+      <div class="stack-item"><div class="layer">Validation</div><div class="tool">Zod</div></div>
+      <div class="stack-item"><div class="layer">Database</div><div class="tool">SQLite · sqlx</div></div>
+      <div class="stack-item"><div class="layer">PDF engine</div><div class="tool">Typst</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============= DATA + TERMINAL ============= -->
+<section style="background: var(--bg-2);">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Where your data lives</div>
+      <h2>Files, not records in someone else's database.</h2>
+      <p>
+        Each business is a separate SQLite file under your OS app-data directory. Backups are file-level — exporting a business is just zipping its SQLite plus its logo.
+      </p>
+    </div>
+
+    <div class="data-row">
+      <div>
+        <ul class="checks" style="font-size: 16px; gap: 14px;">
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> One <span class="mono" style="font-size: 13px;">.db</span> file per business</li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> One <span class="mono" style="font-size: 13px;">tenants.json</span> registry to list them</li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> One logo per business, alongside it</li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Open the folder. Copy it. Email it. It's yours.</li>
+        </ul>
+      </div>
+
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="d d-r"></div>
+          <div class="d d-y"></div>
+          <div class="d d-g"></div>
+          <span class="t">~/Library/Application Support/com.sakoram.billing</span>
+        </div>
+<pre><span class="c-comment"># macOS · Windows path is %APPDATA%\com.sakoram.billing\</span>
+<span class="c-dir">com.sakoram.billing/</span>
+├─ <span class="c-file">tenants.json</span>          <span class="c-mute"># registry of businesses</span>
+├─ <span class="c-dir">businesses/</span>
+│   ├─ <span class="c-file">acme-co.db</span>        <span class="c-mute"># active business</span>
+│   └─ <span class="c-file">test.db</span>
+└─ <span class="c-dir">logos/</span>
+    ├─ <span class="c-file">acme-co.png</span>
+    └─ <span class="c-file">test.png</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============= FAQ ============= -->
+<section id="faq">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">FAQ</div>
+      <h2>The honest answers.</h2>
+    </div>
+    <div class="faq-grid">
+      <div class="faq">
+        <h4>Is there a cloud sync?</h4>
+        <p>No. Sakoram is fully offline by design. Sync is a tradeoff and we picked simplicity. If you want a copy on another machine, export the .zip and import it there.</p>
+      </div>
+      <div class="faq">
+        <h4>What does it cost?</h4>
+        <p>Nothing. It's MIT-licensed and free to download and use, including for commercial bookkeeping.</p>
+      </div>
+      <div class="faq">
+        <h4>Will my data be safe?</h4>
+        <p>Your data lives in a folder on your computer. No telemetry, no analytics, no servers. Back it up the same way you back up any other folder you care about.</p>
+      </div>
+      <div class="faq">
+        <h4>Will the build warn me on Windows?</h4>
+        <p>Yes — the current build is unsigned, so Windows SmartScreen will warn on first run. Click "More info" → "Run anyway". Code-signing is on the roadmap.</p>
+      </div>
+      <div class="faq">
+        <h4>Does it support GST / VAT?</h4>
+        <p>The line-item editor handles itemized pricing and you can express tax as line items. Native first-class tax support is a planned addition.</p>
+      </div>
+      <div class="faq">
+        <h4>Mac and Linux builds?</h4>
+        <p>The codebase is cross-platform (Tauri 2). Windows installers are shipped today; macOS and Linux builds can be produced from source. Star the repo if you want them prebuilt.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============= DOWNLOAD ============= -->
+<section id="download" style="padding: 100px 0;">
+  <div class="wrap">
+    <div class="download">
+      <div style="position: relative; z-index: 1;">
+        <div class="eyebrow" style="color: var(--accent);">Get Sakoram</div>
+        <h2>Open the file. Add a business. Send your first invoice.</h2>
+        <p>That's the whole onboarding. No accounts to make, no integrations to wire, no monthly seat to pay for.</p>
+        <div class="cta-row">
+          <a href="#" class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Download .msi
+          </a>
+          <a href="#" class="btn btn-ghost">View on GitHub</a>
+        </div>
+      </div>
+
+      <div class="platforms" style="position: relative; z-index: 1;">
+        <div class="row">
+          <div class="left">
+            <div class="plat-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.45 9.8 2.1v9.45H0V3.45zm10.95-1.5L24 0v11.4H10.95V1.95zM0 12.6h9.8V22.05L0 20.7V12.6zm10.95 0H24V24l-13.05-1.8V12.6z"/></svg>
+            </div>
+            <div>
+              <b>Windows · x64</b>
+              <span>.msi installer · ~52 MB</span>
+            </div>
+          </div>
+          <span class="pill">v0.11.0</span>
+        </div>
+        <div class="row">
+          <div class="left">
+            <div class="plat-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.45 9.8 2.1v9.45H0V3.45zm10.95-1.5L24 0v11.4H10.95V1.95zM0 12.6h9.8V22.05L0 20.7V12.6zm10.95 0H24V24l-13.05-1.8V12.6z"/></svg>
+            </div>
+            <div>
+              <b>Windows · NSIS</b>
+              <span>.exe setup · ~50 MB</span>
+            </div>
+          </div>
+          <span class="pill">v0.11.0</span>
+        </div>
+        <div class="row">
+          <div class="left">
+            <div class="plat-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+            </div>
+            <div>
+              <b>macOS</b>
+              <span>Build from source · Tauri 2</span>
+            </div>
+          </div>
+          <span class="pill muted">soon</span>
+        </div>
+        <div class="row">
+          <div class="left">
+            <div class="plat-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 0 0-.123.117c-.31.296-.523.572-.534 1.041-.011.486.337.917.913.954.32.024.717.021 1.122.021.418 0 .831-.005 1.225-.021.563-.024.911-.45.913-.914.002-.466-.346-.873-.918-.953a4.262 4.262 0 0 0-.41-.041c-.063-.005-.121-.014-.18-.014.038-.13.082-.262.131-.394.265-.687.605-1.339.972-1.961.456-.755.962-1.51 1.484-2.231.51-.683 1.039-1.398 1.587-2.157.535-.74 1.04-1.502 1.51-2.265.485-.766.952-1.514 1.42-2.234.471-.685.92-1.327 1.318-1.879.398-.55.752-1.039 1.05-1.418.299-.379.535-.673.667-.866.135-.197.245-.41.354-.626.107-.21.21-.421.292-.633.083-.213.139-.42.17-.633.062-.42.024-.836-.13-1.197a1.97 1.97 0 0 0-.626-.836A1.857 1.857 0 0 0 13.61.21 6.45 6.45 0 0 0 12.504 0z"/></svg>
+            </div>
+            <div>
+              <b>Linux</b>
+              <span>AppImage · build from source</span>
+            </div>
+          </div>
+          <span class="pill muted">soon</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============= FOOTER ============= -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <a class="brand" href="#" style="margin-bottom: 12px;">
+          <svg class="logo-mark" viewBox="0 0 120 120" fill="none" aria-hidden="true">
+            <path d="M22 38 C22 24, 36 14, 60 14 C84 14, 98 24, 98 38 L98 78 C98 96, 84 106, 60 106 C36 106, 22 96, 22 78 Z" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/>
+            <path d="M30 22 L36 10 L42 22 Z" fill="currentColor"/>
+            <path d="M78 22 L84 10 L90 22 Z" fill="currentColor"/>
+            <circle cx="44" cy="50" r="14" stroke="currentColor" stroke-width="6"/>
+            <circle cx="76" cy="50" r="14" stroke="currentColor" stroke-width="6"/>
+            <circle cx="44" cy="50" r="5" fill="currentColor"/>
+            <circle cx="76" cy="50" r="5" fill="currentColor"/>
+            <path d="M56 64 L60 70 L64 64" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="36" y1="80" x2="84" y2="80" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+            <line x1="36" y1="88" x2="84" y2="88" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+            <line x1="36" y1="96" x2="68" y2="96" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+            <path d="M70 96 L74 100 L82 92" stroke="#c97a3f" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          <span class="name">Sakoram</span>
+        </a>
+        <p class="foot-tag">Books · Bills · Balance — bookkeeping for small Sri Lankan businesses, fully offline.</p>
+      </div>
+      <div>
+        <h5>Product</h5>
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#screens">Screens</a></li>
+          <li><a href="#architecture">Architecture</a></li>
+          <li><a href="#download">Download</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Project</h5>
+        <ul>
+          <li><a href="#">GitHub</a></li>
+          <li><a href="#">Releases</a></li>
+          <li><a href="#">Issues</a></li>
+          <li><a href="#">Changelog</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Legal</h5>
+        <ul>
+          <li><a href="#">MIT License</a></li>
+          <li><a href="#">Privacy</a></li>
+          <li><a href="#faq">FAQ</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 Sakoram. MIT licensed.</span>
+      <span class="made-with">Made for businesses that prefer their books on their own desk.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // sticky nav border on scroll
+  const nav = document.getElementById('topNav');
+  const onScroll = () => {
+    if (window.scrollY > 8) nav.classList.add('scrolled');
+    else nav.classList.remove('scrolled');
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+</script>
+
+</body>
+</html>

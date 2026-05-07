@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 280" width="920" height="280">
+  
+  
+  <g transform="translate(20, 30) scale(1.833)">
+    <path d="M22 38 C22 24, 36 14, 60 14 C84 14, 98 24, 98 38 L98 78 C98 96, 84 106, 60 106 C36 106, 22 96, 22 78 Z" stroke="#14171c" stroke-width="5" stroke-linejoin="round" fill="none"></path>
+    <path d="M30 22 L36 10 L42 22 Z" fill="#14171c"></path>
+    <path d="M78 22 L84 10 L90 22 Z" fill="#14171c"></path>
+    <circle cx="44" cy="50" r="14" stroke="#14171c" stroke-width="5" fill="none"></circle>
+    <circle cx="76" cy="50" r="14" stroke="#14171c" stroke-width="5" fill="none"></circle>
+    <circle cx="44" cy="50" r="4.5" fill="#14171c"></circle>
+    <circle cx="76" cy="50" r="4.5" fill="#14171c"></circle>
+    <path d="M56 64 L60 70 L64 64" stroke="#14171c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+    <line x1="36" y1="80" x2="84" y2="80" stroke="#14171c" stroke-width="3" stroke-linecap="round"></line>
+    <line x1="36" y1="88" x2="84" y2="88" stroke="#14171c" stroke-width="3" stroke-linecap="round"></line>
+    <line x1="36" y1="96" x2="68" y2="96" stroke="#14171c" stroke-width="3" stroke-linecap="round"></line>
+    <path d="M70 96 L74 100 L82 92" stroke="#c97a3f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+  </g>
+  
+  <text class="wm" x="270" y="180">Sakoram</text>
+  <text class="tag" x="272" y="220">BOOKS · BILLS · BALANCE</text>
+</svg>
