@@ -1,6 +1,23 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
 
+/*
+ * Bundled UI font. Google Sans Flex is a variable font (5 axes) covering
+ * weights 100–1000 in a single ~125 KB file, so we don't need separate
+ * Regular/Bold variants. Shipped as part of the frontend assets — no
+ * dependency on whether the user's machine has the font installed,
+ * which is the whole point: a Tauri webview falls back silently if the
+ * named font isn't present, and most users won't have Google Sans Flex
+ * pre-installed even on a fully online machine.
+ */
+@font-face {
+	font-family: "Google Sans Flex";
+	font-style: normal;
+	font-weight: 100 1000;
+	font-display: swap;
+	src: url("@/assets/fonts/GoogleSansFlex.ttf") format("truetype-variations");
+}
+
 @theme {
 	--font-heading: "Montserrat", sans-serif;
 	--font-sans: "Inter", sans-serif;

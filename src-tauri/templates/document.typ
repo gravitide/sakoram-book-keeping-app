@@ -30,11 +30,12 @@
   ],
 )
 
-// Font cascade: Miriam Libre is bundled with the app, so it's always
-// available. Inter is a soft fallback for any glyph Miriam Libre lacks
-// (it covers a wider Unicode range). We deliberately don't list Linux-
-// only fonts here — they generate noise warnings on Windows.
-#set text(font: ("Miriam Libre", "Inter"), size: 9.5pt, lang: "en")
+// Font cascade: Google Sans Flex is bundled with the app, so it's always
+// available. Miriam Libre is kept as a fallback so existing renders that
+// expected it still resolve, and Inter is a soft fallback for any glyph
+// the others lack. We deliberately don't list Linux-only fonts here —
+// they generate noise warnings on Windows.
+#set text(font: ("Google Sans Flex", "Miriam Libre", "Inter"), size: 9.5pt, lang: "en")
 #set par(leading: 0.55em, spacing: 0.65em)
 
 // ============================================================

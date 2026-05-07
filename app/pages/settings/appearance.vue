@@ -17,12 +17,13 @@
 					</div>
 					<div class="text-xs text-(--ui-text-muted) mt-1">
 						Type any font installed on your system. If we can't find it, we
-						fall back to Miriam Libre and then your system default.
+						fall back to Google Sans Flex (bundled with the app) and then
+						your system default.
 					</div>
 				</template>
 
 				<UFormField label="Font family">
-					<UInput v-model="uiFont" placeholder="e.g. Miriam Libre" />
+					<UInput v-model="uiFont" placeholder="e.g. Google Sans Flex" />
 				</UFormField>
 
 				<div class="mt-4">
@@ -125,7 +126,11 @@
 	await store.ensureLoaded();
 
 	const colors = THEME_COLORS;
+	// Google Sans Flex first — it's bundled with the app, so it always
+	// renders. The rest are common system fonts the user can pick if they
+	// have them installed.
 	const fontSuggestions = [
+		"Google Sans Flex",
 		"Miriam Libre",
 		"Inter",
 		"system-ui",
@@ -134,7 +139,7 @@
 		"Courier New"
 	];
 
-	const uiFont = ref<string>(store.settings?.ui_font ?? "Miriam Libre");
+	const uiFont = ref<string>(store.settings?.ui_font ?? "Google Sans Flex");
 	const themeColor = ref<ThemeColor>(
 		isValidThemeColor(store.settings?.theme_color) ? store.settings!.theme_color : "red"
 	);
@@ -151,7 +156,7 @@
 	// so they don't have to save to see the effect. We snap back to the
 	// last-saved values if they cancel.
 	const previewFontStack = computed(() =>
-		`'${uiFont.value || "Miriam Libre"}', 'Miriam Libre', system-ui, sans-serif`
+		`'${uiFont.value || "Google Sans Flex"}', 'Google Sans Flex', system-ui, sans-serif`
 	);
 
 	// Live preview: override Tailwind's --font-sans on :root + flip the
@@ -170,10 +175,10 @@
 		saving.value = true;
 		try {
 			await store.save({
-				ui_font: uiFont.value.trim() || "Miriam Libre",
+				ui_font: uiFont.value.trim() || "Google Sans Flex",
 				theme_color: themeColor.value
 			});
-			initialFont.value = uiFont.value.trim() || "Miriam Libre";
+			initialFont.value = uiFont.value.trim() || "Google Sans Flex";
 			initialColor.value = themeColor.value;
 			toast.add({ title: "Appearance saved", color: "success", icon: "i-lucide-check" });
 		} catch (err) {
