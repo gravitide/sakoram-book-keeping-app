@@ -36,6 +36,20 @@ export default defineNuxtConfig({
 	svgo: {
 		autoImportPath: "@/assets/"
 	},
+	// Bundle every Lucide icon referenced in source into the client build.
+	// Without this, NuxtUI / @nuxt/icon falls back to fetching SVGs from the
+	// Iconify API at runtime — which fails offline (we ship a desktop app
+	// that's expected to work without internet) and shows blank squares
+	// when the user's network is slow on first paint. `scan: true` tells
+	// Vite to inline only the icons actually used in templates, so the
+	// bundle stays small.
+	icon: {
+		provider: "iconify",
+		clientBundle: {
+			scan: true,
+			sizeLimitKb: 512
+		}
+	},
 	ssr: false,
 	dir: {
 		modules: "app/modules"
