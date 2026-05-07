@@ -19,6 +19,8 @@ pool, multi-tenancy, and the Tauri capability layer.
 | Shell | **Tauri 2** (Rust) on Windows + macOS |
 | Frontend | **Nuxt 4 SSG** (`ssr: false`, `nuxi generate`) |
 | UI | **NuxtUI 4** (`@nuxt/ui` ^4.4) + **Tailwind v4** |
+| Icons | **Lucide** via `@iconify-json/lucide`, bundled into the client (no runtime API fetches) |
+| Fonts | **Google Sans Flex**, **Inter**, **Miriam Libre** — all bundled (UI via `@font-face`, PDF via Typst `--font-path`) |
 | Lang | **TypeScript** strict |
 | State | **Pinia** (composition stores) |
 | Validation | **Zod** |
@@ -162,21 +164,26 @@ sakoram_app/
 │  ├─ layouts/
 │  │  ├─ default.vue                  ← sidebar + main content (tenant switcher in header)
 │  │  └─ welcome.vue                  ← minimal centered layout for /welcome
+│  ├─ assets/
+│  │  ├─ css/main.css                 ← Tailwind + @font-face for the 3 bundled fonts
+│  │  └─ fonts/                       ← GoogleSansFlex, InterVariable, MiriamLibre-{Regular,Bold}
 │  ├─ pages/
 │  │  ├─ index.vue                    ← Dashboard (KPI tiles + recent activity)
 │  │  ├─ welcome.vue                  ← business picker (landing screen)
 │  │  ├─ clients/                     ← list, new, [id]
+│  │  ├─ vendors/                     ← list, new, [id] (mirrors clients)
 │  │  ├─ quotes/                      ← list, new, [id] (PDF preview, convert to invoice)
 │  │  ├─ invoices/                    ← list, new, [id] (PDF preview, payment ledger)
-│  │  ├─ bills/                       ← list, new, [id] (vendor bills, no draft state)
+│  │  ├─ bills/                       ← list, new, [id] (vendor-FK + snapshot, no draft state)
 │  │  ├─ vouchers/                    ← list, new, [id] (money in/out)
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
 │  │     ├─ company.vue               ← business info, address, bank, defaults, logo
-│  │     ├─ appearance.vue            ← UI font (free-text), theme color (8-swatch)
+│  │     ├─ appearance.vue            ← UI font + PDF font (independent), theme color (8-swatch)
 │  │     └─ businesses.vue            ← tenant CRUD + Export/Import
 │  ├─ components/
 │  │  ├─ ClientPicker.vue             ← UPopover with search
+│  │  ├─ VendorPicker.vue             ← clone of ClientPicker, used by bill creation
 │  │  ├─ DateField.vue                ← UInputDate + UCalendar wrapper, ISO-string v-model
 │  │  ├─ DocumentLineEditor.vue       ← bundle/itemized line-item editor
 │  │  ├─ MoneyInput.vue               ← integer-cents v-model
@@ -198,9 +205,10 @@ sakoram_app/
 │  └─ stores/                         ← Pinia composition stores
 │     ├─ settings.ts                  ← company_settings (singleton, per-tenant)
 │     ├─ clients.ts
+│     ├─ vendors.ts                   ← address book for the bills side of the ledger
 │     ├─ quotes.ts                    ← quotes + quote_lines, status FSM, pricing modes
 │     ├─ invoices.ts                  ← invoices + invoice_lines + invoice_payments (ledger)
-│     ├─ bills.ts                     ← vendor bills, no per-payment ledger (just paid_cents)
+│     ├─ bills.ts                     ← vendor_id FK + vendor_snapshot, no per-payment ledger
 │     ├─ vouchers.ts                  ← receipts/payments
 │     └─ tenants.ts                   ← bridges JS to Rust tenant registry
 └─ src-tauri/
@@ -210,13 +218,19 @@ sakoram_app/
    │  └─ main.json                    ← fs scopes, sql, dialog, shell-execute (typst arg validators)
    ├─ binaries/
    │  └─ typst-x86_64-pc-windows-msvc.exe   (gitignored, ~48 MB, target-triple naming required)
-   ├─ fonts/
-   │  └─ MiriamLibre-{Regular,Bold}.ttf     (bundled into installer)
+   ├─ fonts/                          ← same 3 fonts as app/assets/fonts (Typst reads from here)
+   │  ├─ GoogleSansFlex.ttf
+   │  ├─ InterVariable.ttf
+   │  └─ MiriamLibre-{Regular,Bold}.ttf
    ├─ migrations/
    │  ├─ 0001_initial.sql             ← settings, clients, document_counters
    │  ├─ 0002_documents.sql           ← quotes, invoices, payments
-   │  ├─ 0003_bills_vouchers.sql      ← bills, vouchers + their line tables
-   │  └─ 0004_appearance.sql          ← ui_font, theme_color on company_settings
+   │  ├─ 0003_bills_vouchers.sql      ← bills, vouchers + their line tables (original schema)
+   │  ├─ 0004_appearance.sql          ← ui_font, theme_color on company_settings
+   │  ├─ 0005_default_font_google_sans.sql ← flips Miriam Libre default → Google Sans Flex
+   │  ├─ 0006_pdf_font.sql            ← adds pdf_font column (separate from ui_font)
+   │  ├─ 0007_vendors.sql             ← vendors table (mirrors clients shape)
+   │  └─ 0008_bills_use_vendors.sql   ← drop+recreate bills with vendor_id FK + vendor_snapshot
    ├─ templates/
    │  ├─ document.typ                 ← unified Typst template for quotes/invoices/bills
    │  └─ voucher.typ                  ← simpler one-page receipt layout
@@ -366,6 +380,40 @@ Deterministic typography across machines, far higher quality than
 `window.print()`, font-path control, native PDF output. ~48 MB sidecar
 is acceptable for a desktop app.
 
+### Why bundle fonts (and which ones)
+
+The app must work offline and look the same on every machine. Naming
+a font in CSS that isn't installed locally silently falls back to
+system-ui — defeats the point of having a chosen font. Same hazard
+for Typst's font-path lookup.
+
+Three fonts ship in two places:
+
+| Font | License | Notes |
+|---|---|---|
+| Google Sans Flex | OFL (released by Google late 2025) | Variable, ~125 KB. **Default** for both UI and PDF. |
+| Inter | OFL | Variable, ~880 KB. Common readable alternative. |
+| Miriam Libre | OFL | Static Regular + Bold, ~600 KB combined. Original default; kept around as a third bundled choice. |
+
+`app/assets/fonts/*.ttf` — referenced from `app/assets/css/main.css`
+via `@font-face`, hashed and emitted by Vite into `_nuxt/`.
+`src-tauri/fonts/*.ttf` — picked up by Typst via `--font-path` (set
+in `pdf.rs`), bundled into the installer via `tauri.conf.json`'s
+`bundle.resources` list.
+
+UI font and PDF font are independent (`company_settings.ui_font` and
+`company_settings.pdf_font`). The Typst template reads
+`data.font_family` from the per-render JSON payload, then falls back
+through the three bundled families for any missing glyph.
+
+### Why icons are bundled (not fetched at runtime)
+
+NuxtUI / `@nuxt/icon` defaults to fetching SVGs from the Iconify API.
+We're a desktop app expected to work offline — that fails. Fix:
+`@iconify-json/lucide` as a dev dep + `icon.clientBundle.scan: true`
+in `nuxt.config.ts`. Vite scans templates and inlines only the icons
+actually used (~50 icons, ~14 KB). Zero runtime network dependency.
+
 ---
 
 ## Schema overview
@@ -373,8 +421,10 @@ is acceptable for a desktop app.
 See `src-tauri/migrations/` for the source of truth. High-level:
 
 - `company_settings` — singleton (`id=1` CHECK), per-tenant. Includes
-  `ui_font` and `theme_color` for the appearance settings.
+  `ui_font`, `pdf_font` (independent picks), and `theme_color`.
 - `clients` — id, name, contact info, archived flag.
+- `vendors` — same shape as `clients`. Address book for the bills side
+  of the ledger.
 - `document_counters` — `(document_type, fiscal_year)` → `last_number`,
   for atomic gapless allocation.
 - `quotes` + `quote_lines` — `pricing_mode` ∈ {bundle, itemized},
@@ -382,8 +432,10 @@ See `src-tauri/migrations/` for the source of truth. High-level:
   (JSON, frozen at issue), `converted_invoice_id` link.
 - `invoices` + `invoice_lines` + `invoice_payments` — full payment
   ledger (Date, method, amount, reference, notes).
-- `bills` + `bill_lines` — vendor bills. NO ledger; just `paid_cents`
-  on the row. If user wants per-payment trail, they create a voucher.
+- `bills` + `bill_lines` — vendor bills. `vendor_id` FK → `vendors`,
+  plus a `vendor_snapshot` JSON copy frozen at creation time (mirrors
+  `client_snapshot` on quotes/invoices). NO payment ledger; just
+  `paid_cents` on the row — for a paper trail, create a voucher.
 - `vouchers` — money in (receipt) / money out (payment). Standalone or
   optionally linked to an invoice/bill.
 
@@ -435,28 +487,40 @@ Notable allowances:
 
 ## What's done / what's not
 
-### Phases 1–7 — DONE
+### Done
 
-- ✅ DB schema, migrations, foundations
+- ✅ DB schema, migrations, foundations (8 migrations, SCHEMA_VERSION 8)
 - ✅ Clients CRUD
+- ✅ Vendors CRUD (mirrors clients)
 - ✅ Quotes (full lifecycle, PDF, convert-to-invoice)
 - ✅ Invoices (lifecycle, payment ledger, auto-overdue, PDF)
-- ✅ Bills (vendor invoices, payments, PDF)
+- ✅ Bills with vendor FK + snapshot (vendor picker, PDF reads from
+  snapshot)
 - ✅ Vouchers (money in/out, PDF, big amount card layout)
+- ✅ Universal delete on quotes/invoices/bills (typed-name confirm gate
+  for issued docs / docs with payments)
 - ✅ Dashboard (KPI tiles, recent activity, overdue list, quick actions)
-- ✅ PDF generation via bundled Typst sidecar (Miriam Libre font,
-  branded layout, theme color from settings)
+- ✅ PDF generation via bundled Typst sidecar (3 bundled fonts, theme
+  color from settings, user-chosen `pdf_font`)
 - ✅ PDF preview modal (iframe-embedded, save-as via temp file copy)
 - ✅ Settings split: `/settings/company`, `/settings/appearance`,
   `/settings/businesses`
-- ✅ Appearance: free-text font picker, 8-color theme palette (drives
-  both UI and PDFs)
+- ✅ Appearance: independent UI/PDF font pickers (3 bundled +
+  free-text), 8-color theme palette (drives UI and PDFs)
+- ✅ Bundled fonts (Google Sans Flex / Inter / Miriam Libre) — UI
+  via `@font-face`, PDF via Typst `--font-path`
+- ✅ Bundled icons (Lucide via `@iconify-json/lucide` +
+  `icon.clientBundle.scan`) — zero runtime network dependency
 - ✅ DateField (UInputDate + UCalendar wrapper, ISO v-model)
 - ✅ Multi-tenancy (DB-per-business, welcome screen, tenant switcher)
 - ✅ Export/Import (.zip bundles with manifest, schema-version gate)
 - ✅ Window title syncs with active tenant
+- ✅ Sidebar grouped (Dashboard / documents / Contacts /
+  Settings) with thin separators between groups
 - ✅ Production build pipeline (MSI + NSIS installers via
   `bun run tauri:build`)
+- ✅ CI release workflow (`.github/workflows/release.yml`) building
+  Windows installers per version tag
 
 ### Deferred / open items
 
