@@ -1,12 +1,17 @@
 {
-	"permissions": {
-		"allow": [
-			"Bash(tauri:*)",
-			"Bash(bun tauri:*)",
-			"Bash(bun run *)",
-			"Bash(cargo --version)",
-			"Bash(rustup --version)",
-			"Bash(bun add *)"
-		]
-	}
+  "permissions": {
+    "allow": [
+      "Bash(tauri:*)",
+      "Bash(bun tauri:*)",
+      "Bash(bun run *)",
+      "Bash(cargo --version)",
+      "Bash(rustup --version)",
+      "Bash(bun add *)",
+      "Bash(git checkout *)",
+      "Bash(git pull *)",
+      "Bash(git branch *)",
+      "Bash(git fetch *)",
+      "Bash(git stash *)"
+    ]
+  }
 }
