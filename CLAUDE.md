@@ -590,8 +590,7 @@ Notable allowances:
 The user's `~/.claude/CLAUDE.md` says:
 - Use **bash on Windows 11** (Git Bash). Frame shell commands accordingly.
 - **Don't add Claude Code footer** to git commit messages.
-- User email: `saravanamuthaly@gmail.com`.
-- Today's date as of writing: 2026-05-06.
+- Never push directly to `main` — always branch and open a PR.
 
 The project itself doesn't enforce a commit-message format — match the
 existing `git log` style if making commits.

@@ -15,3 +15,9 @@ src-tauri/.tools
 # rebuild via `cargo install --locked typst-cli --root src-tauri/.tools`
 # then copy bin/typst.exe → binaries/typst-<target-triple>.exe
 src-tauri/binaries/*.exe
+
+# JetBrains IDE config (per-developer state, device caches, etc.)
+.idea
+
+# Local Claude Code overrides (personal permission allowlist)
+.claude/settings.local.json
