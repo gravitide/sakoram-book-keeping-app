@@ -53,35 +53,75 @@
 			<table v-else class="w-full text-sm">
 				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
 					<tr>
-						<th class="py-2 pl-3 pr-2 font-medium">
+						<SortableTh
+							th-class="py-2 pl-3 pr-2 font-medium"
+							:active="list.sortKey === 'number'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('number')"
+						>
 							Number
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'client'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('client')"
+						>
 							Client
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'project'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('project')"
+						>
 							Project
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'issue_date'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('issue_date')"
+						>
 							Issued
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'due_date'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('due_date')"
+						>
 							Due
-						</th>
-						<th class="py-2 px-2 font-medium text-right">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium text-right"
+							:active="list.sortKey === 'total'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('total')"
+						>
 							Total
-						</th>
-						<th class="py-2 px-2 font-medium text-right">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium text-right"
+							:active="list.sortKey === 'balance'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('balance')"
+						>
 							Balance
-						</th>
-						<th class="py-2 pl-2 pr-3 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 pl-2 pr-3 font-medium"
+							:active="list.sortKey === 'status'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('status')"
+						>
 							Status
-						</th>
+						</SortableTh>
 					</tr>
 				</thead>
 				<tbody>
 					<tr
-						v-for="i in store.filtered"
+						v-for="i in list.paged"
 						:key="i.id"
 						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
 						@click="open(i)"
@@ -114,6 +154,15 @@
 					</tr>
 				</tbody>
 			</table>
+
+			<ListPagination
+				v-model:page="list.page"
+				v-model:page-size="list.pageSize"
+				:total="list.total"
+				:total-pages="list.totalPages"
+				:range-start="list.rangeStart"
+				:range-end="list.rangeEnd"
+			/>
 		</UCard>
 	</div>
 </template>
@@ -121,6 +170,7 @@
 <script setup lang="ts">
 	import type { InvoiceRow, InvoiceStatus } from "~/stores/invoices";
 	import type { ClientSnapshot } from "~/stores/quotes";
+	import { useListView } from "~/composables/useListView";
 	import { formatLKR } from "~/lib/money";
 	import { useInvoicesStore } from "~/stores/invoices";
 
@@ -132,6 +182,21 @@
 	await store.load();
 	// Auto-flag overdue on every list visit. Cheap single-statement UPDATE.
 	await store.flagOverdue().catch(() => { /* non-fatal */ });
+
+	const list = useListView<InvoiceRow>(
+		() => store.filtered,
+		[
+			{ key: "number", getValue: (i) => i.number },
+			{ key: "client", getValue: (i) => clientName(i.client_snapshot) },
+			{ key: "project", getValue: (i) => i.project_title },
+			{ key: "issue_date", getValue: (i) => i.issue_date },
+			{ key: "due_date", getValue: (i) => i.due_date },
+			{ key: "total", getValue: (i) => i.total_cents },
+			{ key: "balance", getValue: (i) => Math.max(0, i.total_cents - i.paid_cents) },
+			{ key: "status", getValue: (i) => i.status }
+		],
+		{ defaultSortKey: "issue_date", defaultDir: "desc" }
+	);
 
 	const newInvoice = () => router.push("/invoices/new");
 	const open = (i: InvoiceRow) => router.push(`/invoices/${i.id}`);
@@ -147,13 +212,15 @@
 		{ label: "Cancelled", value: "cancelled" }
 	];
 
-	const clientName = (snap: string): string => {
+	// Function declarations (not const arrows) so they hoist above the
+	// useListView() call site, which references them in column getValues.
+	function clientName(snap: string): string {
 		try {
 			return (JSON.parse(snap) as ClientSnapshot).name ?? "—";
 		} catch {
 			return "—";
 		}
-	};
+	}
 
 	const balanceOf = (i: InvoiceRow) => Math.max(0, i.total_cents - i.paid_cents);
 </script>

@@ -48,27 +48,52 @@
 			<table v-else class="w-full text-sm">
 				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
 					<tr>
-						<th class="py-2 pl-3 pr-2 font-medium">
+						<SortableTh
+							th-class="py-2 pl-3 pr-2 font-medium"
+							:active="list.sortKey === 'name'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('name')"
+						>
 							Name
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'contact'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('contact')"
+						>
 							Contact
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'email'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('email')"
+						>
 							Email
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'phone'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('phone')"
+						>
 							Phone
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'tax_id'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('tax_id')"
+						>
 							Tax ID
-						</th>
+						</SortableTh>
 						<th class="py-2 pl-2 pr-3 w-10" />
 					</tr>
 				</thead>
 				<tbody>
 					<tr
-						v-for="c in store.filtered"
+						v-for="c in list.paged"
 						:key="c.id"
 						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
 						@click="openClient(c)"
@@ -101,12 +126,22 @@
 					</tr>
 				</tbody>
 			</table>
+
+			<ListPagination
+				v-model:page="list.page"
+				v-model:page-size="list.pageSize"
+				:total="list.total"
+				:total-pages="list.totalPages"
+				:range-start="list.rangeStart"
+				:range-end="list.rangeEnd"
+			/>
 		</UCard>
 	</div>
 </template>
 
 <script setup lang="ts">
 	import type { ClientRow } from "~/stores/clients";
+	import { useListView } from "~/composables/useListView";
 	import { useClientsStore } from "~/stores/clients";
 
 	definePageMeta({ title: "Clients" });
@@ -116,6 +151,20 @@
 	const router = useRouter();
 
 	await store.load();
+
+	// Sortable columns: name (alpha), and the two contact fields most useful
+	// for browsing. Email/phone/tax_id sort but they nicely surface duplicates.
+	const list = useListView<ClientRow>(
+		() => store.filtered,
+		[
+			{ key: "name", getValue: (c) => c.name },
+			{ key: "contact", getValue: (c) => c.contact_person },
+			{ key: "email", getValue: (c) => c.email },
+			{ key: "phone", getValue: (c) => c.phone },
+			{ key: "tax_id", getValue: (c) => c.tax_id }
+		],
+		{ defaultSortKey: "name", defaultDir: "asc" }
+	);
 
 	const newClient = () => router.push("/clients/new");
 	const openClient = (c: ClientRow) => router.push(`/clients/${c.id}`);

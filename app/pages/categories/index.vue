@@ -48,21 +48,36 @@
 			<table v-else class="w-full text-sm">
 				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
 					<tr>
-						<th class="py-2 pl-3 pr-2 font-medium">
+						<SortableTh
+							th-class="py-2 pl-3 pr-2 font-medium"
+							:active="list.sortKey === 'name'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('name')"
+						>
 							Name
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'color'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('color')"
+						>
 							Color
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'icon'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('icon')"
+						>
 							Icon
-						</th>
+						</SortableTh>
 						<th class="py-2 pl-2 pr-3 w-10" />
 					</tr>
 				</thead>
 				<tbody>
 					<tr
-						v-for="c in store.filtered"
+						v-for="c in list.paged"
 						:key="c.id"
 						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
 						@click="openEdit(c)"
@@ -99,6 +114,15 @@
 					</tr>
 				</tbody>
 			</table>
+
+			<ListPagination
+				v-model:page="list.page"
+				v-model:page-size="list.pageSize"
+				:total="list.total"
+				:total-pages="list.totalPages"
+				:range-start="list.rangeStart"
+				:range-end="list.rangeEnd"
+			/>
 		</UCard>
 
 		<CategoryFormModal
@@ -110,6 +134,7 @@
 
 <script setup lang="ts">
 	import type { BillCategoryRow } from "~/stores/bill_categories";
+	import { useListView } from "~/composables/useListView";
 	import { themeHex } from "~/lib/theme";
 	import { useBillCategoriesStore } from "~/stores/bill_categories";
 
@@ -119,6 +144,16 @@
 	const toast = useToast();
 
 	await store.load();
+
+	const list = useListView<BillCategoryRow>(
+		() => store.filtered,
+		[
+			{ key: "name", getValue: (c) => c.name },
+			{ key: "color", getValue: (c) => c.color },
+			{ key: "icon", getValue: (c) => c.icon }
+		],
+		{ defaultSortKey: "name", defaultDir: "asc" }
+	);
 
 	const modalOpen = ref(false);
 	const editingRow = ref<BillCategoryRow | null>(null);

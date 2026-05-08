@@ -54,32 +54,67 @@
 			<table v-else class="w-full text-sm">
 				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
 					<tr>
-						<th class="py-2 pl-3 pr-2 font-medium">
+						<SortableTh
+							th-class="py-2 pl-3 pr-2 font-medium"
+							:active="list.sortKey === 'number'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('number')"
+						>
 							Number
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'type'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('type')"
+						>
 							Type
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'date'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('date')"
+						>
 							Date
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'party'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('party')"
+						>
 							Party
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'method'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('method')"
+						>
 							Method
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'reference'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('reference')"
+						>
 							Reference
-						</th>
-						<th class="py-2 pl-2 pr-3 font-medium text-right">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 pl-2 pr-3 font-medium text-right"
+							:active="list.sortKey === 'amount'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('amount')"
+						>
 							Amount
-						</th>
+						</SortableTh>
 					</tr>
 				</thead>
 				<tbody>
 					<tr
-						v-for="v in store.filtered"
+						v-for="v in list.paged"
 						:key="v.id"
 						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
 						@click="open(v)"
@@ -110,12 +145,22 @@
 					</tr>
 				</tbody>
 			</table>
+
+			<ListPagination
+				v-model:page="list.page"
+				v-model:page-size="list.pageSize"
+				:total="list.total"
+				:total-pages="list.totalPages"
+				:range-start="list.rangeStart"
+				:range-end="list.rangeEnd"
+			/>
 		</UCard>
 	</div>
 </template>
 
 <script setup lang="ts">
 	import type { VoucherRow, VoucherType } from "~/stores/vouchers";
+	import { useListView } from "~/composables/useListView";
 	import { formatLKR } from "~/lib/money";
 	import { useVouchersStore } from "~/stores/vouchers";
 
@@ -125,6 +170,20 @@
 	const store = useVouchersStore();
 
 	await store.load();
+
+	const list = useListView<VoucherRow>(
+		() => store.filtered,
+		[
+			{ key: "number", getValue: (v) => v.number },
+			{ key: "type", getValue: (v) => v.voucher_type },
+			{ key: "date", getValue: (v) => v.voucher_date },
+			{ key: "party", getValue: (v) => v.party_name },
+			{ key: "method", getValue: (v) => v.payment_method },
+			{ key: "reference", getValue: (v) => v.reference },
+			{ key: "amount", getValue: (v) => v.amount_cents }
+		],
+		{ defaultSortKey: "date", defaultDir: "desc" }
+	);
 
 	const newVoucher = () => router.push("/vouchers/new");
 	const open = (v: VoucherRow) => router.push(`/vouchers/${v.id}`);
