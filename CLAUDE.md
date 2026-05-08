@@ -172,6 +172,7 @@ sakoram_app/
 │  │  ├─ welcome.vue                  ← business picker (landing screen)
 │  │  ├─ clients/                     ← list, new, [id]
 │  │  ├─ vendors/                     ← list, new, [id] (mirrors clients)
+│  │  ├─ categories/                  ← list page only — modal-driven CRUD for bill categories
 │  │  ├─ quotes/                      ← list, new, [id] (PDF preview, convert to invoice)
 │  │  ├─ invoices/                    ← list, new, [id] (PDF preview, payment ledger)
 │  │  ├─ bills/                       ← list, new, [id] (vendor-FK + snapshot, no draft state)
@@ -184,16 +185,23 @@ sakoram_app/
 │  ├─ components/
 │  │  ├─ ClientPicker.vue             ← UPopover with search
 │  │  ├─ VendorPicker.vue             ← clone of ClientPicker, used by bill creation
+│  │  ├─ CategoryPicker.vue           ← bill-category dropdown w/ inline "+ New" modal
+│  │  ├─ CategoryFormModal.vue        ← create/edit category (8-color × 16-icon picker)
 │  │  ├─ DateField.vue                ← UInputDate + UCalendar wrapper, ISO-string v-model
+│  │  ├─ DateRangeField.vue           ← same idea, range mode (v-model:from / v-model:to)
 │  │  ├─ DocumentLineEditor.vue       ← bundle/itemized line-item editor
+│  │  ├─ ListPagination.vue           ← page-size selector + first/prev/next/last + range readout
+│  │  ├─ SortableTh.vue               ← clickable header cell w/ 3-state arrow icon
 │  │  ├─ MoneyInput.vue               ← integer-cents v-model
 │  │  ├─ PaymentRecorder.vue          ← invoice payment modal
 │  │  ├─ PdfPreviewModal.vue          ← embeds rendered PDF in <iframe>
 │  │  └─ StatusBadge.vue              ← color-coded status badges
 │  ├─ composables/
-│  │  └─ usePdfPreview.ts             ← preview→commit flow used by quote/invoice/bill/voucher pages
+│  │  ├─ usePdfPreview.ts             ← preview→commit flow used by quote/invoice/bill/voucher pages
+│  │  └─ useListView.ts               ← sort + paginate any reactive array (returns reactive())
 │  ├─ lib/
 │  │  ├─ db.ts                        ← getDb() (lazy, reads active tenant URL), select/execute
+│  │  ├─ demo-seed.ts                 ← createDemoBusiness() — curated + bulk-fill (~25/section)
 │  │  ├─ money.ts                     ← toCents, formatLKR, computeLineTotals (integer math)
 │  │  ├─ numbering.ts                 ← allocateDocumentNumber (single-statement atomic)
 │  │  ├─ pdf.ts                       ← preview/commit/legacy export helpers
@@ -206,9 +214,10 @@ sakoram_app/
 │     ├─ settings.ts                  ← company_settings (singleton, per-tenant)
 │     ├─ clients.ts
 │     ├─ vendors.ts                   ← address book for the bills side of the ledger
-│     ├─ quotes.ts                    ← quotes + quote_lines, status FSM, pricing modes
+│     ├─ bill_categories.ts           ← managed lookup powering CategoryPicker
+│     ├─ quotes.ts                    ← quotes + quote_lines, status FSM, pricing modes, date filters
 │     ├─ invoices.ts                  ← invoices + invoice_lines + invoice_payments (ledger)
-│     ├─ bills.ts                     ← vendor_id FK + vendor_snapshot, no per-payment ledger
+│     ├─ bills.ts                     ← vendor_id FK + vendor_snapshot + category_snapshot, no per-payment ledger
 │     ├─ vouchers.ts                  ← receipts/payments
 │     └─ tenants.ts                   ← bridges JS to Rust tenant registry
 └─ src-tauri/
@@ -426,6 +435,9 @@ See `src-tauri/migrations/` for the source of truth. High-level:
 - `clients` — id, name, contact info, archived flag.
 - `vendors` — same shape as `clients`. Address book for the bills side
   of the ledger.
+- `bill_categories` — small managed lookup (`name` UNIQUE, `color`
+  swatch name, `icon` Lucide name, archived flag). Powers
+  `CategoryPicker` on the bill page.
 - `document_counters` — `(document_type, fiscal_year)` → `last_number`,
   for atomic gapless allocation.
 - `quotes` + `quote_lines` — `pricing_mode` ∈ {bundle, itemized},
@@ -433,10 +445,12 @@ See `src-tauri/migrations/` for the source of truth. High-level:
   (JSON, frozen at issue), `converted_invoice_id` link.
 - `invoices` + `invoice_lines` + `invoice_payments` — full payment
   ledger (Date, method, amount, reference, notes).
-- `bills` + `bill_lines` — vendor bills. `vendor_id` FK → `vendors`,
-  plus a `vendor_snapshot` JSON copy frozen at creation time (mirrors
-  `client_snapshot` on quotes/invoices). NO payment ledger; just
-  `paid_cents` on the row — for a paper trail, create a voucher.
+- `bills` + `bill_lines` — vendor bills. `vendor_id` FK → `vendors`
+  with a `vendor_snapshot` JSON copy frozen at creation time;
+  `category_id` FK → `bill_categories` with a `category_snapshot` JSON
+  copy ({name, color, icon}) so renames/recolors don't rewrite history
+  (mirrors `client_snapshot` on quotes/invoices). NO payment ledger;
+  just `paid_cents` on the row — for a paper trail, create a voucher.
 - `vouchers` — money in (receipt) / money out (payment). Standalone or
   optionally linked to an invoice/bill.
 
@@ -465,6 +479,56 @@ bills:     unpaid → partial | paid | overdue | cancelled
 
 vouchers:  no transitions; voucher_type (receipt/payment) is locked at create
 ```
+
+---
+
+## List view conventions
+
+Every list page (clients, vendors, bill categories, quotes, invoices,
+bills, vouchers) follows the same shape so the UX stays consistent and
+each page stays small:
+
+1. **Store** owns the data and `filtered` computed (search / status /
+   date filters live here as refs the page binds to in the header).
+2. **Page** instantiates `useListView(() => store.filtered, columns,
+   { defaultSortKey, defaultDir })` and iterates `list.paged` instead
+   of `store.filtered`.
+3. **Headers** use `<SortableTh>` per column, passing `:active`,
+   `:dir`, and `@sort` wired to `list.toggleSort('key')`.
+4. **Footer** is `<ListPagination v-model:page="list.page"
+   v-model:page-size="list.pageSize" :total :total-pages :range-start
+   :range-end />`.
+
+`useListView` returns a `reactive()` object so consumers do
+`list.sortKey` / `list.page = 2` (no `.value` noise) and templates
+auto-unwrap. It snaps page back into range when filters shrink the
+list, and resets to page 1 on sort change. Default page size is 10
+(options: 10 / 25 / 50 / 100).
+
+**Sort defaults that match user expectations:**
+- Documents (quotes / invoices / bills): `issue_date` desc — newest first.
+- Vouchers: `voucher_date` desc.
+- Clients / vendors / categories: `name` asc.
+
+**Snapshot-derived columns** (e.g. client name on a quote, vendor /
+category name on a bill) sort by re-parsing the snapshot in `getValue`
+so the sort matches the visible cell, not the row's underlying FK or
+JSON blob.
+
+**Frontend-only by design.** Sort, filter, and pagination all happen on
+the in-memory `filtered` array — the DB only sees the initial
+`SELECT * FROM …`. Acceptable for a single-user desktop app at
+realistic per-business volumes (low thousands of rows). If a real
+tenant ever crosses ~10k in a single table, the migration is:
+- replace `store.load()` with `fetchPage(offset, limit, sort, dir, filters)`
+- swap `useListView`'s in-memory `paged` for "ask the store for this page"
+Don't pre-optimize — wait for actual slowness.
+
+**Helpers used in column getValues need to hoist.** If a page declares
+`function clientName(...)` as a `const` arrow it lands in the
+temporal-dead-zone when `useListView`'s column descriptors close over
+it. Convert those to `function` declarations (which hoist) or move
+them above the `useListView` call.
 
 ---
 
@@ -512,12 +576,38 @@ Notable allowances:
   via `@font-face`, PDF via Typst `--font-path`
 - ✅ Bundled icons (Lucide via `@iconify-json/lucide` +
   `icon.clientBundle.scan`) — zero runtime network dependency
-- ✅ DateField (UInputDate + UCalendar wrapper, ISO v-model)
+- ✅ DateField (single date) and DateRangeField (range, v-model:from/to)
+  — both ISO-string adapters over `UInputDate`. DateRangeField bumps a
+  `:key` when both refs go null because UInputDate range mode doesn't
+  visually reset on a `{start: null, end: null}` prop change.
 - ✅ Multi-tenancy (DB-per-business, welcome screen, tenant switcher)
 - ✅ Export/Import (.zip bundles with manifest, schema-version gate)
 - ✅ Window title syncs with active tenant
-- ✅ Sidebar grouped (Dashboard / documents / Contacts /
-  Settings) with thin separators between groups
+- ✅ Sidebar grouped (Dashboard / documents / Lists / Settings) with
+  thin separators between groups. "Lists" houses Clients, Vendors,
+  and Bill categories.
+- ✅ Bill categories — managed lookup with name + color (8 swatches)
+  + icon (16 Lucide options). `CategoryPicker` on the bill detail
+  page has an inline "+ New" modal so the user stays on the bill
+  while creating one. Bills carry a frozen `category_snapshot` so
+  renames/recolors don't rewrite history (same pattern as
+  client/vendor snapshots).
+- ✅ Date-range filters on the quotes list (Issued between / Valid
+  between) wired into `quotes.filtered`.
+- ✅ Pagination + click-to-sort columns on every list page via
+  `useListView` composable + `<SortableTh>` + `<ListPagination>`.
+  Default 10 per page, options 10/25/50/100. Frontend-only — store
+  loads all rows once, composable does sort + slice in memory.
+  Documents the migration path to DB-side pagination if a tenant
+  ever crosses ~10k rows in one table (see "List view conventions"
+  below).
+- ✅ Demo seed bulk-fills ~22 extra rows of each entity so list
+  pages, filters, and pagination have realistic volume from the
+  first launch.
+- ✅ Line-ending normalization — `.gitattributes` pins text files to
+  LF in the repo regardless of OS. Without this, Windows checkouts
+  with `core.autocrlf=true` keep showing files as "modified" with
+  no real diff.
 - ✅ Production build pipeline (MSI + NSIS installers via
   `bun run tauri:build`)
 - ✅ CI release workflow (`.github/workflows/release.yml`) building
@@ -529,6 +619,10 @@ Notable allowances:
   exist on the schema; no UI yet. Intent: drop a PDF/image of the
   vendor's bill onto the bill page → stored in app data → openable
   from the detail page.
+- **DB-side pagination** — see "List view conventions" below. Today
+  every list loads all rows; sort/filter/page is in-memory. Acceptable
+  up to a few thousand rows per table; revisit if a real tenant feels
+  slow.
 - **Per-document custom title** (e.g. "DEVELOPMENT QUOTE" instead of
   the generic "QUOTATION") — currently `data.title` is hardcoded per
   doc type in the Pdf payload builders.
