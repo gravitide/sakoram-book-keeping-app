@@ -2,9 +2,6 @@
 	<div>
 		<!-- Identity hero -------------------------------------------------- -->
 		<section class="mb-10">
-			<div class="text-[11px] uppercase tracking-[0.18em] text-(--ui-text-muted) mb-3">
-				Business profile
-			</div>
 			<div class="flex flex-col md:flex-row md:items-center gap-6">
 				<!-- Logo upload / drop zone -->
 				<div
