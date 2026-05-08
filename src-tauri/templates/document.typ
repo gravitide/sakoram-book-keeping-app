@@ -35,7 +35,10 @@
 // the chosen face still resolves. We deliberately don't list Linux-only
 // fonts here — they generate noise warnings on Windows.
 #let chosen-font = if "font_family" in data and data.font_family != none { data.font_family } else { "Inter" }
-#set text(font: (chosen-font, "Inter", "Inter Tight", "Miriam Libre"), size: 9.5pt, lang: "en")
+// Tabular figures (number-width: "tabular") so digits in money / qty / tax
+// columns line up vertically across rows. Inter, Inter Tight, and Miriam
+// Libre all ship the OpenType "tnum" feature that backs this.
+#set text(font: (chosen-font, "Inter", "Inter Tight", "Miriam Libre"), size: 9.5pt, lang: "en", number-width: "tabular")
 #set par(leading: 0.55em, spacing: 0.65em)
 
 // ============================================================

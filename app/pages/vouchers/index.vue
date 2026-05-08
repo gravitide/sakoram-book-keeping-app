@@ -5,7 +5,7 @@
 				<h1 class="text-2xl font-semibold">
 					Vouchers
 				</h1>
-				<p class="text-sm text-(--ui-text-muted)">
+				<p class="text-sm text-(--ui-text-muted) tabular-nums">
 					{{ store.vouchers.length }} total ·
 					<span class="text-(--ui-success)">+ {{ formatLKR(store.totalReceipts) }}</span>
 					received ·

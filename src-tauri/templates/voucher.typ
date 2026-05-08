@@ -21,7 +21,8 @@
   ],
 )
 #let chosen-font = if "font_family" in data and data.font_family != none { data.font_family } else { "Inter" }
-#set text(font: (chosen-font, "Inter", "Inter Tight", "Miriam Libre"), size: 10pt, lang: "en")
+// Tabular figures so the receipt/payment amount and any totals stay aligned.
+#set text(font: (chosen-font, "Inter", "Inter Tight", "Miriam Libre"), size: 10pt, lang: "en", number-width: "tabular")
 #set par(leading: 0.6em, spacing: 0.7em)
 
 // ============================================================
