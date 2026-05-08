@@ -99,11 +99,34 @@ export const useQuotesStore = defineStore("quotes", () => {
 
 	const search = ref("");
 	const statusFilter = ref<QuoteStatus | "all">("all");
+	// Optional date-range narrowing. Each field is its own from/to pair —
+	// "Issued" filters on issue_date, "Valid until" filters on valid_until.
+	// Empty string means unset. ISO date strings sort lexicographically so
+	// direct string compare is correct.
+	const issuedFrom = ref<string | null>(null);
+	const issuedTo = ref<string | null>(null);
+	const validFrom = ref<string | null>(null);
+	const validTo = ref<string | null>(null);
+
+	const hasDateFilters = computed(() =>
+		Boolean(issuedFrom.value || issuedTo.value || validFrom.value || validTo.value)
+	);
+
+	const clearDateFilters = () => {
+		issuedFrom.value = null;
+		issuedTo.value = null;
+		validFrom.value = null;
+		validTo.value = null;
+	};
 
 	const filtered = computed(() => {
 		const q = search.value.trim().toLowerCase();
 		return quotes.value.filter((row) => {
 			if (statusFilter.value !== "all" && row.status !== statusFilter.value) return false;
+			if (issuedFrom.value && row.issue_date < issuedFrom.value) return false;
+			if (issuedTo.value && row.issue_date > issuedTo.value) return false;
+			if (validFrom.value && row.valid_until < validFrom.value) return false;
+			if (validTo.value && row.valid_until > validTo.value) return false;
 			if (!q) return true;
 			let snapName = "";
 			try {
@@ -390,6 +413,12 @@ export const useQuotesStore = defineStore("quotes", () => {
 		error,
 		search,
 		statusFilter,
+		issuedFrom,
+		issuedTo,
+		validFrom,
+		validTo,
+		hasDateFilters,
+		clearDateFilters,
 		filtered,
 		load,
 		get,

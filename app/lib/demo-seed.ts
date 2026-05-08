@@ -426,11 +426,20 @@ interface CategoryIds {
 
 const seedCategories = async (): Promise<CategoryIds> => {
 	const store = useBillCategoriesStore();
+	// The first three are used by the seeded bills below. The rest are
+	// just there to populate the picker so the new user can see what a
+	// realistic category list looks like.
 	const ids: CategoryIds = {
 		utilities: await store.create({ name: "Utilities", color: "amber", icon: "i-lucide-zap" }),
 		supplies: await store.create({ name: "Supplies", color: "blue", icon: "i-lucide-package" }),
 		fees: await store.create({ name: "Fees", color: "violet", icon: "i-lucide-briefcase" })
 	};
+	await store.create({ name: "Rent", color: "orange", icon: "i-lucide-home" });
+	await store.create({ name: "Salaries", color: "emerald", icon: "i-lucide-graduation-cap" });
+	await store.create({ name: "Marketing", color: "red", icon: "i-lucide-shopping-cart" });
+	await store.create({ name: "Software", color: "sky", icon: "i-lucide-laptop" });
+	await store.create({ name: "Travel", color: "green", icon: "i-lucide-car" });
+	await store.create({ name: "Insurance", color: "violet", icon: "i-lucide-shield" });
 	return ids;
 };
 

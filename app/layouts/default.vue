@@ -186,8 +186,8 @@
 		{ to: "/vouchers", label: "Vouchers", icon: "i-lucide-ticket" },
 		{
 			to: "/clients",
-			label: "Contacts",
-			icon: "i-lucide-contact",
+			label: "Lists",
+			icon: "i-lucide-library",
 			divider: true,
 			children: [
 				{ to: "/clients", label: "Clients", icon: "i-lucide-users" },
