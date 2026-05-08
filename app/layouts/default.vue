@@ -65,9 +65,79 @@
 				</template>
 			</nav>
 
-			<div class="px-4 py-3 border-t border-(--ui-border) text-xs text-(--ui-text-muted)">
-				v{{ appVersion }}
+			<div class="px-4 py-3 border-t border-(--ui-border) text-xs text-(--ui-text-muted) flex items-center justify-between">
+				<span>v{{ appVersion }}</span>
+				<UButton
+					icon="i-lucide-info"
+					size="xs"
+					variant="ghost"
+					color="neutral"
+					title="About Sakoram"
+					aria-label="About Sakoram"
+					@click="aboutOpen = true"
+				/>
 			</div>
+
+			<UModal v-model:open="aboutOpen" title="About Sakoram">
+				<template #content>
+					<div class="p-6 space-y-5">
+						<div class="flex flex-col items-center text-center gap-2">
+							<!-- The wordmark PNG is designed for a light background.
+								In dark mode we invert + 180° hue-rotate so the dark
+								text reads as light while the coloured icon flips back
+								to its original hue. -->
+							<img
+								:src="sakoramLogo"
+								alt="Sakoram"
+								class="h-14 w-auto dark:invert dark:hue-rotate-180"
+							>
+							<div class="text-sm text-(--ui-text-muted) tabular-nums">
+								Book Keeping · Version {{ appVersion }}
+							</div>
+						</div>
+
+						<p class="text-sm leading-relaxed">
+							A single-user desktop bookkeeping app — quotes, invoices, bills,
+							and vouchers with professional PDFs. Multi-business by design,
+							runs fully offline, your data stays on this machine.
+						</p>
+
+						<dl class="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm">
+							<dt class="text-(--ui-text-muted)">
+								Active business
+							</dt>
+							<dd class="font-medium truncate">
+								{{ settings.businessName }}
+							</dd>
+
+							<dt class="text-(--ui-text-muted)">
+								Built with
+							</dt>
+							<dd>
+								Tauri · Nuxt · Typst
+							</dd>
+
+							<dt class="text-(--ui-text-muted)">
+								Made by
+							</dt>
+							<dd>
+								Gravitide
+							</dd>
+						</dl>
+
+						<div class="text-xs text-(--ui-text-muted) border-t border-(--ui-border) pt-4">
+							© {{ copyrightYear }} Gravitide. All rights reserved.
+						</div>
+					</div>
+				</template>
+				<template #footer>
+					<div class="flex justify-end w-full">
+						<UButton color="neutral" variant="ghost" @click="aboutOpen = false">
+							Close
+						</UButton>
+					</div>
+				</template>
+			</UModal>
 		</aside>
 
 		<main class="flex-1 min-w-0 overflow-auto">
@@ -83,6 +153,9 @@
 // once for the whole app. Subsequent calls from pages no-op.
 
 	import pkg from "~~/package.json";
+	// Sakoram brand wordmark — bundled into the build by Vite (resolves at
+	// compile time, no runtime fetch). Wide PNG, rendered in the About modal.
+	import sakoramLogo from "~/assets/sakoram-logo.png";
 	import { isValidThemeColor } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -90,6 +163,12 @@
 	// Pulls from package.json so we never forget to update the sidebar
 	// label when bumping the app version.
 	const appVersion = pkg.version;
+	const copyrightYear = new Date().getFullYear();
+
+	// Sidebar-footer About modal. Lives at the layout level so any page
+	// gets it for free; the toggle is the small info button next to the
+	// version number.
+	const aboutOpen = ref(false);
 
 	const settings = useSettingsStore();
 	const tenants = useTenantsStore();
