@@ -601,6 +601,242 @@ const seedVouchers = async (cs: ClientIds, vs: VendorIds, bs: BillIds) => {
 	});
 };
 
+// ---------- Bulk fill (for pagination / list-perf testing) ---------------
+
+// How many extra rows of each entity to add on top of the curated seed.
+// Tuned to push totals past the comfortable single-screen threshold so list
+// pages, filters, and (eventually) pagination get exercised.
+const BULK_COUNT = 22;
+
+const CITIES = ["Colombo", "Kandy", "Galle", "Jaffna", "Negombo", "Matara", "Kurunegala", "Anuradhapura"] as const;
+
+const seedBulkClients = async (): Promise<number[]> => {
+	const store = useClientsStore();
+	const ids: number[] = [];
+	for (let i = 1; i <= BULK_COUNT; i++) {
+		const tag = String(i).padStart(2, "0");
+		ids.push(await store.create({
+			name: `Demo Client ${tag}`,
+			contact_person: `Contact ${tag}`,
+			email: `client-${tag}@demo.example`,
+			phone: null,
+			address_line1: `${i * 7} Test Street`,
+			address_line2: null,
+			city: CITIES[i % CITIES.length] ?? "Colombo",
+			postal_code: null,
+			country: "Sri Lanka",
+			tax_id: i % 3 === 0 ? `VAT-9${tag}00${tag}` : null,
+			notes: null
+		}));
+	}
+	return ids;
+};
+
+const seedBulkVendors = async (): Promise<number[]> => {
+	const store = useVendorsStore();
+	const ids: number[] = [];
+	for (let i = 1; i <= BULK_COUNT; i++) {
+		const tag = String(i).padStart(2, "0");
+		ids.push(await store.create({
+			name: `Demo Vendor ${tag}`,
+			contact_person: null,
+			email: `vendor-${tag}@demo.example`,
+			phone: null,
+			address_line1: `${i * 11} Supplier Lane`,
+			address_line2: null,
+			city: CITIES[(i + 3) % CITIES.length] ?? "Colombo",
+			postal_code: null,
+			country: "Sri Lanka",
+			tax_id: null,
+			notes: null
+		}));
+	}
+	return ids;
+};
+
+const seedBulkQuotes = async (clientIds: number[]) => {
+	const quotes = useQuotesStore();
+	const clients = useClientsStore();
+	// Cycle through 4 status outcomes: draft → sent → accepted → rejected.
+	// Expired quotes happen automatically when sent ones with valid_until in
+	// the past hit `expireOverdue()` at the end of the seed.
+	const outcomes = ["draft", "sent", "accepted", "rejected", "sent-old"] as const;
+	for (let i = 1; i <= BULK_COUNT; i++) {
+		const cid = clientIds[i % clientIds.length]!;
+		const client = clients.clients.find((c) => c.id === cid);
+		if (!client) continue;
+		const id = await quotes.createDraft({
+			client: { ...client, id: client.id },
+			project_title: `Bulk project ${String(i).padStart(2, "0")}`
+		});
+		const subtotal = (5 + (i % 20)) * 1_000_000; // 5M..25M LKR
+		const tax = Math.round(subtotal * 0.18);
+		const issueDays = (i * 13) % 300; // spread across roughly the past 10 months
+		await quotes.update(id, {
+			pricing_mode: "bundle",
+			issue_date: daysAgo(issueDays),
+			valid_until: daysAgo(issueDays - 30), // 30-day validity from issue
+			vat_rate_basis_points: 1800,
+			subtotal_cents: subtotal,
+			tax_cents: tax,
+			total_cents: subtotal + tax,
+			notes: null,
+			prepared_by: "Demo seeder"
+		});
+		const outcome = outcomes[i % outcomes.length];
+		if (outcome === "sent" || outcome === "sent-old" || outcome === "accepted" || outcome === "rejected") {
+			await quotes.setStatus(id, "sent");
+		}
+		if (outcome === "accepted") await quotes.setStatus(id, "accepted");
+		if (outcome === "rejected") await quotes.setStatus(id, "rejected");
+		// "sent-old" stays sent with a past valid_until — expireOverdue() at
+		// the end will flip it to expired, populating that filter bucket.
+	}
+};
+
+const seedBulkInvoices = async (clientIds: number[]) => {
+	const invoices = useInvoicesStore();
+	const clients = useClientsStore();
+	// Mix: draft / sent / partial / paid / overdue / cancelled.
+	const outcomes = ["draft", "sent", "partial", "paid", "overdue", "cancelled"] as const;
+	for (let i = 1; i <= BULK_COUNT; i++) {
+		const cid = clientIds[(i + 5) % clientIds.length]!;
+		const client = clients.clients.find((c) => c.id === cid);
+		if (!client) continue;
+		const id = await invoices.createDraft({
+			client: { ...client, id: client.id },
+			project_title: `Bulk invoice ${String(i).padStart(2, "0")}`
+		});
+		const subtotal = (10 + (i % 30)) * 1_000_000; // 10M..40M LKR
+		const tax = Math.round(subtotal * 0.18);
+		const total = subtotal + tax;
+		const issueDays = (i * 11) % 320;
+		const dueOffset = i % 5 === 0 ? -30 : 30; // every 5th: already overdue
+		await invoices.update(id, {
+			pricing_mode: "bundle",
+			issue_date: daysAgo(issueDays),
+			due_date: daysAgo(issueDays - dueOffset),
+			vat_rate_basis_points: 1800,
+			subtotal_cents: subtotal,
+			tax_cents: tax,
+			total_cents: total,
+			notes: null,
+			terms: null,
+			prepared_by: "Demo seeder"
+		});
+		const outcome = outcomes[i % outcomes.length];
+		if (outcome === "draft") continue;
+		await invoices.setStatus(id, "sent");
+		if (outcome === "partial") {
+			await invoices.recordPayment(id, {
+				payment_date: daysAgo(Math.max(0, issueDays - 5)),
+				amount_cents: Math.floor(total / 2),
+				method: "bank_transfer",
+				reference: `PART-${String(i).padStart(3, "0")}`,
+				notes: null
+			});
+		} else if (outcome === "paid") {
+			await invoices.recordPayment(id, {
+				payment_date: daysAgo(Math.max(0, issueDays - 5)),
+				amount_cents: total,
+				method: "bank_transfer",
+				reference: `PAID-${String(i).padStart(3, "0")}`,
+				notes: null
+			});
+		} else if (outcome === "cancelled") {
+			await invoices.setStatus(id, "cancelled");
+		}
+		// "overdue" comes from due_date < today — flagOverdue() at end of seed
+		// will catch it.
+	}
+};
+
+const seedBulkBills = async (vendorIds: number[], catIds: CategoryIds, allCats: number[]) => {
+	const bills = useBillsStore();
+	const vendors = useVendorsStore();
+	const categoriesStore = useBillCategoriesStore();
+	const snapFor = (id: number): string => {
+		const row = categoriesStore.categories.find((c) => c.id === id);
+		if (!row) throw new Error(`bulk bills: category ${id} missing`);
+		return buildCategorySnapshot(row);
+	};
+	const outcomes = ["unpaid", "partial", "paid", "overdue", "cancelled"] as const;
+	void catIds; // kept for parity if a future variant wants the curated trio
+	for (let i = 1; i <= BULK_COUNT; i++) {
+		const vid = vendorIds[i % vendorIds.length]!;
+		const vendor = vendors.vendors.find((v) => v.id === vid);
+		if (!vendor) continue;
+		const id = await bills.createBill({ vendor: {
+			id: vendor.id,
+			name: vendor.name,
+			contact_person: vendor.contact_person,
+			email: vendor.email,
+			phone: vendor.phone,
+			address_line1: vendor.address_line1,
+			address_line2: vendor.address_line2,
+			city: vendor.city,
+			postal_code: vendor.postal_code,
+			country: vendor.country,
+			tax_id: vendor.tax_id
+		} });
+		const subtotal = (2 + (i % 15)) * 500_000; // 1M..8.5M
+		const tax = Math.round(subtotal * 0.18);
+		const total = subtotal + tax;
+		const issueDays = (i * 9) % 300;
+		const dueOffset = i % 4 === 0 ? -20 : 30;
+		const cid = allCats[i % allCats.length]!;
+		await bills.update(id, {
+			pricing_mode: "bundle",
+			issue_date: daysAgo(issueDays),
+			due_date: daysAgo(issueDays - dueOffset),
+			vendor_invoice_number: `BLK-${String(i).padStart(4, "0")}`,
+			vat_rate_basis_points: 1800,
+			subtotal_cents: subtotal,
+			tax_cents: tax,
+			total_cents: total,
+			category_id: cid,
+			category_snapshot: snapFor(cid),
+			notes: null
+		});
+		const outcome = outcomes[i % outcomes.length];
+		if (outcome === "paid") await bills.recordPayment(id, total);
+		else if (outcome === "partial") await bills.recordPayment(id, Math.floor(total / 2));
+		else if (outcome === "cancelled") await bills.setStatus(id, "cancelled");
+		// "overdue" auto-set by flagOverdue() at end of seed (due_date < today).
+	}
+};
+
+const seedBulkVouchers = async (clientIds: number[], vendorIds: number[]) => {
+	const vouchers = useVouchersStore();
+	const clients = useClientsStore();
+	const vendors = useVendorsStore();
+	const methods = ["bank_transfer", "cash", "cheque", "card", "other"] as const;
+	for (let i = 1; i <= BULK_COUNT; i++) {
+		const isReceipt = i % 2 === 0;
+		const partyId = isReceipt
+			? clientIds[i % clientIds.length]!
+			: vendorIds[i % vendorIds.length]!;
+		const partyName = isReceipt
+			? clients.clients.find((c) => c.id === partyId)?.name ?? "Demo client"
+			: vendors.vendors.find((v) => v.id === partyId)?.name ?? "Demo vendor";
+		const amount = (1 + (i % 12)) * 500_000;
+		await vouchers.create({
+			voucher_type: isReceipt ? "receipt" : "payment",
+			voucher_date: daysAgo((i * 7) % 280),
+			party_name: partyName,
+			amount_cents: amount,
+			payment_method: methods[i % methods.length] ?? "bank_transfer",
+			reference: `BLK-VCH-${String(i).padStart(4, "0")}`,
+			description: isReceipt
+				? `Bulk receipt #${i}`
+				: `Bulk payment #${i}`,
+			related_invoice_id: null,
+			related_bill_id: null,
+			attachment_path: null
+		});
+	}
+};
+
 // ---------- Public entry point -------------------------------------------
 
 /**
@@ -622,7 +858,9 @@ export const createDemoBusiness = async (
 	const t = await tenants.create(displayName);
 	await tenants.activate(t.id);
 
-	// 3. Seed.
+	// 3. Seed — curated handcrafted set first, so the dashboard / detail
+	// pages have realistic content. Bulk fill afterwards adds enough volume
+	// to exercise list pages, filters, and (eventually) pagination.
 	await seedSettings();
 	const clients = await seedClients();
 	const vendors = await seedVendors();
@@ -631,6 +869,24 @@ export const createDemoBusiness = async (
 	await seedInvoices(clients, quotes);
 	const bills = await seedBills(vendors, categories);
 	await seedVouchers(clients, vendors, bills);
+
+	// 4. Bulk fill. Adds ~22 more rows of each entity on top of the curated
+	// set so list pages have realistic volume to scroll/filter/paginate.
+	const bulkClientIds = await seedBulkClients();
+	const bulkVendorIds = await seedBulkVendors();
+	const allClientIds = [
+		...Object.values(clients),
+		...bulkClientIds
+	];
+	const allVendorIds = [
+		...Object.values(vendors),
+		...bulkVendorIds
+	];
+	const allCategoryIds = useBillCategoriesStore().categories.map((c) => c.id);
+	await seedBulkQuotes(allClientIds);
+	await seedBulkInvoices(allClientIds);
+	await seedBulkBills(allVendorIds, categories, allCategoryIds);
+	await seedBulkVouchers(allClientIds, allVendorIds);
 
 	// Auto-overdue any sent invoices/bills whose due date is already past.
 	// `flagOverdue` runs anyway on next dashboard load — calling it
