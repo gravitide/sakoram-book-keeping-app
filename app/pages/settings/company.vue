@@ -238,23 +238,6 @@
 				</SectionCard>
 			</div>
 
-			<div class="mt-6">
-				<SectionCard
-					icon="i-lucide-file-text"
-					title="PDF footer notes"
-					subtitle="Appended at the bottom of generated documents — payment instructions, thanks, fine print."
-				>
-					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-						<UFormField label="Invoice footer" name="invoice_footer_notes">
-							<UTextarea v-model="form.invoice_footer_notes" :rows="4" autoresize />
-						</UFormField>
-						<UFormField label="Quote footer" name="quote_footer_notes">
-							<UTextarea v-model="form.quote_footer_notes" :rows="4" autoresize />
-						</UFormField>
-					</div>
-				</SectionCard>
-			</div>
-
 			<!-- Sticky save bar — lives inside the form so it shares the
 				scrollable <main> ancestor; position:sticky pins it to the
 				bottom of the viewport without taking it out of normal flow
@@ -314,8 +297,11 @@
 	const toast = useToast();
 
 	// Appearance settings (ui_font, theme_color) live on a sibling page, so
-	// we exclude them from this form to avoid stamping them back on save.
-	type CompanyForm = Omit<SettingsUpdate, "ui_font" | "theme_color">;
+	// Excludes fields owned by sibling settings pages so we don't stamp them
+	// back when this form saves. Appearance owns ui_font/pdf_font/theme_color;
+	// the PDF page owns pdf_header_logo_path/invoice_footer_notes/quote_footer_notes.
+	type SiblingOwnedKey = "ui_font" | "pdf_font" | "theme_color" | "pdf_header_logo_path" | "invoice_footer_notes" | "quote_footer_notes";
+	type CompanyForm = Omit<SettingsUpdate, SiblingOwnedKey>;
 
 	const form = reactive<CompanyForm>({
 		business_name: "",
@@ -336,8 +322,6 @@
 		default_vat_rate: 1800,
 		default_payment_terms_days: 30,
 		default_quote_validity_days: 30,
-		invoice_footer_notes: "",
-		quote_footer_notes: "",
 		fiscal_year_start_month: 1,
 		currency_code: "LKR"
 	});
@@ -389,8 +373,6 @@
 		form.default_vat_rate = s.default_vat_rate;
 		form.default_payment_terms_days = s.default_payment_terms_days;
 		form.default_quote_validity_days = s.default_quote_validity_days;
-		form.invoice_footer_notes = s.invoice_footer_notes ?? "";
-		form.quote_footer_notes = s.quote_footer_notes ?? "";
 		form.fiscal_year_start_month = s.fiscal_year_start_month;
 		form.currency_code = s.currency_code ?? "LKR";
 		vatRatePct.value = s.default_vat_rate / 100;

@@ -346,7 +346,7 @@
 			business_name: settingsStore.settings?.business_name ?? null,
 			website: settingsStore.settings?.website ?? null,
 			phone: settingsStore.settings?.phone ?? null,
-			logo_path: settingsStore.settings?.logo_path ?? null
+			logo_path: settingsStore.settings?.pdf_header_logo_path ?? null
 		};
 	};
 
