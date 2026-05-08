@@ -56,6 +56,15 @@
 @layer base {
 	-webkit-tap-highlight-color: transparent;
 
+	/* The shell layout (default.vue) uses h-screen + a single scrollable
+	 * <main>. Stop the document itself from scrolling so we don't show two
+	 * vertical scrollbars (document + main) on long settings pages. */
+	html,
+	body {
+		overflow: hidden;
+		height: 100%;
+	}
+
 	/* Tabular figures for accounting layouts. Tables and numeric inputs
 	 * are where row-to-row digit alignment matters most — money columns,
 	 * qty columns, payment ledgers, line totals. Only digits become

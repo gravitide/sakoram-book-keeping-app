@@ -197,48 +197,37 @@
 					subtitle="Pre-fill values when creating new documents."
 				>
 					<div class="grid grid-cols-2 gap-3">
-						<UFormField label="VAT rate" name="default_vat_rate">
-							<UInput
+						<UFormField label="VAT rate (%)" name="default_vat_rate">
+							<UInputNumber
 								v-model="vatRatePct"
-								type="number"
-								:step="0.01"
+								:step="0.5"
 								:min="0"
 								:max="100"
-							>
-								<template #trailing>
-									<span class="text-xs text-(--ui-text-muted)">%</span>
-								</template>
-							</UInput>
+								class="w-full"
+							/>
 						</UFormField>
-						<UFormField label="Payment terms" name="default_payment_terms_days">
-							<UInput
+						<UFormField label="Payment terms (days)" name="default_payment_terms_days">
+							<UInputNumber
 								v-model="form.default_payment_terms_days"
-								type="number"
 								:min="0"
 								:max="365"
-							>
-								<template #trailing>
-									<span class="text-xs text-(--ui-text-muted)">days</span>
-								</template>
-							</UInput>
+								class="w-full"
+							/>
 						</UFormField>
-						<UFormField label="Quote validity" name="default_quote_validity_days">
-							<UInput
+						<UFormField label="Quote validity (days)" name="default_quote_validity_days">
+							<UInputNumber
 								v-model="form.default_quote_validity_days"
-								type="number"
 								:min="0"
 								:max="365"
-							>
-								<template #trailing>
-									<span class="text-xs text-(--ui-text-muted)">days</span>
-								</template>
-							</UInput>
+								class="w-full"
+							/>
 						</UFormField>
 						<UFormField label="Fiscal year starts" name="fiscal_year_start_month">
 							<USelect
 								v-model="form.fiscal_year_start_month"
 								:items="months"
 								value-key="value"
+								class="w-full"
 							/>
 						</UFormField>
 					</div>
