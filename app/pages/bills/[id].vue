@@ -750,7 +750,7 @@
 			phone: settingsStore.settings?.phone ?? null,
 			address_line1: settingsStore.settings?.address_line1 ?? null,
 			city: settingsStore.settings?.city ?? null,
-			logo_path: settingsStore.settings?.logo_path ?? null,
+			logo_path: settingsStore.settings?.pdf_header_logo_path ?? null,
 			bank: null,
 			lines: lineRows.map((l) => ({
 				item_label: l.item_label,

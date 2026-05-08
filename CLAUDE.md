@@ -135,14 +135,23 @@ added at runtime).
   ├─ tenants.json              ← registry: { active_tenant_id, tenants: [{ id, name, logo_file }] }
   ├─ businesses\
   │   └─ {tenant_id}.db        ← one SQLite file per business
-  └─ logos\
-      └─ {tenant_id}.{ext}     ← one logo file per business
+  ├─ logos\
+  │   └─ {tenant_id}.{ext}     ← square identity logo (sidebar, tenant switcher, hero)
+  └─ pdf-headers\
+      └─ {tenant_id}.{ext}     ← optional wide letterhead logo printed on PDFs
 ```
 
 `tenant.id` doubles as the **slug** and the **filename stem** for both
-the DB and the logo. It's stable: renaming a tenant changes
-`tenant.name` only — the slug, DB filename, and logo filename stay put
-so we don't have to move files around on rename.
+the DB and both logo variants. It's stable: renaming a tenant changes
+`tenant.name` only — the slug, DB filename, and logo filenames stay
+put so we don't have to move files around on rename.
+
+Two logos by design: the sidebar / tenant switcher want a square mark,
+while invoice headers look better with a wide letterhead-style image.
+Only the identity logo (`logos/`) is mirrored into `tenants.json` as
+`logo_file` because the welcome/sidebar UI reads that file directly
+without going through the DB. The PDF header logo lives only on
+`company_settings.pdf_header_logo_path`.
 
 ### Tenant lifecycle
 
@@ -250,7 +259,8 @@ sakoram_app/
    │  ├─ 0008_bills_use_vendors.sql   ← drop+recreate bills with vendor_id FK + vendor_snapshot
    │  ├─ 0009_bill_categories.sql     ← bill_categories lookup; bills get category_id FK + category_snapshot
    │  ├─ 0010_default_font_inter.sql  ← drop Google Sans Flex; default ui_font/pdf_font → Inter
-   │  └─ 0011_currency.sql             ← per-business currency_code on company_settings
+   │  ├─ 0011_currency.sql             ← per-business currency_code on company_settings
+   │  └─ 0012_pdf_header_logo.sql      ← pdf_header_logo_path column (wide PDF letterhead)
    ├─ templates/
    │  ├─ document.typ                 ← unified Typst template for quotes/invoices/bills
    │  └─ voucher.typ                  ← simpler one-page receipt layout

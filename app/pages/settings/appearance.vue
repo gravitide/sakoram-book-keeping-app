@@ -5,8 +5,9 @@
 				Appearance
 			</h1>
 			<p class="text-sm text-(--ui-text-muted)">
-				Pick the UI font, the PDF font, and the accent color used across the
-				app and on rendered documents.
+				Pick the UI font and the accent color used across the app
+				and on rendered documents. PDF-specific fonts live under
+				Settings → PDF.
 			</p>
 		</header>
 
@@ -70,56 +71,6 @@
 						</div>
 						<div class="text-sm">
 							Sphinx of black quartz, judge my vow. 0123456789
-						</div>
-					</div>
-				</div>
-			</UCard>
-
-			<UCard>
-				<template #header>
-					<div class="font-medium">
-						PDF font
-					</div>
-					<div class="text-xs text-(--ui-text-muted) mt-1">
-						Used when rendering quotes, invoices, bills, and vouchers. Pick
-						a bundled font for guaranteed availability — Typst will fall back
-						to the bundled Inter if it can't resolve your choice.
-					</div>
-				</template>
-
-				<UFormField label="Font family">
-					<UInput v-model="pdfFont" placeholder="e.g. Inter" />
-				</UFormField>
-
-				<div class="mt-4">
-					<div class="text-xs text-(--ui-text-muted) mb-2">
-						Bundled fonts:
-					</div>
-					<div class="flex flex-wrap gap-2">
-						<UButton
-							v-for="suggestion in bundledFonts"
-							:key="suggestion"
-							size="xs"
-							variant="soft"
-							color="primary"
-							@click="pdfFont = suggestion"
-						>
-							{{ suggestion }}
-						</UButton>
-					</div>
-				</div>
-
-				<div class="mt-6 p-4 border border-(--ui-border) rounded-md bg-(--ui-bg-muted)">
-					<div class="text-xs text-(--ui-text-muted) uppercase tracking-wide mb-2">
-						Preview (uses the font's webview-rendered version — the PDF
-						will look identical since both pull the same TTF)
-					</div>
-					<div :style="{ fontFamily: pdfPreviewFontStack }" class="space-y-1">
-						<div class="text-2xl font-semibold">
-							INVOICE INV-2026-0042
-						</div>
-						<div class="text-sm">
-							Total: LKR 12,345.00 — due 2026-06-15
 						</div>
 					</div>
 				</div>
@@ -210,18 +161,15 @@
 	];
 
 	const uiFont = ref<string>(store.settings?.ui_font ?? "Inter");
-	const pdfFont = ref<string>(store.settings?.pdf_font ?? "Inter");
 	const themeColor = ref<ThemeColor>(
 		isValidThemeColor(store.settings?.theme_color) ? store.settings!.theme_color : "red"
 	);
 
 	const initialUiFont = ref<string>(uiFont.value);
-	const initialPdfFont = ref<string>(pdfFont.value);
 	const initialColor = ref<ThemeColor>(themeColor.value);
 
 	const dirty = computed(() =>
 		uiFont.value.trim() !== initialUiFont.value
-		|| pdfFont.value.trim() !== initialPdfFont.value
 		|| themeColor.value !== initialColor.value
 	);
 
@@ -230,11 +178,6 @@
 	// last-saved values if they cancel.
 	const previewFontStack = computed(() =>
 		`'${uiFont.value || "Inter"}', 'Inter', system-ui, sans-serif`
-	);
-	// PDF preview uses the same cascade so the user sees roughly what Typst
-	// will render. No effect on the actual app UI.
-	const pdfPreviewFontStack = computed(() =>
-		`'${pdfFont.value || "Inter"}', 'Inter', serif`
 	);
 
 	// Live preview: override Tailwind's --font-sans on :root + flip the
@@ -253,14 +196,11 @@
 		saving.value = true;
 		try {
 			const u = uiFont.value.trim() || "Inter";
-			const p = pdfFont.value.trim() || "Inter";
 			await store.save({
 				ui_font: u,
-				pdf_font: p,
 				theme_color: themeColor.value
 			});
 			initialUiFont.value = u;
-			initialPdfFont.value = p;
 			initialColor.value = themeColor.value;
 			toast.add({ title: "Appearance saved", color: "success", icon: "i-lucide-check" });
 		} catch (err) {
@@ -277,7 +217,6 @@
 
 	const reset = () => {
 		uiFont.value = initialUiFont.value;
-		pdfFont.value = initialPdfFont.value;
 		themeColor.value = initialColor.value;
 	};
 </script>

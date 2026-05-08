@@ -24,6 +24,7 @@ export interface CompanySettingsRow {
 	bank_account_number: string | null
 	bank_branch: string | null
 	logo_path: string | null
+	pdf_header_logo_path: string | null
 	default_vat_rate: number
 	default_payment_terms_days: number
 	default_quote_validity_days: number
@@ -55,6 +56,7 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"bank_account_number",
 	"bank_branch",
 	"logo_path",
+	"pdf_header_logo_path",
 	"default_vat_rate",
 	"default_payment_terms_days",
 	"default_quote_validity_days",
@@ -75,9 +77,23 @@ export const useSettingsStore = defineStore("settings", () => {
 
 	const businessName = computed(() => settings.value?.business_name ?? "Sakoram");
 
-	// Webview-safe URL for the logo file, or null if there is no logo.
+	// Webview-safe URL for the (square) identity logo used in the sidebar
+	// + tenant switcher + company-settings hero. Null if no logo is set.
 	const logoSrc = computed(() => {
 		const p = settings.value?.logo_path;
+		if (!p) return null;
+		try {
+			return convertFileSrc(p);
+		} catch {
+			return null;
+		}
+	});
+
+	// Webview-safe URL for the wide PDF header logo. Distinct asset from
+	// the identity logo so users can keep a square mark for the sidebar
+	// and a letterhead-style image for printed documents.
+	const pdfHeaderLogoSrc = computed(() => {
+		const p = settings.value?.pdf_header_logo_path;
 		if (!p) return null;
 		try {
 			return convertFileSrc(p);
@@ -142,6 +158,7 @@ export const useSettingsStore = defineStore("settings", () => {
 		error,
 		businessName,
 		logoSrc,
+		pdfHeaderLogoSrc,
 		load,
 		ensureLoaded,
 		save
