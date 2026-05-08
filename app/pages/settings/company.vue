@@ -1,28 +1,29 @@
 <template>
-	<div>
-		<header class="mb-6">
-			<h1 class="text-2xl font-semibold">
-				Company details
-			</h1>
-			<p class="text-sm text-(--ui-text-muted)">
-				Business info, address, bank details, defaults, and logo. Changes are saved together.
-			</p>
-		</header>
-
-		<UForm :schema="schema" :state="form" class="space-y-6" @submit="onSubmit">
-			<UCard>
-				<template #header>
-					<div class="flex items-center justify-between">
-						<div class="font-medium">
-							Logo
-						</div>
-						<div v-if="store.settings?.logo_path" class="text-xs text-(--ui-text-muted)">
-							{{ store.settings.logo_path }}
-						</div>
-					</div>
-				</template>
-
-				<div class="flex items-center gap-4">
+	<div class="pb-32">
+		<!-- Identity hero -------------------------------------------------- -->
+		<section class="mb-10">
+			<div class="text-[11px] uppercase tracking-[0.18em] text-(--ui-text-muted) mb-3">
+				Business profile
+			</div>
+			<div class="flex flex-col md:flex-row md:items-center gap-6">
+				<!-- Logo upload / drop zone -->
+				<div
+					class="group relative size-32 shrink-0 rounded-2xl border-2 border-dashed flex items-center justify-center overflow-hidden transition cursor-pointer" :class="[
+						dragOver
+							? 'border-(--ui-primary) bg-(--ui-primary)/5 scale-[1.02]'
+							: 'border-(--ui-border) bg-(--ui-bg-muted) hover:border-(--ui-primary)/60'
+					]"
+					role="button"
+					tabindex="0"
+					aria-label="Upload logo"
+					@click="pickLogo"
+					@keydown.enter.prevent="pickLogo"
+					@keydown.space.prevent="pickLogo"
+					@dragover.prevent="dragOver = true"
+					@dragenter.prevent="dragOver = true"
+					@dragleave.prevent="dragOver = false"
+					@drop.prevent="onDrop"
+				>
 					<input
 						ref="fileInput"
 						type="file"
@@ -30,92 +31,152 @@
 						class="hidden"
 						@change="onFileChange"
 					>
-					<div class="size-24 rounded-md border border-(--ui-border) bg-(--ui-bg-muted) flex items-center justify-center overflow-hidden">
-						<img
-							v-if="store.logoSrc"
-							:src="store.logoSrc"
-							alt="Logo"
-							class="max-w-full max-h-full object-contain"
-						>
-						<UIcon v-else name="i-lucide-image" class="size-8 text-(--ui-text-muted)" />
+					<img
+						v-if="store.logoSrc"
+						:src="store.logoSrc"
+						alt="Logo"
+						class="max-w-full max-h-full object-contain p-2"
+					>
+					<div v-else class="flex flex-col items-center gap-1 text-(--ui-text-muted)">
+						<UIcon name="i-lucide-image-up" class="size-8" />
+						<div class="text-[10px] uppercase tracking-wider">
+							Drop logo
+						</div>
 					</div>
-					<div class="flex gap-2">
-						<UButton icon="i-lucide-upload" variant="outline" @click="pickLogo">
-							{{ store.settings?.logo_path ? "Replace logo" : "Upload logo" }}
-						</UButton>
+					<!-- Replace overlay (only when a logo is set) -->
+					<div
+						v-if="store.logoSrc"
+						class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100"
+					>
+						<UIcon name="i-lucide-upload" class="size-5 text-white" />
+						<span class="text-[10px] uppercase tracking-wider text-white">
+							Replace
+						</span>
+					</div>
+				</div>
+
+				<!-- Identity summary -->
+				<div class="flex-1 min-w-0">
+					<h1 class="text-3xl font-semibold leading-tight truncate">
+						{{ form.business_name || 'Untitled business' }}
+					</h1>
+					<dl class="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-(--ui-text-muted)">
+						<div v-if="form.tax_id" class="flex items-center gap-1.5">
+							<UIcon name="i-lucide-receipt" class="size-3.5" />
+							<span>Tax ID {{ form.tax_id }}</span>
+						</div>
+						<div v-if="form.email" class="flex items-center gap-1.5">
+							<UIcon name="i-lucide-mail" class="size-3.5" />
+							<span>{{ form.email }}</span>
+						</div>
+						<div v-if="form.phone" class="flex items-center gap-1.5">
+							<UIcon name="i-lucide-phone" class="size-3.5" />
+							<span class="tabular-nums">{{ form.phone }}</span>
+						</div>
+						<div v-if="!form.business_name && !form.tax_id && !form.email && !form.phone">
+							Fill in the company details below — they appear on every PDF you generate.
+						</div>
+					</dl>
+					<div class="mt-4 flex flex-wrap items-center gap-2">
 						<UButton
 							v-if="store.settings?.logo_path"
 							icon="i-lucide-trash-2"
-							color="neutral"
+							size="xs"
 							variant="ghost"
+							color="neutral"
 							@click="removeLogo"
 						>
-							Remove
+							Remove logo
 						</UButton>
+						<UButton
+							v-else
+							icon="i-lucide-upload"
+							size="xs"
+							variant="soft"
+							@click="pickLogo"
+						>
+							Upload logo
+						</UButton>
+						<span v-if="logoFileName" class="text-xs text-(--ui-text-muted) truncate">
+							{{ logoFileName }}
+						</span>
 					</div>
 				</div>
-			</UCard>
+			</div>
+		</section>
 
-			<UCard>
-				<template #header>
-					<div class="font-medium">
-						Company
-					</div>
-				</template>
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+		<!-- Form -------------------------------------------------------------- -->
+		<UForm
+			ref="formRef"
+			:schema="schema"
+			:state="form"
+			@submit="onSubmit"
+		>
+			<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+				<SectionCard
+					icon="i-lucide-building-2"
+					title="Company"
+					subtitle="The legal entity behind quotes and invoices."
+				>
 					<UFormField label="Business name" name="business_name" required>
-						<UInput v-model="form.business_name" />
+						<UInput v-model="form.business_name" placeholder="Acme (Pvt) Ltd" />
 					</UFormField>
 					<UFormField label="Tax / VAT registration ID" name="tax_id">
 						<UInput v-model="form.tax_id" />
 					</UFormField>
 					<UFormField label="Email" name="email">
-						<UInput v-model="form.email" type="email" />
+						<UInput
+							v-model="form.email"
+							type="email"
+							leading-icon="i-lucide-mail"
+							placeholder="hello@acme.lk"
+						/>
 					</UFormField>
 					<UFormField label="Phone" name="phone">
-						<UInput v-model="form.phone" />
+						<UInput
+							v-model="form.phone"
+							leading-icon="i-lucide-phone"
+							placeholder="+94 ..."
+						/>
 					</UFormField>
-					<UFormField label="Website" name="website" class="md:col-span-2">
-						<UInput v-model="form.website" placeholder="https://" />
+					<UFormField label="Website" name="website">
+						<UInput
+							v-model="form.website"
+							leading-icon="i-lucide-globe"
+							placeholder="https://"
+						/>
 					</UFormField>
-				</div>
-			</UCard>
+				</SectionCard>
 
-			<UCard>
-				<template #header>
-					<div class="font-medium">
-						Address
-					</div>
-				</template>
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<UFormField label="Address line 1" name="address_line1" class="md:col-span-2">
+				<SectionCard
+					icon="i-lucide-map-pin"
+					title="Address"
+					subtitle="Printed on every issued document."
+				>
+					<UFormField label="Address line 1" name="address_line1">
 						<UInput v-model="form.address_line1" />
 					</UFormField>
-					<UFormField label="Address line 2" name="address_line2" class="md:col-span-2">
+					<UFormField label="Address line 2" name="address_line2">
 						<UInput v-model="form.address_line2" />
 					</UFormField>
-					<UFormField label="City" name="city">
-						<UInput v-model="form.city" />
-					</UFormField>
-					<UFormField label="Postal code" name="postal_code">
-						<UInput v-model="form.postal_code" />
-					</UFormField>
+					<div class="grid grid-cols-3 gap-3">
+						<UFormField label="City" name="city" class="col-span-2">
+							<UInput v-model="form.city" />
+						</UFormField>
+						<UFormField label="Postal" name="postal_code">
+							<UInput v-model="form.postal_code" />
+						</UFormField>
+					</div>
 					<UFormField label="Country" name="country">
 						<UInput v-model="form.country" />
 					</UFormField>
-				</div>
-			</UCard>
+				</SectionCard>
 
-			<UCard>
-				<template #header>
-					<div class="font-medium">
-						Bank details
-					</div>
-					<div class="text-xs text-(--ui-text-muted) mt-1">
-						Printed on invoice PDFs.
-					</div>
-				</template>
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+				<SectionCard
+					icon="i-lucide-landmark"
+					title="Bank details"
+					subtitle="Shown on invoice PDFs so clients know where to pay."
+				>
 					<UFormField label="Bank name" name="bank_name">
 						<UInput v-model="form.bank_name" />
 					</UFormField>
@@ -128,59 +189,128 @@
 					<UFormField label="Account number" name="bank_account_number">
 						<UInput v-model="form.bank_account_number" />
 					</UFormField>
-				</div>
-			</UCard>
+				</SectionCard>
 
-			<UCard>
-				<template #header>
-					<div class="font-medium">
-						Defaults
+				<SectionCard
+					icon="i-lucide-sliders-horizontal"
+					title="Operational defaults"
+					subtitle="Pre-fill values when creating new documents."
+				>
+					<div class="grid grid-cols-2 gap-3">
+						<UFormField label="VAT rate" name="default_vat_rate">
+							<UInput
+								v-model="vatRatePct"
+								type="number"
+								:step="0.01"
+								:min="0"
+								:max="100"
+							>
+								<template #trailing>
+									<span class="text-xs text-(--ui-text-muted)">%</span>
+								</template>
+							</UInput>
+						</UFormField>
+						<UFormField label="Payment terms" name="default_payment_terms_days">
+							<UInput
+								v-model="form.default_payment_terms_days"
+								type="number"
+								:min="0"
+								:max="365"
+							>
+								<template #trailing>
+									<span class="text-xs text-(--ui-text-muted)">days</span>
+								</template>
+							</UInput>
+						</UFormField>
+						<UFormField label="Quote validity" name="default_quote_validity_days">
+							<UInput
+								v-model="form.default_quote_validity_days"
+								type="number"
+								:min="0"
+								:max="365"
+							>
+								<template #trailing>
+									<span class="text-xs text-(--ui-text-muted)">days</span>
+								</template>
+							</UInput>
+						</UFormField>
+						<UFormField label="Fiscal year starts" name="fiscal_year_start_month">
+							<USelect
+								v-model="form.fiscal_year_start_month"
+								:items="months"
+								value-key="value"
+							/>
+						</UFormField>
 					</div>
-				</template>
-				<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-					<UFormField label="Default VAT rate (%)" name="default_vat_rate">
-						<UInput v-model="vatRatePct" type="number" :step="0.01" :min="0" :max="100" />
-					</UFormField>
-					<UFormField label="Payment terms (days)" name="default_payment_terms_days">
-						<UInput v-model="form.default_payment_terms_days" type="number" :min="0" :max="365" />
-					</UFormField>
-					<UFormField label="Quote validity (days)" name="default_quote_validity_days">
-						<UInput v-model="form.default_quote_validity_days" type="number" :min="0" :max="365" />
-					</UFormField>
-					<UFormField label="Fiscal year starts" name="fiscal_year_start_month" class="md:col-span-3">
-						<USelect v-model="form.fiscal_year_start_month" :items="months" value-key="value" class="md:w-1/3" />
-						<template #help>
-							Sri Lanka government FY runs April → March (set to April).
-						</template>
-					</UFormField>
-				</div>
-			</UCard>
-
-			<UCard>
-				<template #header>
-					<div class="font-medium">
-						Footer notes
-					</div>
-					<div class="text-xs text-(--ui-text-muted) mt-1">
-						Shown at the bottom of generated PDFs.
-					</div>
-				</template>
-				<div class="grid grid-cols-1 gap-4">
-					<UFormField label="Invoice footer" name="invoice_footer_notes">
-						<UTextarea v-model="form.invoice_footer_notes" :rows="3" />
-					</UFormField>
-					<UFormField label="Quote footer" name="quote_footer_notes">
-						<UTextarea v-model="form.quote_footer_notes" :rows="3" />
-					</UFormField>
-				</div>
-			</UCard>
-
-			<div class="flex justify-end gap-2 pt-2">
-				<UButton type="submit" :loading="store.saving" icon="i-lucide-save">
-					Save changes
-				</UButton>
+					<p class="text-xs text-(--ui-text-muted) flex items-center gap-1.5">
+						<UIcon name="i-lucide-info" class="size-3.5" />
+						Sri Lanka government FY runs April → March.
+					</p>
+				</SectionCard>
 			</div>
+
+			<div class="mt-6">
+				<SectionCard
+					icon="i-lucide-file-text"
+					title="PDF footer notes"
+					subtitle="Appended at the bottom of generated documents — payment instructions, thanks, fine print."
+				>
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<UFormField label="Invoice footer" name="invoice_footer_notes">
+							<UTextarea v-model="form.invoice_footer_notes" :rows="4" autoresize />
+						</UFormField>
+						<UFormField label="Quote footer" name="quote_footer_notes">
+							<UTextarea v-model="form.quote_footer_notes" :rows="4" autoresize />
+						</UFormField>
+					</div>
+				</SectionCard>
+			</div>
+
+			<!-- Hidden fallback submit so Enter inside an input still saves. -->
+			<button type="submit" class="sr-only" tabindex="-1">
+				Save
+			</button>
 		</UForm>
+
+		<!-- Sticky save bar -->
+		<Transition
+			enter-active-class="transition ease-out duration-200"
+			enter-from-class="opacity-0 translate-y-3"
+			leave-active-class="transition ease-in duration-150"
+			leave-to-class="opacity-0 translate-y-3"
+		>
+			<div
+				v-if="dirty"
+				class="fixed bottom-0 left-0 right-0 z-30 backdrop-blur-md bg-(--ui-bg)/85 border-t border-(--ui-border) shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.15)]"
+			>
+				<div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+					<div class="flex items-center gap-2 text-sm">
+						<span class="relative flex size-2">
+							<span class="absolute inline-flex h-full w-full rounded-full bg-(--ui-warning) opacity-75 animate-ping" />
+							<span class="relative inline-flex size-2 rounded-full bg-(--ui-warning)" />
+						</span>
+						<span class="text-(--ui-text)">Unsaved changes</span>
+					</div>
+					<div class="flex items-center gap-2">
+						<UButton
+							variant="ghost"
+							color="neutral"
+							:disabled="store.saving"
+							@click="onDiscard"
+						>
+							Discard
+						</UButton>
+						<UButton
+							:loading="store.saving"
+							icon="i-lucide-save"
+							@click="triggerSubmit"
+						>
+							Save changes
+						</UButton>
+					</div>
+				</div>
+			</div>
+		</Transition>
 	</div>
 </template>
 
@@ -275,6 +405,16 @@
 	await store.ensureLoaded();
 	hydrate();
 
+	// Dirty tracking via JSON snapshot. Re-baselined after save / discard.
+	const formSnapshot = computed(() =>
+		JSON.stringify({ ...form, _vat: vatRatePct.value })
+	);
+	const baseline = ref<string>(formSnapshot.value);
+	const dirty = computed(() => formSnapshot.value !== baseline.value);
+	const refreshBaseline = () => {
+		baseline.value = formSnapshot.value;
+	};
+
 	const schema = z.object({
 		business_name: z.string().trim().min(1, "Business name is required"),
 		email: z.union([z.literal(""), z.string().email("Invalid email")]),
@@ -293,6 +433,7 @@
 		};
 		try {
 			await store.save(patch);
+			refreshBaseline();
 			toast.add({ title: "Settings saved", color: "success", icon: "i-lucide-check" });
 		} catch (err) {
 			toast.add({
@@ -304,19 +445,42 @@
 		}
 	};
 
+	const onDiscard = () => {
+		hydrate();
+		refreshBaseline();
+		toast.add({
+			title: "Changes discarded",
+			color: "info",
+			icon: "i-lucide-rotate-ccw"
+		});
+	};
+
+	// Programmatically submit the UForm from the sticky save bar so its
+	// Zod validation still runs (rather than calling onSubmit directly).
+	const formRef = ref<{ submit?: () => void } | null>(null);
+	const triggerSubmit = () => {
+		formRef.value?.submit?.();
+	};
+
+	// ----- Logo handling -------------------------------------------------------
+
+	const fileInput = useTemplateRef<HTMLInputElement>("fileInput");
+	const dragOver = ref(false);
+	const pickLogo = () => fileInput.value?.click();
+
+	// Show just the basename, not the absolute OS path. Handles both Windows
+	// backslashes and POSIX slashes so it stays correct on either platform.
+	const logoFileName = computed(() => {
+		const p = store.settings?.logo_path;
+		if (!p) return null;
+		return p.split(/[\\/]/).pop() ?? p;
+	});
+
 	// Use an HTML <input type="file"> rather than the Tauri dialog plugin: it
 	// gives us the raw File bytes directly via FileReader, so we never need
 	// fs-read capability on the user's arbitrary source path. We only write
 	// into the app data dir, which IS in the allowed scope.
-	const fileInput = useTemplateRef<HTMLInputElement>("fileInput");
-	const pickLogo = () => fileInput.value?.click();
-
-	const onFileChange = async (event: Event) => {
-		const input = event.target as HTMLInputElement;
-		const file = input.files?.[0];
-		input.value = ""; // allow re-picking the same file
-		if (!file) return;
-
+	const uploadLogo = async (file: File) => {
 		const tenantId = tenants.activeTenantId;
 		if (!tenantId) {
 			toast.add({ title: "No active business", color: "error", icon: "i-lucide-circle-alert" });
@@ -341,6 +505,7 @@
 			// sidebar can find it without round-tripping through the DB.
 			await tenants.setLogoFile(tenantId, fileName);
 			form.logo_path = target;
+			refreshBaseline();
 			toast.add({ title: "Logo updated", color: "success", icon: "i-lucide-check" });
 		} catch (err) {
 			toast.add({
@@ -352,9 +517,32 @@
 		}
 	};
 
+	const onFileChange = async (event: Event) => {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = ""; // allow re-picking the same file
+		if (file) await uploadLogo(file);
+	};
+
+	const onDrop = async (event: DragEvent) => {
+		dragOver.value = false;
+		const file = event.dataTransfer?.files?.[0];
+		if (!file) return;
+		if (!file.type.startsWith("image/")) {
+			toast.add({
+				title: "Only image files are accepted",
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+			return;
+		}
+		await uploadLogo(file);
+	};
+
 	const removeLogo = async () => {
 		await store.save({ logo_path: null });
 		form.logo_path = null;
+		refreshBaseline();
 		if (tenants.activeTenantId) {
 			await tenants.setLogoFile(tenants.activeTenantId, null);
 		}
