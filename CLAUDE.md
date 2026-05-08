@@ -57,9 +57,12 @@ so backups stay version-aligned.
 These are invariants, not guidelines. Breaking them silently corrupts
 data.
 
-1. **Money is integer cents of LKR. Never floats.** Always store and
-   compute in cents. Use `formatLKR()` and `toCents()` from
-   `app/lib/money.ts`. Banker's (half-even) rounding.
+1. **Money is integer cents (minor units). Never floats.** Always store
+   and compute in cents. Use `formatMoney()` (or its backward-compat
+   alias `formatLKR()`) and `toCents()` from `app/lib/money.ts`.
+   Banker's (half-even) rounding. Only 100-minor-unit currencies are
+   supported — JPY/KRW (no decimals) and Gulf 1000-mil currencies are
+   deliberately out of scope.
 
 2. **Quantities are `quantity_milli`** — qty × 1000 stored as INTEGER.
    Supports 3 decimal places. `formatQty()` for display.
@@ -83,8 +86,13 @@ data.
    `STATUS_TRANSITIONS` maps in each store. The DB also enforces via
    CHECK constraints. Keep them in sync.
 
-8. **Currency is LKR-only.** No multi-currency support. Fiscal year
-   defaults to April→March (Sri Lanka government FY).
+8. **One currency per business**, picked in Company settings and stored
+   on `company_settings.currency_code` as an ISO 4217 alpha code (LKR,
+   USD, EUR, GBP, INR, AED, AUD, SGD — see `CURRENCIES` map in
+   `app/lib/money.ts`). Symbol/locale derives from the code. No FX
+   conversion, no per-document override. The settings store keeps the
+   formatter cache in sync via `setActiveCurrency()` after every load.
+   Fiscal year defaults to April→March (Sri Lanka government FY).
 
 9. **Dates are ISO `YYYY-MM-DD` strings everywhere** — DB columns,
    Pinia state, PDF JSON payloads, function args. Conversion to
@@ -241,7 +249,8 @@ sakoram_app/
    │  ├─ 0007_vendors.sql             ← vendors table (mirrors clients shape)
    │  ├─ 0008_bills_use_vendors.sql   ← drop+recreate bills with vendor_id FK + vendor_snapshot
    │  ├─ 0009_bill_categories.sql     ← bill_categories lookup; bills get category_id FK + category_snapshot
-   │  └─ 0010_default_font_inter.sql  ← drop Google Sans Flex; default ui_font/pdf_font → Inter
+   │  ├─ 0010_default_font_inter.sql  ← drop Google Sans Flex; default ui_font/pdf_font → Inter
+   │  └─ 0011_currency.sql             ← per-business currency_code on company_settings
    ├─ templates/
    │  ├─ document.typ                 ← unified Typst template for quotes/invoices/bills
    │  └─ voucher.typ                  ← simpler one-page receipt layout

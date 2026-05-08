@@ -192,6 +192,14 @@
 					title="Operational defaults"
 					subtitle="Pre-fill values when creating new documents."
 				>
+					<UFormField label="Currency" name="currency_code" hint="Used everywhere money is displayed and on every PDF.">
+						<USelect
+							v-model="form.currency_code"
+							:items="currencyOptions"
+							value-key="value"
+							class="w-full"
+						/>
+					</UFormField>
 					<div class="grid grid-cols-2 gap-3">
 						<UFormField label="VAT rate (%)" name="default_vat_rate">
 							<UInputNumber
@@ -227,10 +235,6 @@
 							/>
 						</UFormField>
 					</div>
-					<p class="text-xs text-(--ui-text-muted) flex items-center gap-1.5">
-						<UIcon name="i-lucide-info" class="size-3.5" />
-						Sri Lanka government FY runs April → March.
-					</p>
 				</SectionCard>
 			</div>
 
@@ -299,6 +303,7 @@
 	import { appDataDir, join } from "@tauri-apps/api/path";
 	import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
 	import { z } from "zod";
+	import { CURRENCIES } from "~/lib/money";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
 
@@ -333,12 +338,20 @@
 		default_quote_validity_days: 30,
 		invoice_footer_notes: "",
 		quote_footer_notes: "",
-		fiscal_year_start_month: 1
+		fiscal_year_start_month: 1,
+		currency_code: "LKR"
 	});
 
 	// Tax rate is stored in basis points (1800 = 18.00%) but the user types
 	// percent. Bind a separate ref and project on save.
 	const vatRatePct = ref<number>(18);
+
+	// Build the currency picker options off the curated CURRENCIES map so
+	// adding/removing a code there auto-updates the dropdown.
+	const currencyOptions = Object.values(CURRENCIES).map((c) => ({
+		label: `${c.code} — ${c.label}`,
+		value: c.code
+	}));
 
 	const months = [
 		{ label: "January", value: 1 },
@@ -379,6 +392,7 @@
 		form.invoice_footer_notes = s.invoice_footer_notes ?? "";
 		form.quote_footer_notes = s.quote_footer_notes ?? "";
 		form.fiscal_year_start_month = s.fiscal_year_start_month;
+		form.currency_code = s.currency_code ?? "LKR";
 		vatRatePct.value = s.default_vat_rate / 100;
 	};
 

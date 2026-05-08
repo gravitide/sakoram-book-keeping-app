@@ -63,7 +63,7 @@
     #align(center)[
       #text(fill: rgb("#6b7280"), size: 9pt, tracking: 0.04em)[#upper("Amount")]
       #v(4pt)
-      #text(weight: "bold", size: 22pt, fill: rgb(data.amount_color))[LKR #data.amount_display]
+      #text(weight: "bold", size: 22pt, fill: rgb(data.amount_color))[#data.currency_symbol #data.amount_display]
     ]
   ]
 ]

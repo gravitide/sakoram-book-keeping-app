@@ -186,7 +186,7 @@
       fill: rgb("#f3f4f6"),
       inset: 9pt,
       align: right,
-      text(weight: "bold", size: 11pt)[LKR #data.formatted.total]
+      text(weight: "bold", size: 11pt)[#data.currency_symbol #data.formatted.total]
     ),
   )
 ] else [
@@ -241,7 +241,7 @@
       table.cell(fill: rgb("#fafafa"), inset: 7pt, align: right)[#data.formatted.tax_no_symbol],
     )} else {()},
     table.cell(colspan: cols.len() - 1, fill: rgb("#f3f4f6"), inset: 9pt, align: right)[],
-    table.cell(fill: rgb("#f3f4f6"), inset: 9pt, align: right, text(weight: "bold", size: 11pt)[LKR #data.formatted.total_no_symbol]),
+    table.cell(fill: rgb("#f3f4f6"), inset: 9pt, align: right, text(weight: "bold", size: 11pt)[#data.currency_symbol #data.formatted.total_no_symbol]),
   )
 ]
 
@@ -257,9 +257,9 @@
       row-gutter: 4pt,
       align: (right, right),
       text(fill: rgb("#6b7280"))[Paid:],
-      text(fill: rgb("#16a34a"))[LKR #data.paid_display],
+      text(fill: rgb("#16a34a"))[#data.currency_symbol #data.paid_display],
       text(weight: "semibold")[Balance due:],
-      text(weight: "bold", size: 11pt, fill: rgb("#dc2626"))[LKR #data.balance_display],
+      text(weight: "bold", size: 11pt, fill: rgb("#dc2626"))[#data.currency_symbol #data.balance_display],
     )
   ]
 ]

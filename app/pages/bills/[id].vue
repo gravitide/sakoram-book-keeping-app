@@ -180,7 +180,7 @@
 							@update:model-value="onBundleSubtotalInput"
 						>
 							<template #trailing>
-								<span class="text-xs text-(--ui-text-muted) pr-1">LKR</span>
+								<span class="text-xs text-(--ui-text-muted) pr-1">{{ currency.code }}</span>
 							</template>
 						</UInput>
 					</UFormField>
@@ -248,7 +248,7 @@
 							@update:model-value="onPaymentInput"
 						>
 							<template #trailing>
-								<span class="text-xs text-(--ui-text-muted) pr-1">LKR</span>
+								<span class="text-xs text-(--ui-text-muted) pr-1">{{ currency.code }}</span>
 							</template>
 						</UInput>
 					</UFormField>
@@ -331,6 +331,7 @@
 	import type { BillLineRow, BillRow, BillStatus, VendorSnapshot } from "~/stores/bills";
 	import type { PricingMode } from "~/stores/quotes";
 	import type { VendorRow } from "~/stores/vendors";
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { computeLineTotals, formatLKR, formatQty, formatRate, sumCents, toCents } from "~/lib/money";
 	import { themeHex } from "~/lib/theme";
 	import { buildCategorySnapshot, useBillCategoriesStore } from "~/stores/bill_categories";
@@ -348,6 +349,7 @@
 	const settingsStore = useSettingsStore();
 	const vendorsStore = useVendorsStore();
 	const categoriesStore = useBillCategoriesStore();
+	const currency = useActiveCurrency();
 	settingsStore.ensureLoaded().catch(() => { /* surfaced elsewhere */ });
 	// Vendors / categories might not be loaded yet if the user lands here via deep link.
 	if (vendorsStore.vendors.length === 0) {
@@ -715,6 +717,8 @@
 			title: "BILL",
 			theme_color: themeHex(settingsStore.settings?.theme_color),
 			font_family: settingsStore.settings?.pdf_font ?? "Inter",
+			currency_code: currency.value.code,
+			currency_symbol: currency.value.symbol,
 			primary_label: "Bill",
 			date_label: "Date",
 			date_value: b.issue_date,
