@@ -142,13 +142,13 @@
 	// wins on specificity. Overriding the variable cascades through every
 	// element that uses it — including teleported overlays (popovers, modals,
 	// the calendar popup) which live outside the layout tree.
-	// Google Sans Flex is bundled via @font-face in main.css, so it's always
+	// Inter is bundled via @font-face in main.css, so it's always
 	// available regardless of what the user has installed on their machine.
 	// User-chosen fonts that AREN'T installed locally fall through to it
 	// instead of jumping straight to system-ui.
 	const appFontStack = computed(() => {
-		const f = settings.settings?.ui_font?.trim() || "Google Sans Flex";
-		return `'${f}', 'Google Sans Flex', system-ui, sans-serif`;
+		const f = settings.settings?.ui_font?.trim() || "Inter";
+		return `'${f}', 'Inter', system-ui, sans-serif`;
 	});
 
 	watch(appFontStack, (stack) => {

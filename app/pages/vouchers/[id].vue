@@ -328,7 +328,7 @@
 			number: v.number,
 			title: isReceiptDoc ? "Receipt voucher" : "Payment voucher",
 			theme_color: themeHex(settingsStore.settings?.theme_color),
-			font_family: settingsStore.settings?.pdf_font ?? "Google Sans Flex",
+			font_family: settingsStore.settings?.pdf_font ?? "Inter",
 			voucher_date: v.voucher_date,
 			amount_display: amountDisplay,
 			amount_color: amountColor,

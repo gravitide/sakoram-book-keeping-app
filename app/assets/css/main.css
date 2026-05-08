@@ -4,25 +4,25 @@
 /*
  * Bundled UI fonts. All three are shipped as frontend assets so the
  * webview always has them regardless of what's installed on the user's
- * machine. Google Sans Flex and Inter are variable fonts (single file,
+ * machine. Inter and Inter Tight are variable fonts (single file,
  * full weight range). Miriam Libre is a static family — Regular + Bold.
  * The same TTFs are also placed under src-tauri/fonts/ so Typst can
  * pick them up for PDF rendering.
  */
-@font-face {
-	font-family: "Google Sans Flex";
-	font-style: normal;
-	font-weight: 100 1000;
-	font-display: swap;
-	src: url("@/assets/fonts/GoogleSansFlex.ttf") format("truetype-variations");
-}
-
 @font-face {
 	font-family: "Inter";
 	font-style: normal;
 	font-weight: 100 900;
 	font-display: swap;
 	src: url("@/assets/fonts/InterVariable.ttf") format("truetype-variations");
+}
+
+@font-face {
+	font-family: "Inter Tight";
+	font-style: normal;
+	font-weight: 100 900;
+	font-display: swap;
+	src: url("@/assets/fonts/InterTight.ttf") format("truetype-variations");
 }
 
 @font-face {
