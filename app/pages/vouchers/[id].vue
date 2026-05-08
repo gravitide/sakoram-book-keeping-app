@@ -144,6 +144,7 @@
 // just records, not gapless documents like invoices.
 
 	import type { VoucherMethod, VoucherRow } from "~/stores/vouchers";
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { formatLKR, toCents } from "~/lib/money";
 	import { themeHex } from "~/lib/theme";
 	import { useBillsStore } from "~/stores/bills";
@@ -161,6 +162,7 @@
 	const invoicesStore = useInvoicesStore();
 	const billsStore = useBillsStore();
 	const settingsStore = useSettingsStore();
+	const currency = useActiveCurrency();
 	settingsStore.ensureLoaded().catch(() => { /* surfaced elsewhere */ });
 
 	const voucherId = Number(route.params.id);
@@ -329,6 +331,8 @@
 			title: isReceiptDoc ? "Receipt voucher" : "Payment voucher",
 			theme_color: themeHex(settingsStore.settings?.theme_color),
 			font_family: settingsStore.settings?.pdf_font ?? "Inter",
+			currency_code: currency.value.code,
+			currency_symbol: currency.value.symbol,
 			voucher_date: v.voucher_date,
 			amount_display: amountDisplay,
 			amount_color: amountColor,

@@ -181,7 +181,7 @@
 							@update:model-value="onBundleSubtotalInput"
 						>
 							<template #trailing>
-								<span class="text-xs text-(--ui-text-muted) pr-1">LKR</span>
+								<span class="text-xs text-(--ui-text-muted) pr-1">{{ currency.code }}</span>
 							</template>
 						</UInput>
 					</UFormField>
@@ -332,6 +332,7 @@
 	import type { LineDraft } from "~/components/DocumentLineEditor.vue";
 	import type { ClientRow } from "~/stores/clients";
 	import type { BankSnapshot, ClientSnapshot, PricingMode, QuoteLineRow, QuoteRow, QuoteStatus } from "~/stores/quotes";
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { computeLineTotals, formatLKR, formatQty, formatRate, sumCents, toCents } from "~/lib/money";
 	import { themeHex } from "~/lib/theme";
 	import { useClientsStore } from "~/stores/clients";
@@ -349,6 +350,7 @@
 	const clientsStore = useClientsStore();
 	const quotesStore = useQuotesStore();
 	const invoicesStore = useInvoicesStore();
+	const currency = useActiveCurrency();
 
 	const quoteId = Number(route.params.id);
 	if (!Number.isFinite(quoteId)) {
@@ -585,6 +587,8 @@
 			title: "QUOTATION",
 			theme_color: themeHex(settingsStore.settings?.theme_color),
 			font_family: settingsStore.settings?.pdf_font ?? "Inter",
+			currency_code: currency.value.code,
+			currency_symbol: currency.value.symbol,
 			// Meta block labels (drives the right-hand grid in document.typ)
 			primary_label: "Quote",
 			date_label: "Date",

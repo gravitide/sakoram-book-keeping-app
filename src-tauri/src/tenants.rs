@@ -36,6 +36,7 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(8, "bills use vendors", include_str!("../migrations/0008_bills_use_vendors.sql")),
 	(9, "bill categories", include_str!("../migrations/0009_bill_categories.sql")),
 	(10, "default font inter", include_str!("../migrations/0010_default_font_inter.sql")),
+	(11, "currency", include_str!("../migrations/0011_currency.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

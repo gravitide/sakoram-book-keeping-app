@@ -18,7 +18,7 @@
 						@update:model-value="onAmountInput"
 					>
 						<template #trailing>
-							<span class="text-xs text-(--ui-text-muted) pr-1">LKR</span>
+							<span class="text-xs text-(--ui-text-muted) pr-1">{{ currency.code }}</span>
 						</template>
 					</UInput>
 				</UFormField>
@@ -56,19 +56,23 @@
 // the time. Method/reference/notes are optional.
 
 	import type { PaymentDraft, PaymentMethod } from "~/stores/invoices";
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { formatLKR, toCents } from "~/lib/money";
+
+	const props = defineProps<Props>();
+
+	const emit = defineEmits<{
+		"update:open": [value: boolean]
+		save: [draft: PaymentDraft]
+	}>();
+
+	const currency = useActiveCurrency();
 
 	interface Props {
 		open: boolean
 		totalCents: number
 		paidCents: number
 	}
-	const props = defineProps<Props>();
-	const emit = defineEmits<{
-		"update:open": [value: boolean]
-		save: [draft: PaymentDraft]
-	}>();
-
 	const balance = computed(() => Math.max(0, props.totalCents - props.paidCents));
 
 	const todayISO = (): string => {

@@ -11,7 +11,7 @@
 			@blur="onBlur"
 		>
 			<template v-if="showCurrency" #trailing>
-				<span class="text-xs text-(--ui-text-muted) pr-1">LKR</span>
+				<span class="text-xs text-(--ui-text-muted) pr-1">{{ currency.code }}</span>
 			</template>
 		</UInput>
 		<div v-if="!focused && modelValue !== 0" class="sr-only">
@@ -21,7 +21,18 @@
 </template>
 
 <script setup lang="ts">
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { formatLKR, toCents } from "~/lib/money";
+
+	const props = withDefaults(defineProps<Props>(), {
+		disabled: false,
+		placeholder: "0.00",
+		showCurrency: true
+	});
+
+	const emit = defineEmits<{ "update:modelValue": [value: number] }>();
+
+	const currency = useActiveCurrency();
 
 	// MoneyInput: v-model is INTEGER CENTS. The user sees rupees with 2 decimals.
 	// The component never lets float arithmetic touch the bound value — every
@@ -33,13 +44,6 @@
 		placeholder?: string
 		showCurrency?: boolean
 	}
-	const props = withDefaults(defineProps<Props>(), {
-		disabled: false,
-		placeholder: "0.00",
-		showCurrency: true
-	});
-	const emit = defineEmits<{ "update:modelValue": [value: number] }>();
-
 	// Internal display string. We don't reformat on every keystroke (would jump
 	// the cursor), only on blur. On focus we show the editable rupee form.
 	const display = ref<string>(centsToRupeeString(props.modelValue));

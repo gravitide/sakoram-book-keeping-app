@@ -177,7 +177,7 @@
 							@update:model-value="onBundleSubtotalInput"
 						>
 							<template #trailing>
-								<span class="text-xs text-(--ui-text-muted) pr-1">LKR</span>
+								<span class="text-xs text-(--ui-text-muted) pr-1">{{ currency.code }}</span>
 							</template>
 						</UInput>
 					</UFormField>
@@ -394,6 +394,7 @@
 	import type { ClientRow } from "~/stores/clients";
 	import type { InvoiceLineRow, InvoicePaymentRow, InvoiceRow, InvoiceStatus, PaymentDraft, PaymentMethod } from "~/stores/invoices";
 	import type { BankSnapshot, ClientSnapshot, PricingMode } from "~/stores/quotes";
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { computeLineTotals, formatLKR, formatQty, formatRate, sumCents, toCents } from "~/lib/money";
 	import { themeHex } from "~/lib/theme";
 	import { useClientsStore } from "~/stores/clients";
@@ -409,6 +410,7 @@
 	const settingsStore = useSettingsStore();
 	const clientsStore = useClientsStore();
 	const invoicesStore = useInvoicesStore();
+	const currency = useActiveCurrency();
 
 	const invoiceId = Number(route.params.id);
 	if (!Number.isFinite(invoiceId)) {
@@ -746,6 +748,8 @@
 			title: "INVOICE",
 			theme_color: themeHex(settingsStore.settings?.theme_color),
 			font_family: settingsStore.settings?.pdf_font ?? "Inter",
+			currency_code: currency.value.code,
+			currency_symbol: currency.value.symbol,
 			primary_label: "Invoice",
 			date_label: "Date",
 			date_value: inv.issue_date,

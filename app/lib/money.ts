@@ -1,11 +1,16 @@
-// Money helpers. Always integer cents of LKR — never floats.
+// Money helpers. Always integer cents (minor units), never floats.
 //
-// - toCents: parse a user-entered rupee value (e.g. 1234.5) into integer cents.
+// - toCents: parse a user-entered major-unit value (e.g. 1234.5) into integer cents.
 //   Uses banker's rounding (half-even) on the final cent to avoid systematic bias.
-// - formatLKR: present integer cents as 'Rs 12,345.50'.
+// - formatMoney: present integer cents using the active currency's symbol + locale.
+//   formatLKR is kept as a backward-compat alias.
 // - sumCents: simple integer addition.
 // - computeLineTotals: rounds at the line level. Document totals must always
 //   be the sum of already-rounded line totals — never recomputed from raw qty.
+//
+// Currency model: a business picks one ISO 4217 code (CURRENCIES map below).
+// We only support 100-minor-unit currencies for now — JPY, KRW, KWD, BHD,
+// OMR would require revisiting the cents math everywhere.
 
 export type Cents = number;
 export type Milli = number;
@@ -14,6 +19,41 @@ export type BasisPoints = number;
 const CENTS_PER_RUPEE = 100;
 const MILLI = 1000;
 const BP_DENOM = 10000;
+
+export interface CurrencyMeta {
+	/** ISO 4217 alpha code, e.g. "LKR". */
+	code: string
+	/** Human label for pickers, e.g. "Sri Lankan Rupee". */
+	label: string
+	/** Symbol printed before the amount, e.g. "Rs", "$", "€". */
+	symbol: string
+	/** BCP-47 locale used for grouping separators. */
+	locale: string
+}
+
+// Curated list. Extending this is cheap; just add a row.
+export const CURRENCIES: Record<string, CurrencyMeta> = {
+	LKR: { code: "LKR", label: "Sri Lankan Rupee", symbol: "Rs", locale: "en-LK" },
+	USD: { code: "USD", label: "US Dollar", symbol: "$", locale: "en-US" },
+	EUR: { code: "EUR", label: "Euro", symbol: "€", locale: "en-IE" },
+	GBP: { code: "GBP", label: "British Pound", symbol: "£", locale: "en-GB" },
+	INR: { code: "INR", label: "Indian Rupee", symbol: "₹", locale: "en-IN" },
+	AED: { code: "AED", label: "UAE Dirham", symbol: "AED", locale: "en-AE" },
+	AUD: { code: "AUD", label: "Australian Dollar", symbol: "A$", locale: "en-AU" },
+	SGD: { code: "SGD", label: "Singapore Dollar", symbol: "S$", locale: "en-SG" }
+};
+
+// Module-level cache. The settings store calls setActiveCurrency() once
+// the company_settings row has loaded so formatMoney() / formatLKR() pick
+// up the right symbol without every caller having to thread it through.
+let _activeCode = "LKR";
+
+export const setActiveCurrency = (code: string): void => {
+	_activeCode = CURRENCIES[code] ? code : "LKR";
+};
+
+export const getActiveCurrency = (): CurrencyMeta =>
+	CURRENCIES[_activeCode] ?? CURRENCIES.LKR!;
 
 const isInt = (n: number): boolean => Number.isInteger(n);
 
@@ -42,17 +82,29 @@ export const toCents = (value: number | string): Cents => {
 	return negative ? -cents : cents;
 };
 
-export const formatLKR = (cents: Cents, opts: { withSymbol?: boolean } = {}): string => {
-	if (!isInt(cents)) throw new Error("formatLKR requires integer cents");
+export interface FormatMoneyOpts {
+	/** Override the active currency (e.g. for PDF preview before save). */
+	code?: string
+	/** Drop the leading currency symbol — useful when the symbol lives in a sibling element. */
+	withSymbol?: boolean
+}
+
+export const formatMoney = (cents: Cents, opts: FormatMoneyOpts = {}): string => {
+	if (!isInt(cents)) throw new Error("formatMoney requires integer cents");
+	const meta = (opts.code && CURRENCIES[opts.code]) || getActiveCurrency();
 	const negative = cents < 0;
 	const abs = Math.abs(cents);
-	const rupees = Math.floor(abs / CENTS_PER_RUPEE);
-	const cs = abs % CENTS_PER_RUPEE;
-	const grouped = rupees.toLocaleString("en-LK");
-	const body = `${grouped}.${cs.toString().padStart(2, "0")}`;
+	const major = Math.floor(abs / CENTS_PER_RUPEE);
+	const minor = abs % CENTS_PER_RUPEE;
+	const grouped = major.toLocaleString(meta.locale);
+	const body = `${grouped}.${minor.toString().padStart(2, "0")}`;
 	const signed = negative ? `-${body}` : body;
-	return opts.withSymbol === false ? signed : `Rs ${signed}`;
+	return opts.withSymbol === false ? signed : `${meta.symbol} ${signed}`;
 };
+
+// Backward-compat alias. Older callsites call formatLKR(cents) — they keep
+// working but now respect whatever currency the active business picked.
+export const formatLKR = formatMoney;
 
 export const sumCents = (...values: Cents[]): Cents => values.reduce((a, b) => a + b, 0);
 
