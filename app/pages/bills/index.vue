@@ -53,38 +53,83 @@
 			<table v-else class="w-full text-sm">
 				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
 					<tr>
-						<th class="py-2 pl-3 pr-2 font-medium">
+						<SortableTh
+							th-class="py-2 pl-3 pr-2 font-medium"
+							:active="list.sortKey === 'number'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('number')"
+						>
 							Number
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'vendor'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('vendor')"
+						>
 							Vendor
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'their_number'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('their_number')"
+						>
 							Their #
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'category'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('category')"
+						>
 							Category
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'issue_date'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('issue_date')"
+						>
 							Issued
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'due_date'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('due_date')"
+						>
 							Due
-						</th>
-						<th class="py-2 px-2 font-medium text-right">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium text-right"
+							:active="list.sortKey === 'total'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('total')"
+						>
 							Total
-						</th>
-						<th class="py-2 px-2 font-medium text-right">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium text-right"
+							:active="list.sortKey === 'balance'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('balance')"
+						>
 							Balance
-						</th>
-						<th class="py-2 pl-2 pr-3 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 pl-2 pr-3 font-medium"
+							:active="list.sortKey === 'status'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('status')"
+						>
 							Status
-						</th>
+						</SortableTh>
 					</tr>
 				</thead>
 				<tbody>
 					<tr
-						v-for="b in store.filtered"
+						v-for="b in list.paged"
 						:key="b.id"
 						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
 						@click="open(b)"
@@ -129,12 +174,22 @@
 					</tr>
 				</tbody>
 			</table>
+
+			<ListPagination
+				v-model:page="list.page"
+				v-model:page-size="list.pageSize"
+				:total="list.total"
+				:total-pages="list.totalPages"
+				:range-start="list.rangeStart"
+				:range-end="list.rangeEnd"
+			/>
 		</UCard>
 	</div>
 </template>
 
 <script setup lang="ts">
 	import type { BillRow, BillStatus, VendorSnapshot } from "~/stores/bills";
+	import { useListView } from "~/composables/useListView";
 	import { formatLKR } from "~/lib/money";
 	import { themeHex } from "~/lib/theme";
 	import { useBillsStore } from "~/stores/bills";
@@ -146,6 +201,22 @@
 
 	await store.load();
 	await store.flagOverdue().catch(() => { /* non-fatal */ });
+
+	const list = useListView<BillRow>(
+		() => store.filtered,
+		[
+			{ key: "number", getValue: (b) => b.number },
+			{ key: "vendor", getValue: (b) => vendorNameOf(b) },
+			{ key: "their_number", getValue: (b) => b.vendor_invoice_number },
+			{ key: "category", getValue: (b) => categoryOf(b)?.name ?? null },
+			{ key: "issue_date", getValue: (b) => b.issue_date },
+			{ key: "due_date", getValue: (b) => b.due_date },
+			{ key: "total", getValue: (b) => b.total_cents },
+			{ key: "balance", getValue: (b) => Math.max(0, b.total_cents - b.paid_cents) },
+			{ key: "status", getValue: (b) => b.status }
+		],
+		{ defaultSortKey: "issue_date", defaultDir: "desc" }
+	);
 
 	const newBill = () => router.push("/bills/new");
 	const open = (b: BillRow) => router.push(`/bills/${b.id}`);
@@ -162,25 +233,28 @@
 
 	const balanceOf = (b: BillRow) => Math.max(0, b.total_cents - b.paid_cents);
 
+	// Function declarations (not const arrows) so they hoist above the
+	// useListView() call site, which references them in column getValues.
+
 	// Vendor name lives in the JSON snapshot frozen at creation time.
 	// Falls back gracefully if the snapshot is missing or malformed.
-	const vendorNameOf = (b: BillRow): string => {
+	function vendorNameOf(b: BillRow): string {
 		try {
 			return (JSON.parse(b.vendor_snapshot) as VendorSnapshot).name || "(no vendor)";
 		} catch {
 			return "(no vendor)";
 		}
-	};
+	}
 
 	// Category name/color/icon also live in a frozen snapshot, so renames or
 	// recolors don't rewrite older bill rows. Returns null when the bill has
 	// no category (or the snapshot is malformed).
-	const categoryOf = (b: BillRow): { name: string, color: string, icon: string } | null => {
+	function categoryOf(b: BillRow): { name: string, color: string, icon: string } | null {
 		if (!b.category_snapshot) return null;
 		try {
 			return JSON.parse(b.category_snapshot) as { name: string, color: string, icon: string };
 		} catch {
 			return null;
 		}
-	};
+	}
 </script>

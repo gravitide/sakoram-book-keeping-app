@@ -48,27 +48,52 @@
 			<table v-else class="w-full text-sm">
 				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
 					<tr>
-						<th class="py-2 pl-3 pr-2 font-medium">
+						<SortableTh
+							th-class="py-2 pl-3 pr-2 font-medium"
+							:active="list.sortKey === 'name'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('name')"
+						>
 							Name
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'contact'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('contact')"
+						>
 							Contact
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'email'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('email')"
+						>
 							Email
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'phone'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('phone')"
+						>
 							Phone
-						</th>
-						<th class="py-2 px-2 font-medium">
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
+							:active="list.sortKey === 'tax_id'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('tax_id')"
+						>
 							Tax ID
-						</th>
+						</SortableTh>
 						<th class="py-2 pl-2 pr-3 w-10" />
 					</tr>
 				</thead>
 				<tbody>
 					<tr
-						v-for="v in store.filtered"
+						v-for="v in list.paged"
 						:key="v.id"
 						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
 						@click="openVendor(v)"
@@ -101,12 +126,22 @@
 					</tr>
 				</tbody>
 			</table>
+
+			<ListPagination
+				v-model:page="list.page"
+				v-model:page-size="list.pageSize"
+				:total="list.total"
+				:total-pages="list.totalPages"
+				:range-start="list.rangeStart"
+				:range-end="list.rangeEnd"
+			/>
 		</UCard>
 	</div>
 </template>
 
 <script setup lang="ts">
 	import type { VendorRow } from "~/stores/vendors";
+	import { useListView } from "~/composables/useListView";
 	import { useVendorsStore } from "~/stores/vendors";
 
 	definePageMeta({ title: "Vendors" });
@@ -116,6 +151,18 @@
 	const router = useRouter();
 
 	await store.load();
+
+	const list = useListView<VendorRow>(
+		() => store.filtered,
+		[
+			{ key: "name", getValue: (v) => v.name },
+			{ key: "contact", getValue: (v) => v.contact_person },
+			{ key: "email", getValue: (v) => v.email },
+			{ key: "phone", getValue: (v) => v.phone },
+			{ key: "tax_id", getValue: (v) => v.tax_id }
+		],
+		{ defaultSortKey: "name", defaultDir: "asc" }
+	);
 
 	const newVendor = () => router.push("/vendors/new");
 	const openVendor = (v: VendorRow) => router.push(`/vendors/${v.id}`);
