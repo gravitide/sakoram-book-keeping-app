@@ -17,14 +17,14 @@
 						UI font
 					</div>
 					<div class="text-xs text-(--ui-text-muted) mt-1">
-						Used in the app interface. Three fonts (Google Sans Flex, Inter,
+						Used in the app interface. Three fonts (Inter, Inter Tight,
 						Miriam Libre) ship with the app; anything else falls through to
 						what's installed on your system.
 					</div>
 				</template>
 
 				<UFormField label="Font family">
-					<UInput v-model="uiFont" placeholder="e.g. Google Sans Flex" />
+					<UInput v-model="uiFont" placeholder="e.g. Inter" />
 				</UFormField>
 
 				<div class="mt-4">
@@ -83,12 +83,12 @@
 					<div class="text-xs text-(--ui-text-muted) mt-1">
 						Used when rendering quotes, invoices, bills, and vouchers. Pick
 						a bundled font for guaranteed availability — Typst will fall back
-						to the bundled Google Sans Flex if it can't resolve your choice.
+						to the bundled Inter if it can't resolve your choice.
 					</div>
 				</template>
 
 				<UFormField label="Font family">
-					<UInput v-model="pdfFont" placeholder="e.g. Google Sans Flex" />
+					<UInput v-model="pdfFont" placeholder="e.g. Inter" />
 				</UFormField>
 
 				<div class="mt-4">
@@ -196,10 +196,10 @@
 	// --font-path arg (PDF) — guaranteed to render regardless of what's
 	// installed locally. System fonts are common picks but only render
 	// when present on the user's machine; the cascade falls back to the
-	// bundled Google Sans Flex if not.
+	// bundled Inter if not.
 	const bundledFonts = [
-		"Google Sans Flex",
 		"Inter",
+		"Inter Tight",
 		"Miriam Libre"
 	];
 	const systemFonts = [
@@ -209,8 +209,8 @@
 		"Courier New"
 	];
 
-	const uiFont = ref<string>(store.settings?.ui_font ?? "Google Sans Flex");
-	const pdfFont = ref<string>(store.settings?.pdf_font ?? "Google Sans Flex");
+	const uiFont = ref<string>(store.settings?.ui_font ?? "Inter");
+	const pdfFont = ref<string>(store.settings?.pdf_font ?? "Inter");
 	const themeColor = ref<ThemeColor>(
 		isValidThemeColor(store.settings?.theme_color) ? store.settings!.theme_color : "red"
 	);
@@ -229,12 +229,12 @@
 	// so they don't have to save to see the effect. We snap back to the
 	// last-saved values if they cancel.
 	const previewFontStack = computed(() =>
-		`'${uiFont.value || "Google Sans Flex"}', 'Google Sans Flex', system-ui, sans-serif`
+		`'${uiFont.value || "Inter"}', 'Inter', system-ui, sans-serif`
 	);
 	// PDF preview uses the same cascade so the user sees roughly what Typst
 	// will render. No effect on the actual app UI.
 	const pdfPreviewFontStack = computed(() =>
-		`'${pdfFont.value || "Google Sans Flex"}', 'Google Sans Flex', serif`
+		`'${pdfFont.value || "Inter"}', 'Inter', serif`
 	);
 
 	// Live preview: override Tailwind's --font-sans on :root + flip the
@@ -252,8 +252,8 @@
 	const onSave = async () => {
 		saving.value = true;
 		try {
-			const u = uiFont.value.trim() || "Google Sans Flex";
-			const p = pdfFont.value.trim() || "Google Sans Flex";
+			const u = uiFont.value.trim() || "Inter";
+			const p = pdfFont.value.trim() || "Inter";
 			await store.save({
 				ui_font: u,
 				pdf_font: p,

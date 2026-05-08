@@ -20,7 +20,7 @@ pool, multi-tenancy, and the Tauri capability layer.
 | Frontend | **Nuxt 4 SSG** (`ssr: false`, `nuxi generate`) |
 | UI | **NuxtUI 4** (`@nuxt/ui` ^4.4) + **Tailwind v4** |
 | Icons | **Lucide** via `@iconify-json/lucide`, bundled into the client (no runtime API fetches) |
-| Fonts | **Google Sans Flex**, **Inter**, **Miriam Libre** — all bundled (UI via `@font-face`, PDF via Typst `--font-path`) |
+| Fonts | **Inter**, **Inter Tight**, **Miriam Libre** — all bundled (UI via `@font-face`, PDF via Typst `--font-path`) |
 | Lang | **TypeScript** strict |
 | State | **Pinia** (composition stores) |
 | Validation | **Zod** |
@@ -166,7 +166,7 @@ sakoram_app/
 │  │  └─ welcome.vue                  ← minimal centered layout for /welcome
 │  ├─ assets/
 │  │  ├─ css/main.css                 ← Tailwind + @font-face for the 3 bundled fonts
-│  │  └─ fonts/                       ← GoogleSansFlex, InterVariable, MiriamLibre-{Regular,Bold}
+│  │  └─ fonts/                       ← InterVariable, InterTight, MiriamLibre-{Regular,Bold}
 │  ├─ pages/
 │  │  ├─ index.vue                    ← Dashboard (KPI tiles + recent activity)
 │  │  ├─ welcome.vue                  ← business picker (landing screen)
@@ -228,8 +228,8 @@ sakoram_app/
    ├─ binaries/
    │  └─ typst-x86_64-pc-windows-msvc.exe   (gitignored, ~48 MB, target-triple naming required)
    ├─ fonts/                          ← same 3 fonts as app/assets/fonts (Typst reads from here)
-   │  ├─ GoogleSansFlex.ttf
    │  ├─ InterVariable.ttf
+   │  ├─ InterTight.ttf
    │  └─ MiriamLibre-{Regular,Bold}.ttf
    ├─ migrations/
    │  ├─ 0001_initial.sql             ← settings, clients, document_counters
@@ -240,7 +240,8 @@ sakoram_app/
    │  ├─ 0006_pdf_font.sql            ← adds pdf_font column (separate from ui_font)
    │  ├─ 0007_vendors.sql             ← vendors table (mirrors clients shape)
    │  ├─ 0008_bills_use_vendors.sql   ← drop+recreate bills with vendor_id FK + vendor_snapshot
-   │  └─ 0009_bill_categories.sql     ← bill_categories lookup; bills get category_id FK + category_snapshot
+   │  ├─ 0009_bill_categories.sql     ← bill_categories lookup; bills get category_id FK + category_snapshot
+   │  └─ 0010_default_font_inter.sql  ← drop Google Sans Flex; default ui_font/pdf_font → Inter
    ├─ templates/
    │  ├─ document.typ                 ← unified Typst template for quotes/invoices/bills
    │  └─ voucher.typ                  ← simpler one-page receipt layout
@@ -401,8 +402,8 @@ Three fonts ship in two places:
 
 | Font | License | Notes |
 |---|---|---|
-| Google Sans Flex | OFL (released by Google late 2025) | Variable, ~125 KB. **Default** for both UI and PDF. |
-| Inter | OFL | Variable, ~880 KB. Common readable alternative. |
+| Inter | OFL | Variable, ~880 KB. **Default** for both UI and PDF. |
+| Inter Tight | OFL | Variable, ~570 KB. Tighter sibling of Inter — useful when titles or invoice headers feel airy. |
 | Miriam Libre | OFL | Static Regular + Bold, ~600 KB combined. Original default; kept around as a third bundled choice. |
 
 `app/assets/fonts/*.ttf` — referenced from `app/assets/css/main.css`
@@ -572,7 +573,7 @@ Notable allowances:
   `/settings/businesses`
 - ✅ Appearance: independent UI/PDF font pickers (3 bundled +
   free-text), 8-color theme palette (drives UI and PDFs)
-- ✅ Bundled fonts (Google Sans Flex / Inter / Miriam Libre) — UI
+- ✅ Bundled fonts (Inter / Inter Tight / Miriam Libre) — UI
   via `@font-face`, PDF via Typst `--font-path`
 - ✅ Bundled icons (Lucide via `@iconify-json/lucide` +
   `icon.clientBundle.scan`) — zero runtime network dependency

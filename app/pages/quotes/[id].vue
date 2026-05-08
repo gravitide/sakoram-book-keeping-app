@@ -584,7 +584,7 @@
 			number: q.number,
 			title: "QUOTATION",
 			theme_color: themeHex(settingsStore.settings?.theme_color),
-			font_family: settingsStore.settings?.pdf_font ?? "Google Sans Flex",
+			font_family: settingsStore.settings?.pdf_font ?? "Inter",
 			// Meta block labels (drives the right-hand grid in document.typ)
 			primary_label: "Quote",
 			date_label: "Date",

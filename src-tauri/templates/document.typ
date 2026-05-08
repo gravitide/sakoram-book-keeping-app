@@ -34,8 +34,8 @@
 // first; the three bundled fonts follow as fallbacks so any glyph not in
 // the chosen face still resolves. We deliberately don't list Linux-only
 // fonts here — they generate noise warnings on Windows.
-#let chosen-font = if "font_family" in data and data.font_family != none { data.font_family } else { "Google Sans Flex" }
-#set text(font: (chosen-font, "Google Sans Flex", "Inter", "Miriam Libre"), size: 9.5pt, lang: "en")
+#let chosen-font = if "font_family" in data and data.font_family != none { data.font_family } else { "Inter" }
+#set text(font: (chosen-font, "Inter", "Inter Tight", "Miriam Libre"), size: 9.5pt, lang: "en")
 #set par(leading: 0.55em, spacing: 0.65em)
 
 // ============================================================

@@ -714,7 +714,7 @@
 			number: b.number,
 			title: "BILL",
 			theme_color: themeHex(settingsStore.settings?.theme_color),
-			font_family: settingsStore.settings?.pdf_font ?? "Google Sans Flex",
+			font_family: settingsStore.settings?.pdf_font ?? "Inter",
 			primary_label: "Bill",
 			date_label: "Date",
 			date_value: b.issue_date,
