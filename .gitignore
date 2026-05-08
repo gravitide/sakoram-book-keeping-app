@@ -9,6 +9,8 @@ node_modules
 .env
 .cargo
 dist
+# TypeScript incremental build cache (regenerated locally on each typecheck).
+*.tsbuildinfo
 src-tauri/target
 src-tauri/.tools
 # Keep the binaries dir tracked but ignore the actual ~50 MB exe;
