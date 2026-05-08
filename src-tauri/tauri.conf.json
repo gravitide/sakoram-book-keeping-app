@@ -32,7 +32,7 @@
 		"devUrl": "http://localhost:3000"
 	},
 	"productName": "Sakoram Book Keeping",
-	"version": "0.16.1",
+	"version": "0.17.0",
 	"identifier": "com.sakoram.billing",
 	"plugins": {},
 	"app": {
@@ -41,7 +41,7 @@
 				"label": "main",
 				"title": "Sakoram Book Keeping",
 				"width": 1366,
-				"height": 800,
+				"height": 1000,
 				"minWidth": 1024,
 				"minHeight": 640,
 				"resizable": true,

@@ -81,11 +81,15 @@
 								</UBadge>
 							</span>
 						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted) capitalize">
-							{{ c.color }}
+						<td class="py-2 px-2">
+							<span
+								class="inline-block size-5 rounded border border-(--ui-border) align-middle"
+								:style="{ backgroundColor: themeHex(c.color) }"
+								:title="c.color"
+							/>
 						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted) text-xs">
-							{{ c.icon }}
+						<td class="py-2 px-2 text-(--ui-text-muted)">
+							<UIcon :name="c.icon" class="size-5 align-middle" :title="c.icon" />
 						</td>
 						<td class="py-2 pl-2 pr-3 text-right" @click.stop>
 							<UDropdownMenu :items="itemsFor(c)">

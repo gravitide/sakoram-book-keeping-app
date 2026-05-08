@@ -16,19 +16,50 @@
 
 		<UCard>
 			<template #header>
-				<div class="flex items-center justify-between gap-4 flex-wrap">
-					<UInput
-						v-model="store.search"
-						placeholder="Search by number, project, or client…"
-						icon="i-lucide-search"
-						class="md:w-96"
-					/>
-					<USelect
-						v-model="store.statusFilter"
-						:items="statusOptions"
-						value-key="value"
-						class="w-40"
-					/>
+				<div class="space-y-3">
+					<div class="flex items-center justify-between gap-4 flex-wrap">
+						<UInput
+							v-model="store.search"
+							placeholder="Search by number, project, or client…"
+							icon="i-lucide-search"
+							class="md:w-96"
+						/>
+						<USelect
+							v-model="store.statusFilter"
+							:items="statusOptions"
+							value-key="value"
+							class="w-40"
+						/>
+					</div>
+					<div class="flex items-end gap-6 flex-wrap">
+						<div class="w-72">
+							<UFormField label="Issued between">
+								<DateRangeField
+									v-model:from="store.issuedFrom"
+									v-model:to="store.issuedTo"
+								/>
+							</UFormField>
+						</div>
+						<div class="w-72">
+							<UFormField label="Valid between">
+								<DateRangeField
+									v-model:from="store.validFrom"
+									v-model:to="store.validTo"
+								/>
+							</UFormField>
+						</div>
+						<UButton
+							v-if="store.hasDateFilters"
+							size="xs"
+							variant="ghost"
+							color="neutral"
+							icon="i-lucide-x"
+							class="mb-1"
+							@click="store.clearDateFilters()"
+						>
+							Clear dates
+						</UButton>
+					</div>
 				</div>
 			</template>
 
