@@ -604,6 +604,20 @@ The user's `~/.claude/CLAUDE.md` says:
 The project itself doesn't enforce a commit-message format — match the
 existing `git log` style if making commits.
 
+**Branch workflow — every new piece of work follows this.** No
+exceptions, even for one-line fixes:
+
+1. **Sync main first.** `git checkout main && git fetch origin && git pull --ff-only`. If the pull refuses because of leftover edits from a prior merged PR (typical after `gh pr merge --squash`), stash or `git checkout --` the offending file and pull again.
+2. **Branch from main.** `git checkout -b <type>/<short-slug>` (e.g. `feat/quote-date-filters`, `fix/save-button-disabled`, `chore/gitignore-tsbuildinfo`).
+3. Do the work, lint, commit. Bump the version (rules above).
+4. `git push -u origin <branch>` then `gh pr create …`.
+5. After review, `gh pr merge <num> --squash --delete-branch`.
+6. Back to step 1 for the next task — pull main again before branching.
+
+Never start work directly on `main`, never branch off another feature
+branch, and don't reuse a branch after its PR was merged (the squash
+commit on remote has different content than the local branch tip).
+
 **Bump the version on every PR.** Pre-1.0, use a minor bump (`0.X.0`)
 for new features and a patch bump (`0.X.Y`) for fixes / chores. Three
 files must stay in sync:
