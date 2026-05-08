@@ -1,0 +1,22 @@
+# Normalize text files to LF in the repo regardless of the developer's OS.
+# Without this, Windows checkouts with `core.autocrlf=true` keep showing
+# files (e.g. src-tauri/Cargo.toml) as "modified" even when there's no
+# real diff — Git is just warning that LF→CRLF would happen next touch.
+# Pinning eol=lf in .gitattributes overrides that behavior per repo.
+
+* text=auto eol=lf
+
+# Binary files: never touch line endings.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.exe binary
+*.dll binary
+*.zip binary
