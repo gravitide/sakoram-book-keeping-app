@@ -55,6 +55,15 @@
 
 @layer base {
 	-webkit-tap-highlight-color: transparent;
+
+	/* Tabular figures for accounting layouts. Tables and numeric inputs
+	 * are where row-to-row digit alignment matters most — money columns,
+	 * qty columns, payment ledgers, line totals. Only digits become
+	 * fixed-width; letters stay proportional, so no readability hit. */
+	table,
+	input {
+		font-variant-numeric: tabular-nums;
+	}
 }
 
 @layer utilities {

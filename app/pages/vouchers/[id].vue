@@ -15,7 +15,7 @@
 				<p class="text-sm text-(--ui-text-muted) mt-1">
 					{{ isReceipt ? `From ${voucher.party_name}` : `To ${voucher.party_name}` }}
 					·
-					<span class="font-medium" :class="isReceipt ? 'text-(--ui-success)' : 'text-(--ui-error)'">
+					<span class="font-medium tabular-nums" :class="isReceipt ? 'text-(--ui-success)' : 'text-(--ui-error)'">
 						{{ isReceipt ? '+' : '−' }} {{ formatLKR(voucher.amount_cents) }}
 					</span>
 				</p>

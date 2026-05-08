@@ -5,7 +5,7 @@
 				<h1 class="text-2xl font-semibold">
 					Invoices
 				</h1>
-				<p class="text-sm text-(--ui-text-muted)">
+				<p class="text-sm text-(--ui-text-muted) tabular-nums">
 					{{ store.invoices.length }} total · {{ formatLKR(store.outstandingTotal) }} outstanding
 					<span v-if="store.overdueCount > 0" class="text-(--ui-error)">
 						· {{ store.overdueCount }} overdue
