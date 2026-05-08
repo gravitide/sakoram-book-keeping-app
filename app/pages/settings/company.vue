@@ -1,5 +1,5 @@
 <template>
-	<div class="pb-32">
+	<div>
 		<!-- Identity hero -------------------------------------------------- -->
 		<section class="mb-10">
 			<div class="text-[11px] uppercase tracking-[0.18em] text-(--ui-text-muted) mb-3">
@@ -107,7 +107,6 @@
 
 		<!-- Form -------------------------------------------------------------- -->
 		<UForm
-			ref="formRef"
 			:schema="schema"
 			:state="form"
 			@submit="onSubmit"
@@ -255,24 +254,18 @@
 				</SectionCard>
 			</div>
 
-			<!-- Hidden fallback submit so Enter inside an input still saves. -->
-			<button type="submit" class="sr-only" tabindex="-1">
-				Save
-			</button>
-		</UForm>
-
-		<!-- Sticky save bar -->
-		<Transition
-			enter-active-class="transition ease-out duration-200"
-			enter-from-class="opacity-0 translate-y-3"
-			leave-active-class="transition ease-in duration-150"
-			leave-to-class="opacity-0 translate-y-3"
-		>
+			<!-- Sticky save bar — lives inside the form so it shares the
+				scrollable <main> ancestor; position:sticky pins it to the
+				bottom of the viewport without taking it out of normal flow
+				(avoids the second scrollbar that position:fixed introduced
+				here). -->
 			<div
-				v-if="dirty"
-				class="fixed bottom-0 left-0 right-0 z-30 backdrop-blur-md bg-(--ui-bg)/85 border-t border-(--ui-border) shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.15)]"
+				class="sticky bottom-0 -mx-2 mt-6 transition-all duration-200"
+				:class="dirty
+					? 'opacity-100 translate-y-0 pointer-events-auto'
+					: 'opacity-0 translate-y-3 pointer-events-none'"
 			>
-				<div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+				<div class="rounded-xl backdrop-blur-md bg-(--ui-bg)/90 border border-(--ui-border) shadow-lg px-4 py-3 flex items-center justify-between gap-4">
 					<div class="flex items-center gap-2 text-sm">
 						<span class="relative flex size-2">
 							<span class="absolute inline-flex h-full w-full rounded-full bg-(--ui-warning) opacity-75 animate-ping" />
@@ -284,22 +277,23 @@
 						<UButton
 							variant="ghost"
 							color="neutral"
-							:disabled="store.saving"
+							:disabled="store.saving || !dirty"
 							@click="onDiscard"
 						>
 							Discard
 						</UButton>
 						<UButton
 							:loading="store.saving"
+							:disabled="!dirty"
 							icon="i-lucide-save"
-							@click="triggerSubmit"
+							type="submit"
 						>
 							Save changes
 						</UButton>
 					</div>
 				</div>
 			</div>
-		</Transition>
+		</UForm>
 	</div>
 </template>
 
@@ -442,13 +436,6 @@
 			color: "info",
 			icon: "i-lucide-rotate-ccw"
 		});
-	};
-
-	// Programmatically submit the UForm from the sticky save bar so its
-	// Zod validation still runs (rather than calling onSubmit directly).
-	const formRef = ref<{ submit?: () => void } | null>(null);
-	const triggerSubmit = () => {
-		formRef.value?.submit?.();
 	};
 
 	// ----- Logo handling -------------------------------------------------------

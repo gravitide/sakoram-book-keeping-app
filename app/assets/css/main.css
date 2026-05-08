@@ -53,17 +53,18 @@
 	--color-error: var(--ui-color-error-500)
 }
 
+/* The shell layout (default.vue) uses h-screen + a single scrollable
+ * <main>. Stop the document itself from scrolling so we don't show two
+ * vertical scrollbars (document + main) on long pages. Outside @layer so
+ * it always wins, regardless of how Tailwind orders preflight. */
+html,
+body {
+	overflow: hidden !important;
+	height: 100% !important;
+}
+
 @layer base {
 	-webkit-tap-highlight-color: transparent;
-
-	/* The shell layout (default.vue) uses h-screen + a single scrollable
-	 * <main>. Stop the document itself from scrolling so we don't show two
-	 * vertical scrollbars (document + main) on long settings pages. */
-	html,
-	body {
-		overflow: hidden;
-		height: 100%;
-	}
 
 	/* Tabular figures for accounting layouts. Tables and numeric inputs
 	 * are where row-to-row digit alignment matters most — money columns,
