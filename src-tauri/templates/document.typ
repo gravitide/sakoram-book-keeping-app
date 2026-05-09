@@ -44,9 +44,17 @@
 // ============================================================
 // Header: logo top-right, red rule below
 // ============================================================
+// Header slot: prefer the user's letterhead logo, fall back to the
+// business name set as a typographic wordmark so the header isn't
+// blank when no logo has been uploaded.
 #align(right)[
   #if data.logo_file != none {
     image(data.logo_file, height: 12mm)
+  } else if data.business_name != none and data.business_name != "" {
+    box(height: 12mm)[
+      #set align(right + horizon)
+      #text(weight: "bold", size: 16pt, tracking: 0.02em)[#data.business_name]
+    ]
   } else {
     box(height: 12mm)
   }
