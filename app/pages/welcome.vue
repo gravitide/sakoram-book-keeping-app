@@ -170,7 +170,7 @@
 
 	import { convertFileSrc } from "@tauri-apps/api/core";
 	import pkg from "~~/package.json";
-	import sakoramLogo from "~/assets/sakoram-wordmark.svg";
+	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import { createDemoBusiness } from "~/lib/demo-seed";
 	import { useTenantsStore } from "~/stores/tenants";
 
