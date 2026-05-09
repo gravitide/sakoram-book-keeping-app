@@ -1,6 +1,10 @@
 <template>
 	<div>
-		<header class="mb-6">
+		<!-- The form is intentionally narrow (max-w-2xl) — the inputs
+			don't benefit from the wider main-content cap the other pages
+			use. Centering it inside the wider container keeps the page
+			from looking left-skewed on a wide monitor. -->
+		<header class="mb-6 max-w-2xl mx-auto">
 			<h1 class="text-2xl font-semibold">
 				Appearance
 			</h1>
@@ -11,7 +15,7 @@
 			</p>
 		</header>
 
-		<div class="space-y-6 max-w-2xl">
+		<div class="space-y-6 max-w-2xl mx-auto">
 			<UCard>
 				<template #header>
 					<div class="font-medium">

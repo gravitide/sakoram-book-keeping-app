@@ -141,7 +141,11 @@
 		</aside>
 
 		<main class="flex-1 min-w-0 overflow-auto">
-			<div class="px-8 py-6 max-w-7xl mx-auto">
+			<!-- Content cap: 96rem (1536px) — matches Tailwind's `2xl`
+				breakpoint. Wider than the default `max-w-7xl` (1280px) so
+				multi-column list pages have more room on a wide desktop
+				monitor without stretching edge-to-edge on ultrawide. -->
+			<div class="px-8 py-6 max-w-[96rem] mx-auto">
 				<slot />
 			</div>
 		</main>
