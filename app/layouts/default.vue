@@ -1,10 +1,10 @@
 <template>
 	<div class="h-screen flex bg-(--ui-bg-muted)">
-		<aside class="w-60 shrink-0 border-r border-(--ui-border) bg-(--ui-bg) flex flex-col">
+		<aside class="w-60 shrink-0 m-2 rounded-lg border border-(--ui-border) bg-(--ui-bg) shadow-lg shadow-black/20 flex flex-col overflow-hidden">
 			<UDropdownMenu :items="tenantMenuItems">
 				<button
 					type="button"
-					class="w-full px-4 py-3 border-b border-(--ui-border) flex items-center gap-2 min-w-0 hover:bg-(--ui-bg-elevated) transition text-left"
+					class="w-full px-4 py-3 border-b border-(--ui-border) flex items-center gap-2 min-w-0 hover:bg-(--ui-bg-accented) transition text-left"
 					title="Switch business"
 				>
 					<div class="size-9 shrink-0 rounded-md bg-(--ui-bg-muted) border border-(--ui-border) flex items-center justify-center overflow-hidden">
@@ -145,7 +145,7 @@
 				breakpoint. Wider than the default `max-w-7xl` (1280px) so
 				multi-column list pages have more room on a wide desktop
 				monitor without stretching edge-to-edge on ultrawide. -->
-			<div class="px-8 py-6 max-w-[96rem] mx-auto">
+			<div class="pl-4 pr-8 py-6 max-w-[96rem] mx-auto">
 				<slot />
 			</div>
 		</main>
