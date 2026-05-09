@@ -177,12 +177,11 @@
       table.cell(fill: rgb("#fafafa"), inset: 7pt, align: right, text(weight: "regular")[#data.formatted.tax]),
     )} else {()},
 
+    // Grand total spans all three columns so the amount has the full
+    // table width to render on (otherwise the narrow Amount column
+    // wraps the currency symbol onto its own line).
     table.cell(
-      colspan: 2,
-      fill: rgb("#f3f4f6"),
-      inset: 9pt,
-    )[],
-    table.cell(
+      colspan: 3,
       fill: rgb("#f3f4f6"),
       inset: 9pt,
       align: right,
@@ -240,8 +239,11 @@
       table.cell(colspan: cols.len() - 1, fill: rgb("#fafafa"), inset: 7pt, align: right)[VAT],
       table.cell(fill: rgb("#fafafa"), inset: 7pt, align: right)[#data.formatted.tax_no_symbol],
     )} else {()},
-    table.cell(colspan: cols.len() - 1, fill: rgb("#f3f4f6"), inset: 9pt, align: right)[],
-    table.cell(fill: rgb("#f3f4f6"), inset: 9pt, align: right, text(weight: "bold", size: 11pt)[#data.currency_symbol #data.formatted.total_no_symbol]),
+    // Grand total spans the full row so the amount has the entire
+    // table width to render on. Constraining it to the narrow Total
+    // column wraps "Rs" and the number onto separate lines on
+    // large totals.
+    table.cell(colspan: cols.len(), fill: rgb("#f3f4f6"), inset: 9pt, align: right, text(weight: "bold", size: 11pt)[#data.currency_symbol #data.formatted.total_no_symbol]),
   )
 ]
 
