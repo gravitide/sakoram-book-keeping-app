@@ -103,6 +103,27 @@ export const useBillsStore = defineStore("bills", () => {
 
 	const search = ref("");
 	const statusFilter = ref<BillStatus | "all" | "outstanding">("all");
+	// "all" = no narrowing; otherwise the FK id of a vendor or category.
+	// Filter on the FK so renames/recolors of the lookup don't orphan
+	// the filter (the row keeps its category_id even if the snapshot
+	// would visually change).
+	const vendorFilter = ref<number | "all">("all");
+	const categoryFilter = ref<number | "all" | "uncategorised">("all");
+	const issuedFrom = ref<string | null>(null);
+	const issuedTo = ref<string | null>(null);
+	const dueFrom = ref<string | null>(null);
+	const dueTo = ref<string | null>(null);
+
+	const hasDateFilters = computed(() =>
+		Boolean(issuedFrom.value || issuedTo.value || dueFrom.value || dueTo.value)
+	);
+
+	const clearDateFilters = () => {
+		issuedFrom.value = null;
+		issuedTo.value = null;
+		dueFrom.value = null;
+		dueTo.value = null;
+	};
 
 	const filtered = computed(() => {
 		const q = search.value.trim().toLowerCase();
@@ -112,6 +133,16 @@ export const useBillsStore = defineStore("bills", () => {
 			} else if (statusFilter.value !== "all" && row.status !== statusFilter.value) {
 				return false;
 			}
+			if (vendorFilter.value !== "all" && row.vendor_id !== vendorFilter.value) return false;
+			if (categoryFilter.value === "uncategorised") {
+				if (row.category_id !== null) return false;
+			} else if (categoryFilter.value !== "all" && row.category_id !== categoryFilter.value) {
+				return false;
+			}
+			if (issuedFrom.value && row.issue_date < issuedFrom.value) return false;
+			if (issuedTo.value && row.issue_date > issuedTo.value) return false;
+			if (dueFrom.value && row.due_date < dueFrom.value) return false;
+			if (dueTo.value && row.due_date > dueTo.value) return false;
 			if (!q) return true;
 			let snapName = "";
 			try {
@@ -391,6 +422,14 @@ export const useBillsStore = defineStore("bills", () => {
 		error,
 		search,
 		statusFilter,
+		vendorFilter,
+		categoryFilter,
+		issuedFrom,
+		issuedTo,
+		dueFrom,
+		dueTo,
+		hasDateFilters,
+		clearDateFilters,
 		filtered,
 		outstandingTotal,
 		overdueCount,

@@ -20,19 +20,44 @@
 
 		<UCard>
 			<template #header>
-				<div class="flex items-center justify-between gap-4 flex-wrap">
+				<!-- Vouchers have fewer filter dimensions than the other
+					ledgers (no FK to a client/vendor — party_name is
+					free text), so a single row fits everything: search,
+					type, date range, and the reset pill. -->
+				<div class="flex items-center gap-3 flex-wrap">
 					<UInput
 						v-model="store.search"
 						placeholder="Search by number, party, reference…"
 						icon="i-lucide-search"
-						class="md:w-96"
+						size="md"
+						class="flex-1 min-w-64"
 					/>
 					<USelect
 						v-model="store.typeFilter"
 						:items="typeOptions"
 						value-key="value"
+						icon="i-lucide-arrow-left-right"
 						class="w-40"
 					/>
+					<div class="flex items-center gap-2">
+						<UIcon name="i-lucide-calendar" class="size-3.5 text-(--ui-text-muted)" />
+						<span class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted)">Date</span>
+						<DateRangeField
+							v-model:from="store.dateFrom"
+							v-model:to="store.dateTo"
+						/>
+					</div>
+					<UButton
+						v-if="hasAnyFilter"
+						size="xs"
+						variant="soft"
+						color="neutral"
+						icon="i-lucide-x"
+						class="ml-auto"
+						@click="resetFilters"
+					>
+						Reset filters
+					</UButton>
 				</div>
 			</template>
 
@@ -187,6 +212,18 @@
 
 	const newVoucher = () => router.push("/vouchers/new");
 	const open = (v: VoucherRow) => router.push(`/vouchers/${v.id}`);
+
+	const hasAnyFilter = computed(() =>
+		store.search.trim() !== ""
+		|| store.typeFilter !== "all"
+		|| store.hasDateFilters
+	);
+
+	const resetFilters = () => {
+		store.search = "";
+		store.typeFilter = "all";
+		store.clearDateFilters();
+	};
 
 	const typeOptions: { label: string, value: VoucherType | "all" }[] = [
 		{ label: "All", value: "all" },

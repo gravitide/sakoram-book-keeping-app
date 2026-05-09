@@ -51,11 +51,23 @@ export const useVouchersStore = defineStore("vouchers", () => {
 
 	const search = ref("");
 	const typeFilter = ref<VoucherType | "all">("all");
+	// Optional date-range narrowing on voucher_date.
+	const dateFrom = ref<string | null>(null);
+	const dateTo = ref<string | null>(null);
+
+	const hasDateFilters = computed(() => Boolean(dateFrom.value || dateTo.value));
+
+	const clearDateFilters = () => {
+		dateFrom.value = null;
+		dateTo.value = null;
+	};
 
 	const filtered = computed(() => {
 		const q = search.value.trim().toLowerCase();
 		return vouchers.value.filter((row) => {
 			if (typeFilter.value !== "all" && row.voucher_type !== typeFilter.value) return false;
+			if (dateFrom.value && row.voucher_date < dateFrom.value) return false;
+			if (dateTo.value && row.voucher_date > dateTo.value) return false;
 			if (!q) return true;
 			return (
 				row.number.toLowerCase().includes(q)
@@ -163,6 +175,10 @@ export const useVouchersStore = defineStore("vouchers", () => {
 		error,
 		search,
 		typeFilter,
+		dateFrom,
+		dateTo,
+		hasDateFilters,
+		clearDateFilters,
 		filtered,
 		totalPayments,
 		totalReceipts,
