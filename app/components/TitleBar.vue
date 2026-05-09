@@ -59,7 +59,7 @@
 
 <script setup lang="ts">
 	import { getCurrentWindow } from "@tauri-apps/api/window";
-	import sakoramIcon from "~/assets/sakoram-icon.svg";
+	import sakoramIcon from "~/assets/sakoram-icon.svg?url";
 	import { useTenantsStore } from "~/stores/tenants";
 
 	withDefaults(defineProps<{ showSidebarToggle?: boolean }>(), {
