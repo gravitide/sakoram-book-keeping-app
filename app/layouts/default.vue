@@ -2,7 +2,7 @@
 	<div class="h-screen flex flex-col bg-(--ui-bg-muted)">
 		<TitleBar :show-sidebar-toggle="true" />
 		<div class="flex-1 min-h-0 flex">
-			<aside v-show="!sidebarCollapsed" class="w-60 shrink-0 m-2 mt-0 rounded-lg border border-(--ui-border) bg-(--ui-bg) shadow-lg shadow-black/20 flex flex-col overflow-hidden">
+			<aside v-show="!sidebarCollapsed" class="app-chrome w-60 shrink-0 m-2 mt-0 rounded-lg border border-(--ui-border) bg-(--ui-bg) shadow-lg shadow-black/20 flex flex-col overflow-hidden">
 				<UDropdownMenu :items="tenantMenuItems">
 					<button
 						type="button"

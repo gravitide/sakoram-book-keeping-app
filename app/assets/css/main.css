@@ -92,6 +92,23 @@ body {
 	}
 }
 
+/* Native-feeling text selection rules. Buttons, links, sidebar
+ * chrome, and the custom titlebar shouldn't be selectable — desktop
+ * apps don't let you drag-select labels and the side effect makes
+ * the whole UI feel webby. Data surfaces (page content, tables,
+ * inputs) stay selectable so users can still copy invoice numbers,
+ * client names, totals, etc. */
+button,
+a,
+[role="button"],
+[role="tab"],
+[role="menuitem"],
+.app-chrome,
+.app-chrome * {
+	user-select: none;
+	-webkit-user-select: none;
+}
+
 /* Slim, app-like scrollbars. The default Chromium scrollbar is too
  * fat for a desktop app — Claude/Notion/VS Code-style thin tracks read
  * as native chrome. Track stays transparent (the underlying surface
