@@ -21,7 +21,7 @@
 		</div>
 
 		<div class="flex-1 flex items-center gap-2 px-3 min-w-0" data-tauri-drag-region>
-			<UIcon name="i-lucide-book-open-text" class="size-4 text-(--ui-primary) shrink-0" data-tauri-drag-region />
+			<img :src="sakoramIcon" alt="" class="size-4 shrink-0" data-tauri-drag-region>
 			<span class="truncate" data-tauri-drag-region>{{ title }}</span>
 		</div>
 
@@ -59,6 +59,7 @@
 
 <script setup lang="ts">
 	import { getCurrentWindow } from "@tauri-apps/api/window";
+	import sakoramIcon from "~/assets/sakoram-icon.svg";
 	import { useTenantsStore } from "~/stores/tenants";
 
 	withDefaults(defineProps<{ showSidebarToggle?: boolean }>(), {
