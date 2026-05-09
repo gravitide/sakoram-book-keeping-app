@@ -24,6 +24,23 @@ use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Manager};
 
+// Default bill categories seeded into every freshly-created tenant. Same
+// list the demo seed used to inject manually — moved here so brand-new
+// businesses also start with a sensible picker instead of an empty one.
+// `INSERT OR IGNORE` keeps re-runs safe (the UNIQUE name index on
+// bill_categories makes duplicates a no-op).
+const DEFAULT_BILL_CATEGORIES: &[(&str, &str, &str)] = &[
+	("Utilities", "amber", "i-lucide-zap"),
+	("Supplies", "blue", "i-lucide-package"),
+	("Fees", "violet", "i-lucide-briefcase"),
+	("Rent", "orange", "i-lucide-home"),
+	("Salaries", "emerald", "i-lucide-graduation-cap"),
+	("Marketing", "red", "i-lucide-shopping-cart"),
+	("Software", "sky", "i-lucide-laptop"),
+	("Travel", "green", "i-lucide-car"),
+	("Insurance", "violet", "i-lucide-shield"),
+];
+
 // Embedded migration SQL — same files plugin-sql used to consume.
 const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(1, "initial schema", include_str!("../migrations/0001_initial.sql")),
@@ -211,6 +228,41 @@ fn split_sql_statements(sql: &str) -> Vec<String> {
 	out
 }
 
+// ---------- Fresh-tenant seed -----------------------------------------------
+
+/// Stamps the new tenant DB with the user's chosen business name and the
+/// default bill categories. Called right after `run_migrations` from both
+/// the public `create_tenant` command and `create_tenant_internal` (which
+/// data_io uses during import). Safe to re-run: business_name UPDATE is
+/// idempotent and category INSERTs use OR IGNORE against the UNIQUE name
+/// index so existing categories aren't disturbed.
+async fn seed_fresh_tenant(db_path: &Path, business_name: &str) -> Result<(), String> {
+	let url = format!("sqlite:{}", db_path.to_string_lossy());
+	let opts = SqliteConnectOptions::from_str(&url).map_err(|e| e.to_string())?;
+	let pool = SqlitePool::connect_with(opts).await.map_err(|e| e.to_string())?;
+
+	sqlx::query("UPDATE company_settings SET business_name = ? WHERE id = 1")
+		.bind(business_name)
+		.execute(&pool)
+		.await
+		.map_err(|e| format!("seed business_name: {e}"))?;
+
+	for (name, color, icon) in DEFAULT_BILL_CATEGORIES {
+		sqlx::query(
+			"INSERT OR IGNORE INTO bill_categories (name, color, icon) VALUES (?, ?, ?)",
+		)
+		.bind(*name)
+		.bind(*color)
+		.bind(*icon)
+		.execute(&pool)
+		.await
+		.map_err(|e| format!("seed bill_category {name}: {e}"))?;
+	}
+
+	pool.close().await;
+	Ok(())
+}
+
 // ---------- Legacy single-DB migration --------------------------------------
 
 /// On first launch after the multi-tenancy upgrade, look for the old
@@ -302,19 +354,7 @@ pub async fn create_tenant(app: AppHandle, name: String) -> Result<Tenant, Strin
 	let db_path = tenant_db_path(&app, &id)?;
 
 	run_migrations(&db_path).await?;
-
-	// Seed the new DB with the business name (replaces the default "Sakoram").
-	{
-		let url = format!("sqlite:{}", db_path.to_string_lossy());
-		let opts = SqliteConnectOptions::from_str(&url).map_err(|e| e.to_string())?;
-		let pool = SqlitePool::connect_with(opts).await.map_err(|e| e.to_string())?;
-		sqlx::query("UPDATE company_settings SET business_name = ? WHERE id = 1")
-			.bind(trimmed)
-			.execute(&pool)
-			.await
-			.map_err(|e| format!("seed business_name: {e}"))?;
-		pool.close().await;
-	}
+	seed_fresh_tenant(&db_path, trimmed).await?;
 
 	let tenant = Tenant { id: id.clone(), name: trimmed.to_string(), logo_file: None };
 	reg.tenants.push(tenant.clone());
@@ -465,18 +505,7 @@ pub async fn create_tenant_internal(app: &AppHandle, name: &str) -> Result<Tenan
 	let id = unique_slug(&slugify(trimmed), &reg.tenants);
 	let db_path = tenant_db_path(app, &id)?;
 	run_migrations(&db_path).await?;
-
-	{
-		let url = format!("sqlite:{}", db_path.to_string_lossy());
-		let opts = SqliteConnectOptions::from_str(&url).map_err(|e| e.to_string())?;
-		let pool = SqlitePool::connect_with(opts).await.map_err(|e| e.to_string())?;
-		sqlx::query("UPDATE company_settings SET business_name = ? WHERE id = 1")
-			.bind(trimmed)
-			.execute(&pool)
-			.await
-			.map_err(|e| format!("seed business_name: {e}"))?;
-		pool.close().await;
-	}
+	seed_fresh_tenant(&db_path, trimmed).await?;
 
 	let tenant = Tenant { id: id.clone(), name: trimmed.to_string(), logo_file: None };
 	reg.tenants.push(tenant.clone());
