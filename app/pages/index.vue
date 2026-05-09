@@ -113,6 +113,85 @@
 			</UCard>
 		</div>
 
+		<!-- Monthly cash flow — receipts vs payments grouped per month
+			over the last 12 months. Sourced directly off the voucher
+			ledger (which is now the single source of truth for cash
+			flow after the bills/invoices payments-via-vouchers
+			refactor). -->
+		<UCard class="mb-4">
+			<template #header>
+				<div class="flex items-center justify-between gap-4 flex-wrap">
+					<div>
+						<div class="font-medium">
+							Monthly cash flow
+						</div>
+						<div class="text-xs text-(--ui-text-muted) mt-0.5">
+							Receipts in, payments out — last 12 months from the voucher ledger.
+						</div>
+					</div>
+					<UIcon name="i-lucide-bar-chart-3" class="size-4 text-(--ui-text-muted)" />
+				</div>
+			</template>
+			<MonthlyCashFlowChart :vouchers="vouchersStore.vouchers" />
+		</UCard>
+
+		<!-- Insights row 1: receivables aging + expense breakdown.
+			Two cards side-by-side on lg, stacked on mobile. -->
+		<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+			<UCard>
+				<template #header>
+					<div class="flex items-center justify-between gap-2">
+						<div>
+							<div class="font-medium">
+								Receivables aging
+							</div>
+							<div class="text-xs text-(--ui-text-muted) mt-0.5">
+								Outstanding invoice balances by days past due.
+							</div>
+						</div>
+						<UIcon name="i-lucide-alarm-clock" class="size-4 text-(--ui-text-muted)" />
+					</div>
+				</template>
+				<ReceivablesAgingChart />
+			</UCard>
+
+			<UCard>
+				<template #header>
+					<div class="flex items-center justify-between gap-2">
+						<div>
+							<div class="font-medium">
+								Expenses by category
+							</div>
+							<div class="text-xs text-(--ui-text-muted) mt-0.5">
+								Where the money's going, last 90 days.
+							</div>
+						</div>
+						<UIcon name="i-lucide-pie-chart" class="size-4 text-(--ui-text-muted)" />
+					</div>
+				</template>
+				<ExpensesByCategoryChart />
+			</UCard>
+		</div>
+
+		<!-- Insights row 2: top clients (full-width — list with bars
+			reads better with horizontal room). -->
+		<UCard class="mb-4">
+			<template #header>
+				<div class="flex items-center justify-between gap-2">
+					<div>
+						<div class="font-medium">
+							Top clients
+						</div>
+						<div class="text-xs text-(--ui-text-muted) mt-0.5">
+							Invoiced revenue over the last 12 months — concentration check.
+						</div>
+					</div>
+					<UIcon name="i-lucide-users" class="size-4 text-(--ui-text-muted)" />
+				</div>
+			</template>
+			<TopClientsChart />
+		</UCard>
+
 		<!-- Two-column area: recent activity + at-a-glance lists -->
 		<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
 			<UCard class="lg:col-span-2">
