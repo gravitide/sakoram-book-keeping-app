@@ -19,19 +19,74 @@
 
 		<UCard>
 			<template #header>
-				<div class="flex items-center justify-between gap-4 flex-wrap">
-					<UInput
-						v-model="store.search"
-						placeholder="Search by number, vendor, vendor invoice…"
-						icon="i-lucide-search"
-						class="md:w-96"
-					/>
-					<USelect
-						v-model="store.statusFilter"
-						:items="statusOptions"
-						value-key="value"
-						class="w-48"
-					/>
+				<!-- Filter strip — bills have more dimensions than the
+					quote/invoice equivalents (vendor + category + dates),
+					so the second row stretches a bit wider. -->
+				<div class="flex flex-col gap-3">
+					<div class="flex items-center gap-2 flex-wrap">
+						<UInput
+							v-model="store.search"
+							placeholder="Search by number, vendor, vendor invoice…"
+							icon="i-lucide-search"
+							size="md"
+							class="flex-1 min-w-64"
+						/>
+						<USelectMenu
+							v-model="store.vendorFilter"
+							:items="vendorOptions"
+							value-key="value"
+							label-key="label"
+							icon="i-lucide-truck"
+							class="w-56"
+							:search-input="{ placeholder: 'Filter vendors…' }"
+						/>
+						<USelectMenu
+							v-model="store.categoryFilter"
+							:items="categoryOptions"
+							value-key="value"
+							label-key="label"
+							icon="i-lucide-tag"
+							class="w-48"
+							:search-input="{ placeholder: 'Filter categories…' }"
+						/>
+						<USelect
+							v-model="store.statusFilter"
+							:items="statusOptions"
+							value-key="value"
+							icon="i-lucide-flag"
+							class="w-44"
+						/>
+					</div>
+
+					<div class="flex items-center gap-4 flex-wrap text-sm">
+						<div class="flex items-center gap-2">
+							<UIcon name="i-lucide-calendar" class="size-3.5 text-(--ui-text-muted)" />
+							<span class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted)">Issued</span>
+							<DateRangeField
+								v-model:from="store.issuedFrom"
+								v-model:to="store.issuedTo"
+							/>
+						</div>
+						<div class="flex items-center gap-2">
+							<UIcon name="i-lucide-calendar-clock" class="size-3.5 text-(--ui-text-muted)" />
+							<span class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted)">Due</span>
+							<DateRangeField
+								v-model:from="store.dueFrom"
+								v-model:to="store.dueTo"
+							/>
+						</div>
+						<UButton
+							v-if="hasAnyFilter"
+							size="xs"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-x"
+							class="ml-auto"
+							@click="resetFilters"
+						>
+							Reset filters
+						</UButton>
+					</div>
 				</div>
 			</template>
 
@@ -192,14 +247,20 @@
 	import { useListView } from "~/composables/useListView";
 	import { formatLKR } from "~/lib/money";
 	import { themeHex } from "~/lib/theme";
+	import { useBillCategoriesStore } from "~/stores/bill_categories";
 	import { useBillsStore } from "~/stores/bills";
+	import { useVendorsStore } from "~/stores/vendors";
 
 	definePageMeta({ title: "Bills" });
 
 	const router = useRouter();
 	const store = useBillsStore();
+	const vendorsStore = useVendorsStore();
+	const categoriesStore = useBillCategoriesStore();
 
-	await store.load();
+	// Load all four stores in parallel so the filter dropdowns are
+	// populated by the time the table renders.
+	await Promise.all([store.load(), vendorsStore.load(), categoriesStore.load()]);
 	await store.flagOverdue().catch(() => { /* non-fatal */ });
 
 	const list = useListView<BillRow>(
@@ -220,6 +281,41 @@
 
 	const newBill = () => router.push("/bills/new");
 	const open = (b: BillRow) => router.push(`/bills/${b.id}`);
+
+	const vendorOptions = computed<{ label: string, value: number | "all" }[]>(() => [
+		{ label: "All vendors", value: "all" },
+		...[...vendorsStore.vendors]
+			.sort((a, b) => a.name.localeCompare(b.name))
+			.map((v) => ({ label: v.name, value: v.id }))
+	]);
+
+	// Categories: include an "Uncategorised" sentinel for bills without a
+	// category_id (otherwise the user can't surface those rows in
+	// isolation).
+	const categoryOptions = computed<{ label: string, value: number | "all" | "uncategorised" }[]>(() => [
+		{ label: "All categories", value: "all" },
+		{ label: "Uncategorised", value: "uncategorised" },
+		...[...categoriesStore.categories]
+			.filter((c) => c.is_archived === 0)
+			.sort((a, b) => a.name.localeCompare(b.name))
+			.map((c) => ({ label: c.name, value: c.id }))
+	]);
+
+	const hasAnyFilter = computed(() =>
+		store.search.trim() !== ""
+		|| store.statusFilter !== "all"
+		|| store.vendorFilter !== "all"
+		|| store.categoryFilter !== "all"
+		|| store.hasDateFilters
+	);
+
+	const resetFilters = () => {
+		store.search = "";
+		store.statusFilter = "all";
+		store.vendorFilter = "all";
+		store.categoryFilter = "all";
+		store.clearDateFilters();
+	};
 
 	const statusOptions: { label: string, value: BillStatus | "all" | "outstanding" }[] = [
 		{ label: "All", value: "all" },

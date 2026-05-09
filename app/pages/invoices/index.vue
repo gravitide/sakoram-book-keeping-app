@@ -19,19 +19,65 @@
 
 		<UCard>
 			<template #header>
-				<div class="flex items-center justify-between gap-4 flex-wrap">
-					<UInput
-						v-model="store.search"
-						placeholder="Search by number, project, or client…"
-						icon="i-lucide-search"
-						class="md:w-96"
-					/>
-					<USelect
-						v-model="store.statusFilter"
-						:items="statusOptions"
-						value-key="value"
-						class="w-48"
-					/>
+				<!-- Filter strip — same shape as Quotes:
+					Row 1 = quick filters (search / client / status)
+					Row 2 = date ranges + reset pill -->
+				<div class="flex flex-col gap-3">
+					<div class="flex items-center gap-2 flex-wrap">
+						<UInput
+							v-model="store.search"
+							placeholder="Search by number, project, or client…"
+							icon="i-lucide-search"
+							size="md"
+							class="flex-1 min-w-64"
+						/>
+						<USelectMenu
+							v-model="store.clientFilter"
+							:items="clientOptions"
+							value-key="value"
+							label-key="label"
+							icon="i-lucide-users"
+							class="w-56"
+							:search-input="{ placeholder: 'Filter clients…' }"
+						/>
+						<USelect
+							v-model="store.statusFilter"
+							:items="statusOptions"
+							value-key="value"
+							icon="i-lucide-flag"
+							class="w-48"
+						/>
+					</div>
+
+					<div class="flex items-center gap-4 flex-wrap text-sm">
+						<div class="flex items-center gap-2">
+							<UIcon name="i-lucide-calendar" class="size-3.5 text-(--ui-text-muted)" />
+							<span class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted)">Issued</span>
+							<DateRangeField
+								v-model:from="store.issuedFrom"
+								v-model:to="store.issuedTo"
+							/>
+						</div>
+						<div class="flex items-center gap-2">
+							<UIcon name="i-lucide-calendar-clock" class="size-3.5 text-(--ui-text-muted)" />
+							<span class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted)">Due</span>
+							<DateRangeField
+								v-model:from="store.dueFrom"
+								v-model:to="store.dueTo"
+							/>
+						</div>
+						<UButton
+							v-if="hasAnyFilter"
+							size="xs"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-x"
+							class="ml-auto"
+							@click="resetFilters"
+						>
+							Reset filters
+						</UButton>
+					</div>
 				</div>
 			</template>
 
@@ -172,14 +218,18 @@
 	import type { ClientSnapshot } from "~/stores/quotes";
 	import { useListView } from "~/composables/useListView";
 	import { formatLKR } from "~/lib/money";
+	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
 
 	definePageMeta({ title: "Invoices" });
 
 	const router = useRouter();
 	const store = useInvoicesStore();
+	const clientsStore = useClientsStore();
 
-	await store.load();
+	// Load both stores in parallel so the client filter dropdown is
+	// populated by the time the table renders.
+	await Promise.all([store.load(), clientsStore.load()]);
 	// Auto-flag overdue on every list visit. Cheap single-statement UPDATE.
 	await store.flagOverdue().catch(() => { /* non-fatal */ });
 
@@ -200,6 +250,29 @@
 
 	const newInvoice = () => router.push("/invoices/new");
 	const open = (i: InvoiceRow) => router.push(`/invoices/${i.id}`);
+
+	// "All clients" sentinel + every loaded client. Includes archived
+	// ones so old invoices against them stay findable.
+	const clientOptions = computed<{ label: string, value: number | "all" }[]>(() => [
+		{ label: "All clients", value: "all" },
+		...[...clientsStore.clients]
+			.sort((a, b) => a.name.localeCompare(b.name))
+			.map((c) => ({ label: c.name, value: c.id }))
+	]);
+
+	const hasAnyFilter = computed(() =>
+		store.search.trim() !== ""
+		|| store.statusFilter !== "all"
+		|| store.clientFilter !== "all"
+		|| store.hasDateFilters
+	);
+
+	const resetFilters = () => {
+		store.search = "";
+		store.statusFilter = "all";
+		store.clientFilter = "all";
+		store.clearDateFilters();
+	};
 
 	const statusOptions: { label: string, value: InvoiceStatus | "all" | "outstanding" }[] = [
 		{ label: "All", value: "all" },

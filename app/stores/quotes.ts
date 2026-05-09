@@ -99,6 +99,10 @@ export const useQuotesStore = defineStore("quotes", () => {
 
 	const search = ref("");
 	const statusFilter = ref<QuoteStatus | "all">("all");
+	// "all" = no narrowing; otherwise the FK id of a single client to
+	// scope the list to. Filters on client_id (the FK), not the snapshot
+	// name — clients keep the same id even after a rename.
+	const clientFilter = ref<number | "all">("all");
 	// Optional date-range narrowing. Each field is its own from/to pair —
 	// "Issued" filters on issue_date, "Valid until" filters on valid_until.
 	// Empty string means unset. ISO date strings sort lexicographically so
@@ -123,6 +127,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 		const q = search.value.trim().toLowerCase();
 		return quotes.value.filter((row) => {
 			if (statusFilter.value !== "all" && row.status !== statusFilter.value) return false;
+			if (clientFilter.value !== "all" && row.client_id !== clientFilter.value) return false;
 			if (issuedFrom.value && row.issue_date < issuedFrom.value) return false;
 			if (issuedTo.value && row.issue_date > issuedTo.value) return false;
 			if (validFrom.value && row.valid_until < validFrom.value) return false;
@@ -419,6 +424,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 		error,
 		search,
 		statusFilter,
+		clientFilter,
 		issuedFrom,
 		issuedTo,
 		validFrom,

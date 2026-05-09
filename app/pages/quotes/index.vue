@@ -16,48 +16,74 @@
 
 		<UCard>
 			<template #header>
-				<div class="space-y-3">
-					<div class="flex items-center justify-between gap-4 flex-wrap">
+				<!-- Filter strip: two coordinated rows. The first holds the
+					quick filters (search / client / status); the second
+					holds the less-common date ranges with compact inline
+					labels. A single "Reset" pill surfaces on the far right
+					of row 2 whenever any filter is active. -->
+				<div class="flex flex-col gap-3">
+					<!-- Row 1 — quick filters -->
+					<div class="flex items-center gap-2 flex-wrap">
 						<UInput
 							v-model="store.search"
 							placeholder="Search by number, project, or client…"
 							icon="i-lucide-search"
-							class="md:w-96"
+							size="md"
+							class="flex-1 min-w-64"
+						/>
+						<!-- USelectMenu (searchable) instead of USelect because the
+							client list can grow long; typing into the dropdown
+							narrows it. value-key/label-key bind to the
+							(number | "all") shape we put in the store. -->
+						<USelectMenu
+							v-model="store.clientFilter"
+							:items="clientOptions"
+							value-key="value"
+							label-key="label"
+							icon="i-lucide-users"
+							class="w-56"
+							:search-input="{ placeholder: 'Filter clients…' }"
 						/>
 						<USelect
 							v-model="store.statusFilter"
 							:items="statusOptions"
 							value-key="value"
+							icon="i-lucide-flag"
 							class="w-40"
 						/>
 					</div>
-					<div class="flex items-end gap-6 flex-wrap">
-						<div class="w-72">
-							<UFormField label="Issued between">
-								<DateRangeField
-									v-model:from="store.issuedFrom"
-									v-model:to="store.issuedTo"
-								/>
-							</UFormField>
+
+					<!-- Row 2 — date ranges + reset. Inline compact labels
+						instead of stacked UFormField — at this density the
+						extra label height made the section feel busier than
+						it needed to. -->
+					<div class="flex items-center gap-4 flex-wrap text-sm">
+						<div class="flex items-center gap-2">
+							<UIcon name="i-lucide-calendar" class="size-3.5 text-(--ui-text-muted)" />
+							<span class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted)">Issued</span>
+							<DateRangeField
+								v-model:from="store.issuedFrom"
+								v-model:to="store.issuedTo"
+							/>
 						</div>
-						<div class="w-72">
-							<UFormField label="Valid between">
-								<DateRangeField
-									v-model:from="store.validFrom"
-									v-model:to="store.validTo"
-								/>
-							</UFormField>
+						<div class="flex items-center gap-2">
+							<UIcon name="i-lucide-calendar-clock" class="size-3.5 text-(--ui-text-muted)" />
+							<span class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted)">Valid</span>
+							<DateRangeField
+								v-model:from="store.validFrom"
+								v-model:to="store.validTo"
+							/>
 						</div>
 						<UButton
-							v-if="store.hasDateFilters"
+							v-if="hasAnyFilter"
 							size="xs"
-							variant="ghost"
+							variant="soft"
 							color="neutral"
 							icon="i-lucide-x"
-							class="mb-1"
-							@click="store.clearDateFilters()"
+							class="ml-auto"
+							@click="resetFilters"
 						>
-							Clear dates
+							Reset filters
 						</UButton>
 					</div>
 				</div>
@@ -187,14 +213,19 @@
 	import type { ClientSnapshot, QuoteRow, QuoteStatus } from "~/stores/quotes";
 	import { useListView } from "~/composables/useListView";
 	import { formatLKR } from "~/lib/money";
+	import { useClientsStore } from "~/stores/clients";
 	import { useQuotesStore } from "~/stores/quotes";
 
 	definePageMeta({ title: "Quotes" });
 
 	const router = useRouter();
 	const store = useQuotesStore();
+	const clientsStore = useClientsStore();
 
-	await store.load();
+	// Load both stores in parallel so the filter dropdown is populated by
+	// the time the table renders. Clients are needed only for the
+	// "Filter by client" select — the row itself reads off the snapshot.
+	await Promise.all([store.load(), clientsStore.load()]);
 	// Auto-expire any sent quotes past their valid_until on every list load.
 	await store.expireOverdue().catch(() => { /* non-fatal */ });
 
@@ -215,6 +246,32 @@
 
 	const newQuote = () => router.push("/quotes/new");
 	const open = (q: QuoteRow) => router.push(`/quotes/${q.id}`);
+
+	// Does any filter narrow the list right now? Drives the visibility
+	// of the "Reset filters" pill in the toolbar.
+	const hasAnyFilter = computed(() =>
+		store.search.trim() !== ""
+		|| store.statusFilter !== "all"
+		|| store.clientFilter !== "all"
+		|| store.hasDateFilters
+	);
+
+	const resetFilters = () => {
+		store.search = "";
+		store.statusFilter = "all";
+		store.clientFilter = "all";
+		store.clearDateFilters();
+	};
+
+	// "All clients" sentinel + every loaded client (active or archived,
+	// since old quotes against an archived client should still be
+	// findable). Sorted by name to match the rest of the app.
+	const clientOptions = computed<{ label: string, value: number | "all" }[]>(() => [
+		{ label: "All clients", value: "all" },
+		...[...clientsStore.clients]
+			.sort((a, b) => a.name.localeCompare(b.name))
+			.map((c) => ({ label: c.name, value: c.id }))
+	]);
 
 	const statusOptions: { label: string, value: QuoteStatus | "all" }[] = [
 		{ label: "All", value: "all" },

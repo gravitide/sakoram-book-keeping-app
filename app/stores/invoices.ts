@@ -155,6 +155,26 @@ export const useInvoicesStore = defineStore("invoices", () => {
 
 	const search = ref("");
 	const statusFilter = ref<InvoiceStatus | "all" | "outstanding">("all");
+	// "all" = no narrowing; otherwise the FK id of a single client.
+	// Filters on client_id (not the snapshot name) so renames don't
+	// orphan the filter.
+	const clientFilter = ref<number | "all">("all");
+	// Optional date-range narrowing — issue_date / due_date.
+	const issuedFrom = ref<string | null>(null);
+	const issuedTo = ref<string | null>(null);
+	const dueFrom = ref<string | null>(null);
+	const dueTo = ref<string | null>(null);
+
+	const hasDateFilters = computed(() =>
+		Boolean(issuedFrom.value || issuedTo.value || dueFrom.value || dueTo.value)
+	);
+
+	const clearDateFilters = () => {
+		issuedFrom.value = null;
+		issuedTo.value = null;
+		dueFrom.value = null;
+		dueTo.value = null;
+	};
 
 	const filtered = computed(() => {
 		const q = search.value.trim().toLowerCase();
@@ -164,6 +184,11 @@ export const useInvoicesStore = defineStore("invoices", () => {
 			} else if (statusFilter.value !== "all" && row.status !== statusFilter.value) {
 				return false;
 			}
+			if (clientFilter.value !== "all" && row.client_id !== clientFilter.value) return false;
+			if (issuedFrom.value && row.issue_date < issuedFrom.value) return false;
+			if (issuedTo.value && row.issue_date > issuedTo.value) return false;
+			if (dueFrom.value && row.due_date < dueFrom.value) return false;
+			if (dueTo.value && row.due_date > dueTo.value) return false;
 			if (!q) return true;
 			let snapName = "";
 			try {
@@ -560,6 +585,13 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		error,
 		search,
 		statusFilter,
+		clientFilter,
+		issuedFrom,
+		issuedTo,
+		dueFrom,
+		dueTo,
+		hasDateFilters,
+		clearDateFilters,
 		filtered,
 		outstandingTotal,
 		overdueCount,
