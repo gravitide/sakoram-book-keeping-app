@@ -213,7 +213,7 @@
 						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
 							{{ b.issue_date }}
 						</td>
-						<td class="py-2 px-2 tabular-nums" :class="b.status === 'overdue' ? 'text-(--ui-error) font-medium' : 'text-(--ui-text-muted)'">
+						<td class="py-2 px-2 tabular-nums" :class="statusOf(b) === 'overdue' ? 'text-(--ui-error) font-medium' : 'text-(--ui-text-muted)'">
 							{{ b.due_date }}
 						</td>
 						<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap">
@@ -224,7 +224,7 @@
 							<span v-else>{{ formatLKR(balanceOf(b)) }}</span>
 						</td>
 						<td class="py-2 pl-2 pr-3">
-							<StatusBadge :status="b.status" />
+							<StatusBadge :status="statusOf(b)" />
 						</td>
 					</tr>
 				</tbody>
@@ -250,6 +250,7 @@
 	import { useBillCategoriesStore } from "~/stores/bill_categories";
 	import { useBillsStore } from "~/stores/bills";
 	import { useVendorsStore } from "~/stores/vendors";
+	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Bills" });
 
@@ -258,10 +259,16 @@
 	const vendorsStore = useVendorsStore();
 	const categoriesStore = useBillCategoriesStore();
 
-	// Load all four stores in parallel so the filter dropdowns are
-	// populated by the time the table renders.
-	await Promise.all([store.load(), vendorsStore.load(), categoriesStore.load()]);
-	await store.flagOverdue().catch(() => { /* non-fatal */ });
+	// Load every store the list / filter dropdowns / derived status
+	// reach into, in parallel. Vouchers are essential because bill
+	// status and balance are derived from linked payment vouchers.
+	const vouchersStore = useVouchersStore();
+	await Promise.all([
+		store.load(),
+		vendorsStore.load(),
+		categoriesStore.load(),
+		vouchersStore.load()
+	]);
 
 	const list = useListView<BillRow>(
 		() => store.filtered,
@@ -273,8 +280,8 @@
 			{ key: "issue_date", getValue: (b) => b.issue_date },
 			{ key: "due_date", getValue: (b) => b.due_date },
 			{ key: "total", getValue: (b) => b.total_cents },
-			{ key: "balance", getValue: (b) => Math.max(0, b.total_cents - b.paid_cents) },
-			{ key: "status", getValue: (b) => b.status }
+			{ key: "balance", getValue: (b) => store.balanceCentsFor(b) },
+			{ key: "status", getValue: (b) => store.derivedStatus(b) }
 		],
 		{ defaultSortKey: "issue_date", defaultDir: "desc" }
 	);
@@ -327,7 +334,10 @@
 		{ label: "Cancelled", value: "cancelled" }
 	];
 
-	const balanceOf = (b: BillRow) => Math.max(0, b.total_cents - b.paid_cents);
+	// Balance + status are derived from the linked payment vouchers
+	// (and due date) — see bills store. The list table just delegates.
+	const balanceOf = (b: BillRow) => store.balanceCentsFor(b);
+	const statusOf = (b: BillRow) => store.derivedStatus(b);
 
 	// Function declarations (not const arrows) so they hoist above the
 	// useListView() call site, which references them in column getValues.

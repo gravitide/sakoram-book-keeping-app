@@ -23,7 +23,7 @@
 					v-if="balanceCents > 0 && !isCancelled"
 					color="primary"
 					icon="i-lucide-circle-dollar-sign"
-					@click="openRecordPayment"
+					@click="goRecordPayment"
 				>
 					Record payment
 				</UButton>
@@ -47,11 +47,14 @@
 				>
 					PDF
 				</UButton>
-				<UDropdownMenu v-if="transitionItems.length > 0" :items="transitionItems">
-					<UButton color="neutral" variant="outline" trailing-icon="i-lucide-chevron-down">
-						Status
-					</UButton>
-				</UDropdownMenu>
+				<UButton
+					color="neutral"
+					variant="outline"
+					:icon="isCancelled ? 'i-lucide-rotate-ccw' : 'i-lucide-ban'"
+					@click="toggleCancelled"
+				>
+					{{ isCancelled ? "Reopen bill" : "Mark cancelled" }}
+				</UButton>
 				<UButton
 					color="error"
 					variant="ghost"
@@ -211,17 +214,98 @@
 						<div v-if="paidCents > 0" class="text-(--ui-text-muted) pt-1 border-t border-(--ui-border) mt-1">
 							Paid: <span class="text-(--ui-success)">{{ formatLKR(paidCents) }}</span>
 						</div>
-						<div v-if="paidCents > 0" class="font-semibold" :class="balanceCents === 0 ? 'text-(--ui-success)' : 'text-(--ui-text)'">
+						<div v-if="paidCents > 0 && !overpaid" class="font-semibold" :class="balanceCents === 0 ? 'text-(--ui-success)' : 'text-(--ui-text)'">
 							Balance: {{ formatLKR(balanceCents) }}
+						</div>
+						<!-- Overpaid pill: linked vouchers sum to more than
+							the bill total. Soft warning — the user might
+							have legitimate reasons (refund, deliberate
+							over-payment) but it should still be visible. -->
+						<div v-if="overpaid" class="font-semibold text-(--ui-warning) pt-0.5">
+							Overpaid by {{ formatLKR(overpaymentCents) }}
 						</div>
 					</div>
 				</div>
+			</UCard>
 
-				<div v-if="paidCents > 0 && !isCancelled" class="mt-4 text-right">
-					<UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-rotate-ccw" @click="resetPayments">
-						Reset payments to zero
-					</UButton>
+			<!-- Payment vouchers linked to this bill. Vouchers are the
+				single source of truth for cash flow — the "paid" / "balance"
+				numbers above are sums of these rows. Click a row to open
+				the voucher; click the header button to create a new
+				payment voucher pre-filled against this bill. -->
+			<UCard>
+				<template #header>
+					<div class="flex items-center justify-between">
+						<div>
+							<div class="font-medium">
+								Payments
+							</div>
+							<div class="text-xs text-(--ui-text-muted) mt-0.5">
+								<span v-if="payments.length === 0">No payments recorded yet — each "Record payment" creates a voucher in the cash ledger.</span>
+								<span v-else>{{ payments.length }} payment voucher{{ payments.length === 1 ? "" : "s" }} · {{ formatLKR(paidCents) }} of {{ formatLKR(totalCents) }} paid.</span>
+							</div>
+						</div>
+						<UButton
+							v-if="balanceCents > 0 && !isCancelled"
+							size="xs"
+							variant="soft"
+							icon="i-lucide-plus"
+							@click="goRecordPayment"
+						>
+							Record payment
+						</UButton>
+					</div>
+				</template>
+
+				<div v-if="payments.length === 0" class="py-6 text-center text-sm text-(--ui-text-muted)">
+					<UIcon name="i-lucide-ticket" class="size-8 mx-auto mb-2 opacity-50" />
+					<div>Recording a payment opens a pre-filled voucher form.</div>
 				</div>
+				<table v-else class="w-full text-sm">
+					<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
+						<tr>
+							<th class="py-2 pl-3 pr-2 font-medium">
+								Voucher
+							</th>
+							<th class="py-2 px-2 font-medium">
+								Date
+							</th>
+							<th class="py-2 px-2 font-medium">
+								Method
+							</th>
+							<th class="py-2 px-2 font-medium">
+								Reference
+							</th>
+							<th class="py-2 pl-2 pr-3 font-medium text-right">
+								Amount
+							</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr
+							v-for="v in payments"
+							:key="v.id"
+							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+							@click="router.push(`/vouchers/${v.id}`)"
+						>
+							<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
+								{{ v.number }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
+								{{ v.voucher_date }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted)">
+								{{ methodLabel(v.payment_method) }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted)">
+								{{ v.reference || "—" }}
+							</td>
+							<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap font-medium text-(--ui-error)">
+								− {{ formatLKR(v.amount_cents) }}
+							</td>
+						</tr>
+					</tbody>
+				</table>
 			</UCard>
 
 			<UCard>
@@ -233,38 +317,6 @@
 				<UTextarea v-model="formNotes" :rows="4" :disabled="!editable" placeholder="Internal notes about this bill" />
 			</UCard>
 		</div>
-
-		<UModal v-model:open="showPaymentModal" title="Record payment">
-			<template #body>
-				<div class="space-y-4">
-					<div class="text-sm text-(--ui-text-muted) flex justify-between border-b border-(--ui-border) pb-2">
-						<span>Outstanding balance:</span>
-						<span class="font-medium tabular-nums text-(--ui-text)">{{ formatLKR(balanceCents) }}</span>
-					</div>
-					<UFormField label="Amount" required>
-						<UInput
-							:model-value="paymentAmountDisplay"
-							placeholder="0.00"
-							@update:model-value="onPaymentInput"
-						>
-							<template #trailing>
-								<span class="text-xs text-(--ui-text-muted) pr-1">{{ currency.code }}</span>
-							</template>
-						</UInput>
-					</UFormField>
-				</div>
-			</template>
-			<template #footer>
-				<div class="flex justify-end gap-2 w-full">
-					<UButton color="neutral" variant="outline" @click="showPaymentModal = false">
-						Cancel
-					</UButton>
-					<UButton :disabled="paymentAmountCents <= 0" icon="i-lucide-check" @click="confirmPayment">
-						Record payment
-					</UButton>
-				</div>
-			</template>
-		</UModal>
 
 		<UModal v-model:open="showDeleteDialog" :title="`Delete ${bill.number}?`">
 			<template #body>
@@ -328,16 +380,17 @@
 // bundle: just total, due date, vendor invoice number, attachment.
 
 	import type { LineDraft } from "~/components/DocumentLineEditor.vue";
-	import type { BillLineRow, BillRow, BillStatus, VendorSnapshot } from "~/stores/bills";
+	import type { BillLineRow, BillPersistedStatus, BillRow, BillStatus, VendorSnapshot } from "~/stores/bills";
 	import type { PricingMode } from "~/stores/quotes";
 	import type { VendorRow } from "~/stores/vendors";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { computeLineTotals, formatLKR, formatQty, formatRate, sumCents, toCents } from "~/lib/money";
 	import { themeHex } from "~/lib/theme";
 	import { buildCategorySnapshot, useBillCategoriesStore } from "~/stores/bill_categories";
-	import { canTransition, useBillsStore } from "~/stores/bills";
+	import { useBillsStore } from "~/stores/bills";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVendorsStore } from "~/stores/vendors";
+	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Bill" });
 
@@ -349,14 +402,21 @@
 	const settingsStore = useSettingsStore();
 	const vendorsStore = useVendorsStore();
 	const categoriesStore = useBillCategoriesStore();
+	const vouchersStore = useVouchersStore();
 	const currency = useActiveCurrency();
 	settingsStore.ensureLoaded().catch(() => { /* surfaced elsewhere */ });
-	// Vendors / categories might not be loaded yet if the user lands here via deep link.
+	// Vendors / categories / vouchers might not be loaded yet if the user
+	// lands here via deep link. Vouchers are essential — the Payments
+	// panel reads them and the derived "paid" / "balance" / status all
+	// fall out of the voucher ledger.
 	if (vendorsStore.vendors.length === 0) {
 		vendorsStore.load().catch(() => { /* surfaced via picker empty state */ });
 	}
 	if (categoriesStore.categories.length === 0) {
 		categoriesStore.load().catch(() => { /* surfaced via picker empty state */ });
+	}
+	if (vouchersStore.vouchers.length === 0) {
+		vouchersStore.load().catch(() => { /* non-fatal — payments panel just stays empty */ });
 	}
 
 	const billId = Number(route.params.id);
@@ -387,12 +447,42 @@
 	const vendorSnapshot = ref<VendorSnapshot | null>(null);
 
 	const pricingMode = computed<PricingMode>(() => bill.value?.pricing_mode ?? "bundle");
-	const status = computed<BillStatus>(() => bill.value?.status ?? "unpaid");
-	const isCancelled = computed(() => status.value === "cancelled");
+	// `status` is the user-visible derived state (unpaid/partial/paid/
+	// overdue/cancelled). It collapses the persisted `status` column
+	// (open|cancelled) with the sum of linked payment vouchers and the
+	// due_date. `isCancelled` is the persisted bit alone — used to gate
+	// the editor's read-only behaviour.
+	const status = computed<BillStatus>(() =>
+		bill.value ? store.derivedStatus(bill.value) : "unpaid"
+	);
+	const isCancelled = computed(() => bill.value?.status === "cancelled");
 	const editable = computed(() => !isCancelled.value);
 	const totalCents = computed(() => bill.value?.total_cents ?? 0);
-	const paidCents = computed(() => bill.value?.paid_cents ?? 0);
+	const paidCents = computed(() => (bill.value ? store.paidCentsFor(bill.value.id) : 0));
 	const balanceCents = computed(() => Math.max(0, totalCents.value - paidCents.value));
+	// Overpayment surface: when sum-of-payment-vouchers > total, show
+	// the overrun in the totals card. derivedStatus() still reads
+	// 'paid' (capped) — this is purely informational.
+	const overpaymentCents = computed(() => Math.max(0, paidCents.value - totalCents.value));
+	const overpaid = computed(() => overpaymentCents.value > 0);
+
+	// Payment vouchers linked to this bill, most-recent first. Reactive
+	// against the vouchers store, so creating/editing/deleting a
+	// payment voucher elsewhere reflects here immediately.
+	const payments = computed(() =>
+		bill.value ? store.linkedPayments(bill.value.id) : []
+	);
+
+	const methodLabel = (m: string | null): string => {
+		if (!m) return "—";
+		return ({
+			bank_transfer: "Bank transfer",
+			cash: "Cash",
+			cheque: "Cheque",
+			card: "Card",
+			other: "Other"
+		} as Record<string, string>)[m] ?? m;
+	};
 
 	const hydrate = async () => {
 		hydrating.value = true;
@@ -582,68 +672,41 @@
 		}
 	};
 
-	// Payment recording. Bills don't have a per-payment ledger — we just
-	// bump paid_cents.
-	const showPaymentModal = ref(false);
-	const paymentAmountDisplay = ref("");
-	const paymentAmountCents = ref(0);
-	const openRecordPayment = () => {
-		paymentAmountCents.value = balanceCents.value;
-		paymentAmountDisplay.value = balanceCents.value === 0
-			? ""
-			: `${Math.floor(balanceCents.value / 100)}.${String(balanceCents.value % 100).padStart(2, "0")}`;
-		showPaymentModal.value = true;
-	};
-	const onPaymentInput = (raw: string | number) => {
-		paymentAmountDisplay.value = String(raw);
-		try {
-			paymentAmountCents.value = toCents(String(raw));
-		} catch { /* ignore */ }
-	};
-	const confirmPayment = async () => {
-		showPaymentModal.value = false;
-		if (paymentAmountCents.value <= 0) return;
-		try {
-			await store.recordPayment(billId, paymentAmountCents.value);
-			await hydrate();
-			toast.add({ title: "Payment recorded", color: "success", icon: "i-lucide-check" });
-		} catch (err) {
+	// Recording a payment is now creating a payment voucher pre-filled
+	// against this bill. The New Voucher page reads ?bill=N from the
+	// query string and seeds voucher_type=payment, the vendor name,
+	// related_bill_id, and the outstanding balance as the amount.
+	const goRecordPayment = () => {
+		if (dirty.value) {
 			toast.add({
-				title: "Could not record payment",
-				description: err instanceof Error ? err.message : String(err),
-				color: "error",
+				title: "Save your changes first",
+				description: "Otherwise the bill's outstanding balance might not match.",
+				color: "warning",
 				icon: "i-lucide-circle-alert"
 			});
+			return;
 		}
+		router.push(`/vouchers/new?bill=${billId}`);
 	};
 
-	// Reset paid_cents (e.g. correcting a mistake).
-	const resetPayments = async () => {
-		try {
-			await store.setPaidAmount(billId, 0);
-			await hydrate();
-			toast.add({ title: "Payments reset", color: "info", icon: "i-lucide-rotate-ccw" });
-		} catch (err) {
-			toast.add({
-				title: "Reset failed",
-				description: err instanceof Error ? err.message : String(err),
-				color: "error",
-				icon: "i-lucide-circle-alert"
-			});
-		}
-	};
-
-	const transition = async (target: BillStatus) => {
+	// Cancel / re-open is the only persisted status transition now — every
+	// other state (unpaid/partial/paid/overdue) is derived from the voucher
+	// ledger and the due date.
+	const toggleCancelled = async () => {
 		if (!bill.value) return;
-		if (!canTransition(bill.value.status, target)) return;
 		if (dirty.value) {
 			toast.add({ title: "Save your changes first", color: "warning", icon: "i-lucide-circle-alert" });
 			return;
 		}
+		const next: BillPersistedStatus = bill.value.status === "cancelled" ? "open" : "cancelled";
 		try {
-			await store.setStatus(billId, target);
+			await store.setCancelled(billId, next === "cancelled");
 			await hydrate();
-			toast.add({ title: `Marked as ${target}`, color: "info", icon: "i-lucide-check" });
+			toast.add({
+				title: next === "cancelled" ? "Bill cancelled" : "Bill reopened",
+				color: "info",
+				icon: next === "cancelled" ? "i-lucide-ban" : "i-lucide-rotate-ccw"
+			});
 		} catch (err) {
 			toast.add({
 				title: "Action failed",
@@ -654,13 +717,6 @@
 		}
 	};
 
-	const transitionItems = computed(() => {
-		const cur = status.value;
-		const items: { label: string, icon: string, onSelect: () => void }[] = [];
-		if (canTransition(cur, "cancelled")) items.push({ label: "Mark as Cancelled", icon: "i-lucide-ban", onSelect: () => transition("cancelled") });
-		return items.length > 0 ? [items] : [];
-	});
-
 	const showDeleteDialog = ref(false);
 	const deleteConfirmInput = ref("");
 	const askDelete = () => {
@@ -668,9 +724,10 @@
 		showDeleteDialog.value = true;
 	};
 	// Bills with recorded payments require typed-name confirmation, since
-	// removing them scrubs payment history. Unpaid bills delete on a single
-	// click — there's nothing destructive about it.
-	const needsTypedConfirm = computed(() => (bill.value?.paid_cents ?? 0) > 0);
+	// removing them strips the link from the (kept) payment vouchers and
+	// loses the bill's record. Unpaid bills delete on a single click —
+	// there's nothing destructive about it.
+	const needsTypedConfirm = computed(() => paidCents.value > 0);
 	const canConfirmDelete = computed(() => {
 		if (!bill.value) return false;
 		if (!needsTypedConfirm.value) return true;
@@ -709,7 +766,8 @@
 		const fmt = (cents: number) => formatLKR(cents);
 		const fmtNoSym = (cents: number) => formatLKR(cents, { withSymbol: false });
 
-		const balanceCentsValue = Math.max(0, b.total_cents - b.paid_cents);
+		const paid = store.paidCentsFor(b.id);
+		const balanceCentsValue = Math.max(0, b.total_cents - paid);
 
 		return {
 			kind: "bill",
@@ -742,9 +800,9 @@
 			notes: b.notes ?? "",
 			notes_paragraphs: (b.notes ?? "").split(/\n\s*\n/).filter((p) => p.trim().length > 0),
 			prepared_by: "",
-			paid_cents: b.paid_cents > 0 ? b.paid_cents : null,
-			paid_display: b.paid_cents > 0 ? fmtNoSym(b.paid_cents) : null,
-			balance_display: b.paid_cents > 0 ? fmtNoSym(balanceCentsValue) : null,
+			paid_cents: paid > 0 ? paid : null,
+			paid_display: paid > 0 ? fmtNoSym(paid) : null,
+			balance_display: paid > 0 ? fmtNoSym(balanceCentsValue) : null,
 			business_name: settingsStore.settings?.business_name ?? null,
 			website: settingsStore.settings?.website ?? null,
 			phone: settingsStore.settings?.phone ?? null,

@@ -30,7 +30,7 @@
 					v-if="canRecordPayments"
 					color="primary"
 					icon="i-lucide-circle-dollar-sign"
-					@click="openRecordPayment"
+					@click="goRecordPayment"
 				>
 					Record payment
 				</UButton>
@@ -54,7 +54,7 @@
 				>
 					PDF
 				</UButton>
-				<UDropdownMenu v-if="transitionItems.length > 0" :items="transitionItems">
+				<UDropdownMenu v-if="statusActionItems.length > 0" :items="statusActionItems">
 					<UButton color="neutral" variant="outline" trailing-icon="i-lucide-chevron-down">
 						Status
 					</UButton>
@@ -206,77 +206,98 @@
 						<div v-if="paidCents > 0" class="text-(--ui-text-muted) pt-1 border-t border-(--ui-border) mt-1">
 							Paid: <span class="text-(--ui-success)">{{ formatLKR(paidCents) }}</span>
 						</div>
-						<div v-if="paidCents > 0" class="font-semibold" :class="balanceCents === 0 ? 'text-(--ui-success)' : 'text-(--ui-text)'">
+						<div v-if="paidCents > 0 && !overpaid" class="font-semibold" :class="balanceCents === 0 ? 'text-(--ui-success)' : 'text-(--ui-text)'">
 							Balance: {{ formatLKR(balanceCents) }}
+						</div>
+						<!-- Overpaid pill: linked receipts sum to more than the
+							invoice total. Soft warning — the user might have
+							a legitimate reason (refund correction, advance)
+							but the discrepancy should be visible. -->
+						<div v-if="overpaid" class="font-semibold text-(--ui-warning) pt-0.5">
+							Overpaid by {{ formatLKR(overpaymentCents) }}
 						</div>
 					</div>
 				</div>
+			</UCard>
 
-				<!-- Payment ledger -->
-				<div v-if="payments.length > 0 || canRecordPayments" class="mt-6 border-t border-(--ui-border) pt-4">
-					<div class="flex items-center justify-between mb-2">
-						<div class="text-sm font-medium">
-							Payments
+			<!-- Receipt vouchers linked to this invoice. Vouchers are the
+				single source of truth for cash flow — the "paid" /
+				"balance" numbers above are sums of these rows. Click a row
+				to open the voucher; click the header button to create a
+				new receipt voucher pre-filled against this invoice. -->
+			<UCard v-if="!isDraft">
+				<template #header>
+					<div class="flex items-center justify-between">
+						<div>
+							<div class="font-medium">
+								Payments
+							</div>
+							<div class="text-xs text-(--ui-text-muted) mt-0.5">
+								<span v-if="payments.length === 0">No payments recorded yet — each "Record payment" creates a voucher in the cash ledger.</span>
+								<span v-else>{{ payments.length }} receipt voucher{{ payments.length === 1 ? "" : "s" }} · {{ formatLKR(paidCents) }} of {{ formatLKR(totalCents) }} received.</span>
+							</div>
 						</div>
 						<UButton
 							v-if="canRecordPayments"
 							size="xs"
-							variant="outline"
+							variant="soft"
 							icon="i-lucide-plus"
-							@click="openRecordPayment"
+							@click="goRecordPayment"
 						>
-							Add payment
+							Record payment
 						</UButton>
 					</div>
-					<div v-if="payments.length === 0" class="text-sm text-(--ui-text-muted) py-4 text-center border border-dashed border-(--ui-border) rounded-md">
-						No payments recorded yet.
-					</div>
-					<table v-else class="w-full text-sm">
-						<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-							<tr>
-								<th class="py-2 pr-2 font-medium">
-									Date
-								</th>
-								<th class="py-2 px-2 font-medium">
-									Method
-								</th>
-								<th class="py-2 px-2 font-medium">
-									Reference
-								</th>
-								<th class="py-2 px-2 font-medium text-right">
-									Amount
-								</th>
-								<th class="py-2 pl-2 w-8" />
-							</tr>
-						</thead>
-						<tbody>
-							<tr v-for="p in payments" :key="p.id" class="border-b border-(--ui-border)/60 last:border-0">
-								<td class="py-2 pr-2 tabular-nums">
-									{{ p.payment_date }}
-								</td>
-								<td class="py-2 px-2 text-(--ui-text-muted)">
-									{{ methodLabel(p.method) }}
-								</td>
-								<td class="py-2 px-2 text-(--ui-text-muted)">
-									{{ p.reference || "—" }}
-								</td>
-								<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap font-medium">
-									{{ formatLKR(p.amount_cents) }}
-								</td>
-								<td class="py-2 pl-2 text-right">
-									<UButton
-										v-if="canRecordPayments || status === 'paid'"
-										size="xs"
-										variant="ghost"
-										color="error"
-										icon="i-lucide-trash-2"
-										@click="askDeletePayment(p)"
-									/>
-								</td>
-							</tr>
-						</tbody>
-					</table>
+				</template>
+
+				<div v-if="payments.length === 0" class="py-6 text-center text-sm text-(--ui-text-muted)">
+					<UIcon name="i-lucide-ticket" class="size-8 mx-auto mb-2 opacity-50" />
+					<div>Recording a payment opens a pre-filled voucher form.</div>
 				</div>
+				<table v-else class="w-full text-sm">
+					<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
+						<tr>
+							<th class="py-2 pl-3 pr-2 font-medium">
+								Voucher
+							</th>
+							<th class="py-2 px-2 font-medium">
+								Date
+							</th>
+							<th class="py-2 px-2 font-medium">
+								Method
+							</th>
+							<th class="py-2 px-2 font-medium">
+								Reference
+							</th>
+							<th class="py-2 pl-2 pr-3 font-medium text-right">
+								Amount
+							</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr
+							v-for="v in payments"
+							:key="v.id"
+							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+							@click="router.push(`/vouchers/${v.id}`)"
+						>
+							<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
+								{{ v.number }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
+								{{ v.voucher_date }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted)">
+								{{ methodLabel(v.payment_method) }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted)">
+								{{ v.reference || "—" }}
+							</td>
+							<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap font-medium text-(--ui-success)">
+								+ {{ formatLKR(v.amount_cents) }}
+							</td>
+						</tr>
+					</tbody>
+				</table>
 			</UCard>
 
 			<UCard>
@@ -303,22 +324,21 @@
 			<template #body>
 				<div class="space-y-3 text-sm">
 					<p class="text-(--ui-text-muted)">
-						This permanently removes the invoice, its line items, and all
-						payment records. The number {{ invoice.number }} will not be
-						reused — it'll show as a gap in your sequence.
+						This permanently removes the invoice and its line items. The
+						number {{ invoice.number }} will not be reused — it'll show
+						as a gap in your sequence.
 					</p>
 					<div v-if="!isDraft" class="rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/10 p-3 space-y-2">
 						<p class="font-medium text-(--ui-text)">
-							This invoice has been issued ({{ status }}<span v-if="paidCents > 0">, {{ formatLKR(paidCents) }} paid</span>).
+							This invoice has been issued ({{ status }}<span v-if="paidCents > 0">, {{ formatLKR(paidCents) }} received</span>).
 						</p>
 						<p class="text-(--ui-text-muted)">
 							Deleting issued documents breaks the rule that issued
 							records are immutable.
-							<span v-if="payments.length > 0">All {{ payments.length }} payment record(s) will be lost.</span>
+							<span v-if="payments.length > 0">{{ payments.length }} receipt voucher{{ payments.length === 1 ? "" : "s" }} will be kept but become un-linked.</span>
 							<span v-if="invoice.source_quote_id">The source quote's link to this invoice will be cleared.</span>
-							Vouchers that reference this invoice will be kept but
-							unlinked. Only do this if it's a real mistake to scrub
-							from your books.
+							Only do this if it's a real mistake to scrub from your
+							books.
 						</p>
 						<UFormField :label="`Type ${invoice.number} to confirm`">
 							<UInput v-model="deleteConfirmInput" :placeholder="invoice.number" autofocus />
@@ -343,33 +363,6 @@
 			</template>
 		</UModal>
 
-		<UModal v-model:open="showDeletePaymentDialog" title="Remove payment?">
-			<template #body>
-				<p v-if="paymentToDelete" class="text-sm text-(--ui-text-muted)">
-					Remove the {{ formatLKR(paymentToDelete.amount_cents) }} payment
-					from {{ paymentToDelete.payment_date }}? The invoice's paid total
-					and status will be recalculated.
-				</p>
-			</template>
-			<template #footer>
-				<div class="flex justify-end gap-2 w-full">
-					<UButton color="neutral" variant="outline" @click="showDeletePaymentDialog = false">
-						Cancel
-					</UButton>
-					<UButton color="error" icon="i-lucide-trash-2" @click="confirmDeletePayment">
-						Remove payment
-					</UButton>
-				</div>
-			</template>
-		</UModal>
-
-		<PaymentRecorder
-			v-model:open="showPaymentModal"
-			:total-cents="totalCents"
-			:paid-cents="paidCents"
-			@save="onRecordPayment"
-		/>
-
 		<PdfPreviewModal
 			v-model:open="pdf.state.open"
 			:asset-url="pdf.state.assetUrl"
@@ -383,22 +376,27 @@
 </template>
 
 <script setup lang="ts">
-// Invoice editor — mirrors the quote editor but adds a payments ledger.
+// Invoice editor — mirrors the quote editor.
 //
-// Once an invoice is sent, the header/lines are frozen but payments can
-// still be added/removed (recordPayment / deletePayment auto-recompute
-// status). Drafts are fully editable.
+// Once an invoice is sent, the header/lines are frozen. Payments are
+// not stored on the invoice any more (migration 0014 dropped
+// invoice_payments and invoices.paid_cents). They live as receipt
+// vouchers with related_invoice_id; the "paid" / "balance" / status
+// values you see here are derived in JS from those linked vouchers.
+// "Record payment" routes to /vouchers/new?invoice=N which pre-fills
+// the voucher form against this invoice and bounces back here on save.
 
 	import type { LineDraft } from "~/components/DocumentLineEditor.vue";
 	import type { ClientRow } from "~/stores/clients";
-	import type { InvoiceLineRow, InvoicePaymentRow, InvoiceRow, InvoiceStatus, PaymentDraft, PaymentMethod } from "~/stores/invoices";
+	import type { InvoiceLineRow, InvoicePersistedStatus, InvoiceRow, InvoiceStatus } from "~/stores/invoices";
 	import type { BankSnapshot, ClientSnapshot, PricingMode } from "~/stores/quotes";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { computeLineTotals, formatLKR, formatQty, formatRate, sumCents, toCents } from "~/lib/money";
 	import { themeHex } from "~/lib/theme";
 	import { useClientsStore } from "~/stores/clients";
-	import { canTransition, useInvoicesStore } from "~/stores/invoices";
+	import { useInvoicesStore } from "~/stores/invoices";
 	import { useSettingsStore } from "~/stores/settings";
+	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Invoice" });
 
@@ -409,6 +407,7 @@
 	const settingsStore = useSettingsStore();
 	const clientsStore = useClientsStore();
 	const invoicesStore = useInvoicesStore();
+	const vouchersStore = useVouchersStore();
 	const currency = useActiveCurrency();
 
 	const invoiceId = Number(route.params.id);
@@ -418,7 +417,6 @@
 
 	const invoice = ref<InvoiceRow | null>(null);
 	const lines = ref<LineDraft[]>([]);
-	const payments = ref<InvoicePaymentRow[]>([]);
 	const saving = ref(false);
 	const dirty = ref(false);
 	const hydrating = ref(false);
@@ -434,16 +432,44 @@
 	const formPreparedBy = ref("");
 
 	const pricingMode = computed<PricingMode>(() => invoice.value?.pricing_mode ?? "bundle");
-	const status = computed<InvoiceStatus>(() => invoice.value?.status ?? "draft");
-	const isDraft = computed(() => status.value === "draft");
-	const editable = computed(() => isDraft.value);
-	const canRecordPayments = computed(() =>
-		["sent", "partial", "overdue"].includes(status.value)
+	// Persisted bit (draft|sent|cancelled) drives editability and the
+	// status FSM. The user-visible status (the badge / list filter)
+	// uses the derived enum below.
+	const persistedStatus = computed<InvoicePersistedStatus>(() => invoice.value?.status ?? "draft");
+	const status = computed<InvoiceStatus>(() =>
+		invoice.value ? invoicesStore.derivedStatus(invoice.value) : "draft"
 	);
+	const isDraft = computed(() => persistedStatus.value === "draft");
+	const editable = computed(() => isDraft.value);
+	// Receipts can only be recorded against issued, non-cancelled
+	// invoices. Drafts and cancellations bail out.
+	const canRecordPayments = computed(() => persistedStatus.value === "sent");
 
 	const totalCents = computed(() => invoice.value?.total_cents ?? 0);
-	const paidCents = computed(() => invoice.value?.paid_cents ?? 0);
+	const paidCents = computed(() => (invoice.value ? invoicesStore.paidCentsFor(invoice.value.id) : 0));
 	const balanceCents = computed(() => Math.max(0, totalCents.value - paidCents.value));
+	// Overpaid surface — sum of receipts > invoice total. derivedStatus
+	// still reads "paid" (capped); this is purely informational.
+	const overpaymentCents = computed(() => Math.max(0, paidCents.value - totalCents.value));
+	const overpaid = computed(() => overpaymentCents.value > 0);
+
+	// Receipt vouchers linked to this invoice, most-recent first.
+	// Reactive against the vouchers store so creating/editing/deleting
+	// a receipt elsewhere reflects here immediately.
+	const payments = computed(() =>
+		invoice.value ? invoicesStore.linkedPayments(invoice.value.id) : []
+	);
+
+	const methodLabel = (m: string | null): string => {
+		if (!m) return "—";
+		return ({
+			bank_transfer: "Bank transfer",
+			cash: "Cash",
+			cheque: "Cheque",
+			card: "Card",
+			other: "Other"
+		} as Record<string, string>)[m] ?? m;
+	};
 
 	const clientSnapshot = computed<ClientSnapshot | null>(() => {
 		if (!invoice.value?.client_snapshot) return null;
@@ -454,7 +480,14 @@
 		}
 	});
 
-	await Promise.all([settingsStore.ensureLoaded(), clientsStore.load()]);
+	// Vouchers store is loaded too — derived paid / status / payments
+	// panel all read off it. If a deep-link navigates straight here,
+	// the panel would otherwise be empty until a manual refresh.
+	await Promise.all([
+		settingsStore.ensureLoaded(),
+		clientsStore.load(),
+		vouchersStore.load()
+	]);
 
 	const hydrate = async () => {
 		hydrating.value = true;
@@ -484,7 +517,8 @@
 			tax_rate_basis_points: l.tax_rate_basis_points
 		}));
 
-		payments.value = await invoicesStore.getPayments(invoiceId);
+		// Linked receipt vouchers come from the vouchers store reactively
+		// — nothing to fetch here. See the `payments` computed above.
 		dirty.value = false;
 		// Let the form-field watcher's queued run flush before unsetting the
 		// guard, so re-hydrate after save doesn't immediately re-dirty.
@@ -603,9 +637,14 @@
 		}
 	};
 
-	const transition = async (target: InvoiceStatus) => {
+	// Persisted status transitions are now extremely simple — only the
+	// three states the user sets directly. Legal moves:
+	//   draft     → sent (issue), cancelled
+	//   sent      → cancelled
+	//   cancelled → sent (reopen — the most likely prior state was sent;
+	//               drafts that get cancelled tend to be deleted instead)
+	const setPersistedStatus = async (target: InvoicePersistedStatus) => {
 		if (!invoice.value) return;
-		if (!canTransition(invoice.value.status, target)) return;
 		if (dirty.value) {
 			toast.add({ title: "Save your changes first", color: "warning", icon: "i-lucide-circle-alert" });
 			return;
@@ -613,7 +652,12 @@
 		try {
 			await invoicesStore.setStatus(invoiceId, target);
 			await hydrate();
-			toast.add({ title: `Marked as ${target}`, color: "info", icon: "i-lucide-check" });
+			const messages: Record<InvoicePersistedStatus, string> = {
+				draft: "Reverted to draft",
+				sent: "Marked as sent",
+				cancelled: "Cancelled"
+			};
+			toast.add({ title: messages[target], color: "info", icon: "i-lucide-check" });
 		} catch (err) {
 			toast.add({
 				title: "Action failed",
@@ -624,11 +668,17 @@
 		}
 	};
 
-	const transitionItems = computed(() => {
-		const cur = status.value;
+	const statusActionItems = computed(() => {
+		const cur = persistedStatus.value;
 		const items: { label: string, icon: string, onSelect: () => void }[] = [];
-		if (canTransition(cur, "sent")) items.push({ label: "Mark as Sent", icon: "i-lucide-send", onSelect: () => transition("sent") });
-		if (canTransition(cur, "cancelled")) items.push({ label: "Mark as Cancelled", icon: "i-lucide-ban", onSelect: () => transition("cancelled") });
+		if (cur === "draft") {
+			items.push({ label: "Mark as Sent", icon: "i-lucide-send", onSelect: () => setPersistedStatus("sent") });
+			items.push({ label: "Cancel invoice", icon: "i-lucide-ban", onSelect: () => setPersistedStatus("cancelled") });
+		} else if (cur === "sent") {
+			items.push({ label: "Cancel invoice", icon: "i-lucide-ban", onSelect: () => setPersistedStatus("cancelled") });
+		} else if (cur === "cancelled") {
+			items.push({ label: "Reopen as Sent", icon: "i-lucide-rotate-ccw", onSelect: () => setPersistedStatus("sent") });
+		}
 		return items.length > 0 ? [items] : [];
 	});
 
@@ -666,60 +716,22 @@
 		}
 	};
 
-	const showPaymentModal = ref(false);
-	const openRecordPayment = () => {
-		showPaymentModal.value = true;
-	};
-	const onRecordPayment = async (draft: PaymentDraft) => {
-		showPaymentModal.value = false;
-		try {
-			await invoicesStore.recordPayment(invoiceId, draft);
-			await hydrate();
-			toast.add({ title: "Payment recorded", color: "success", icon: "i-lucide-check" });
-		} catch (err) {
+	// Recording a payment is now creating a receipt voucher pre-filled
+	// against this invoice. The New Voucher page reads ?invoice=N from
+	// the query string and seeds voucher_type=receipt, the client name,
+	// related_invoice_id, and the outstanding balance as the amount.
+	// Redirects back here on save.
+	const goRecordPayment = () => {
+		if (dirty.value) {
 			toast.add({
-				title: "Could not record payment",
-				description: err instanceof Error ? err.message : String(err),
-				color: "error",
+				title: "Save your changes first",
+				description: "Otherwise the invoice's outstanding balance might not match.",
+				color: "warning",
 				icon: "i-lucide-circle-alert"
 			});
+			return;
 		}
-	};
-
-	const showDeletePaymentDialog = ref(false);
-	const paymentToDelete = ref<InvoicePaymentRow | null>(null);
-	const askDeletePayment = (p: InvoicePaymentRow) => {
-		paymentToDelete.value = p;
-		showDeletePaymentDialog.value = true;
-	};
-	const confirmDeletePayment = async () => {
-		const p = paymentToDelete.value;
-		showDeletePaymentDialog.value = false;
-		paymentToDelete.value = null;
-		if (!p) return;
-		try {
-			await invoicesStore.deletePayment(invoiceId, p.id);
-			await hydrate();
-			toast.add({ title: "Payment removed", color: "info", icon: "i-lucide-trash-2" });
-		} catch (err) {
-			toast.add({
-				title: "Could not remove payment",
-				description: err instanceof Error ? err.message : String(err),
-				color: "error",
-				icon: "i-lucide-circle-alert"
-			});
-		}
-	};
-
-	const methodLabel = (m: PaymentMethod | null): string => {
-		if (!m) return "—";
-		return ({
-			bank_transfer: "Bank transfer",
-			cash: "Cash",
-			cheque: "Cheque",
-			card: "Card",
-			other: "Other"
-		} as const)[m] ?? m;
+		router.push(`/vouchers/new?invoice=${invoiceId}`);
 	};
 
 	// ---- PDF export ----------------------------------------------------------
@@ -739,7 +751,8 @@
 		const fmt = (cents: number) => formatLKR(cents);
 		const fmtNoSym = (cents: number) => formatLKR(cents, { withSymbol: false });
 
-		const balanceCentsValue = Math.max(0, inv.total_cents - inv.paid_cents);
+		const paid = invoicesStore.paidCentsFor(inv.id);
+		const balanceCentsValue = Math.max(0, inv.total_cents - paid);
 
 		return {
 			kind: "invoice",
@@ -772,9 +785,9 @@
 			prepared_by: inv.prepared_by ?? "",
 			// Show paid/balance only when something has been paid; null
 			// suppresses the row entirely on a freshly-issued invoice.
-			paid_cents: inv.paid_cents > 0 ? inv.paid_cents : null,
-			paid_display: inv.paid_cents > 0 ? fmtNoSym(inv.paid_cents) : null,
-			balance_display: inv.paid_cents > 0 ? fmtNoSym(balanceCentsValue) : null,
+			paid_cents: paid > 0 ? paid : null,
+			paid_display: paid > 0 ? fmtNoSym(paid) : null,
+			balance_display: paid > 0 ? fmtNoSym(balanceCentsValue) : null,
 			business_name: settingsStore.settings?.business_name ?? null,
 			website: settingsStore.settings?.website ?? null,
 			phone: settingsStore.settings?.phone ?? null,

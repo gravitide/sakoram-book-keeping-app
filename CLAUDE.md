@@ -234,7 +234,7 @@ sakoram_app/
 │     ├─ bill_categories.ts           ← managed lookup powering CategoryPicker
 │     ├─ quotes.ts                    ← quotes + quote_lines, status FSM, pricing modes, date filters
 │     ├─ invoices.ts                  ← invoices + invoice_lines + invoice_payments (ledger)
-│     ├─ bills.ts                     ← vendor_id FK + vendor_snapshot + category_snapshot, no per-payment ledger
+│     ├─ bills.ts                     ← vendor_id FK + vendor_snapshot + category_snapshot. Payments live on vouchers; derivedStatus/paidCentsFor sum vouchers.related_bill_id.
 │     ├─ vouchers.ts                  ← receipts/payments
 │     └─ tenants.ts                   ← bridges JS to Rust tenant registry
 └─ src-tauri/
@@ -260,7 +260,9 @@ sakoram_app/
    │  ├─ 0009_bill_categories.sql     ← bill_categories lookup; bills get category_id FK + category_snapshot
    │  ├─ 0010_default_font_inter.sql  ← drop Google Sans Flex; default ui_font/pdf_font → Inter
    │  ├─ 0011_currency.sql             ← per-business currency_code on company_settings
-   │  └─ 0012_pdf_header_logo.sql      ← pdf_header_logo_path column (wide PDF letterhead)
+   │  ├─ 0012_pdf_header_logo.sql      ← pdf_header_logo_path column (wide PDF letterhead)
+   │  ├─ 0013_bills_payments_via_vouchers.sql ← drop bills.paid_cents; status collapses to open|cancelled. Payments derive from vouchers.related_bill_id.
+   │  └─ 0014_invoices_payments_via_vouchers.sql ← drop invoices.paid_cents + invoice_payments table; status collapses to draft|sent|cancelled. Payments derive from vouchers.related_invoice_id.
    ├─ templates/
    │  ├─ document.typ                 ← unified Typst template for quotes/invoices/bills
    │  └─ voucher.typ                  ← simpler one-page receipt layout
@@ -463,16 +465,36 @@ See `src-tauri/migrations/` for the source of truth. High-level:
 - `quotes` + `quote_lines` — `pricing_mode` ∈ {bundle, itemized},
   `status` FSM, `client_snapshot` (JSON), `bank_details_snapshot`
   (JSON, frozen at issue), `converted_invoice_id` link.
-- `invoices` + `invoice_lines` + `invoice_payments` — full payment
-  ledger (Date, method, amount, reference, notes).
+- `invoices` + `invoice_lines` — clients we've billed. **No
+  `paid_cents` column** — removed in migration 0014. **No
+  `invoice_payments` table** — also dropped in 0014. Payments live on
+  the voucher ledger; `vouchers.related_invoice_id` links each
+  receipt voucher back to its invoice. The persisted `status` only
+  stores the user's explicit decision (`draft` | `sent` | `cancelled`);
+  the user-visible draft / sent / partial / paid / overdue state is
+  **derived** in JS from the sum of linked receipt vouchers +
+  `total_cents` + today vs `due_date`. See `app/stores/invoices.ts`:
+  `derivedStatus()`, `paidCentsFor()`, `linkedPayments()`. Same
+  pattern as bills — see migration 0013 for the bills equivalent.
 - `bills` + `bill_lines` — vendor bills. `vendor_id` FK → `vendors`
   with a `vendor_snapshot` JSON copy frozen at creation time;
   `category_id` FK → `bill_categories` with a `category_snapshot` JSON
   copy ({name, color, icon}) so renames/recolors don't rewrite history
-  (mirrors `client_snapshot` on quotes/invoices). NO payment ledger;
-  just `paid_cents` on the row — for a paper trail, create a voucher.
+  (mirrors `client_snapshot` on quotes/invoices). **No `paid_cents`
+  column** — removed in migration 0013. Payments live on the voucher
+  ledger; `vouchers.related_bill_id` links each payment voucher
+  back to its bill. The persisted `status` only stores the user's
+  explicit decision (`open` | `cancelled`); the user-visible
+  unpaid / partial / paid / overdue state is **derived** in JS from
+  the sum of linked payment vouchers + `total_cents` + today vs
+  `due_date`. See `app/stores/bills.ts`: `derivedStatus()`,
+  `paidCentsFor()`, `linkedPayments()`.
 - `vouchers` — money in (receipt) / money out (payment). Standalone or
-  optionally linked to an invoice/bill.
+  optionally linked to an invoice (`related_invoice_id`) or bill
+  (`related_bill_id`). For both invoices and bills, a voucher with
+  the matching link is the **only** way money flow against the
+  document is recorded — the document's "paid" / "balance" /
+  status all derive from these voucher rows.
 
 `PRAGMA table_info(...)` is used in `data_io.rs` to discover columns
 dynamically — adding a column to a migration auto-flows into export.
@@ -491,11 +513,21 @@ quotes:    draft → sent → accepted → converted (terminal)
                        ↘ rejected | expired (terminal)
                 draft → rejected (cancel)
 
-invoices:  draft → sent → partial | paid | overdue | cancelled
-           overdue ↔ partial → paid
+invoices:  persisted: draft ↔ sent ↔ cancelled (the only user transitions)
+           derived:   draft           → draft
+                      sent + payments → partial | paid
+                      sent + due < today + balance > 0 → overdue
+                      cancelled is sticky
+           ("Record payment" creates a receipt voucher with
+            related_invoice_id; the partial/paid/overdue states fall
+            out of that.)
 
-bills:     unpaid → partial | paid | overdue | cancelled
-           (no draft — bills come from outside)
+bills:     persisted: open ↔ cancelled (the only user transitions)
+           derived:   open + payments → unpaid | partial | paid
+                      open + due_date < today + balance > 0 → overdue
+                      cancelled is sticky
+           (no draft — bills come from outside; "Record payment"
+            now creates a voucher with related_bill_id)
 
 vouchers:  no transitions; voucher_type (receipt/payment) is locked at create
 ```

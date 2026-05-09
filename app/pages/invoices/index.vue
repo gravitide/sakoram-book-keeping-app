@@ -184,7 +184,7 @@
 						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
 							{{ i.issue_date }}
 						</td>
-						<td class="py-2 px-2 tabular-nums" :class="i.status === 'overdue' ? 'text-(--ui-error) font-medium' : 'text-(--ui-text-muted)'">
+						<td class="py-2 px-2 tabular-nums" :class="statusOf(i) === 'overdue' ? 'text-(--ui-error) font-medium' : 'text-(--ui-text-muted)'">
 							{{ i.due_date }}
 						</td>
 						<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap">
@@ -195,7 +195,7 @@
 							<span v-else>{{ formatLKR(balanceOf(i)) }}</span>
 						</td>
 						<td class="py-2 pl-2 pr-3">
-							<StatusBadge :status="i.status" />
+							<StatusBadge :status="statusOf(i)" />
 						</td>
 					</tr>
 				</tbody>
@@ -220,18 +220,19 @@
 	import { formatLKR } from "~/lib/money";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
+	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Invoices" });
 
 	const router = useRouter();
 	const store = useInvoicesStore();
 	const clientsStore = useClientsStore();
+	const vouchersStore = useVouchersStore();
 
-	// Load both stores in parallel so the client filter dropdown is
-	// populated by the time the table renders.
-	await Promise.all([store.load(), clientsStore.load()]);
-	// Auto-flag overdue on every list visit. Cheap single-statement UPDATE.
-	await store.flagOverdue().catch(() => { /* non-fatal */ });
+	// Load every store the list / filter dropdowns / derived status
+	// reach into, in parallel. Vouchers are essential because invoice
+	// status and balance are derived from linked receipt vouchers.
+	await Promise.all([store.load(), clientsStore.load(), vouchersStore.load()]);
 
 	const list = useListView<InvoiceRow>(
 		() => store.filtered,
@@ -242,8 +243,8 @@
 			{ key: "issue_date", getValue: (i) => i.issue_date },
 			{ key: "due_date", getValue: (i) => i.due_date },
 			{ key: "total", getValue: (i) => i.total_cents },
-			{ key: "balance", getValue: (i) => Math.max(0, i.total_cents - i.paid_cents) },
-			{ key: "status", getValue: (i) => i.status }
+			{ key: "balance", getValue: (i) => store.balanceCentsFor(i) },
+			{ key: "status", getValue: (i) => store.derivedStatus(i) }
 		],
 		{ defaultSortKey: "issue_date", defaultDir: "desc" }
 	);
@@ -295,5 +296,8 @@
 		}
 	}
 
-	const balanceOf = (i: InvoiceRow) => Math.max(0, i.total_cents - i.paid_cents);
+	// Balance + status are derived from linked receipt vouchers (and
+	// due date) — see invoices store. The list table just delegates.
+	const balanceOf = (i: InvoiceRow) => store.balanceCentsFor(i);
+	const statusOf = (i: InvoiceRow) => store.derivedStatus(i);
 </script>

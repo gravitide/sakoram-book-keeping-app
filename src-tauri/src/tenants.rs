@@ -55,6 +55,8 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(10, "default font inter", include_str!("../migrations/0010_default_font_inter.sql")),
 	(11, "currency", include_str!("../migrations/0011_currency.sql")),
 	(12, "pdf header logo", include_str!("../migrations/0012_pdf_header_logo.sql")),
+	(13, "bills payments via vouchers", include_str!("../migrations/0013_bills_payments_via_vouchers.sql")),
+	(14, "invoices payments via vouchers", include_str!("../migrations/0014_invoices_payments_via_vouchers.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
