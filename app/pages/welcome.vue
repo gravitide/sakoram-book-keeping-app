@@ -1,9 +1,11 @@
 <template>
 	<div class="w-full max-w-3xl">
 		<header class="text-center mb-8">
-			<div class="mx-auto size-12 rounded-md bg-(--ui-primary)/10 flex items-center justify-center mb-3">
-				<UIcon name="i-lucide-receipt-text" class="size-6 text-(--ui-primary)" />
-			</div>
+			<img
+				:src="sakoramLogo"
+				alt="Sakoram"
+				class="h-20 w-auto mx-auto mb-5 dark:invert dark:hue-rotate-180"
+			>
 			<h1 class="text-2xl font-semibold">
 				{{ tenants.tenants.length === 0 ? "Welcome to Sakoram Book Keeping" : "Pick a business" }}
 			</h1>
@@ -52,16 +54,61 @@
 			</button>
 		</div>
 
-		<!-- Add new business -->
-		<div class="bg-(--ui-bg) border border-(--ui-border) rounded-lg p-4">
+		<!-- First-run choice: empty state offers Create vs Try-demo as
+			equal-weight side-by-side cards. Once a tenant exists this
+			collapses back to the compact "add another" affordance. -->
+		<div v-if="tenants.tenants.length === 0 && !showCreate" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+			<button
+				type="button"
+				class="text-left p-5 bg-(--ui-bg) border border-(--ui-border) rounded-lg hover:border-(--ui-primary) transition disabled:opacity-50 disabled:hover:border-(--ui-border)"
+				:disabled="seedingDemo"
+				@click="showCreate = true"
+			>
+				<div class="size-10 rounded-md bg-(--ui-primary)/10 flex items-center justify-center mb-3">
+					<UIcon name="i-lucide-plus" class="size-5 text-(--ui-primary)" />
+				</div>
+				<div class="font-medium mb-1">
+					Create your business
+				</div>
+				<div class="text-xs text-(--ui-text-muted)">
+					Start with an empty book — add your own clients, vendors, and documents.
+				</div>
+			</button>
+
+			<button
+				type="button"
+				class="text-left p-5 bg-(--ui-bg) border border-(--ui-border) rounded-lg hover:border-(--ui-primary) transition disabled:opacity-50 disabled:hover:border-(--ui-border)"
+				:disabled="seedingDemo"
+				@click="onAddDemo"
+			>
+				<div class="size-10 rounded-md bg-(--ui-bg-muted) border border-(--ui-border) flex items-center justify-center mb-3">
+					<UIcon
+						:name="seedingDemo ? 'i-lucide-loader-circle' : 'i-lucide-sparkles'"
+						class="size-5 text-(--ui-text-muted)"
+						:class="{ 'animate-spin': seedingDemo }"
+					/>
+				</div>
+				<div class="font-medium mb-1">
+					{{ seedingDemo ? "Setting up demo data…" : "Try a demo business" }}
+				</div>
+				<div class="text-xs text-(--ui-text-muted)">
+					Pre-loaded clients, invoices, bills, and vouchers so you can explore right away.
+				</div>
+			</button>
+		</div>
+
+		<!-- Compact "add another" / create-form block once at least one
+			tenant exists, or when the user opens the form from the empty
+			state above. -->
+		<div v-else class="bg-(--ui-bg) border border-(--ui-border) rounded-lg p-4">
 			<div v-if="!showCreate" class="text-center space-y-3">
 				<UButton
 					icon="i-lucide-plus"
-					:variant="tenants.tenants.length === 0 ? 'solid' : 'outline'"
+					variant="outline"
 					:disabled="seedingDemo"
 					@click="showCreate = true"
 				>
-					{{ tenants.tenants.length === 0 ? "Create your first business" : "Add another business" }}
+					Add another business
 				</UButton>
 				<div class="text-xs text-(--ui-text-muted)">
 					or
@@ -76,7 +123,7 @@
 							name="i-lucide-loader-circle"
 							class="size-3 inline-block animate-spin align-middle"
 						/>
-						{{ seedingDemo ? "Setting up demo data…" : "try a demo business with sample data" }}
+						{{ seedingDemo ? "Setting up demo data…" : "add a demo business with sample data" }}
 					</button>
 				</div>
 			</div>
@@ -123,6 +170,7 @@
 
 	import { convertFileSrc } from "@tauri-apps/api/core";
 	import pkg from "~~/package.json";
+	import sakoramLogo from "~/assets/sakoram-logo.png";
 	import { createDemoBusiness } from "~/lib/demo-seed";
 	import { useTenantsStore } from "~/stores/tenants";
 
@@ -155,7 +203,7 @@
 		}
 	});
 
-	const showCreate = ref(tenants.tenants.length === 0);
+	const showCreate = ref(false);
 	const newName = ref("");
 	const creating = ref(false);
 	const switchingId = ref<string | null>(null);
