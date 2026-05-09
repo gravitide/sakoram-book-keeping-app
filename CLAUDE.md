@@ -204,15 +204,19 @@ sakoram_app/
 │  │  ├─ VendorPicker.vue             ← clone of ClientPicker, used by bill creation
 │  │  ├─ CategoryPicker.vue           ← bill-category dropdown w/ inline "+ New" modal
 │  │  ├─ CategoryFormModal.vue        ← create/edit category (8-color × 16-icon picker)
+│  │  ├─ SectionCard.vue              ← header-with-icon card; used on company / client / vendor edit pages
 │  │  ├─ DateField.vue                ← UInputDate + UCalendar wrapper, ISO-string v-model
 │  │  ├─ DateRangeField.vue           ← same idea, range mode (v-model:from / v-model:to)
 │  │  ├─ DocumentLineEditor.vue       ← bundle/itemized line-item editor
 │  │  ├─ ListPagination.vue           ← page-size selector + first/prev/next/last + range readout
 │  │  ├─ SortableTh.vue               ← clickable header cell w/ 3-state arrow icon
 │  │  ├─ MoneyInput.vue               ← integer-cents v-model
-│  │  ├─ PaymentRecorder.vue          ← invoice payment modal
 │  │  ├─ PdfPreviewModal.vue          ← embeds rendered PDF in <iframe>
-│  │  └─ StatusBadge.vue              ← color-coded status badges
+│  │  ├─ StatusBadge.vue              ← color-coded status badges
+│  │  ├─ MonthlyCashFlowChart.vue     ← dashboard: 12-month receipts vs payments (SVG, no chart lib)
+│  │  ├─ ReceivablesAgingChart.vue    ← dashboard: outstanding invoices by days-past-due bucket
+│  │  ├─ ExpensesByCategoryChart.vue  ← dashboard: bills donut by category, last 90 days
+│  │  └─ TopClientsChart.vue          ← dashboard: top clients by invoiced revenue, last 12 months
 │  ├─ composables/
 │  │  ├─ usePdfPreview.ts             ← preview→commit flow used by quote/invoice/bill/voucher pages
 │  │  └─ useListView.ts               ← sort + paginate any reactive array (returns reactive())
@@ -233,7 +237,7 @@ sakoram_app/
 │     ├─ vendors.ts                   ← address book for the bills side of the ledger
 │     ├─ bill_categories.ts           ← managed lookup powering CategoryPicker
 │     ├─ quotes.ts                    ← quotes + quote_lines, status FSM, pricing modes, date filters
-│     ├─ invoices.ts                  ← invoices + invoice_lines + invoice_payments (ledger)
+│     ├─ invoices.ts                  ← invoices + invoice_lines. Payments live on vouchers; derivedStatus/paidCentsFor sum vouchers.related_invoice_id (no paid_cents column, no invoice_payments table).
 │     ├─ bills.ts                     ← vendor_id FK + vendor_snapshot + category_snapshot. Payments live on vouchers; derivedStatus/paidCentsFor sum vouchers.related_bill_id.
 │     ├─ vouchers.ts                  ← receipts/payments
 │     └─ tenants.ts                   ← bridges JS to Rust tenant registry
@@ -250,7 +254,7 @@ sakoram_app/
    │  └─ MiriamLibre-{Regular,Bold}.ttf
    ├─ migrations/
    │  ├─ 0001_initial.sql             ← settings, clients, document_counters
-   │  ├─ 0002_documents.sql           ← quotes, invoices, payments
+   │  ├─ 0002_documents.sql           ← quotes, invoices, invoice_payments (latter dropped in 0014)
    │  ├─ 0003_bills_vouchers.sql      ← bills, vouchers + their line tables (original schema)
    │  ├─ 0004_appearance.sql          ← ui_font, theme_color on company_settings
    │  ├─ 0005_default_font_google_sans.sql ← flips Miriam Libre default → Google Sans Flex
@@ -606,17 +610,29 @@ Notable allowances:
 
 ### Done
 
-- ✅ DB schema, migrations, foundations (9 migrations, SCHEMA_VERSION 9)
-- ✅ Clients CRUD
+- ✅ DB schema, migrations, foundations (14 migrations, SCHEMA_VERSION 14)
+- ✅ Clients CRUD (hero + SectionCard layout, mirrors Settings → Company)
 - ✅ Vendors CRUD (mirrors clients)
-- ✅ Quotes (full lifecycle, PDF, convert-to-invoice)
-- ✅ Invoices (lifecycle, payment ledger, auto-overdue, PDF)
-- ✅ Bills with vendor FK + snapshot (vendor picker, PDF reads from
-  snapshot)
-- ✅ Vouchers (money in/out, PDF, big amount card layout)
+- ✅ Quotes (full lifecycle, PDF, convert-to-invoice; default VAT seeded
+  from settings on draft creation)
+- ✅ Invoices (lifecycle, PDF; payments via receipt vouchers, status
+  derived from voucher sums + due date — no paid_cents column or
+  invoice_payments table; default VAT seeded from settings on draft)
+- ✅ Bills with vendor FK + snapshot + category FK + snapshot. Payments
+  via payment vouchers, status derived from voucher sums + due date
+  (no paid_cents column).
+- ✅ Vouchers (money in/out, PDF, big amount card layout). "Record
+  payment" on a bill or invoice routes to /vouchers/new?bill=N or
+  ?invoice=N with the voucher form prefilled, and bounces back to
+  the document on save.
 - ✅ Universal delete on quotes/invoices/bills (typed-name confirm gate
-  for issued docs / docs with payments)
-- ✅ Dashboard (KPI tiles, recent activity, overdue list, quick actions)
+  for issued docs / docs with payments). Linked vouchers stay intact
+  on delete; their related_*_id is nulled out so the cash flow
+  history isn't lost.
+- ✅ Dashboard (KPI tiles, monthly cash-flow chart, receivables aging,
+  expenses by category donut, top clients horizontal bars, recent
+  activity, overdue list, quick actions). All charts hand-rolled SVG
+  — no Chart.js / D3 — and theme-aware via CSS variables.
 - ✅ PDF generation via bundled Typst sidecar (3 bundled fonts, theme
   color from settings, user-chosen `pdf_font`)
 - ✅ PDF preview modal (iframe-embedded, save-as via temp file copy)
@@ -644,8 +660,29 @@ Notable allowances:
   while creating one. Bills carry a frozen `category_snapshot` so
   renames/recolors don't rewrite history (same pattern as
   client/vendor snapshots).
-- ✅ Date-range filters on the quotes list (Issued between / Valid
-  between) wired into `quotes.filtered`.
+- ✅ Unified filter strip across every list page (quotes / invoices /
+  bills / vouchers): two-row layout with a search input + FK pickers
+  (USelectMenu, searchable for clients/vendors/categories) + status
+  enum (USelect) on row 1, compact inline date-range fields on row
+  2, and a single "Reset filters" pill that surfaces whenever any
+  filter is active. All filters live as refs on the relevant store's
+  `filtered` computed.
+- ✅ Default bill categories (Utilities, Supplies, Fees, Rent,
+  Salaries, Marketing, Software, Travel, Insurance) seeded into
+  every fresh tenant by the Rust `create_tenant` flow — no longer a
+  demo-only thing.
+- ✅ Welcome screen redesigned with the Sakoram wordmark and two
+  side-by-side cards on first run ("Create your business" /
+  "Try a demo business"). Multi-tenant case still uses the compact
+  list + "Add another business" affordance.
+- ✅ Allow deleting the active / last business — clears
+  active_tenant_id, closes the open DB pool first to release the
+  Windows file lock, hard-reloads to /welcome.
+- ✅ Main content cap widened from `max-w-7xl` (1280px) to
+  `max-w-[96rem]` (1536px) in `app/layouts/default.vue` to give
+  data-heavy list pages more room. Narrow forms (Settings →
+  Appearance / PDF, both voucher pages) are explicitly
+  `max-w-2xl mx-auto` so they centre under the wider cap.
 - ✅ Pagination + click-to-sort columns on every list page via
   `useListView` composable + `<SortableTh>` + `<ListPagination>`.
   Default 10 per page, options 10/25/50/100. Frontend-only — store
@@ -667,6 +704,12 @@ Notable allowances:
 
 ### Deferred / open items
 
+- **Native-feel polish pass** — the app still feels webby in places.
+  Top three: (1) `user-select: none` on UI chrome (sidebar, headers,
+  buttons), keep selection on data; (2) custom thin scrollbars via
+  `::-webkit-scrollbar`; (3) disable the production webview
+  context-menu. After that: a Cmd/Ctrl+K command palette would be
+  the single biggest "feels native" win.
 - **Bill/voucher attachment upload UI** — `attachment_path` columns
   exist on the schema; no UI yet. Intent: drop a PDF/image of the
   vendor's bill onto the bill page → stored in app data → openable
