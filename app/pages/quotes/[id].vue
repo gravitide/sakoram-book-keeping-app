@@ -187,9 +187,8 @@
 					</UFormField>
 
 					<UFormField label="VAT rate (%)" hint="Set to 0 for a tax-free quote.">
-						<UInput
+						<UInputNumber
 							v-model="vatRatePct"
-							type="number"
 							:step="0.01"
 							:min="0"
 							:max="100"

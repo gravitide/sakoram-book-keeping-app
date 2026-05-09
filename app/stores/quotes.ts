@@ -230,13 +230,18 @@ export const useQuotesStore = defineStore("quotes", () => {
 		const clientSnap = buildClientSnapshot(input.client);
 		const bankSnap = buildBankSnapshot();
 
+		// Seed the draft's VAT rate from the business profile's default so
+		// the editor lands with the right percentage already filled in.
+		// Stored as basis points (18% → 1800). The editor still lets the
+		// user override per-quote.
+		const defaultVatBp = settings.default_vat_rate ?? 0;
 		const result = await execute(
 			`INSERT INTO quotes (
 				number, client_id, client_snapshot, issue_date, valid_until,
 				status, pricing_mode, project_title,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents,
 				prepared_by, bank_details_snapshot
-			) VALUES (?, ?, ?, ?, ?, 'draft', 'bundle', ?, 0, 0, 0, 0, ?, ?)`,
+			) VALUES (?, ?, ?, ?, ?, 'draft', 'bundle', ?, ?, 0, 0, 0, ?, ?)`,
 			[
 				allocation.number,
 				input.client.id,
@@ -244,6 +249,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 				issue,
 				validUntil,
 				input.project_title ?? "",
+				defaultVatBp,
 				null,
 				bankSnap
 			]
