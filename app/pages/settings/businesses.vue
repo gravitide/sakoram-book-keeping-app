@@ -87,7 +87,6 @@
 							@click="askRename(t)"
 						/>
 						<UButton
-							v-if="t.id !== tenants.activeTenantId"
 							size="xs"
 							variant="ghost"
 							color="error"
@@ -195,7 +194,16 @@
 					This <span class="font-semibold text-(--ui-error)">permanently deletes</span> the database for
 					<span class="font-medium text-(--ui-text)">{{ deleteTarget?.name }}</span> — all its clients, quotes, invoices, bills, vouchers, and settings. This cannot be undone.
 				</p>
-				<p class="text-sm text-(--ui-text-muted) mt-2">
+				<div
+					v-if="deleteTarget?.id === tenants.activeTenantId"
+					class="text-sm text-(--ui-error)/90 bg-(--ui-error)/10 border border-(--ui-error)/30 rounded p-3 mt-3 flex gap-2"
+				>
+					<UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0 mt-0.5" />
+					<div>
+						This is the <span class="font-semibold">active business</span>. After deleting, you'll be returned to the welcome screen to pick or create another.
+					</div>
+				</div>
+				<p class="text-sm text-(--ui-text-muted) mt-3">
 					Type <span class="font-mono text-(--ui-text)">{{ deleteTarget?.name }}</span> to confirm:
 				</p>
 				<UInput v-model="deleteConfirmText" :placeholder="deleteTarget?.name" autofocus class="mt-2" />
@@ -358,11 +366,18 @@
 		const t = deleteTarget.value;
 		if (!t || saving.value) return;
 		if (deleteConfirmText.value.trim() !== t.name) return;
+		const wasActive = t.id === tenants.activeTenantId;
 		saving.value = true;
 		try {
 			await tenants.remove(t.id);
 			toast.add({ title: `${t.name} deleted`, color: "info", icon: "i-lucide-trash-2" });
 			showDelete.value = false;
+			// Active business gone → hard-reload so the global tenant
+			// middleware redirects to /welcome and every Pinia store
+			// drops its in-memory state from the now-deleted DB.
+			if (wasActive) {
+				window.location.assign("/");
+			}
 		} catch (err) {
 			toast.add({
 				title: "Delete failed",

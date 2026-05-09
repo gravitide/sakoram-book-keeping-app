@@ -355,16 +355,30 @@ pub async fn rename_tenant(app: AppHandle, id: String, name: String) -> Result<(
 #[tauri::command]
 pub async fn delete_tenant(app: AppHandle, id: String) -> Result<(), String> {
 	let mut reg = read_registry(&app)?;
-	if reg.active_tenant_id.as_deref() == Some(&id) {
-		return Err("Cannot delete the active business — switch to another first.".into());
-	}
 	let pos = reg.tenants.iter().position(|t| t.id == id).ok_or("Tenant not found")?;
 	let tenant = reg.tenants.remove(pos);
+	// If the deleted tenant was active, clear the active pointer so the
+	// next launch (or middleware redirect) sends the user to /welcome.
+	// Caller is responsible for closing the open DB connection before
+	// invoking this — otherwise the file is locked on Windows.
+	if reg.active_tenant_id.as_deref() == Some(&tenant.id) {
+		reg.active_tenant_id = None;
+	}
 	write_registry(&app, &reg)?;
 
 	let _ = std::fs::remove_file(tenant_db_path(&app, &tenant.id)?);
+	// Remove both logo variants if present (identity + PDF header).
 	if let Some(logo) = &tenant.logo_file {
 		let _ = std::fs::remove_file(logos_dir(&app)?.join(logo));
+	}
+	for ext in &["png", "jpg", "jpeg", "webp", "svg"] {
+		let _ = std::fs::remove_file(
+			app.path()
+				.app_data_dir()
+				.map_err(|e| e.to_string())?
+				.join("pdf-headers")
+				.join(format!("{}.{ext}", tenant.id)),
+		);
 	}
 	Ok(())
 }
