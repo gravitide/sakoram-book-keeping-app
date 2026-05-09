@@ -1,5 +1,8 @@
 <template>
-	<div v-if="voucher">
+	<!-- Centered narrow shape, same as the new-voucher page and the
+		Appearance / PDF settings pages. The form's intrinsic width is
+		much smaller than the wider main-content cap. -->
+	<div v-if="voucher" class="max-w-2xl mx-auto">
 		<header class="mb-6 flex items-start justify-between gap-4 flex-wrap">
 			<div>
 				<NuxtLink to="/vouchers" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) flex items-center gap-1">
@@ -41,7 +44,7 @@
 			</div>
 		</header>
 
-		<UCard class="max-w-2xl">
+		<UCard>
 			<div class="space-y-4">
 				<UFormField label="Type" hint="Cannot be changed — delete and re-create if it was the wrong type.">
 					<UInput :model-value="isReceipt ? 'Receipt' : 'Payment'" disabled />

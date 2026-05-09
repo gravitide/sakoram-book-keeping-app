@@ -1,5 +1,9 @@
 <template>
-	<div class="max-w-2xl">
+	<!-- Centered narrow shape, same as Settings → Appearance / PDF.
+		The form's intrinsic width (max-w-2xl) is much smaller than
+		the wider main-content cap, and a left-anchored block looks
+		off on a wide monitor. -->
+	<div class="max-w-2xl mx-auto">
 		<header class="mb-6">
 			<NuxtLink to="/vouchers" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) flex items-center gap-1">
 				<UIcon name="i-lucide-arrow-left" class="size-4" />
