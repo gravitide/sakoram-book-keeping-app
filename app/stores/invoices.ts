@@ -1,18 +1,24 @@
-// Invoices store. Mirrors `quotes` for the document lifecycle but adds the
-// payment ledger and the convert-from-quote operation.
+// Invoices store. Mirrors `quotes` for the document lifecycle, plus
+// the convert-from-quote operation.
 //
-// Status transitions:
-//   draft     → sent | cancelled
-//   sent      → partial | paid | overdue | cancelled
-//   partial   → paid | overdue | cancelled
-//   paid      → (terminal — refunds aren't modelled in v1)
-//   overdue   → partial | paid | cancelled
-//   cancelled → (terminal)
+// Status model
+// ------------
+// The DB persists three states the user sets directly:
+//   draft     — not yet issued; editable, deletable, no payments expected
+//   sent      — issued; payments may now arrive
+//   cancelled — terminal user-set state; sticky, never auto-overridden
 //
-// `partial` and `paid` are derived from paid_cents, but we store them as
-// explicit status so list filters and dashboard tiles don't need to do the
-// math. recordPayment() updates both atomically (one statement each, in
-// sequence — see db.ts for why we don't use JS-side transactions).
+// Every other state the UI presents — partial / paid / overdue — is
+// **derived** from the linked receipt vouchers and the due_date. There
+// is no `paid_cents` column any more (migration 0014). Receipts are
+// recorded by creating a voucher with `voucher_type='receipt'` and
+// `related_invoice_id` set; the bills refactor in 0013 introduced the
+// same pattern for payments. The voucher ledger is the single source
+// of truth for cash flow.
+//
+// Recording a payment is just navigating to /vouchers/new?invoice=N
+// from the invoice detail page — the New Voucher form prefills the
+// type, party, amount, and link, then bounces back here on save.
 
 import type { BankSnapshot, ClientSnapshot, PricingMode, QuoteLineRow, QuoteRow } from "~/stores/quotes";
 import { defineStore } from "pinia";
@@ -20,9 +26,14 @@ import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { computeLineTotals, sumCents } from "~/lib/money";
 import { allocateDocumentNumber } from "~/lib/numbering";
-
 import { useSettingsStore } from "~/stores/settings";
+import { useVouchersStore } from "~/stores/vouchers";
 
+// Persisted on `invoices.status` — the only states the user sets
+// directly. The richer enum below is the derived view the UI consumes.
+export type InvoicePersistedStatus = "draft" | "sent" | "cancelled";
+
+// Derived status — what list pages, badges, and filters see.
 export type InvoiceStatus = "draft" | "sent" | "partial" | "paid" | "overdue" | "cancelled";
 
 export interface InvoiceRow {
@@ -33,14 +44,15 @@ export interface InvoiceRow {
 	source_quote_id: number | null
 	issue_date: string
 	due_date: string
-	status: InvoiceStatus
+	/// The persisted enum (draft|sent|cancelled). Use derivedStatus()
+	/// for the user-visible payment state.
+	status: InvoicePersistedStatus
 	pricing_mode: PricingMode
 	project_title: string
 	vat_rate_basis_points: number
 	subtotal_cents: number
 	tax_cents: number
 	total_cents: number
-	paid_cents: number
 	notes: string | null
 	terms: string | null
 	prepared_by: string | null
@@ -66,39 +78,6 @@ export interface InvoiceLineRow {
 
 export type InvoiceLineDraft = Omit<InvoiceLineRow,	| "id" | "invoice_id"
 	| "line_subtotal_cents" | "line_tax_cents" | "line_total_cents">;
-
-export type PaymentMethod = "cash" | "bank_transfer" | "cheque" | "card" | "other";
-
-export interface InvoicePaymentRow {
-	id: number
-	invoice_id: number
-	payment_date: string
-	amount_cents: number
-	method: PaymentMethod | null
-	reference: string | null
-	notes: string | null
-	created_at: string
-}
-
-export interface PaymentDraft {
-	payment_date: string
-	amount_cents: number
-	method: PaymentMethod | null
-	reference: string | null
-	notes: string | null
-}
-
-const STATUS_TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
-	draft: ["sent", "cancelled"],
-	sent: ["partial", "paid", "overdue", "cancelled"],
-	partial: ["paid", "overdue", "cancelled"],
-	overdue: ["partial", "paid", "cancelled"],
-	paid: [],
-	cancelled: []
-};
-
-export const canTransition = (from: InvoiceStatus, to: InvoiceStatus): boolean =>
-	STATUS_TRANSITIONS[from]?.includes(to) ?? false;
 
 const todayISO = (): string => {
 	const d = new Date();
@@ -176,12 +155,56 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		dueTo.value = null;
 	};
 
+	// ---------- Derived payment helpers --------------------------------
+	// Mirror of bills' helpers — we read receipt vouchers off the
+	// vouchers store rather than caching anything on the invoice row.
+	// Voucher ledger is small (single-user app) and Pinia tracks the
+	// dependency, so the derived values stay fresh through every edit.
+
+	/// All receipt vouchers (voucher_type='receipt') linked to this
+	/// invoice, ordered most-recent first to match the detail page's
+	/// payments panel.
+	const linkedPayments = (invoiceId: number) => {
+		const vouchers = useVouchersStore();
+		return vouchers.vouchers
+			.filter((v) => v.related_invoice_id === invoiceId && v.voucher_type === "receipt")
+			.slice()
+			.sort((a, b) => b.voucher_date.localeCompare(a.voucher_date) || b.id - a.id);
+	};
+
+	/// Total recorded receipts against an invoice, in cents. Sums
+	/// voucher amounts; safe when the vouchers store hasn't loaded yet.
+	const paidCentsFor = (invoiceId: number): number =>
+		linkedPayments(invoiceId).reduce((sum, v) => sum + v.amount_cents, 0);
+
+	const balanceCentsFor = (inv: InvoiceRow): number =>
+		Math.max(0, inv.total_cents - paidCentsFor(inv.id));
+
+	/// User-visible status from persisted status + receipt sum +
+	/// due date. Order of precedence:
+	///   draft / cancelled — sticky (whatever the user set)
+	///   paid              — receipts cover the full total
+	///   overdue           — sent + balance > 0 + due_date < today
+	///   partial           — sent + 0 < paid < total
+	///   sent              — sent + nothing paid (still pending)
+	const derivedStatus = (inv: InvoiceRow, now: string = todayISO()): InvoiceStatus => {
+		if (inv.status === "draft") return "draft";
+		if (inv.status === "cancelled") return "cancelled";
+		const paid = paidCentsFor(inv.id);
+		if (paid >= inv.total_cents && inv.total_cents > 0) return "paid";
+		if (inv.due_date < now) return "overdue";
+		if (paid > 0) return "partial";
+		return "sent";
+	};
+
 	const filtered = computed(() => {
+		const today = todayISO();
 		const q = search.value.trim().toLowerCase();
 		return invoices.value.filter((row) => {
+			const ds = derivedStatus(row, today);
 			if (statusFilter.value === "outstanding") {
-				if (!["sent", "partial", "overdue"].includes(row.status)) return false;
-			} else if (statusFilter.value !== "all" && row.status !== statusFilter.value) {
+				if (!["sent", "partial", "overdue"].includes(ds)) return false;
+			} else if (statusFilter.value !== "all" && ds !== statusFilter.value) {
 				return false;
 			}
 			if (clientFilter.value !== "all" && row.client_id !== clientFilter.value) return false;
@@ -203,18 +226,21 @@ export const useInvoicesStore = defineStore("invoices", () => {
 	});
 
 	const outstandingTotal = computed(() => {
+		const today = todayISO();
 		let sum = 0;
 		for (const r of invoices.value) {
-			if (r.status === "sent" || r.status === "partial" || r.status === "overdue") {
-				sum += Math.max(0, r.total_cents - r.paid_cents);
+			const ds = derivedStatus(r, today);
+			if (ds === "sent" || ds === "partial" || ds === "overdue") {
+				sum += balanceCentsFor(r);
 			}
 		}
 		return sum;
 	});
 
-	const overdueCount = computed(() =>
-		invoices.value.filter((r) => r.status === "overdue").length
-	);
+	const overdueCount = computed(() => {
+		const today = todayISO();
+		return invoices.value.filter((r) => derivedStatus(r, today) === "overdue").length;
+	});
 
 	const load = async () => {
 		loading.value = true;
@@ -237,12 +263,6 @@ export const useInvoicesStore = defineStore("invoices", () => {
 	const getLines = async (invoiceId: number): Promise<InvoiceLineRow[]> =>
 		select<InvoiceLineRow>(
 			"SELECT * FROM invoice_lines WHERE invoice_id = ? ORDER BY sort_order ASC, id ASC",
-			[invoiceId]
-		);
-
-	const getPayments = async (invoiceId: number): Promise<InvoicePaymentRow[]> =>
-		select<InvoicePaymentRow>(
-			"SELECT * FROM invoice_payments WHERE invoice_id = ? ORDER BY date(payment_date) ASC, id ASC",
 			[invoiceId]
 		);
 
@@ -271,9 +291,9 @@ export const useInvoicesStore = defineStore("invoices", () => {
 			`INSERT INTO invoices (
 				number, client_id, client_snapshot, source_quote_id,
 				issue_date, due_date, status, pricing_mode, project_title,
-				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents, paid_cents,
+				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents,
 				prepared_by, bank_details_snapshot
-			) VALUES (?, ?, ?, NULL, ?, ?, 'draft', 'bundle', ?, ?, 0, 0, 0, 0, ?, ?)`,
+			) VALUES (?, ?, ?, NULL, ?, ?, 'draft', 'bundle', ?, ?, 0, 0, 0, ?, ?)`,
 			[
 				allocation.number,
 				input.client.id,
@@ -314,9 +334,9 @@ export const useInvoicesStore = defineStore("invoices", () => {
 			`INSERT INTO invoices (
 				number, client_id, client_snapshot, source_quote_id,
 				issue_date, due_date, status, pricing_mode, project_title,
-				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents, paid_cents,
+				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents,
 				notes, terms, prepared_by, bank_details_snapshot
-			) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+			) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				allocation.number,
 				quote.client_id,
@@ -446,86 +466,16 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		};
 	};
 
-	// Decide the next status after a paid_cents change. Pure helper.
-	const statusAfterPayment = (
-		current: InvoiceStatus,
-		totalCents: number,
-		paidCents: number
-	): InvoiceStatus => {
-		if (current === "draft" || current === "cancelled") return current;
-		if (paidCents <= 0) return current === "partial" ? "sent" : current;
-		if (paidCents >= totalCents) return "paid";
-		return "partial";
-	};
-
-	const recordPayment = async (
-		invoiceId: number,
-		payment: PaymentDraft
-	): Promise<void> => {
-		const inv = await get(invoiceId);
-		if (!inv) throw new Error("recordPayment: invoice not found");
-		if (inv.status === "draft") {
-			throw new Error("Cannot record payments against a draft invoice");
-		}
-		if (inv.status === "cancelled") {
-			throw new Error("Cannot record payments against a cancelled invoice");
-		}
-		if (payment.amount_cents <= 0) {
-			throw new Error("Payment amount must be positive");
-		}
-
-		await execute(
-			`INSERT INTO invoice_payments (
-				invoice_id, payment_date, amount_cents, method, reference, notes
-			) VALUES (?, ?, ?, ?, ?, ?)`,
-			[
-				invoiceId,
-				payment.payment_date,
-				payment.amount_cents,
-				payment.method,
-				payment.reference,
-				payment.notes
-			]
-		);
-
-		// Re-derive paid_cents from the ledger so we self-heal if anything's
-		// gone out of sync. Cheap because payment counts are tiny per invoice.
-		const sumRow = await selectOne<{ s: number }>(
-			"SELECT COALESCE(SUM(amount_cents), 0) AS s FROM invoice_payments WHERE invoice_id = ?",
-			[invoiceId]
-		);
-		const newPaid = sumRow?.s ?? 0;
-		const next = statusAfterPayment(inv.status, inv.total_cents, newPaid);
-		await execute(
-			"UPDATE invoices SET paid_cents = ?, status = ?, updated_at = datetime('now') WHERE id = ?",
-			[newPaid, next, invoiceId]
-		);
-		await load();
-	};
-
-	const deletePayment = async (invoiceId: number, paymentId: number): Promise<void> => {
-		const inv = await get(invoiceId);
-		if (!inv) throw new Error("deletePayment: invoice not found");
-		await execute("DELETE FROM invoice_payments WHERE id = ? AND invoice_id = ?", [paymentId, invoiceId]);
-		const sumRow = await selectOne<{ s: number }>(
-			"SELECT COALESCE(SUM(amount_cents), 0) AS s FROM invoice_payments WHERE invoice_id = ?",
-			[invoiceId]
-		);
-		const newPaid = sumRow?.s ?? 0;
-		const next = statusAfterPayment(inv.status, inv.total_cents, newPaid);
-		await execute(
-			"UPDATE invoices SET paid_cents = ?, status = ?, updated_at = datetime('now') WHERE id = ?",
-			[newPaid, next, invoiceId]
-		);
-		await load();
-	};
-
-	const setStatus = async (id: number, target: InvoiceStatus): Promise<void> => {
-		const row = await get(id);
-		if (!row) throw new Error("setStatus: invoice not found");
-		if (!canTransition(row.status, target)) {
-			throw new Error(`Cannot move invoice from ${row.status} to ${target}`);
-		}
+	/// Move between the three persisted states. The legal transitions
+	/// are now extremely simple:
+	///   draft     ↔ sent            (issue / un-issue)
+	///   draft     → cancelled       (kill before issuing)
+	///   sent      → cancelled       (void after issuing)
+	///   cancelled ↔ sent            (reopen — refund flow)
+	///
+	/// We don't model "draft → cancelled → draft" since the user is
+	/// likely to just delete a never-sent invoice instead.
+	const setStatus = async (id: number, target: InvoicePersistedStatus): Promise<void> => {
 		await execute(
 			"UPDATE invoices SET status = ?, updated_at = datetime('now') WHERE id = ?",
 			[target, id]
@@ -539,17 +489,18 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		if (row.status !== "draft") {
 			throw new Error("Only draft invoices can be deleted");
 		}
-		// invoice_lines and invoice_payments cascade via FK ON DELETE CASCADE.
+		// invoice_lines cascade via FK ON DELETE CASCADE.
 		await execute("DELETE FROM invoices WHERE id = ?", [id]);
 		await load();
 	};
 
-	// Universal delete — removes an invoice regardless of status, including
-	// any payment ledger entries (cascaded). Used by the typed-name confirm
-	// flow on the detail page when the user genuinely needs to scrub a
-	// record. Reverse FKs without an ON DELETE clause are nulled first:
-	//   - quotes.converted_invoice_id (back-link from a converted quote)
-	//   - vouchers.related_invoice_id (loose link from receipts)
+	// Universal delete — removes an invoice regardless of status. Used by
+	// the typed-name confirm flow on the detail page when the user
+	// genuinely needs to scrub a record. Reverse FKs without an ON DELETE
+	// clause are nulled first so the DELETE doesn't fault on dangling
+	// references when foreign_keys is enabled. Linked receipt vouchers
+	// stay intact (they record real money received) — they just lose
+	// their link back to the now-deleted invoice.
 	const remove = async (id: number): Promise<void> => {
 		const row = await get(id);
 		if (!row) return;
@@ -563,20 +514,9 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		);
 		await execute("DELETE FROM invoices WHERE id = ?", [id]);
 		await load();
-	};
-
-	// Run on app boot / list load. Flips sent|partial invoices past their
-	// due_date to 'overdue'. Doesn't touch paid/draft/cancelled.
-	const flagOverdue = async (): Promise<number> => {
-		const today = todayISO();
-		const result = await execute(
-			`UPDATE invoices
-			 SET status = 'overdue', updated_at = datetime('now')
-			 WHERE status IN ('sent','partial') AND due_date < ?`,
-			[today]
-		);
-		if (result.rowsAffected > 0) await load();
-		return result.rowsAffected;
+		// Refresh vouchers too so the un-linked rows reflect immediately
+		// in the vouchers list.
+		await useVouchersStore().load().catch(() => { /* non-fatal */ });
 	};
 
 	return {
@@ -598,17 +538,20 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		load,
 		get,
 		getLines,
-		getPayments,
 		createDraft,
 		createFromQuote,
 		update,
 		replaceLines,
-		recordPayment,
-		deletePayment,
 		setStatus,
 		deleteDraft,
 		remove,
-		flagOverdue,
-		buildClientSnapshot
+		buildClientSnapshot,
+		// Derived payment helpers — read these instead of the old paid_cents
+		// column. They live on the store so any consumer (list page, detail
+		// page, dashboard, PDF builder) shares the same derivation.
+		linkedPayments,
+		paidCentsFor,
+		balanceCentsFor,
+		derivedStatus
 	};
 });

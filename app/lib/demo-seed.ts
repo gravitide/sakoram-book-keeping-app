@@ -312,7 +312,14 @@ const seedQuotes = async (cs: ClientIds): Promise<QuoteIds> => {
 
 // ---------- Invoices ------------------------------------------------------
 
-const seedInvoices = async (cs: ClientIds, qs: QuoteIds) => {
+interface InvoiceIds {
+	galle: number
+	premier: number
+	tea: number
+	draft: number
+}
+
+const seedInvoices = async (cs: ClientIds, qs: QuoteIds): Promise<InvoiceIds> => {
 	const invoices = useInvoicesStore();
 	const quotes = useQuotesStore();
 	const clients = useClientsStore();
@@ -328,13 +335,9 @@ const seedInvoices = async (cs: ClientIds, qs: QuoteIds) => {
 		due_date: daysAgo(10)
 	});
 	await invoices.setStatus(galleInvoiceId, "sent");
-	await invoices.recordPayment(galleInvoiceId, {
-		payment_date: daysAgo(8),
-		amount_cents: 56_640_000,
-		method: "bank_transfer",
-		reference: "TXN-883421",
-		notes: "Full payment received."
-	});
+	// Galle's full payment is recorded via a receipt voucher in
+	// seedVouchers below — invoices no longer carry their own
+	// payment ledger (migration 0014).
 
 	// 2. Premier Construction — partial. Big project, half paid so far.
 	const premier = clients.clients.find((c) => c.id === cs.premier)!;
@@ -363,13 +366,8 @@ const seedInvoices = async (cs: ClientIds, qs: QuoteIds) => {
 		}
 	]);
 	await invoices.setStatus(premierId, "sent");
-	await invoices.recordPayment(premierId, {
-		payment_date: daysAgo(5),
-		amount_cents: 60_000_000,
-		method: "cheque",
-		reference: "CHQ-001245",
-		notes: "Initial milestone payment."
-	});
+	// Premier's first-milestone payment is recorded via a receipt
+	// voucher in seedVouchers below.
 
 	// 3. Kandy Tea — overdue. Issued a while back; due date is in the past.
 	const kandy = clients.clients.find((c) => c.id === cs.kandyTea)!;
@@ -412,6 +410,8 @@ const seedInvoices = async (cs: ClientIds, qs: QuoteIds) => {
 		total_cents: 10_620_000,
 		vat_rate_basis_points: 1800
 	});
+
+	return { galle: galleInvoiceId, premier: premierId, tea: teaId, draft: draftId };
 };
 
 // ---------- Bills ---------------------------------------------------------
@@ -493,7 +493,10 @@ const seedBills = async (vs: VendorIds, cats: CategoryIds): Promise<BillIds> => 
 		total_cents: 3_540_000,
 		notes: "April commercial-rate consumption."
 	});
-	await bills.recordPayment(ids.ceb, 3_540_000);
+	// CEB bill is fully paid via the linked payment voucher created
+	// below in seedVouchers — no separate recordPayment call needed.
+	// (Bills no longer have a paid_cents column; status is derived
+	// from the sum of linked payment vouchers.)
 
 	// 2. Lanka Office Supplies — unpaid, due soon.
 	ids.office = await bills.createBill({ vendor: vendorRow(office) });
@@ -526,14 +529,28 @@ const seedBills = async (vs: VendorIds, cats: CategoryIds): Promise<BillIds> => 
 		total_cents: 1_500_000,
 		notes: "Wire transfer + FX fees, March activity."
 	});
-	await bills.recordPayment(ids.bank, 800_000);
+	// HNB bill is partially paid — record the LKR 800k towards it as
+	// a payment voucher linked back to this bill. The bill's derived
+	// status will read 'partial' off the voucher ledger.
+	await useVouchersStore().create({
+		voucher_type: "payment",
+		voucher_date: daysAgo(8),
+		party_name: hnb.name,
+		amount_cents: 800_000,
+		payment_method: "bank_transfer",
+		reference: "OUT-HNB-FX-1",
+		description: `Partial payment for ${(await bills.get(ids.bank))?.number}`,
+		related_invoice_id: null,
+		related_bill_id: ids.bank,
+		attachment_path: null
+	});
 
 	return ids;
 };
 
 // ---------- Vouchers ------------------------------------------------------
 
-const seedVouchers = async (cs: ClientIds, vs: VendorIds, bs: BillIds) => {
+const seedVouchers = async (cs: ClientIds, vs: VendorIds, bs: BillIds, is: InvoiceIds) => {
 	const vouchers = useVouchersStore();
 	const clients = useClientsStore();
 	const vendors = useVendorsStore();
@@ -544,6 +561,8 @@ const seedVouchers = async (cs: ClientIds, vs: VendorIds, bs: BillIds) => {
 	const office = vendors.vendors.find((v) => v.id === vs.officeSupplies)!;
 
 	// 1. Receipt: Galle Hotels paid the converted invoice in full.
+	// Linked to the invoice — that link is what flips the invoice's
+	// derived status to 'paid' (no recordPayment call any more).
 	await vouchers.create({
 		voucher_type: "receipt",
 		voucher_date: daysAgo(8),
@@ -552,12 +571,12 @@ const seedVouchers = async (cs: ClientIds, vs: VendorIds, bs: BillIds) => {
 		payment_method: "bank_transfer",
 		reference: "TXN-883421",
 		description: "Full payment for hotel branding refresh.",
-		related_invoice_id: null,
+		related_invoice_id: is.galle,
 		related_bill_id: null,
 		attachment_path: null
 	});
 
-	// 2. Receipt: Premier first-milestone payment.
+	// 2. Receipt: Premier first-milestone payment (50%).
 	await vouchers.create({
 		voucher_type: "receipt",
 		voucher_date: daysAgo(5),
@@ -566,7 +585,7 @@ const seedVouchers = async (cs: ClientIds, vs: VendorIds, bs: BillIds) => {
 		payment_method: "cheque",
 		reference: "CHQ-001245",
 		description: "Stage-2 milestone (50%).",
-		related_invoice_id: null,
+		related_invoice_id: is.premier,
 		related_bill_id: null,
 		attachment_path: null
 	});
@@ -697,6 +716,7 @@ const seedBulkQuotes = async (clientIds: number[]) => {
 const seedBulkInvoices = async (clientIds: number[]) => {
 	const invoices = useInvoicesStore();
 	const clients = useClientsStore();
+	const vouchers = useVouchersStore();
 	// Mix: draft / sent / partial / paid / overdue / cancelled.
 	const outcomes = ["draft", "sent", "partial", "paid", "overdue", "cancelled"] as const;
 	for (let i = 1; i <= BULK_COUNT; i++) {
@@ -727,33 +747,47 @@ const seedBulkInvoices = async (clientIds: number[]) => {
 		const outcome = outcomes[i % outcomes.length];
 		if (outcome === "draft") continue;
 		await invoices.setStatus(id, "sent");
+		// Payments now flow through receipt vouchers — invoices don't
+		// carry their own paid_cents, status flips to 'partial' /
+		// 'paid' purely from linked vouchers' amount sums. "Overdue"
+		// is derived from the due date, no flagOverdue call needed.
+		const clientName = client.name;
 		if (outcome === "partial") {
-			await invoices.recordPayment(id, {
-				payment_date: daysAgo(Math.max(0, issueDays - 5)),
+			await vouchers.create({
+				voucher_type: "receipt",
+				voucher_date: daysAgo(Math.max(0, issueDays - 5)),
+				party_name: clientName,
 				amount_cents: Math.floor(total / 2),
-				method: "bank_transfer",
+				payment_method: "bank_transfer",
 				reference: `PART-${String(i).padStart(3, "0")}`,
-				notes: null
+				description: `Bulk partial invoice #${i}`,
+				related_invoice_id: id,
+				related_bill_id: null,
+				attachment_path: null
 			});
 		} else if (outcome === "paid") {
-			await invoices.recordPayment(id, {
-				payment_date: daysAgo(Math.max(0, issueDays - 5)),
+			await vouchers.create({
+				voucher_type: "receipt",
+				voucher_date: daysAgo(Math.max(0, issueDays - 5)),
+				party_name: clientName,
 				amount_cents: total,
-				method: "bank_transfer",
+				payment_method: "bank_transfer",
 				reference: `PAID-${String(i).padStart(3, "0")}`,
-				notes: null
+				description: `Bulk paid invoice #${i}`,
+				related_invoice_id: id,
+				related_bill_id: null,
+				attachment_path: null
 			});
 		} else if (outcome === "cancelled") {
 			await invoices.setStatus(id, "cancelled");
 		}
-		// "overdue" comes from due_date < today — flagOverdue() at end of seed
-		// will catch it.
 	}
 };
 
 const seedBulkBills = async (vendorIds: number[], catIds: CategoryIds, allCats: number[]) => {
 	const bills = useBillsStore();
 	const vendors = useVendorsStore();
+	const vouchers = useVouchersStore();
 	const categoriesStore = useBillCategoriesStore();
 	const snapFor = (id: number): string => {
 		const row = categoriesStore.categories.find((c) => c.id === id);
@@ -799,10 +833,40 @@ const seedBulkBills = async (vendorIds: number[], catIds: CategoryIds, allCats: 
 			notes: null
 		});
 		const outcome = outcomes[i % outcomes.length];
-		if (outcome === "paid") await bills.recordPayment(id, total);
-		else if (outcome === "partial") await bills.recordPayment(id, Math.floor(total / 2));
-		else if (outcome === "cancelled") await bills.setStatus(id, "cancelled");
-		// "overdue" auto-set by flagOverdue() at end of seed (due_date < today).
+		// Payments now flow through vouchers — bills don't carry their own
+		// paid_cents, status flips to 'partial' / 'paid' purely from
+		// linked vouchers' amount sums. "Overdue" is derived from the
+		// due date and how much remains, no flagOverdue call needed.
+		const vendorName = vendor.name;
+		if (outcome === "paid") {
+			await vouchers.create({
+				voucher_type: "payment",
+				voucher_date: daysAgo(Math.max(0, issueDays - 5)),
+				party_name: vendorName,
+				amount_cents: total,
+				payment_method: "bank_transfer",
+				reference: `BLK-PAY-${String(i).padStart(4, "0")}`,
+				description: `Bulk paid bill #${i}`,
+				related_invoice_id: null,
+				related_bill_id: id,
+				attachment_path: null
+			});
+		} else if (outcome === "partial") {
+			await vouchers.create({
+				voucher_type: "payment",
+				voucher_date: daysAgo(Math.max(0, issueDays - 3)),
+				party_name: vendorName,
+				amount_cents: Math.floor(total / 2),
+				payment_method: "bank_transfer",
+				reference: `BLK-PAY-${String(i).padStart(4, "0")}-P`,
+				description: `Bulk partial bill #${i}`,
+				related_invoice_id: null,
+				related_bill_id: id,
+				attachment_path: null
+			});
+		} else if (outcome === "cancelled") {
+			await bills.setCancelled(id, true);
+		}
 	}
 };
 
@@ -866,9 +930,9 @@ export const createDemoBusiness = async (
 	const vendors = await seedVendors();
 	const categories = await seedCategories();
 	const quotes = await seedQuotes(clients);
-	await seedInvoices(clients, quotes);
+	const invoices = await seedInvoices(clients, quotes);
 	const bills = await seedBills(vendors, categories);
-	await seedVouchers(clients, vendors, bills);
+	await seedVouchers(clients, vendors, bills, invoices);
 
 	// 4. Bulk fill. Adds ~22 more rows of each entity on top of the curated
 	// set so list pages have realistic volume to scroll/filter/paginate.
@@ -888,12 +952,9 @@ export const createDemoBusiness = async (
 	await seedBulkBills(allVendorIds, categories, allCategoryIds);
 	await seedBulkVouchers(allClientIds, allVendorIds);
 
-	// Auto-overdue any sent invoices/bills whose due date is already past.
-	// `flagOverdue` runs anyway on next dashboard load — calling it
-	// here makes sure the demo's "overdue" tile shows real data
-	// immediately on first paint.
-	await useInvoicesStore().flagOverdue();
-	await useBillsStore().flagOverdue();
+	// Both invoices and bills now derive their overdue presentation
+	// from due_date + linked-voucher sums every time it's read — no
+	// flagOverdue call needed at the end of the seed.
 
 	return t;
 };

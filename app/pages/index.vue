@@ -228,10 +228,11 @@
 </template>
 
 <script setup lang="ts">
-// Dashboard. Tiles are derived from the same Pinia stores the list pages use,
-// so loading them here also warms the cache for the user's next click. We
-// trigger flagOverdue() on mount so stale 'sent' invoices/bills past their
-// due_date flip to 'overdue' before the tiles compute their counts.
+// Dashboard. Tiles are derived from the same Pinia stores the list pages
+// use, so loading them here also warms the cache for the user's next
+// click. There's no persisted 'overdue' status on either bills or
+// invoices any more — both derive that state in JS from due_date and
+// linked vouchers, so no flagOverdue call is needed at mount time.
 
 	import type { ClientSnapshot } from "~/stores/quotes";
 	import { formatLKR } from "~/lib/money";
@@ -257,12 +258,6 @@
 				billsStore.load(),
 				quotesStore.load(),
 				vouchersStore.load()
-			]);
-			// Auto-flag overdue happens after load. Each call may trigger a
-			// reload of its own store if rows changed.
-			await Promise.all([
-				invoicesStore.flagOverdue(),
-				billsStore.flagOverdue()
 			]);
 		} catch (err) {
 			loadError.value = err instanceof Error ? err.message : String(err);
@@ -482,27 +477,31 @@
 	const overdueItems = computed<OverdueItem[]>(() => {
 		const items: OverdueItem[] = [];
 		for (const i of invoicesStore.invoices) {
-			if (i.status !== "overdue") continue;
+			// Invoice status is now derived from linked receipt vouchers
+			// + due date — the persisted column is only draft|sent|cancelled.
+			if (invoicesStore.derivedStatus(i) !== "overdue") continue;
 			items.push({
 				kind: "invoice",
 				id: i.id,
 				number: i.number,
 				subtitle: parseClientName(i.client_snapshot),
 				dueDate: formatDate(i.due_date),
-				amountCents: Math.max(0, i.total_cents - i.paid_cents),
+				amountCents: invoicesStore.balanceCentsFor(i),
 				amountClass: "text-(--ui-error)",
 				to: `/invoices/${i.id}`
 			});
 		}
 		for (const b of billsStore.bills) {
-			if (b.status !== "overdue") continue;
+			// Bill status is now derived from the linked payment vouchers
+			// + due date — the row's persisted `status` is just open|cancelled.
+			if (billsStore.derivedStatus(b) !== "overdue") continue;
 			items.push({
 				kind: "bill",
 				id: b.id,
 				number: b.number,
 				subtitle: parseVendorName(b.vendor_snapshot),
 				dueDate: formatDate(b.due_date),
-				amountCents: Math.max(0, b.total_cents - b.paid_cents),
+				amountCents: billsStore.balanceCentsFor(b),
 				amountClass: "text-(--ui-warning)",
 				to: `/bills/${b.id}`
 			});
