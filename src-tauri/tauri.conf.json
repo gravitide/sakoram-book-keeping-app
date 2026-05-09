@@ -31,15 +31,15 @@
 		"beforeDevCommand": "bun run dev",
 		"devUrl": "http://localhost:3000"
 	},
-	"productName": "Sakoram Book Keeping",
-	"version": "0.35.0",
+	"productName": "Sakoram Bookkeeping",
+	"version": "0.35.1",
 	"identifier": "com.sakoram.billing",
 	"plugins": {},
 	"app": {
 		"windows": [
 			{
 				"label": "main",
-				"title": "Sakoram Book Keeping",
+				"title": "Sakoram Bookkeeping",
 				"width": 1366,
 				"height": 1000,
 				"minWidth": 1024,

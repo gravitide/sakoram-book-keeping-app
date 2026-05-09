@@ -7,7 +7,7 @@
 				class="h-20 w-auto mx-auto mb-5 dark:invert dark:hue-rotate-180"
 			>
 			<h1 class="text-2xl font-semibold">
-				{{ tenants.tenants.length === 0 ? "Welcome to Sakoram Book Keeping" : "Pick a business" }}
+				{{ tenants.tenants.length === 0 ? "Welcome to Sakoram Bookkeeping" : "Pick a business" }}
 			</h1>
 			<p class="text-sm text-(--ui-text-muted) mt-1">
 				{{
@@ -170,7 +170,7 @@
 
 	import { convertFileSrc } from "@tauri-apps/api/core";
 	import pkg from "~~/package.json";
-	import sakoramLogo from "~/assets/sakoram-logo.png";
+	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import { createDemoBusiness } from "~/lib/demo-seed";
 	import { useTenantsStore } from "~/stores/tenants";
 

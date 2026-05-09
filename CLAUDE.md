@@ -1,4 +1,4 @@
-# Sakoram Book Keeping — handoff notes
+# Sakoram Bookkeeping — handoff notes
 
 A single-user desktop bookkeeping app for a Sri Lankan business. Manages
 quotes, invoices, bills, vouchers, and renders professional PDFs. Runs
@@ -334,8 +334,8 @@ After `tauri:build` finishes you'll find:
 
 ```
 src-tauri/target/release/bundle/
-  ├─ msi/Sakoram Book Keeping_0.9.0_x64_en-US.msi
-  └─ nsis/Sakoram Book Keeping_0.9.0_x64-setup.exe
+  ├─ msi/Sakoram Bookkeeping_0.9.0_x64_en-US.msi
+  └─ nsis/Sakoram Bookkeeping_0.9.0_x64-setup.exe
 ```
 
 The build is **unsigned** — Windows SmartScreen will warn on first run.

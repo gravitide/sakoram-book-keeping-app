@@ -1,4 +1,4 @@
-<h1 align="center">Sakoram Book Keeping</h1>
+<h1 align="center">Sakoram Bookkeeping</h1>
 
 <p align="center">
 	<img src="./docs/sakoram-logo.png" alt="Sakoram brand logo">
@@ -110,8 +110,8 @@ Outputs Windows installers to:
 
 ```
 src-tauri/target/release/bundle/
-  ├─ msi/Sakoram Book Keeping_<version>_x64_en-US.msi
-  └─ nsis/Sakoram Book Keeping_<version>_x64-setup.exe
+  ├─ msi/Sakoram Bookkeeping_<version>_x64_en-US.msi
+  └─ nsis/Sakoram Bookkeeping_<version>_x64-setup.exe
 ```
 
 > ⚠️ The build is currently **unsigned**, so Windows SmartScreen will
