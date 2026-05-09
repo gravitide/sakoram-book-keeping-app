@@ -1,6 +1,9 @@
 <template>
 	<div>
-		<header class="mb-6">
+		<!-- Same narrow-and-centered shape as Settings → Appearance: this
+			page only has a handful of inputs and would look stretched at
+			the wider main-content width the data tables use. -->
+		<header class="mb-6 max-w-2xl mx-auto">
 			<h1 class="text-2xl font-semibold">
 				PDF
 			</h1>
@@ -11,6 +14,7 @@
 
 		<UForm
 			:state="form"
+			class="max-w-2xl mx-auto"
 			@submit="onSubmit"
 		>
 			<SectionCard
@@ -143,14 +147,16 @@
 					title="Footer notes"
 					subtitle="Appended at the bottom of generated documents — payment instructions, thanks, fine print."
 				>
-					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-						<UFormField label="Invoice footer" name="invoice_footer_notes">
-							<UTextarea v-model="form.invoice_footer_notes" :rows="5" autoresize />
-						</UFormField>
-						<UFormField label="Quote footer" name="quote_footer_notes">
-							<UTextarea v-model="form.quote_footer_notes" :rows="5" autoresize />
-						</UFormField>
-					</div>
+					<!-- Stacked vertically instead of side-by-side: at the
+						narrower max-w-2xl page width a two-column textarea
+						grid is too cramped. The two fields rarely need to be
+						compared at a glance, so a single column reads cleaner. -->
+					<UFormField label="Invoice footer" name="invoice_footer_notes">
+						<UTextarea v-model="form.invoice_footer_notes" :rows="5" autoresize class="w-full" />
+					</UFormField>
+					<UFormField label="Quote footer" name="quote_footer_notes">
+						<UTextarea v-model="form.quote_footer_notes" :rows="5" autoresize class="w-full" />
+					</UFormField>
 				</SectionCard>
 			</div>
 
