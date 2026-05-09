@@ -1,7 +1,7 @@
 [package]
 name = "sakoram_billing"
 version = "0.35.1"
-description = "Sakoram Book Keeping — desktop app for quotes, invoices, bills and vouchers"
+description = "Sakoram Bookkeeping — desktop app for quotes, invoices, bills and vouchers"
 authors = [ "Sakoram" ]
 license = "MIT"
 edition = "2021"

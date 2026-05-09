@@ -72,7 +72,7 @@
 
 	const title = computed(() => {
 		const name = tenants.activeTenant?.name;
-		return name ? `${name} · Sakoram Book Keeping` : "Sakoram Book Keeping";
+		return name ? `${name} · Sakoram Bookkeeping` : "Sakoram Bookkeeping";
 	});
 
 	const minimize = () => {

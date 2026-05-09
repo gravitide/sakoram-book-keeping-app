@@ -23,7 +23,7 @@
 								{{ tenants.activeTenant?.name ?? settings.businessName }}
 							</div>
 							<div class="text-xs text-(--ui-text-muted)">
-								{{ tenants.tenants.length > 1 ? "Switch business" : "Sakoram Book Keeping" }}
+								{{ tenants.tenants.length > 1 ? "Switch business" : "Sakoram Bookkeeping" }}
 							</div>
 						</div>
 						<UIcon name="i-lucide-chevrons-up-down" class="size-4 text-(--ui-text-muted) shrink-0" />
@@ -94,7 +94,7 @@
 									class="h-14 w-auto dark:invert dark:hue-rotate-180"
 								>
 								<div class="text-sm text-(--ui-text-muted) tabular-nums">
-									Book Keeping · Version {{ appVersion }}
+									Bookkeeping · Version {{ appVersion }}
 								</div>
 							</div>
 

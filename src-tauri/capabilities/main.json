@@ -1,7 +1,7 @@
 {
 	"$schema": "../gen/schemas/desktop-schema.json",
 	"identifier": "main",
-	"description": "Capabilities for the Sakoram Book Keeping app window",
+	"description": "Capabilities for the Sakoram Bookkeeping app window",
 	"windows": [
 		"main"
 	],

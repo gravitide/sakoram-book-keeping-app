@@ -4,7 +4,7 @@
 	"version": "0.35.1",
 	"private": true,
 	"packageManager": "bun@1.3.6",
-	"description": "Sakoram Book Keeping — desktop app for quotes, invoices, bills, vouchers",
+	"description": "Sakoram Bookkeeping — desktop app for quotes, invoices, bills, vouchers",
 	"license": "MIT",
 	"scripts": {
 		"dev": "nuxt dev",
