@@ -162,7 +162,7 @@
 	import pkg from "~~/package.json";
 	// Sakoram brand wordmark — bundled into the build by Vite (resolves at
 	// compile time, no runtime fetch). Wide PNG, rendered in the About modal.
-	import sakoramLogo from "~/assets/sakoram-logo.png";
+	import sakoramLogo from "~/assets/sakoram-wordmark.svg";
 	import { isValidThemeColor } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
