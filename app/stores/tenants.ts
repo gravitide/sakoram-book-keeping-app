@@ -69,8 +69,20 @@ export const useTenantsStore = defineStore("tenants", () => {
 	};
 
 	const remove = async (id: string): Promise<void> => {
+		// If we're deleting the active tenant, the open DB pool holds an
+		// OS-level handle on Windows — Rust's remove_file would fail. Close
+		// it first, then drop the in-memory active state so the rest of the
+		// app stops trying to query it.
+		const wasActive = activeTenantId.value === id;
+		if (wasActive) {
+			await resetDbCache();
+		}
 		await invoke("delete_tenant", { id });
 		tenants.value = tenants.value.filter((t) => t.id !== id);
+		if (wasActive) {
+			activeTenantId.value = null;
+			dbUrl.value = null;
+		}
 	};
 
 	/// Switch the active tenant. Caller is responsible for navigating —
