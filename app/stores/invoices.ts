@@ -237,13 +237,18 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		const clientSnap = buildClientSnapshot(input.client);
 		const bankSnap = buildBankSnapshot();
 
+		// Seed the draft's VAT rate from the business profile's default so
+		// the editor lands with the right percentage already filled in.
+		// Stored as basis points (18% → 1800). The editor still lets the
+		// user override per-invoice.
+		const defaultVatBp = settings.default_vat_rate ?? 0;
 		const result = await execute(
 			`INSERT INTO invoices (
 				number, client_id, client_snapshot, source_quote_id,
 				issue_date, due_date, status, pricing_mode, project_title,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents, paid_cents,
 				prepared_by, bank_details_snapshot
-			) VALUES (?, ?, ?, NULL, ?, ?, 'draft', 'bundle', ?, 0, 0, 0, 0, 0, ?, ?)`,
+			) VALUES (?, ?, ?, NULL, ?, ?, 'draft', 'bundle', ?, ?, 0, 0, 0, 0, ?, ?)`,
 			[
 				allocation.number,
 				input.client.id,
@@ -251,6 +256,7 @@ export const useInvoicesStore = defineStore("invoices", () => {
 				issue,
 				due,
 				input.project_title ?? "",
+				defaultVatBp,
 				null,
 				bankSnap
 			]
