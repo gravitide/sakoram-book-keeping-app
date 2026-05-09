@@ -1,7 +1,7 @@
 <h1 align="center">Sakoram Bookkeeping</h1>
 
 <p align="center">
-	<img src="./docs/sakoram-logo.png" alt="Sakoram brand logo">
+	<img src="./docs/sakroam-text-logo.svg" alt="Sakoram brand wordmark" width="420">
 </p>
 
 <p align="center">
