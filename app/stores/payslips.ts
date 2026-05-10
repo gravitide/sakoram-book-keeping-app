@@ -48,6 +48,7 @@ export interface PayslipRow {
 
 export interface EmployeeSnapshot {
 	full_name: string
+	employee_number: string | null
 	nic: string | null
 	designation: string | null
 	email: string | null
@@ -187,6 +188,7 @@ export const usePayslipsStore = defineStore("payslips", () => {
 
 	const buildEmployeeSnapshot = (e: {
 		full_name: string
+		employee_number?: string | null
 		nic?: string | null
 		designation?: string | null
 		email?: string | null
@@ -203,6 +205,7 @@ export const usePayslipsStore = defineStore("payslips", () => {
 		bank_account_name?: string | null
 	}): string => JSON.stringify({
 		full_name: e.full_name,
+		employee_number: e.employee_number ?? null,
 		nic: e.nic ?? null,
 		designation: e.designation ?? null,
 		email: e.email ?? null,

@@ -16,6 +16,7 @@ import { execute, select, selectOne } from "~/lib/db";
 export interface EmployeeRow {
 	id: number
 	full_name: string
+	employee_number: string | null
 	nic: string | null
 	designation: string | null
 	email: string | null
@@ -41,6 +42,7 @@ export type EmployeeInput = Omit<EmployeeRow, "id" | "is_archived" | "created_at
 
 const INSERTABLE_COLUMNS: ReadonlyArray<keyof EmployeeInput> = [
 	"full_name",
+	"employee_number",
 	"nic",
 	"designation",
 	"email",
@@ -75,6 +77,7 @@ export const useEmployeesStore = defineStore("employees", () => {
 			if (!q) return true;
 			return (
 				e.full_name.toLowerCase().includes(q)
+				|| (e.employee_number ?? "").toLowerCase().includes(q)
 				|| (e.email ?? "").toLowerCase().includes(q)
 				|| (e.designation ?? "").toLowerCase().includes(q)
 				|| (e.phone ?? "").toLowerCase().includes(q)

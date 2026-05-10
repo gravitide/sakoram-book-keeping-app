@@ -158,6 +158,14 @@
 								{{ employee?.full_name }}
 							</dd>
 						</div>
+						<div v-if="employee?.employee_number">
+							<dt class="text-xs text-(--ui-text-muted)">
+								Employee #
+							</dt>
+							<dd class="tabular-nums">
+								{{ employee.employee_number }}
+							</dd>
+						</div>
 						<div v-if="employee?.designation">
 							<dt class="text-xs text-(--ui-text-muted)">
 								Designation
@@ -590,6 +598,7 @@
 			pay_date: r.pay_date,
 			employee: {
 				full_name: e.full_name,
+				employee_number: e.employee_number ?? null,
 				designation: e.designation ?? null,
 				nic: e.nic ?? null,
 				bank_name: e.bank_name ?? null,

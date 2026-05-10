@@ -76,6 +76,10 @@
       #linebreak()
       #faint(data.employee.designation)
     ]
+    #if data.employee.employee_number != none [
+      #v(4pt)
+      #faint("Employee #: " + data.employee.employee_number)
+    ]
     #if data.employee.nic != none [
       #v(4pt)
       #faint("NIC: " + data.employee.nic)
