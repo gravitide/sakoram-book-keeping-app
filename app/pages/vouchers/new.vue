@@ -1,9 +1,12 @@
 <template>
-	<!-- Centered narrow shape, same as Settings → Appearance / PDF.
-		The form's intrinsic width (max-w-2xl) is much smaller than
-		the wider main-content cap, and a left-anchored block looks
-		off on a wide monitor. -->
 	<div class="max-w-2xl mx-auto">
+		<!-- Centered narrow shape, same as Settings → Appearance / PDF.
+			The form's intrinsic width (max-w-2xl) is much smaller than
+			the wider main-content cap, and a left-anchored block looks
+			off on a wide monitor. The comment lives *inside* the root
+			div — leaving it at the template top makes the page have two
+			top-level nodes, which breaks Nuxt route transitions and ends
+			up rendering as an empty page after navigation. -->
 		<header class="mb-6">
 			<!-- Back link follows the prefill: if the user arrived from a
 				bill / invoice / payslip's "Record payment" button, we
