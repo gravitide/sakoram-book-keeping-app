@@ -136,13 +136,14 @@
       header-cell("Earnings", rgb("#f0fdf4")),
       header-cell("Amount", rgb("#f0fdf4")),
 
-      ..if data.earnings.len() > 0 {
-        data.earnings.map(line => (
+      ..if data.earnings.len() == 0 {
+        (table.cell(colspan: 2, inset: 12pt, align: center, text(fill: rgb("#9ca3af"), size: 9pt)[No earnings]),)
+      } else { () },
+      ..for line in data.earnings {
+        (
           body-cell(line.label),
           body-cell(line.amount_display, align-h: right),
-        )).flatten()
-      } else {
-        (table.cell(colspan: 2, inset: 12pt, align: center, text(fill: rgb("#9ca3af"), size: 9pt)[No earnings]),)
+        )
       },
 
       table.cell(fill: rgb("#fafafa"), inset: 7pt, align: right, text(weight: "bold")[Total earnings]),
@@ -159,13 +160,14 @@
       header-cell("Deductions", rgb("#fef2f2")),
       header-cell("Amount", rgb("#fef2f2")),
 
-      ..if data.deductions.len() > 0 {
-        data.deductions.map(line => (
+      ..if data.deductions.len() == 0 {
+        (table.cell(colspan: 2, inset: 12pt, align: center, text(fill: rgb("#9ca3af"), size: 9pt)[No deductions]),)
+      } else { () },
+      ..for line in data.deductions {
+        (
           body-cell(line.label),
           body-cell(line.amount_display, align-h: right),
-        )).flatten()
-      } else {
-        (table.cell(colspan: 2, inset: 12pt, align: center, text(fill: rgb("#9ca3af"), size: 9pt)[No deductions]),)
+        )
       },
 
       table.cell(fill: rgb("#fafafa"), inset: 7pt, align: right, text(weight: "bold")[Total deductions]),
