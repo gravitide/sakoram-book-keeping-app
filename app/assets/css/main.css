@@ -163,3 +163,11 @@ a,
 .layout-leave-to {
 	@apply opacity-0;
 }
+
+/* Calendar cells flagged via is-date-unavailable carry a strikethrough
+   from Reka UI; fading them on top makes "you can't pick this" much
+   more obvious at a glance. Scoped to [data-unavailable] only —
+   [data-disabled] is too broad (matches disabled buttons site-wide). */
+[data-unavailable] {
+	opacity: 0.35;
+}

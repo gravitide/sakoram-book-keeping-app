@@ -6,6 +6,7 @@
 		:placeholder="placeholder"
 		:min-value="cdMin"
 		:max-value="cdMax"
+		:is-date-unavailable="isDateUnavailable"
 		@update:model-value="onUpdate"
 	>
 		<template #trailing>
@@ -24,6 +25,7 @@
 						:model-value="cdValue"
 						:min-value="cdMin"
 						:max-value="cdMax"
+						:is-date-unavailable="isDateUnavailable"
 						class="p-2"
 						@update:model-value="onUpdate"
 					/>
@@ -45,7 +47,7 @@
 // recipe: the calendar lives in the trailing slot via UPopover, anchored
 // to the year segment's element so it lines up under the input.
 
-	import type { CalendarDate } from "@internationalized/date";
+	import type { CalendarDate, DateValue } from "@internationalized/date";
 	import type { ComponentPublicInstance } from "vue";
 	import { parseDate } from "@internationalized/date";
 
@@ -79,6 +81,16 @@
 	const cdValue = computed<CalendarDate | null>(() => isoToCalendarDate(props.modelValue));
 	const cdMin = computed<CalendarDate | undefined>(() => isoToCalendarDate(props.minValue ?? null) ?? undefined);
 	const cdMax = computed<CalendarDate | undefined>(() => isoToCalendarDate(props.maxValue ?? null) ?? undefined);
+
+	// Reka UI's calendar renders strikethrough on dates this returns true
+	// for. Without it, dates outside [min, max] are only greyed-out — the
+	// strikethrough makes "you can't pick this" obvious at a glance.
+	// CalendarDate.compare returns <0 / 0 / >0 like a comparator.
+	const isDateUnavailable = (date: DateValue): boolean => {
+		if (cdMin.value && date.compare(cdMin.value) < 0) return true;
+		if (cdMax.value && date.compare(cdMax.value) > 0) return true;
+		return false;
+	};
 
 	const onUpdate = (next: CalendarDate | null | undefined) => {
 		emit("update:modelValue", next ? next.toString() : null);
