@@ -90,13 +90,12 @@
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<UFormField label="Date" required>
-						<DateField v-model="voucherDate" :disabled="prefilled" />
+						<DateField v-model="voucherDate" />
 					</UFormField>
-					<UFormField label="Amount" required>
+					<UFormField label="Amount" required :hint="prefilled ? 'Defaults to remaining balance — edit for a partial payment.' : undefined">
 						<UInput
 							:model-value="amountDisplay"
 							placeholder="0.00"
-							:disabled="prefilled"
 							@update:model-value="onAmountInput"
 						>
 							<template #trailing>
