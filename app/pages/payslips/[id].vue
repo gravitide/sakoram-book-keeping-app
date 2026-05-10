@@ -135,9 +135,19 @@
 			<div class="space-y-6">
 				<UCard>
 					<template #header>
-						<h2 class="font-semibold">
-							Employee
-						</h2>
+						<div class="flex items-center justify-between gap-2">
+							<h2 class="font-semibold">
+								Employee
+							</h2>
+							<NuxtLink
+								v-if="row?.employee_id"
+								:to="`/employees/${row.employee_id}`"
+								class="text-xs text-(--ui-primary) hover:underline inline-flex items-center gap-1"
+							>
+								<UIcon name="i-lucide-external-link" class="size-3" />
+								Open record
+							</NuxtLink>
+						</div>
 					</template>
 					<dl class="text-sm space-y-1.5">
 						<div>
