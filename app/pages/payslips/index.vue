@@ -209,6 +209,7 @@
 	definePageMeta({ title: "Payslips" });
 
 	const router = useRouter();
+	const toast = useToast();
 	const store = usePayslipsStore();
 	const employeesStore = useEmployeesStore();
 	const vouchersStore = useVouchersStore();
@@ -328,7 +329,37 @@
 
 	const open = (r: PayslipRow) => router.push(`/payslips/${r.id}`);
 
-	const itemsFor = (r: PayslipRow) => [[
-		{ label: "Open", icon: "i-lucide-pencil", onSelect: () => open(r) }
-	]];
+	// Quick 'Mark issued' from the row dropdown — saves the user a
+	// click into the detail page when the draft is already complete.
+	// Refused at the store level if anything's off (zero net, etc.)
+	// so worst case is a toast describing the problem.
+	const markIssued = async (r: PayslipRow) => {
+		try {
+			await store.setStatus(r.id, "issued");
+			toast.add({ title: `${r.number} issued`, color: "success", icon: "i-lucide-send" });
+		} catch (err) {
+			toast.add({
+				title: "Could not issue",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	const itemsFor = (r: PayslipRow) => {
+		const items: { label: string, icon: string, onSelect: () => void }[] = [
+			{ label: "Open", icon: "i-lucide-pencil", onSelect: () => open(r) }
+		];
+		if (r.status === "draft" && r.net_cents > 0) {
+			items.push({
+				label: "Mark issued",
+				icon: "i-lucide-send",
+				onSelect: () => {
+					void markIssued(r);
+				}
+			});
+		}
+		return [items];
+	};
 </script>
