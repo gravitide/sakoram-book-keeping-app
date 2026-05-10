@@ -100,41 +100,50 @@
 					</tr>
 				</thead>
 				<tbody>
-					<tr
+					<!-- Right-click any row → same actions menu as the
+						overflow ⋯ button. Reka UI's as-child trigger keeps
+						the <tr> as the actual DOM element so the table
+						layout stays valid. Same pattern the payslips list
+						uses. -->
+					<UContextMenu
 						v-for="e in list.paged"
 						:key="e.id"
-						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-						@click="openEmployee(e)"
+						:items="itemsFor(e)"
 					>
-						<td class="py-2 pl-3 pr-2 font-medium tabular-nums text-(--ui-text-muted)">
-							{{ e.employee_number || "—" }}
-						</td>
-						<td class="py-2 px-2 font-medium">
-							<span class="flex items-center gap-2">
-								{{ e.full_name }}
-								<UBadge v-if="e.is_archived === 1" color="neutral" variant="subtle" size="sm">
-									Archived
-								</UBadge>
-							</span>
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted)">
-							{{ e.designation || "—" }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted)">
-							{{ e.nic || "—" }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted)">
-							{{ e.phone || "—" }}
-						</td>
-						<td class="py-2 px-2 text-right tabular-nums">
-							{{ formatMoney(e.basic_salary_cents) }}
-						</td>
-						<td class="py-2 pl-2 pr-3 text-right" @click.stop>
-							<UDropdownMenu :items="itemsFor(e)">
-								<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
-							</UDropdownMenu>
-						</td>
-					</tr>
+						<tr
+							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+							@click="openEmployee(e)"
+						>
+							<td class="py-2 pl-3 pr-2 font-medium tabular-nums text-(--ui-text-muted)">
+								{{ e.employee_number || "—" }}
+							</td>
+							<td class="py-2 px-2 font-medium">
+								<span class="flex items-center gap-2">
+									{{ e.full_name }}
+									<UBadge v-if="e.is_archived === 1" color="neutral" variant="subtle" size="sm">
+										Archived
+									</UBadge>
+								</span>
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted)">
+								{{ e.designation || "—" }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted)">
+								{{ e.nic || "—" }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted)">
+								{{ e.phone || "—" }}
+							</td>
+							<td class="py-2 px-2 text-right tabular-nums">
+								{{ formatMoney(e.basic_salary_cents) }}
+							</td>
+							<td class="py-2 pl-2 pr-3 text-right" @click.stop>
+								<UDropdownMenu :items="itemsFor(e)">
+									<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
+								</UDropdownMenu>
+							</td>
+						</tr>
+					</UContextMenu>
 				</tbody>
 			</table>
 
