@@ -265,7 +265,10 @@
 			@cancel="pdf.onCancel"
 		/>
 
-		<!-- Delete confirmation -->
+		<!-- Delete confirmation. Plain double-confirm — no typed-name
+			gate; payslips are easy to recreate from the bulk page if a
+			delete was accidental, and the gate just slowed the user
+			down for the common case. -->
 		<UModal v-model:open="confirmDelete" title="Delete this payslip?">
 			<template #body>
 				<div class="space-y-3 text-sm">
@@ -277,8 +280,6 @@
 					<p v-if="payments.length > 0" class="text-(--ui-warning)">
 						Heads up: {{ payments.length }} payment voucher(s) link to this payslip.
 					</p>
-					<p>Type the payslip number to confirm:</p>
-					<UInput v-model="confirmText" :placeholder="row?.number" />
 				</div>
 			</template>
 			<template #footer>
@@ -288,7 +289,6 @@
 					</UButton>
 					<UButton
 						color="error"
-						:disabled="confirmText !== row?.number"
 						:loading="busy"
 						icon="i-lucide-trash-2"
 						@click="onDelete"
@@ -407,7 +407,6 @@
 	const saving = ref(false);
 	const busy = ref(false);
 	const confirmDelete = ref(false);
-	const confirmText = ref("");
 
 	const onSave = async () => {
 		if (!row.value) return;
