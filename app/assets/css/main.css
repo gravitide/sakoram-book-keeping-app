@@ -151,11 +151,11 @@ a,
 
 .page-enter-active,
 .page-leave-active {
-	@apply transition-opacity ease-in-out duration-300;
+	@apply transition-opacity ease-in-out duration-150;
 }
 .layout-enter-active,
 .layout-leave-active {
-	@apply transition-opacity ease-in-out duration-500;
+	@apply transition-opacity ease-in-out duration-200;
 }
 .page-enter-from,
 .page-leave-to,
