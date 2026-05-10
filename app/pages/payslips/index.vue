@@ -153,36 +153,46 @@
 					</tr>
 				</thead>
 				<tbody>
-					<tr
+					<!-- Each row is wrapped in a UContextMenu so right-click
+						surfaces the same actions as the overflow button.
+						UContextMenu uses Reka UI's as-child trigger so the
+						<tr> stays the actual rendered element — no wrapper
+						div between tbody and tr (which would be invalid
+						HTML and break the layout). -->
+					<UContextMenu
 						v-for="r in list.paged"
 						:key="r.id"
-						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-						@click="open(r)"
+						:items="itemsFor(r)"
 					>
-						<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
-							{{ r.number }}
-						</td>
-						<td class="py-2 px-2">
-							{{ employeeName(r) }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-							{{ r.period_start }} → {{ r.period_end }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-							{{ r.pay_date }}
-						</td>
-						<td class="py-2 px-2">
-							<StatusBadge :status="store.derivedStatus(r)" />
-						</td>
-						<td class="py-2 px-2 text-right tabular-nums">
-							{{ formatMoney(r.net_cents) }}
-						</td>
-						<td class="py-2 pl-2 pr-3 text-right" @click.stop>
-							<UDropdownMenu :items="itemsFor(r)">
-								<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
-							</UDropdownMenu>
-						</td>
-					</tr>
+						<tr
+							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+							@click="open(r)"
+						>
+							<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
+								{{ r.number }}
+							</td>
+							<td class="py-2 px-2">
+								{{ employeeName(r) }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
+								{{ r.period_start }} → {{ r.period_end }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
+								{{ r.pay_date }}
+							</td>
+							<td class="py-2 px-2">
+								<StatusBadge :status="store.derivedStatus(r)" />
+							</td>
+							<td class="py-2 px-2 text-right tabular-nums">
+								{{ formatMoney(r.net_cents) }}
+							</td>
+							<td class="py-2 pl-2 pr-3 text-right" @click.stop>
+								<UDropdownMenu :items="itemsFor(r)">
+									<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
+								</UDropdownMenu>
+							</td>
+						</tr>
+					</UContextMenu>
 				</tbody>
 			</table>
 
