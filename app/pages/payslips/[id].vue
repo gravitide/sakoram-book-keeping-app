@@ -194,19 +194,30 @@
 						No payments recorded yet.
 					</div>
 					<ul v-else class="text-sm divide-y divide-(--ui-border)">
+						<!-- Two-line row: voucher number + amount on the
+							top line, secondary metadata (date · method)
+							muted underneath. Amount is right-aligned and
+							gets the visual weight; the date no longer
+							floats awkwardly between two strong fields. -->
 						<li
 							v-for="v in payments"
 							:key="v.id"
-							class="py-2 flex items-center justify-between gap-3"
+							class="py-2.5"
 						>
-							<NuxtLink
-								:to="`/vouchers/${v.id}`"
-								class="font-medium tabular-nums hover:text-(--ui-primary)"
-							>
-								{{ v.number }}
-							</NuxtLink>
-							<span class="text-xs text-(--ui-text-muted)">{{ v.voucher_date }}</span>
-							<span class="font-medium tabular-nums">{{ formatMoney(v.amount_cents) }}</span>
+							<div class="flex items-center justify-between gap-3">
+								<NuxtLink
+									:to="`/vouchers/${v.id}`"
+									class="font-medium tabular-nums hover:text-(--ui-primary)"
+								>
+									{{ v.number }}
+								</NuxtLink>
+								<span class="font-medium tabular-nums">{{ formatMoney(v.amount_cents) }}</span>
+							</div>
+							<div class="text-xs text-(--ui-text-muted) mt-0.5 tabular-nums">
+								{{ v.voucher_date }}<template v-if="paymentMethodLabel(v.payment_method)">
+									· {{ paymentMethodLabel(v.payment_method) }}
+								</template>
+							</div>
 						</li>
 					</ul>
 					<div v-if="row" class="mt-3 pt-3 border-t border-(--ui-border) text-sm tabular-nums">
@@ -504,6 +515,20 @@
 		} finally {
 			busy.value = false;
 		}
+	};
+
+	// Friendly label for a voucher's payment_method, used as the
+	// muted secondary line in the Payments panel.
+	const paymentMethodLabel = (m: string | null): string | null => {
+		if (!m) return null;
+		const map: Record<string, string> = {
+			bank_transfer: "Bank transfer",
+			cash: "Cash",
+			cheque: "Cheque",
+			card: "Card",
+			other: "Other"
+		};
+		return map[m] ?? m;
 	};
 
 	const recordPayment = () => {
