@@ -51,11 +51,25 @@
 						</UButton>
 					</div>
 					<div class="flex items-center gap-3 flex-wrap">
+						<!-- Month / year shortcut: 90% of the time the user is
+							asking 'show me April 2026' — picking from a single
+							list is much faster than two date fields. The
+							underlying period_from / period_to filters still
+							drive the query; this just sets them to the chosen
+							month's bounds. The custom-range fields below stay
+							for the rarer multi-month or partial-month case. -->
+						<USelectMenu
+							v-model="monthSelection"
+							:items="monthOptions"
+							value-key="value"
+							class="md:w-48"
+							:search-input="{ placeholder: 'Month…' }"
+						/>
 						<DateRangeField
 							v-model:from="store.periodFrom"
 							v-model:to="store.periodTo"
-							from-label="Period from"
-							to-label="Period to"
+							from-label="Custom from"
+							to-label="Custom to"
 						/>
 					</div>
 				</div>
@@ -179,7 +193,7 @@
 	import { useListView } from "~/composables/useListView";
 	import { formatMoney } from "~/lib/money";
 	import { useEmployeesStore } from "~/stores/employees";
-	import { usePayslipsStore } from "~/stores/payslips";
+	import { monthBounds, usePayslipsStore } from "~/stores/payslips";
 	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Payslips" });
@@ -228,6 +242,53 @@
 		get: () => store.employeeFilter,
 		set: (v: number | "all") => {
 			store.employeeFilter = v;
+		}
+	});
+
+	// Month shortcut. The list spans whatever months are present in the
+	// payslip table plus the current month — that way we don't show a
+	// year of empty options on a fresh tenant, and we always include
+	// the month the user is most likely about to issue a payslip in.
+	const monthOptions = computed(() => {
+		const months = new Set<string>(); // "YYYY-MM"
+		for (const p of store.payslips) {
+			months.add(p.period_start.slice(0, 7));
+		}
+		const today = new Date();
+		months.add(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`);
+		const sorted = Array.from(months).sort().reverse();
+		const fmt = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" });
+		return [
+			{ label: "All months", value: "all" as const },
+			...sorted.map((ym) => {
+				const [y, m] = ym.split("-").map(Number) as [number, number];
+				return { label: fmt.format(new Date(y, m - 1, 1)), value: ym };
+			})
+		];
+	});
+
+	// v-model on the month picker. Reading: "all" when both range bounds
+	// are unset, the matching YYYY-MM when from/to align with that
+	// month's bounds, otherwise "all" (custom range — let the
+	// DateRangeField alone, the picker just shows All).
+	const monthSelection = computed<string>({
+		get: () => {
+			const from = store.periodFrom;
+			const to = store.periodTo;
+			if (!from || !to) return "all";
+			const ym = from.slice(0, 7);
+			const bounds = monthBounds(`${ym}-01`);
+			return from === bounds.start && to === bounds.end ? ym : "all";
+		},
+		set: (v: string) => {
+			if (v === "all") {
+				store.periodFrom = null;
+				store.periodTo = null;
+				return;
+			}
+			const bounds = monthBounds(`${v}-01`);
+			store.periodFrom = bounds.start;
+			store.periodTo = bounds.end;
 		}
 	});
 
