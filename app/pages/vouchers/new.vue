@@ -89,8 +89,12 @@
 				</UFormField>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<UFormField label="Date" required>
-						<DateField v-model="voucherDate" />
+					<UFormField
+						label="Date"
+						required
+						:hint="dateMin ? `Cannot be before ${dateMin} (the payslip's pay date).` : undefined"
+					>
+						<DateField v-model="voucherDate" :min-value="dateMin" />
 					</UFormField>
 					<UFormField label="Amount" required :hint="prefilled ? 'Defaults to remaining balance — edit for a partial payment.' : undefined">
 						<UInput
@@ -236,10 +240,9 @@
 	});
 
 	// True when the user arrived via 'Record payment' on a known
-	// document — type / date / amount / party / linked-doc all come
-	// from that document and shouldn't be edited here. We still let
-	// them tweak Method / Reference / Description (those are the
-	// transaction-specific bits the source document doesn't know).
+	// document — type / party / linked-doc come from that document
+	// and shouldn't be edited here. Date and amount stay editable
+	// because partial / early / late payments are normal.
 	const prefilled = computed(() =>
 		prefilledInvoiceId.value !== null
 		|| prefilledBillId.value !== null
@@ -265,6 +268,14 @@
 	const seedPayslip = prefilledPayslipId.value
 		? payslipsStore.payslips.find((p) => p.id === prefilledPayslipId.value) ?? null
 		: null;
+
+	// When recording a payment for a payslip, the voucher date must
+	// be on or after the payslip's pay_date — paying before the pay
+	// date doesn't make accounting sense. Bills and invoices don't
+	// share the same constraint (you can pay a bill the day it
+	// arrives, even before its issue/due date in edge cases) so we
+	// only clamp the payslip case.
+	const dateMin: string | null = seedPayslip?.pay_date ?? null;
 
 	const seedVendorName = (() => {
 		if (!seedBill) return "";
@@ -317,7 +328,14 @@
 			: seedBill ? `Payment for ${seedBill.number}` : "";
 
 	const voucherType = ref<VoucherType>(initialType);
-	const voucherDate = ref<string>(todayISO());
+	// Default to today, but never earlier than the payslip's pay_date
+	// when one's prefilled — saves the user a manual fix when they
+	// open the form before the salary is officially due.
+	const initialDate = (() => {
+		const t = todayISO();
+		return dateMin && t < dateMin ? dateMin : t;
+	})();
+	const voucherDate = ref<string>(initialDate);
 	const partyName = ref<string>(initialPartyName);
 	const amountDisplay = ref<string>(seedAmountDisplay);
 	const amountCents = ref<number>(seedAmountCents);
