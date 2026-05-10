@@ -153,36 +153,46 @@
 					</tr>
 				</thead>
 				<tbody>
-					<tr
+					<!-- Each row is wrapped in a UContextMenu so right-click
+						surfaces the same actions as the overflow button.
+						UContextMenu uses Reka UI's as-child trigger so the
+						<tr> stays the actual rendered element — no wrapper
+						div between tbody and tr (which would be invalid
+						HTML and break the layout). -->
+					<UContextMenu
 						v-for="r in list.paged"
 						:key="r.id"
-						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-						@click="open(r)"
+						:items="itemsFor(r)"
 					>
-						<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
-							{{ r.number }}
-						</td>
-						<td class="py-2 px-2">
-							{{ employeeName(r) }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-							{{ r.period_start }} → {{ r.period_end }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-							{{ r.pay_date }}
-						</td>
-						<td class="py-2 px-2">
-							<StatusBadge :status="store.derivedStatus(r)" />
-						</td>
-						<td class="py-2 px-2 text-right tabular-nums">
-							{{ formatMoney(r.net_cents) }}
-						</td>
-						<td class="py-2 pl-2 pr-3 text-right" @click.stop>
-							<UDropdownMenu :items="itemsFor(r)">
-								<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
-							</UDropdownMenu>
-						</td>
-					</tr>
+						<tr
+							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+							@click="open(r)"
+						>
+							<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
+								{{ r.number }}
+							</td>
+							<td class="py-2 px-2">
+								{{ employeeName(r) }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
+								{{ r.period_start }} → {{ r.period_end }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
+								{{ r.pay_date }}
+							</td>
+							<td class="py-2 px-2">
+								<StatusBadge :status="store.derivedStatus(r)" />
+							</td>
+							<td class="py-2 px-2 text-right tabular-nums">
+								{{ formatMoney(r.net_cents) }}
+							</td>
+							<td class="py-2 pl-2 pr-3 text-right" @click.stop>
+								<UDropdownMenu :items="itemsFor(r)">
+									<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
+								</UDropdownMenu>
+							</td>
+						</tr>
+					</UContextMenu>
 				</tbody>
 			</table>
 
@@ -195,28 +205,46 @@
 				:range-end="list.rangeEnd"
 			/>
 		</UCard>
+
+		<PdfPreviewModal
+			v-model:open="pdf.state.open"
+			:asset-url="pdf.state.assetUrl"
+			:suggested-file-name="pdf.state.suggestedFileName"
+			:saving="pdf.state.saving"
+			title="Payslip PDF preview"
+			@save="pdf.onSave"
+			@cancel="pdf.onCancel"
+		/>
 	</div>
 </template>
 
 <script setup lang="ts">
-	import type { EmployeeSnapshot, PayslipRow, PayslipStatus } from "~/stores/payslips";
+	import type { EmployeeSnapshot, PayslipLineDraft, PayslipRow, PayslipStatus } from "~/stores/payslips";
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { useListView } from "~/composables/useListView";
+	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { formatMoney } from "~/lib/money";
+	import { buildPayslipPdfPayload } from "~/lib/payslip-pdf";
 	import { useEmployeesStore } from "~/stores/employees";
 	import { monthBounds, usePayslipsStore } from "~/stores/payslips";
+	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Payslips" });
 
 	const router = useRouter();
+	const toast = useToast();
 	const store = usePayslipsStore();
 	const employeesStore = useEmployeesStore();
 	const vouchersStore = useVouchersStore();
+	const settingsStore = useSettingsStore();
+	const currency = useActiveCurrency();
 
 	await Promise.all([
 		store.load(),
 		employeesStore.employees.length === 0 ? employeesStore.load() : Promise.resolve(),
-		vouchersStore.vouchers.length === 0 ? vouchersStore.load() : Promise.resolve()
+		vouchersStore.vouchers.length === 0 ? vouchersStore.load() : Promise.resolve(),
+		settingsStore.ensureLoaded()
 	]);
 
 	const employeeName = (r: PayslipRow): string => {
@@ -328,7 +356,92 @@
 
 	const open = (r: PayslipRow) => router.push(`/payslips/${r.id}`);
 
-	const itemsFor = (r: PayslipRow) => [[
-		{ label: "Open", icon: "i-lucide-pencil", onSelect: () => open(r) }
-	]];
+	// Per-row PDF generation. We hand usePdfPreview a callback that
+	// reads from a 'currentPayslip' ref + a fetched lines list — set
+	// by onPdfClick before opening the modal. The shared payload
+	// builder takes it from there.
+	const currentPayslip = ref<PayslipRow | null>(null);
+	const currentLines = ref<PayslipLineDraft[]>([]);
+	const pdf = usePdfPreview({
+		command: "export_payslip_pdf",
+		buildPayload: () => {
+			if (!currentPayslip.value) return {};
+			return buildPayslipPdfPayload({
+				row: currentPayslip.value,
+				lines: currentLines.value,
+				settings: settingsStore.settings,
+				currency: currency.value,
+				paidCents: store.paidCentsFor(currentPayslip.value.id),
+				balanceCents: store.balanceCentsFor(currentPayslip.value)
+			});
+		},
+		fileName: () => `${currentPayslip.value?.number ?? "payslip"}.pdf`,
+		title: "Payslip PDF preview"
+	});
+	const onPdfClick = async (r: PayslipRow) => {
+		currentPayslip.value = r;
+		try {
+			const rows = await store.getLines(r.id);
+			currentLines.value = rows.map((l) => ({
+				sort_order: l.sort_order,
+				kind: l.kind,
+				label: l.label,
+				amount_cents: l.amount_cents
+			}));
+		} catch (err) {
+			toast.add({
+				title: "Could not load lines",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+			return;
+		}
+		pdf.open();
+	};
+
+	// Quick 'Mark issued' from the row dropdown — saves the user a
+	// click into the detail page when the draft is already complete.
+	// Refused at the store level if anything's off (zero net, etc.)
+	// so worst case is a toast describing the problem.
+	const markIssued = async (r: PayslipRow) => {
+		try {
+			await store.setStatus(r.id, "issued");
+			toast.add({ title: `${r.number} issued`, color: "success", icon: "i-lucide-send" });
+		} catch (err) {
+			toast.add({
+				title: "Could not issue",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	// UDropdownMenu / UContextMenu render a thin divider between
+	// each top-level group. We split lifecycle actions (Open, Mark
+	// issued) from the export action (Generate PDF) so the menu
+	// reads as two distinct kinds of intent.
+	const itemsFor = (r: PayslipRow) => {
+		const lifecycle: { label: string, icon: string, onSelect: () => void }[] = [
+			{ label: "Open", icon: "i-lucide-pencil", onSelect: () => open(r) }
+		];
+		if (r.status === "draft" && r.net_cents > 0) {
+			lifecycle.push({
+				label: "Mark issued",
+				icon: "i-lucide-send",
+				onSelect: () => {
+					void markIssued(r);
+				}
+			});
+		}
+		const exports = [{
+			label: "Generate PDF",
+			icon: "i-lucide-file-down",
+			onSelect: () => {
+				void onPdfClick(r);
+			}
+		}];
+		return [lifecycle, exports];
+	};
 </script>

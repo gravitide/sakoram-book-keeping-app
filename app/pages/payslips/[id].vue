@@ -334,8 +334,8 @@
 	import type { EmployeeSnapshot, PayslipLineDraft, PayslipLineRow, PayslipRow } from "~/stores/payslips";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
-	import { formatLKR, formatMoney } from "~/lib/money";
-	import { themeHex } from "~/lib/theme";
+	import { formatMoney } from "~/lib/money";
+	import { buildPayslipPdfPayload } from "~/lib/payslip-pdf";
 	import { usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
@@ -554,76 +554,20 @@
 		router.push(`/vouchers/new?payslip=${row.value.id}`);
 	};
 
-	// PDF rendering. We send the lines split into earnings / deductions so
-	// the Typst template can iterate each side independently. Money fields
-	// get pre-formatted (currency-aware, comma-separated) in the payload —
-	// the template only needs to concatenate the symbol back on.
+	// PDF rendering. The detail page passes the *editor's* lines (so an
+	// unsaved tweak is reflected in the preview) rather than re-fetching
+	// from the DB; the shared builder accepts whatever line list we hand
+	// it. The list page uses the same builder with DB-fetched lines.
 	const buildPdfPayload = () => {
-		const r = row.value;
-		const e = employee.value;
-		if (!r || !e) return {};
-		const earnings = form.lines
-			.filter((l) => l.kind === "earning")
-			.map((l) => ({
-				label: l.label || "(unnamed)",
-				amount_display: formatLKR(l.amount_cents, { withSymbol: false })
-			}));
-		const deductions = form.lines
-			.filter((l) => l.kind === "deduction")
-			.map((l) => ({
-				label: l.label || "(unnamed)",
-				amount_display: formatLKR(l.amount_cents, { withSymbol: false })
-			}));
-
-		const earningsTotal = form.lines
-			.filter((l) => l.kind === "earning")
-			.reduce((s, l) => s + l.amount_cents, 0);
-		const deductionsTotal = form.lines
-			.filter((l) => l.kind === "deduction")
-			.reduce((s, l) => s + l.amount_cents, 0);
-		const net = Math.max(0, earningsTotal - deductionsTotal);
-
-		const paidC = paidCents.value;
-		const balanceC = balanceCents.value;
-
-		return {
-			number: r.number,
-			theme_color: themeHex(settingsStore.settings?.theme_color),
-			font_family: settingsStore.settings?.pdf_font ?? "Inter",
-			currency_code: currency.value.code,
-			currency_symbol: currency.value.symbol,
-			period_start: r.period_start,
-			period_end: r.period_end,
-			period_display: `${r.period_start} → ${r.period_end}`,
-			pay_date: r.pay_date,
-			employee: {
-				full_name: e.full_name,
-				employee_number: e.employee_number ?? null,
-				designation: e.designation ?? null,
-				nic: e.nic ?? null,
-				bank_name: e.bank_name ?? null,
-				bank_branch: e.bank_branch ?? null,
-				bank_account_number: e.bank_account_number ?? null,
-				bank_account_name: e.bank_account_name ?? null
-			},
-			earnings,
-			deductions,
-			formatted: {
-				earnings: formatLKR(earningsTotal, { withSymbol: false }),
-				deductions: formatLKR(deductionsTotal, { withSymbol: false }),
-				net: formatLKR(net, { withSymbol: false })
-			},
-			paid_cents: paidC > 0 ? paidC : null,
-			paid_display: paidC > 0 ? formatLKR(paidC, { withSymbol: false }) : null,
-			balance_display: paidC > 0 ? formatLKR(balanceC, { withSymbol: false }) : null,
-			notes: r.notes,
-			business_name: settingsStore.settings?.business_name ?? null,
-			website: settingsStore.settings?.website ?? null,
-			phone: settingsStore.settings?.phone ?? null,
-			address_line1: settingsStore.settings?.address_line1 ?? null,
-			city: settingsStore.settings?.city ?? null,
-			logo_path: settingsStore.settings?.pdf_header_logo_path ?? null
-		};
+		if (!row.value) return {};
+		return buildPayslipPdfPayload({
+			row: row.value,
+			lines: form.lines,
+			settings: settingsStore.settings,
+			currency: currency.value,
+			paidCents: paidCents.value,
+			balanceCents: balanceCents.value
+		});
 	};
 
 	const pdf = usePdfPreview({
