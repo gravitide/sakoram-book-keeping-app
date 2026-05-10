@@ -93,6 +93,7 @@
 	definePageMeta({ title: "New payslip" });
 
 	const router = useRouter();
+	const route = useRoute();
 	const toast = useToast();
 	const store = usePayslipsStore();
 	const employeesStore = useEmployeesStore();
@@ -102,8 +103,20 @@
 		employeesStore.employees.length === 0 ? employeesStore.load() : Promise.resolve()
 	]);
 
-	const employeeId = ref<number | null>(null);
-	const picked = ref<EmployeeRow | null>(null);
+	// Optional ?employee=ID query — used by the "Create payslip" action on
+	// the employees list to preselect.
+	const preselectedId = (() => {
+		const raw = route.query.employee;
+		const v = Array.isArray(raw) ? raw[0] : raw;
+		const n = v ? Number(v) : Number.NaN;
+		return Number.isFinite(n) ? n : null;
+	})();
+	const preselected = preselectedId !== null
+		? employeesStore.employees.find((e) => e.id === preselectedId) ?? null
+		: null;
+
+	const employeeId = ref<number | null>(preselected?.id ?? null);
+	const picked = ref<EmployeeRow | null>(preselected);
 	const creating = ref(false);
 
 	// Default to the current calendar month — the most common case.
