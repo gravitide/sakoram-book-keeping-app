@@ -26,6 +26,14 @@
 }
 
 @font-face {
+	font-family: "Stack Sans Text";
+	font-style: normal;
+	font-weight: 100 900;
+	font-display: swap;
+	src: url("@/assets/fonts/StackSansText.ttf") format("truetype-variations");
+}
+
+@font-face {
 	font-family: "Miriam Libre";
 	font-style: normal;
 	font-weight: 400;
