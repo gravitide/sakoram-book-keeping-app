@@ -54,7 +54,7 @@
 					Record payment
 				</UButton>
 				<UButton
-					v-if="row && row.status !== 'cancelled'"
+					v-if="canCancel"
 					icon="i-lucide-circle-x"
 					variant="soft"
 					color="neutral"
@@ -394,6 +394,16 @@
 	const paidCents = computed(() => row.value ? store.paidCentsFor(row.value.id) : 0);
 	const balanceCents = computed(() => row.value ? store.balanceCentsFor(row.value) : 0);
 	const payments = computed(() => row.value ? store.linkedPayments(row.value.id) : []);
+
+	// Cancel is offered only when the store would actually allow it.
+	// The store FSM refuses cancel on an issued payslip with linked
+	// payments (caller must delete the vouchers first); reflecting
+	// that here keeps the button from being a dead-end click.
+	const canCancel = computed(() => {
+		if (!row.value || row.value.status === "cancelled") return false;
+		if (row.value.status === "issued" && paidCents.value > 0) return false;
+		return true;
+	});
 
 	const canIssue = computed(() => {
 		if (!row.value) return false;
