@@ -25,6 +25,7 @@ use tauri_plugin_shell::ShellExt;
 
 const DOCUMENT_TEMPLATE: &str = include_str!("../templates/document.typ");
 const VOUCHER_TEMPLATE: &str = include_str!("../templates/voucher.typ");
+const PAYSLIP_TEMPLATE: &str = include_str!("../templates/payslip.typ");
 
 #[derive(Debug, thiserror::Error)]
 pub enum PdfError {
@@ -227,6 +228,15 @@ pub async fn export_bill_pdf(
 	output_path: String,
 ) -> Result<(), PdfError> {
 	render_pdf(&app, "document.typ", DOCUMENT_TEMPLATE, data, PathBuf::from(output_path)).await
+}
+
+#[tauri::command]
+pub async fn export_payslip_pdf(
+	app: AppHandle,
+	data: Value,
+	output_path: String,
+) -> Result<(), PdfError> {
+	render_pdf(&app, "payslip.typ", PAYSLIP_TEMPLATE, data, PathBuf::from(output_path)).await
 }
 
 #[tauri::command]
