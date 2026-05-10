@@ -247,8 +247,8 @@
 
 		<!-- Delete confirmation -->
 		<UModal v-model:open="confirmDelete" title="Delete this payslip?">
-			<template #content>
-				<div class="p-6 space-y-3 text-sm">
+			<template #body>
+				<div class="space-y-3 text-sm">
 					<p>
 						This permanently removes payslip <span class="font-medium tabular-nums">{{ row?.number }}</span>.
 						Any payment vouchers stay in the books but lose their link
