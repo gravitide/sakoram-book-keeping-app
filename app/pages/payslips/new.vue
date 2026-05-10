@@ -31,12 +31,19 @@
 						<DateField v-model="periodStart" />
 					</UFormField>
 					<UFormField label="Period end" required>
-						<DateField v-model="periodEnd" />
+						<DateField
+							v-model="periodEnd"
+							:min-value="periodStart"
+						/>
 					</UFormField>
 				</div>
 
-				<UFormField label="Pay date" required>
-					<DateField v-model="payDate" />
+				<UFormField label="Pay date" required hint="Must fall within the pay period.">
+					<DateField
+						v-model="payDate"
+						:min-value="periodStart"
+						:max-value="periodEnd"
+					/>
 				</UFormField>
 
 				<div v-if="duplicateExists" class="rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/10 px-3 py-2 text-xs flex items-start gap-2">
@@ -108,6 +115,24 @@
 	const periodStart = ref<string | null>(initialBounds.start);
 	const periodEnd = ref<string | null>(initialBounds.end);
 	const payDate = ref<string | null>(initialBounds.end);
+
+	// When the user changes period_start, snap period_end to the last
+	// day of *that* month and pull pay_date in if it has fallen out of
+	// the new range. Saves the user from manually fixing two fields
+	// every time they shift the period.
+	watch(periodStart, (next, prev) => {
+		if (!next || next === prev) return;
+		const bounds = monthBounds(next);
+		periodEnd.value = bounds.end;
+		if (!payDate.value || payDate.value < bounds.start) payDate.value = bounds.end;
+		else if (payDate.value > bounds.end) payDate.value = bounds.end;
+	});
+
+	// If the user shrinks period_end, drag pay_date back into range.
+	watch(periodEnd, (next) => {
+		if (!next) return;
+		if (payDate.value && payDate.value > next) payDate.value = next;
+	});
 
 	const onPick = (e: EmployeeRow) => {
 		picked.value = e;
