@@ -233,6 +233,7 @@
 	definePageMeta({ title: "Payslips" });
 
 	const router = useRouter();
+	const route = useRoute();
 	const toast = useToast();
 	const store = usePayslipsStore();
 	const employeesStore = useEmployeesStore();
@@ -246,6 +247,15 @@
 		vouchersStore.vouchers.length === 0 ? vouchersStore.load() : Promise.resolve(),
 		settingsStore.ensureLoaded()
 	]);
+
+	// Optional ?employee=ID query — used by the "View payslips" action on
+	// the employees list to land here pre-filtered to that employee.
+	{
+		const raw = route.query.employee;
+		const v = Array.isArray(raw) ? raw[0] : raw;
+		const n = v ? Number(v) : Number.NaN;
+		if (Number.isFinite(n)) store.employeeFilter = n;
+	}
 
 	const employeeName = (r: PayslipRow): string => {
 		try {
