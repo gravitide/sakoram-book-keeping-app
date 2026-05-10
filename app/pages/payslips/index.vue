@@ -10,9 +10,19 @@
 					<span class="font-medium tabular-nums">{{ formatMoney(store.outstandingTotal) }}</span>
 				</p>
 			</div>
-			<UButton icon="i-lucide-plus" @click="router.push('/payslips/new')">
-				New payslip
-			</UButton>
+			<div class="flex items-center gap-2">
+				<UButton
+					icon="i-lucide-users"
+					variant="soft"
+					color="neutral"
+					@click="router.push('/payslips/bulk')"
+				>
+					Bulk for all
+				</UButton>
+				<UButton icon="i-lucide-plus" @click="router.push('/payslips/new')">
+					New payslip
+				</UButton>
+			</div>
 		</header>
 
 		<UCard>
