@@ -418,12 +418,16 @@
 		}
 	};
 
+	// UDropdownMenu / UContextMenu render a thin divider between
+	// each top-level group. We split lifecycle actions (Open, Mark
+	// issued) from the export action (Generate PDF) so the menu
+	// reads as two distinct kinds of intent.
 	const itemsFor = (r: PayslipRow) => {
-		const items: { label: string, icon: string, onSelect: () => void }[] = [
+		const lifecycle: { label: string, icon: string, onSelect: () => void }[] = [
 			{ label: "Open", icon: "i-lucide-pencil", onSelect: () => open(r) }
 		];
 		if (r.status === "draft" && r.net_cents > 0) {
-			items.push({
+			lifecycle.push({
 				label: "Mark issued",
 				icon: "i-lucide-send",
 				onSelect: () => {
@@ -431,13 +435,13 @@
 				}
 			});
 		}
-		items.push({
+		const exports = [{
 			label: "Generate PDF",
 			icon: "i-lucide-file-down",
 			onSelect: () => {
 				void onPdfClick(r);
 			}
-		});
-		return [items];
+		}];
+		return [lifecycle, exports];
 	};
 </script>
