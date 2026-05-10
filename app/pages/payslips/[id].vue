@@ -248,8 +248,8 @@
 					<UButton variant="ghost" color="neutral" :disabled="saving" @click="onDiscard">
 						Discard
 					</UButton>
-					<UButton :loading="saving" :disabled="!dirty || locked" icon="i-lucide-save" @click="onSave">
-						Save changes
+					<UButton :loading="saving" :disabled="!dirty" icon="i-lucide-save" @click="onSave">
+						{{ locked ? "Save notes" : "Save changes" }}
 					</UButton>
 				</div>
 			</div>
@@ -410,19 +410,28 @@
 	const confirmText = ref("");
 
 	const onSave = async () => {
-		if (!row.value || locked.value) return;
+		if (!row.value) return;
 		saving.value = true;
 		try {
-			const totals = await store.replaceLines(row.value.id, form.lines);
-			await store.update(row.value.id, {
-				period_start: form.period_start ?? row.value.period_start,
-				period_end: form.period_end ?? row.value.period_end,
-				pay_date: form.pay_date ?? row.value.pay_date,
-				notes: form.notes.trim() || null,
-				earnings_cents: totals.earnings_cents,
-				deductions_cents: totals.deductions_cents,
-				net_cents: totals.net_cents
-			});
+			if (locked.value) {
+				// Issued / cancelled payslips are immutable except for the
+				// notes field — we persist that and nothing else, even if
+				// the form's other slots somehow ended up dirty.
+				await store.update(row.value.id, {
+					notes: form.notes.trim() || null
+				});
+			} else {
+				const totals = await store.replaceLines(row.value.id, form.lines);
+				await store.update(row.value.id, {
+					period_start: form.period_start ?? row.value.period_start,
+					period_end: form.period_end ?? row.value.period_end,
+					pay_date: form.pay_date ?? row.value.pay_date,
+					notes: form.notes.trim() || null,
+					earnings_cents: totals.earnings_cents,
+					deductions_cents: totals.deductions_cents,
+					net_cents: totals.net_cents
+				});
+			}
 			await store.load();
 			await hydrate();
 			refreshBaseline();
