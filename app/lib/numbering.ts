@@ -10,13 +10,14 @@
 
 import { select, selectOne } from "./db";
 
-export type DocumentType = "quote" | "invoice" | "bill" | "voucher";
+export type DocumentType = "quote" | "invoice" | "bill" | "voucher" | "payslip";
 
 const PREFIX: Record<DocumentType, string> = {
 	quote: "QUO",
 	invoice: "INV",
 	bill: "BIL",
-	voucher: "VCH"
+	voucher: "VCH",
+	payslip: "PSL"
 };
 
 // Compute the fiscal year for a given ISO date string and the configured

@@ -542,6 +542,7 @@ const seedBills = async (vs: VendorIds, cats: CategoryIds): Promise<BillIds> => 
 		description: `Partial payment for ${(await bills.get(ids.bank))?.number}`,
 		related_invoice_id: null,
 		related_bill_id: ids.bank,
+		related_payslip_id: null,
 		attachment_path: null
 	});
 
@@ -573,6 +574,7 @@ const seedVouchers = async (cs: ClientIds, vs: VendorIds, bs: BillIds, is: Invoi
 		description: "Full payment for hotel branding refresh.",
 		related_invoice_id: is.galle,
 		related_bill_id: null,
+		related_payslip_id: null,
 		attachment_path: null
 	});
 
@@ -587,6 +589,7 @@ const seedVouchers = async (cs: ClientIds, vs: VendorIds, bs: BillIds, is: Invoi
 		description: "Stage-2 milestone (50%).",
 		related_invoice_id: is.premier,
 		related_bill_id: null,
+		related_payslip_id: null,
 		attachment_path: null
 	});
 
@@ -601,6 +604,7 @@ const seedVouchers = async (cs: ClientIds, vs: VendorIds, bs: BillIds, is: Invoi
 		description: "April electricity bill.",
 		related_invoice_id: null,
 		related_bill_id: bs.ceb,
+		related_payslip_id: null,
 		attachment_path: null
 	});
 
@@ -616,6 +620,7 @@ const seedVouchers = async (cs: ClientIds, vs: VendorIds, bs: BillIds, is: Invoi
 		description: "Petty-cash advance for delivery handler.",
 		related_invoice_id: null,
 		related_bill_id: null,
+		related_payslip_id: null,
 		attachment_path: null
 	});
 };
@@ -763,6 +768,7 @@ const seedBulkInvoices = async (clientIds: number[]) => {
 				description: `Bulk partial invoice #${i}`,
 				related_invoice_id: id,
 				related_bill_id: null,
+				related_payslip_id: null,
 				attachment_path: null
 			});
 		} else if (outcome === "paid") {
@@ -776,6 +782,7 @@ const seedBulkInvoices = async (clientIds: number[]) => {
 				description: `Bulk paid invoice #${i}`,
 				related_invoice_id: id,
 				related_bill_id: null,
+				related_payslip_id: null,
 				attachment_path: null
 			});
 		} else if (outcome === "cancelled") {
@@ -849,6 +856,7 @@ const seedBulkBills = async (vendorIds: number[], catIds: CategoryIds, allCats: 
 				description: `Bulk paid bill #${i}`,
 				related_invoice_id: null,
 				related_bill_id: id,
+				related_payslip_id: null,
 				attachment_path: null
 			});
 		} else if (outcome === "partial") {
@@ -862,6 +870,7 @@ const seedBulkBills = async (vendorIds: number[], catIds: CategoryIds, allCats: 
 				description: `Bulk partial bill #${i}`,
 				related_invoice_id: null,
 				related_bill_id: id,
+				related_payslip_id: null,
 				attachment_path: null
 			});
 		} else if (outcome === "cancelled") {
@@ -896,6 +905,7 @@ const seedBulkVouchers = async (clientIds: number[], vendorIds: number[]) => {
 				: `Bulk payment #${i}`,
 			related_invoice_id: null,
 			related_bill_id: null,
+			related_payslip_id: null,
 			attachment_path: null
 		});
 	}

@@ -149,11 +149,13 @@
 // the user creates the voucher.
 
 	import type { VendorSnapshot } from "~/stores/bills";
+	import type { EmployeeSnapshot } from "~/stores/payslips";
 	import type { ClientSnapshot } from "~/stores/quotes";
 	import type { VoucherInput, VoucherMethod, VoucherType } from "~/stores/vouchers";
 	import { formatLKR, toCents } from "~/lib/money";
 	import { useBillsStore } from "~/stores/bills";
 	import { useInvoicesStore } from "~/stores/invoices";
+	import { usePayslipsStore } from "~/stores/payslips";
 	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "New voucher" });
@@ -164,11 +166,12 @@
 	const store = useVouchersStore();
 	const invoicesStore = useInvoicesStore();
 	const billsStore = useBillsStore();
+	const payslipsStore = usePayslipsStore();
 
 	// Vouchers store has to be loaded too so the bills store's
 	// derivedStatus / paidCentsFor below see existing payment vouchers
 	// when we compute the suggested-amount default.
-	await Promise.all([store.load(), invoicesStore.load(), billsStore.load()]);
+	await Promise.all([store.load(), invoicesStore.load(), billsStore.load(), payslipsStore.load()]);
 
 	// "Record payment" on a bill or invoice detail page navigates here
 	// with ?bill=N or ?invoice=N — we pre-fill the appropriate fields
@@ -183,6 +186,12 @@
 	});
 	const prefilledInvoiceId = computed<number | null>(() => {
 		const raw = route.query.invoice;
+		const v = Array.isArray(raw) ? raw[0] : raw;
+		const n = Number(v);
+		return Number.isFinite(n) && n > 0 ? n : null;
+	});
+	const prefilledPayslipId = computed<number | null>(() => {
+		const raw = route.query.payslip;
 		const v = Array.isArray(raw) ? raw[0] : raw;
 		const n = Number(v);
 		return Number.isFinite(n) && n > 0 ? n : null;
@@ -204,6 +213,9 @@
 	const seedInvoice = prefilledInvoiceId.value
 		? invoicesStore.invoices.find((i) => i.id === prefilledInvoiceId.value) ?? null
 		: null;
+	const seedPayslip = prefilledPayslipId.value
+		? payslipsStore.payslips.find((p) => p.id === prefilledPayslipId.value) ?? null
+		: null;
 
 	const seedVendorName = (() => {
 		if (!seedBill) return "";
@@ -223,20 +235,37 @@
 		}
 	})();
 
-	// Pick whichever side prefilled. Invoice wins ties (shouldn't
-	// happen — both query params at once is a malformed link).
+	const seedEmployeeName = (() => {
+		if (!seedPayslip) return "";
+		try {
+			return (JSON.parse(seedPayslip.employee_snapshot) as EmployeeSnapshot).full_name ?? "";
+		} catch {
+			return "";
+		}
+	})();
+
+	// Pick whichever side prefilled. Invoice wins, then payslip, then bill.
+	// Multiple query params at once is a malformed link — first match wins.
 	const seedAmountCents = seedInvoice
 		? invoicesStore.balanceCentsFor(seedInvoice)
-		: seedBill ? billsStore.balanceCentsFor(seedBill) : 0;
+		: seedPayslip
+			? payslipsStore.balanceCentsFor(seedPayslip)
+			: seedBill ? billsStore.balanceCentsFor(seedBill) : 0;
 	const seedAmountDisplay = seedAmountCents > 0
 		? `${Math.floor(seedAmountCents / 100)}.${String(seedAmountCents % 100).padStart(2, "0")}`
 		: "";
 
 	const initialType: VoucherType = seedInvoice ? "receipt" : "payment";
-	const initialPartyName = seedInvoice ? seedClientName : seedVendorName;
+	const initialPartyName = seedInvoice
+		? seedClientName
+		: seedPayslip
+			? seedEmployeeName
+			: seedVendorName;
 	const initialDescription = seedInvoice
 		? `Receipt for ${seedInvoice.number}`
-		: seedBill ? `Payment for ${seedBill.number}` : "";
+		: seedPayslip
+			? `Salary payment — ${seedPayslip.number}`
+			: seedBill ? `Payment for ${seedBill.number}` : "";
 
 	const voucherType = ref<VoucherType>(initialType);
 	const voucherDate = ref<string>(todayISO());
@@ -248,6 +277,7 @@
 	const description = ref<string>(initialDescription);
 	const relatedInvoiceId = ref<number | null>(seedInvoice?.id ?? null);
 	const relatedBillId = ref<number | null>(seedBill?.id ?? null);
+	const relatedPayslipId = ref<number | null>(seedPayslip?.id ?? null);
 	const creating = ref(false);
 
 	const typeOptions: { label: string, value: VoucherType }[] = [
@@ -380,6 +410,7 @@
 		// vouchers list (the canonical home of the standalone-create
 		// flow).
 		if (prefilledInvoiceId.value) router.push(`/invoices/${prefilledInvoiceId.value}`);
+		else if (prefilledPayslipId.value) router.push(`/payslips/${prefilledPayslipId.value}`);
 		else if (prefilledBillId.value) router.push(`/bills/${prefilledBillId.value}`);
 		else router.push("/vouchers");
 	};
@@ -401,6 +432,7 @@
 				description: description.value.trim() || null,
 				related_invoice_id: voucherType.value === "receipt" ? relatedInvoiceId.value : null,
 				related_bill_id: voucherType.value === "payment" ? relatedBillId.value : null,
+				related_payslip_id: voucherType.value === "payment" ? relatedPayslipId.value : null,
 				attachment_path: null
 			};
 			const id = await store.create(input);
@@ -411,6 +443,8 @@
 			// page like the standalone-create path always did.
 			if (prefilledInvoiceId.value) {
 				await router.replace(`/invoices/${prefilledInvoiceId.value}`);
+			} else if (prefilledPayslipId.value) {
+				await router.replace(`/payslips/${prefilledPayslipId.value}`);
 			} else if (prefilledBillId.value) {
 				await router.replace(`/bills/${prefilledBillId.value}`);
 			} else {
