@@ -112,6 +112,34 @@
 				</div>
 			</UCard>
 
+			<UCard>
+				<template #header>
+					<div class="font-medium">
+						Zoom
+					</div>
+					<div class="text-xs text-(--ui-text-muted) mt-1">
+						Scales the whole interface — text, icons, spacing, modals.
+						Saved on this machine, separate from business settings.
+						The titlebar and PDFs are intentionally unaffected.
+					</div>
+				</template>
+
+				<div class="flex flex-wrap gap-2">
+					<button
+						v-for="z in ZOOM_LEVELS"
+						:key="z"
+						type="button"
+						class="rounded-md border px-3 py-1.5 text-sm transition tabular-nums"
+						:class="zoomLevel === z
+							? 'border-(--ui-primary) bg-(--ui-primary)/10 text-(--ui-primary) font-medium'
+							: 'border-(--ui-border) hover:border-(--ui-text-muted)'"
+						@click="setZoomLevel(z)"
+					>
+						{{ z }}%
+					</button>
+				</div>
+			</UCard>
+
 			<div class="flex justify-end gap-2">
 				<UButton
 					color="neutral"
@@ -136,6 +164,7 @@
 // sticks across launches.
 
 	import type { ThemeColor } from "~/lib/theme";
+	import { useUiState, ZOOM_LEVELS } from "~/composables/useUiState";
 	import { isValidThemeColor, THEME_COLORS } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 
@@ -144,6 +173,10 @@
 	const store = useSettingsStore();
 	const toast = useToast();
 	const appConfig = useAppConfig() as { ui: { colors: { primary: string } } };
+	// Zoom is a per-machine UI preference (localStorage-backed) rather
+	// than a per-tenant business field. Sits on this page since it's
+	// part of the same 'how the app looks' bucket the user expects.
+	const { zoomLevel, setZoomLevel } = useUiState();
 
 	await store.ensureLoaded();
 
