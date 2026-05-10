@@ -205,15 +205,29 @@
 				:range-end="list.rangeEnd"
 			/>
 		</UCard>
+
+		<PdfPreviewModal
+			v-model:open="pdf.state.open"
+			:asset-url="pdf.state.assetUrl"
+			:suggested-file-name="pdf.state.suggestedFileName"
+			:saving="pdf.state.saving"
+			title="Payslip PDF preview"
+			@save="pdf.onSave"
+			@cancel="pdf.onCancel"
+		/>
 	</div>
 </template>
 
 <script setup lang="ts">
-	import type { EmployeeSnapshot, PayslipRow, PayslipStatus } from "~/stores/payslips";
+	import type { EmployeeSnapshot, PayslipLineDraft, PayslipRow, PayslipStatus } from "~/stores/payslips";
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { useListView } from "~/composables/useListView";
+	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { formatMoney } from "~/lib/money";
+	import { buildPayslipPdfPayload } from "~/lib/payslip-pdf";
 	import { useEmployeesStore } from "~/stores/employees";
 	import { monthBounds, usePayslipsStore } from "~/stores/payslips";
+	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Payslips" });
@@ -223,11 +237,14 @@
 	const store = usePayslipsStore();
 	const employeesStore = useEmployeesStore();
 	const vouchersStore = useVouchersStore();
+	const settingsStore = useSettingsStore();
+	const currency = useActiveCurrency();
 
 	await Promise.all([
 		store.load(),
 		employeesStore.employees.length === 0 ? employeesStore.load() : Promise.resolve(),
-		vouchersStore.vouchers.length === 0 ? vouchersStore.load() : Promise.resolve()
+		vouchersStore.vouchers.length === 0 ? vouchersStore.load() : Promise.resolve(),
+		settingsStore.ensureLoaded()
 	]);
 
 	const employeeName = (r: PayslipRow): string => {
@@ -339,6 +356,50 @@
 
 	const open = (r: PayslipRow) => router.push(`/payslips/${r.id}`);
 
+	// Per-row PDF generation. We hand usePdfPreview a callback that
+	// reads from a 'currentPayslip' ref + a fetched lines list — set
+	// by onPdfClick before opening the modal. The shared payload
+	// builder takes it from there.
+	const currentPayslip = ref<PayslipRow | null>(null);
+	const currentLines = ref<PayslipLineDraft[]>([]);
+	const pdf = usePdfPreview({
+		command: "export_payslip_pdf",
+		buildPayload: () => {
+			if (!currentPayslip.value) return {};
+			return buildPayslipPdfPayload({
+				row: currentPayslip.value,
+				lines: currentLines.value,
+				settings: settingsStore.settings,
+				currency: currency.value,
+				paidCents: store.paidCentsFor(currentPayslip.value.id),
+				balanceCents: store.balanceCentsFor(currentPayslip.value)
+			});
+		},
+		fileName: () => `${currentPayslip.value?.number ?? "payslip"}.pdf`,
+		title: "Payslip PDF preview"
+	});
+	const onPdfClick = async (r: PayslipRow) => {
+		currentPayslip.value = r;
+		try {
+			const rows = await store.getLines(r.id);
+			currentLines.value = rows.map((l) => ({
+				sort_order: l.sort_order,
+				kind: l.kind,
+				label: l.label,
+				amount_cents: l.amount_cents
+			}));
+		} catch (err) {
+			toast.add({
+				title: "Could not load lines",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+			return;
+		}
+		pdf.open();
+	};
+
 	// Quick 'Mark issued' from the row dropdown — saves the user a
 	// click into the detail page when the draft is already complete.
 	// Refused at the store level if anything's off (zero net, etc.)
@@ -370,6 +431,13 @@
 				}
 			});
 		}
+		items.push({
+			label: "Generate PDF",
+			icon: "i-lucide-file-down",
+			onSelect: () => {
+				void onPdfClick(r);
+			}
+		});
 		return [items];
 	};
 </script>
