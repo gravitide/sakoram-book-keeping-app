@@ -46,21 +46,12 @@
 					Mark issued
 				</UButton>
 				<UButton
-					v-if="row?.status === 'issued' && balanceCents > 0"
+					v-if="row?.status === 'issued'"
 					icon="i-lucide-banknote"
 					color="success"
 					@click="recordPayment"
 				>
 					Record payment
-				</UButton>
-				<UButton
-					v-if="latestPaymentId"
-					icon="i-lucide-external-link"
-					variant="soft"
-					color="success"
-					@click="openLatestPayment"
-				>
-					View payment{{ payments.length > 1 ? "s" : "" }}
 				</UButton>
 				<UButton
 					v-if="row && row.status !== 'cancelled'"
@@ -508,16 +499,6 @@
 	const recordPayment = () => {
 		if (!row.value) return;
 		router.push(`/vouchers/new?payslip=${row.value.id}`);
-	};
-
-	// 'View payment(s)' button affordance. The Payments side panel
-	// always lists every linked voucher with a click-through, but
-	// the header button gives one-click access to the most recent
-	// one — which for a typical fully-paid payslip is *the* payment.
-	// Multiple payments is rare; the panel below has the rest.
-	const latestPaymentId = computed(() => payments.value[0]?.id ?? null);
-	const openLatestPayment = () => {
-		if (latestPaymentId.value !== null) router.push(`/vouchers/${latestPaymentId.value}`);
 	};
 
 	// PDF rendering. We send the lines split into earnings / deductions so
