@@ -19,7 +19,7 @@
 				<div class="flex items-center justify-between gap-4 flex-wrap">
 					<UInput
 						v-model="store.search"
-						placeholder="Search by name, designation, email, phone, NIC…"
+						placeholder="Search by name, employee #, designation, email, phone, NIC…"
 						icon="i-lucide-search"
 						class="md:w-96"
 					/>
@@ -50,6 +50,14 @@
 					<tr>
 						<SortableTh
 							th-class="py-2 pl-3 pr-2 font-medium"
+							:active="list.sortKey === 'employee_number'"
+							:dir="list.sortDir"
+							@sort="list.toggleSort('employee_number')"
+						>
+							Employee #
+						</SortableTh>
+						<SortableTh
+							th-class="py-2 px-2 font-medium"
 							:active="list.sortKey === 'full_name'"
 							:dir="list.sortDir"
 							@sort="list.toggleSort('full_name')"
@@ -98,7 +106,10 @@
 						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
 						@click="openEmployee(e)"
 					>
-						<td class="py-2 pl-3 pr-2 font-medium">
+						<td class="py-2 pl-3 pr-2 font-medium tabular-nums text-(--ui-text-muted)">
+							{{ e.employee_number || "—" }}
+						</td>
+						<td class="py-2 px-2 font-medium">
 							<span class="flex items-center gap-2">
 								{{ e.full_name }}
 								<UBadge v-if="e.is_archived === 1" color="neutral" variant="subtle" size="sm">
@@ -156,6 +167,7 @@
 	const list = useListView<EmployeeRow>(
 		() => store.filtered,
 		[
+			{ key: "employee_number", getValue: (e) => e.employee_number },
 			{ key: "full_name", getValue: (e) => e.full_name },
 			{ key: "designation", getValue: (e) => e.designation },
 			{ key: "nic", getValue: (e) => e.nic },

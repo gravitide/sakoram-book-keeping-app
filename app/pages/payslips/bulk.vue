@@ -283,6 +283,7 @@
 					employee: {
 						id: row.employee.id,
 						full_name: row.employee.full_name,
+						employee_number: row.employee.employee_number,
 						nic: row.employee.nic,
 						designation: row.employee.designation,
 						email: row.employee.email,

@@ -26,6 +26,10 @@
 						</UBadge>
 					</h1>
 					<dl class="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-(--ui-text-muted)">
+						<div v-if="form.employee_number" class="flex items-center gap-1.5">
+							<UIcon name="i-lucide-hash" class="size-3.5" />
+							<span class="tabular-nums">{{ form.employee_number }}</span>
+						</div>
 						<div v-if="form.designation" class="flex items-center gap-1.5">
 							<UIcon name="i-lucide-briefcase" class="size-3.5" />
 							<span>{{ form.designation }}</span>
@@ -42,7 +46,7 @@
 							<UIcon name="i-lucide-phone" class="size-3.5" />
 							<span class="tabular-nums">{{ form.phone }}</span>
 						</div>
-						<div v-if="!form.designation && !form.nic && !form.email && !form.phone">
+						<div v-if="!form.employee_number && !form.designation && !form.nic && !form.email && !form.phone">
 							{{ isNew
 								? "Fill in the details below — name is the only required field."
 								: "No details captured yet — add some below." }}
@@ -72,6 +76,13 @@
 				>
 					<UFormField label="Full name" name="full_name" required>
 						<UInput v-model="form.full_name" placeholder="A. B. Perera" />
+					</UFormField>
+					<UFormField label="Employee number" name="employee_number" hint="Optional">
+						<UInput
+							v-model="form.employee_number"
+							leading-icon="i-lucide-hash"
+							placeholder="e.g. E001"
+						/>
 					</UFormField>
 					<UFormField label="Designation" name="designation">
 						<UInput
@@ -236,6 +247,7 @@
 
 	const form = reactive<EmployeeInput>({
 		full_name: "",
+		employee_number: "",
 		nic: "",
 		designation: "",
 		email: "",
@@ -267,6 +279,7 @@
 
 	const hydrate = (row: EmployeeRow) => {
 		form.full_name = row.full_name;
+		form.employee_number = row.employee_number ?? "";
 		form.nic = row.nic ?? "";
 		form.designation = row.designation ?? "";
 		form.email = row.email ?? "";

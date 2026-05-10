@@ -173,6 +173,7 @@
 				employee: {
 					id: e.id,
 					full_name: e.full_name,
+					employee_number: e.employee_number,
 					nic: e.nic,
 					designation: e.designation,
 					email: e.email,
