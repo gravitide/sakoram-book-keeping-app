@@ -227,7 +227,7 @@
     #if data.employee.bank_account_name != none [
       Account name: #text(weight: "semibold")[#data.employee.bank_account_name] \
     ]
-    Account #: #text(weight: "semibold")[#data.employee.bank_account_number] \
+    Account no.: #text(weight: "semibold")[#data.employee.bank_account_number] \
     #if data.employee.bank_name != none [
       Bank: #text(weight: "semibold")[
         #data.employee.bank_name#if data.employee.bank_branch != none [, #data.employee.bank_branch]
