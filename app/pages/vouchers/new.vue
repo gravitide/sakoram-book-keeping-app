@@ -74,11 +74,7 @@
 					</div>
 				</div>
 
-				<UFormField
-					label="Type"
-					required
-					:hint="prefilled ? 'Locked — set by the document you came from.' : undefined"
-				>
+				<UFormField label="Type" required>
 					<USelect
 						v-model="voucherType"
 						:items="typeOptions"
@@ -89,14 +85,16 @@
 				</UFormField>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<UFormField
-						label="Date"
-						required
-						:hint="dateMin ? `Cannot be before ${dateMin} (the payslip's pay date).` : undefined"
-					>
+					<UFormField label="Date" required>
 						<DateField v-model="voucherDate" :min-value="dateMin" />
+						<template v-if="dateMin" #help>
+							<span class="inline-flex items-center gap-1 text-xs">
+								<UIcon name="i-lucide-info" class="size-3 shrink-0" />
+								On or after {{ dateMin }} (pay date)
+							</span>
+						</template>
 					</UFormField>
-					<UFormField label="Amount" required :hint="prefilled ? 'Defaults to remaining balance — edit for a partial payment.' : undefined">
+					<UFormField label="Amount" required>
 						<UInput
 							:model-value="amountDisplay"
 							placeholder="0.00"
@@ -122,6 +120,12 @@
 								Total {{ linkedDocKind === 'invoice' ? 'received' : 'paid' }} will become {{ formatLKR(linkedDocAlreadyPaidCents + amountCents) }} against a {{ formatLKR(linkedDocTotalCents) }} {{ linkedDocKind === 'invoice' ? 'invoice' : 'bill' }}. Continue if intended.
 							</div>
 						</div>
+						<template v-if="prefilled" #help>
+							<span class="inline-flex items-center gap-1 text-xs">
+								<UIcon name="i-lucide-info" class="size-3 shrink-0" />
+								Edit for a partial payment
+							</span>
+						</template>
 					</UFormField>
 				</div>
 
