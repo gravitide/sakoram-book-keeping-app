@@ -27,9 +27,31 @@
 				</p>
 			</div>
 			<div class="flex gap-2 items-center">
-				<UButton :loading="saving" :disabled="!dirty" icon="i-lucide-save" @click="save">
-					Save
+				<!-- Read-only by default; flip to edit mode explicitly so
+					a stray click on a saved voucher can't introduce
+					unintended changes. -->
+				<UButton
+					v-if="!editing"
+					icon="i-lucide-pencil"
+					variant="soft"
+					color="neutral"
+					@click="enterEdit"
+				>
+					Edit
 				</UButton>
+				<template v-else>
+					<UButton
+						color="neutral"
+						variant="ghost"
+						:disabled="saving"
+						@click="cancelEdit"
+					>
+						Cancel
+					</UButton>
+					<UButton :loading="saving" :disabled="!dirty" icon="i-lucide-save" @click="save">
+						Save
+					</UButton>
+				</template>
 				<UButton
 					color="neutral"
 					variant="outline"
@@ -55,12 +77,13 @@
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<UFormField label="Date" required>
-						<DateField v-model="voucherDate" />
+						<DateField v-model="voucherDate" :disabled="!editing" />
 					</UFormField>
 					<UFormField label="Amount" required>
 						<UInput
 							:model-value="amountDisplay"
 							placeholder="0.00"
+							:disabled="!editing"
 							@update:model-value="onAmountInput"
 						>
 							<template #trailing>
@@ -71,31 +94,31 @@
 				</div>
 
 				<UFormField :label="isReceipt ? 'Received from' : 'Paid to'" required>
-					<UInput v-model="partyName" />
+					<UInput v-model="partyName" :disabled="!editing" />
 				</UFormField>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<UFormField label="Method">
-						<USelect v-model="method" :items="methodOptions" value-key="value" class="w-full" />
+						<USelect v-model="method" :items="methodOptions" value-key="value" class="w-full" :disabled="!editing" />
 					</UFormField>
 					<UFormField label="Reference">
-						<UInput v-model="reference" />
+						<UInput v-model="reference" :disabled="!editing" />
 					</UFormField>
 				</div>
 
 				<UFormField label="Description">
-					<UTextarea v-model="description" :rows="3" />
+					<UTextarea v-model="description" :rows="3" :disabled="!editing" />
 				</UFormField>
 
 				<UFormField v-if="isReceipt" label="Linked invoice">
-					<USelect v-model="relatedInvoiceId" :items="invoiceOptions" value-key="value" class="w-full" />
+					<USelect v-model="relatedInvoiceId" :items="invoiceOptions" value-key="value" class="w-full" :disabled="!editing" />
 				</UFormField>
 				<template v-else>
 					<UFormField label="Linked bill">
-						<USelect v-model="relatedBillId" :items="billOptions" value-key="value" class="w-full" />
+						<USelect v-model="relatedBillId" :items="billOptions" value-key="value" class="w-full" :disabled="!editing" />
 					</UFormField>
 					<UFormField label="Linked payslip">
-						<USelect v-model="relatedPayslipId" :items="payslipOptions" value-key="value" class="w-full" />
+						<USelect v-model="relatedPayslipId" :items="payslipOptions" value-key="value" class="w-full" :disabled="!editing" />
 					</UFormField>
 				</template>
 
@@ -194,6 +217,10 @@
 	const voucher = ref<VoucherRow | null>(null);
 	const saving = ref(false);
 	const dirty = ref(false);
+	// Read-only by default. The user has to click Edit to put the
+	// page into edit mode — protects vouchers (which represent real
+	// cash flow) from a stray keystroke after they've been recorded.
+	const editing = ref(false);
 
 	const voucherDate = ref<string>("");
 	const partyName = ref<string>("");
@@ -292,6 +319,18 @@
 		relatedPayslipId.value ? payslipsStore.payslips.find((p) => p.id === relatedPayslipId.value) : null
 	);
 
+	const enterEdit = () => {
+		editing.value = true;
+	};
+
+	// Bail out of edit mode and snap the form back to whatever was
+	// last persisted. Re-hydrating from the row clears any keystrokes
+	// the user typed before changing their mind.
+	const cancelEdit = async () => {
+		await hydrate();
+		editing.value = false;
+	};
+
 	const save = async () => {
 		if (!voucher.value) return;
 		if (amountCents.value <= 0) {
@@ -312,6 +351,7 @@
 				related_payslip_id: !isReceipt.value ? relatedPayslipId.value : null
 			});
 			await hydrate();
+			editing.value = false;
 			toast.add({ title: "Voucher saved", color: "success", icon: "i-lucide-check" });
 		} catch (err) {
 			toast.add({
