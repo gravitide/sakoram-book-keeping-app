@@ -188,6 +188,7 @@
 
 	const newEmployee = () => router.push("/employees/new");
 	const openEmployee = (e: EmployeeRow) => router.push(`/employees/${e.id}`);
+	const createPayslip = (e: EmployeeRow) => router.push(`/payslips/new?employee=${e.id}`);
 
 	const toggleArchive = async (e: EmployeeRow) => {
 		const goingToArchive = e.is_archived === 0;
@@ -208,16 +209,27 @@
 		}
 	};
 
-	const itemsFor = (e: EmployeeRow) => [[
-		{
-			label: "Edit",
-			icon: "i-lucide-pencil",
-			onSelect: () => openEmployee(e)
-		},
-		{
-			label: e.is_archived === 0 ? "Archive" : "Restore",
-			icon: e.is_archived === 0 ? "i-lucide-archive" : "i-lucide-archive-restore",
-			onSelect: () => toggleArchive(e)
-		}
-	]];
+	const itemsFor = (e: EmployeeRow) => {
+		const lifecycle = [
+			{
+				label: "Edit",
+				icon: "i-lucide-pencil",
+				onSelect: () => openEmployee(e)
+			},
+			{
+				label: e.is_archived === 0 ? "Archive" : "Restore",
+				icon: e.is_archived === 0 ? "i-lucide-archive" : "i-lucide-archive-restore",
+				onSelect: () => toggleArchive(e)
+			}
+		];
+		if (e.is_archived === 1) return [lifecycle];
+		const payroll = [
+			{
+				label: "Create payslip",
+				icon: "i-lucide-receipt",
+				onSelect: () => createPayslip(e)
+			}
+		];
+		return [lifecycle, payroll];
+	};
 </script>
