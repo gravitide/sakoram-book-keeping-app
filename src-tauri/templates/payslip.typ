@@ -254,7 +254,9 @@
 // ============================================================
 // Sign-off (two columns)
 // ============================================================
-#v(48pt)
+// Generous lead-in so the signature lines have actual writing room
+// above them on a printed copy.
+#v(72pt)
 #grid(
   columns: (1fr, 1fr),
   column-gutter: 60pt,
