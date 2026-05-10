@@ -22,9 +22,10 @@
 						UI font
 					</div>
 					<div class="text-xs text-(--ui-text-muted) mt-1">
-						Used in the app interface. Four fonts (Inter, Inter Tight,
-						Stack Sans Text, Miriam Libre) ship with the app; anything else
-						falls through to what's installed on your system.
+						Used in the app interface. Five fonts (Inter, Inter Tight,
+						Stack Sans Text, Miriam Libre, Amarna) ship with the app;
+						anything else falls through to what's installed on your
+						system.
 					</div>
 				</template>
 
@@ -156,7 +157,8 @@
 		"Inter",
 		"Inter Tight",
 		"Stack Sans Text",
-		"Miriam Libre"
+		"Miriam Libre",
+		"Amarna"
 	];
 	const systemFonts = [
 		"system-ui",
