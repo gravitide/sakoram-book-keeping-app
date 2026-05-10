@@ -34,7 +34,7 @@ use crate::tenants;
 
 const FORMAT_VERSION: i32 = 1;
 /// Increment when adding migrations beyond what existing exports can carry.
-const SCHEMA_VERSION: i32 = 14;
+const SCHEMA_VERSION: i32 = 15;
 
 /// Tables exported in dependency order — parents first. Restore uses
 /// the same order; replace-mode wipe uses the reverse.
@@ -42,6 +42,7 @@ const TABLES: &[&str] = &[
 	"company_settings",
 	"clients",
 	"vendors",
+	"employees",
 	"document_counters",
 	"quotes",
 	"quote_lines",
