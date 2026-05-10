@@ -36,17 +36,14 @@
 					class="rounded-md border border-(--ui-border) bg-(--ui-bg-muted)/60 px-3 py-2.5 text-sm"
 				>
 					<div class="flex items-center gap-2 mb-1.5">
-						<UIcon
-							:name="linkedDocKind === 'invoice' ? 'i-lucide-receipt' : 'i-lucide-file-input'"
-							class="size-4 text-(--ui-text-muted)"
-						/>
+						<UIcon :name="linkedDocIcon" class="size-4 text-(--ui-text-muted)" />
 						<span class="font-medium tabular-nums">{{ linkedDocNumber }}</span>
 						<span class="text-(--ui-text-muted)">· {{ linkedDocPartyLabel }}</span>
 					</div>
 					<div class="grid grid-cols-3 gap-3 text-xs tabular-nums">
 						<div>
 							<div class="text-(--ui-text-muted)">
-								{{ linkedDocKind === 'invoice' ? 'Invoice total' : 'Bill total' }}
+								{{ linkedDocTotalLabel }}
 							</div>
 							<div class="font-medium">
 								{{ formatLKR(linkedDocTotalCents) }}
@@ -54,7 +51,7 @@
 						</div>
 						<div>
 							<div class="text-(--ui-text-muted)">
-								{{ linkedDocKind === 'invoice' ? 'Already received' : 'Already paid' }}
+								{{ linkedDocPaidLabel }}
 							</div>
 							<div class="font-medium">
 								{{ formatLKR(linkedDocAlreadyPaidCents) }}
@@ -115,9 +112,9 @@
 						>
 							<UIcon name="i-lucide-triangle-alert" class="size-4 text-(--ui-warning) shrink-0 mt-0.5" />
 							<div class="text-(--ui-text)">
-								This {{ linkedDocKind === 'invoice' ? 'receipt' : 'payment' }} exceeds the {{ linkedDocKind === 'invoice' ? 'invoice' : 'bill' }}'s outstanding balance by
+								This {{ overpaymentVerb }} exceeds the {{ linkedDocNoun }}'s outstanding balance by
 								<span class="font-semibold tabular-nums">{{ formatLKR(overpaymentCents) }}</span>.
-								Total {{ linkedDocKind === 'invoice' ? 'received' : 'paid' }} will become {{ formatLKR(linkedDocAlreadyPaidCents + amountCents) }} against a {{ formatLKR(linkedDocTotalCents) }} {{ linkedDocKind === 'invoice' ? 'invoice' : 'bill' }}. Continue if intended.
+								Total {{ overpaymentTotalVerb }} will become {{ formatLKR(linkedDocAlreadyPaidCents + amountCents) }} against a {{ formatLKR(linkedDocTotalCents) }} {{ linkedDocNoun }}. Continue if intended.
 							</div>
 						</div>
 						<template v-if="prefilled" #help>
@@ -421,15 +418,23 @@
 		if (voucherType.value !== "receipt" || relatedInvoiceId.value === null) return null;
 		return invoicesStore.invoices.find((i) => i.id === relatedInvoiceId.value) ?? null;
 	});
+	const linkedPayslip = computed(() => {
+		if (voucherType.value !== "payment" || relatedPayslipId.value === null) return null;
+		return payslipsStore.payslips.find((p) => p.id === relatedPayslipId.value) ?? null;
+	});
 
-	const linkedDocKind = computed<"bill" | "invoice" | null>(() => {
+	const linkedDocKind = computed<"bill" | "invoice" | "payslip" | null>(() => {
 		if (linkedBill.value) return "bill";
 		if (linkedInvoice.value) return "invoice";
+		if (linkedPayslip.value) return "payslip";
 		return null;
 	});
 
 	const linkedDocNumber = computed(() =>
-		linkedBill.value?.number ?? linkedInvoice.value?.number ?? ""
+		linkedBill.value?.number
+		?? linkedInvoice.value?.number
+		?? linkedPayslip.value?.number
+		?? ""
 	);
 
 	const linkedDocPartyLabel = computed(() => {
@@ -447,23 +452,65 @@
 				return "";
 			}
 		}
+		if (linkedPayslip.value) {
+			try {
+				return (JSON.parse(linkedPayslip.value.employee_snapshot) as EmployeeSnapshot).full_name ?? "";
+			} catch {
+				return "";
+			}
+		}
 		return "";
 	});
 
 	const linkedDocTotalCents = computed(() => {
 		if (linkedBill.value) return linkedBill.value.total_cents;
 		if (linkedInvoice.value) return linkedInvoice.value.total_cents;
+		if (linkedPayslip.value) return linkedPayslip.value.net_cents;
 		return 0;
 	});
 
 	const linkedDocAlreadyPaidCents = computed(() => {
 		if (linkedBill.value) return billsStore.paidCentsFor(linkedBill.value.id);
 		if (linkedInvoice.value) return invoicesStore.paidCentsFor(linkedInvoice.value.id);
+		if (linkedPayslip.value) return payslipsStore.paidCentsFor(linkedPayslip.value.id);
 		return 0;
 	});
 
 	const linkedDocRemainingCents = computed(() =>
 		Math.max(0, linkedDocTotalCents.value - linkedDocAlreadyPaidCents.value)
+	);
+
+	// Per-kind copy for the context block + overpayment warning. Keeps
+	// the template readable instead of nested ternaries.
+	const linkedDocIcon = computed(() => {
+		switch (linkedDocKind.value) {
+		case "invoice": return "i-lucide-receipt";
+		case "payslip": return "i-lucide-file-spreadsheet";
+		default: return "i-lucide-file-input"; // bill
+		}
+	});
+	const linkedDocNoun = computed(() => {
+		switch (linkedDocKind.value) {
+		case "invoice": return "invoice";
+		case "payslip": return "payslip";
+		default: return "bill";
+		}
+	});
+	const linkedDocTotalLabel = computed(() => {
+		switch (linkedDocKind.value) {
+		case "invoice": return "Invoice total";
+		case "payslip": return "Net pay";
+		default: return "Bill total";
+		}
+	});
+	const linkedDocPaidLabel = computed(() =>
+		linkedDocKind.value === "invoice" ? "Already received" : "Already paid"
+	);
+	const overpaymentVerb = computed(() =>
+		linkedDocKind.value === "invoice" ? "receipt" : "payment"
+	);
+	const overpaymentTotalVerb = computed(() =>
+		linkedDocKind.value === "invoice" ? "received" : "paid"
 	);
 
 	// "Overpayment" = sum of existing payments + this new voucher
