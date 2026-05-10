@@ -60,20 +60,17 @@
 				/>
 
 				<div v-if="autoPay" class="space-y-4 pl-6 border-l-2 border-(--ui-border)">
-					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-						<UFormField label="Payment method">
-							<USelect v-model="paymentMethod" :items="methodOptions" value-key="value" class="w-full" />
-						</UFormField>
-						<UFormField label="Reference" hint="Cheque #, transaction ID…">
-							<UInput v-model="reference" />
-						</UFormField>
-					</div>
+					<UFormField label="Payment method">
+						<USelect v-model="paymentMethod" :items="methodOptions" value-key="value" class="w-full md:w-1/2" />
+					</UFormField>
 					<UFormField label="Description">
 						<UInput v-model="description" :placeholder="defaultDescription" />
 					</UFormField>
 					<p class="text-xs text-(--ui-text-muted)">
 						One payment voucher per payslip, dated <span class="font-medium tabular-nums">{{ payDate }}</span>,
-						amount equal to the payslip's net.
+						amount equal to the payslip's net. Add a per-employee
+						transaction reference (cheque #, TXN ID…) on each row
+						below.
 					</p>
 				</div>
 			</div>
@@ -158,14 +155,24 @@
 					>
 						Open
 					</NuxtLink>
-					<div v-else class="text-sm tabular-nums shrink-0 text-right">
-						<div class="font-medium">
-							{{ formatMoney(row.employee.basic_salary_cents) }}
+					<template v-else>
+						<UInput
+							v-if="autoPay && row.checked"
+							v-model="row.reference"
+							placeholder="TXN / cheque #"
+							size="sm"
+							class="w-44 shrink-0"
+							:aria-label="`Reference for ${row.employee.full_name}`"
+						/>
+						<div class="text-sm tabular-nums shrink-0 text-right">
+							<div class="font-medium">
+								{{ formatMoney(row.employee.basic_salary_cents) }}
+							</div>
+							<div class="text-xs text-(--ui-text-muted)">
+								{{ runStepsLabel }}
+							</div>
 						</div>
-						<div class="text-xs text-(--ui-text-muted)">
-							{{ runStepsLabel }}
-						</div>
-					</div>
+					</template>
 				</li>
 			</ul>
 
@@ -258,7 +265,6 @@
 	});
 
 	const paymentMethod = ref<VoucherMethod | null>("bank_transfer");
-	const reference = ref<string>("");
 	const description = ref<string>("");
 
 	const methodOptions: { label: string, value: VoucherMethod | null }[] = [
@@ -287,6 +293,10 @@
 		alreadyExists: boolean
 		existingId: number | null
 		checked: boolean
+		// Per-row payment reference (transaction ID, cheque #, etc.).
+		// Vouchers in a payroll run rarely share a reference, so we
+		// collect this on the row instead of as a bulk default.
+		reference: string
 	}
 
 	const rows = ref<BulkRow[]>([]);
@@ -299,11 +309,16 @@
 			const existing = start
 				? store.payslips.find((p) => p.employee_id === e.id && p.period_start === start) ?? null
 				: null;
+			// Preserve any reference the user had already typed for this
+			// employee — re-deriving rows on period change shouldn't wipe
+			// their input.
+			const prev = rows.value.find((r) => r.employee.id === e.id);
 			next.push({
 				employee: e,
 				alreadyExists: existing !== null,
 				existingId: existing?.id ?? null,
-				checked: existing === null
+				checked: existing === null,
+				reference: prev?.reference ?? ""
 			});
 		}
 		rows.value = next;
@@ -454,7 +469,7 @@
 						party_name: row.employee.full_name,
 						amount_cents: netCents,
 						payment_method: paymentMethod.value,
-						reference: reference.value.trim() || null,
+						reference: row.reference.trim() || null,
 						description: description.value.trim() || defaultDescription.value,
 						related_invoice_id: null,
 						related_bill_id: null,
