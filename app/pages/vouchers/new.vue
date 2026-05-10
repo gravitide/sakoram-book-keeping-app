@@ -36,17 +36,14 @@
 					class="rounded-md border border-(--ui-border) bg-(--ui-bg-muted)/60 px-3 py-2.5 text-sm"
 				>
 					<div class="flex items-center gap-2 mb-1.5">
-						<UIcon
-							:name="linkedDocKind === 'invoice' ? 'i-lucide-receipt' : 'i-lucide-file-input'"
-							class="size-4 text-(--ui-text-muted)"
-						/>
+						<UIcon :name="linkedDocIcon" class="size-4 text-(--ui-text-muted)" />
 						<span class="font-medium tabular-nums">{{ linkedDocNumber }}</span>
 						<span class="text-(--ui-text-muted)">· {{ linkedDocPartyLabel }}</span>
 					</div>
 					<div class="grid grid-cols-3 gap-3 text-xs tabular-nums">
 						<div>
 							<div class="text-(--ui-text-muted)">
-								{{ linkedDocKind === 'invoice' ? 'Invoice total' : 'Bill total' }}
+								{{ linkedDocTotalLabel }}
 							</div>
 							<div class="font-medium">
 								{{ formatLKR(linkedDocTotalCents) }}
@@ -54,7 +51,7 @@
 						</div>
 						<div>
 							<div class="text-(--ui-text-muted)">
-								{{ linkedDocKind === 'invoice' ? 'Already received' : 'Already paid' }}
+								{{ linkedDocPaidLabel }}
 							</div>
 							<div class="font-medium">
 								{{ formatLKR(linkedDocAlreadyPaidCents) }}
@@ -75,12 +72,24 @@
 				</div>
 
 				<UFormField label="Type" required>
-					<USelect v-model="voucherType" :items="typeOptions" value-key="value" class="w-full" />
+					<USelect
+						v-model="voucherType"
+						:items="typeOptions"
+						value-key="value"
+						class="w-full"
+						:disabled="prefilled"
+					/>
 				</UFormField>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<UFormField label="Date" required>
-						<DateField v-model="voucherDate" />
+						<DateField v-model="voucherDate" :min-value="dateMin" />
+						<template v-if="dateMin" #help>
+							<span class="inline-flex items-center gap-1 text-xs">
+								<UIcon name="i-lucide-info" class="size-3 shrink-0" />
+								On or after {{ dateMin }} (pay date)
+							</span>
+						</template>
 					</UFormField>
 					<UFormField label="Amount" required>
 						<UInput
@@ -103,16 +112,22 @@
 						>
 							<UIcon name="i-lucide-triangle-alert" class="size-4 text-(--ui-warning) shrink-0 mt-0.5" />
 							<div class="text-(--ui-text)">
-								This {{ linkedDocKind === 'invoice' ? 'receipt' : 'payment' }} exceeds the {{ linkedDocKind === 'invoice' ? 'invoice' : 'bill' }}'s outstanding balance by
+								This {{ overpaymentVerb }} exceeds the {{ linkedDocNoun }}'s outstanding balance by
 								<span class="font-semibold tabular-nums">{{ formatLKR(overpaymentCents) }}</span>.
-								Total {{ linkedDocKind === 'invoice' ? 'received' : 'paid' }} will become {{ formatLKR(linkedDocAlreadyPaidCents + amountCents) }} against a {{ formatLKR(linkedDocTotalCents) }} {{ linkedDocKind === 'invoice' ? 'invoice' : 'bill' }}. Continue if intended.
+								Total {{ overpaymentTotalVerb }} will become {{ formatLKR(linkedDocAlreadyPaidCents + amountCents) }} against a {{ formatLKR(linkedDocTotalCents) }} {{ linkedDocNoun }}. Continue if intended.
 							</div>
 						</div>
+						<template v-if="prefilled" #help>
+							<span class="inline-flex items-center gap-1 text-xs">
+								<UIcon name="i-lucide-info" class="size-3 shrink-0" />
+								Edit for a partial payment
+							</span>
+						</template>
 					</UFormField>
 				</div>
 
 				<UFormField :label="voucherType === 'receipt' ? 'Received from' : 'Paid to'" required>
-					<UInput v-model="partyName" />
+					<UInput v-model="partyName" :disabled="prefilled" />
 				</UFormField>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -129,10 +144,31 @@
 				</UFormField>
 
 				<UFormField v-if="voucherType === 'receipt'" label="Linked invoice (optional)">
-					<USelect v-model="relatedInvoiceId" :items="invoiceOptions" value-key="value" class="w-full" />
+					<USelect
+						v-model="relatedInvoiceId"
+						:items="invoiceOptions"
+						value-key="value"
+						class="w-full"
+						:disabled="prefilled"
+					/>
 				</UFormField>
 				<UFormField v-if="voucherType === 'payment'" label="Linked bill (optional)">
-					<USelect v-model="relatedBillId" :items="billOptions" value-key="value" class="w-full" />
+					<USelect
+						v-model="relatedBillId"
+						:items="billOptions"
+						value-key="value"
+						class="w-full"
+						:disabled="prefilled"
+					/>
+				</UFormField>
+				<UFormField v-if="voucherType === 'payment'" label="Linked payslip (optional)">
+					<USelect
+						v-model="relatedPayslipId"
+						:items="payslipOptions"
+						value-key="value"
+						class="w-full"
+						:disabled="prefilled"
+					/>
 				</UFormField>
 			</div>
 
@@ -204,6 +240,16 @@
 		return Number.isFinite(n) && n > 0 ? n : null;
 	});
 
+	// True when the user arrived via 'Record payment' on a known
+	// document — type / party / linked-doc come from that document
+	// and shouldn't be edited here. Date and amount stay editable
+	// because partial / early / late payments are normal.
+	const prefilled = computed(() =>
+		prefilledInvoiceId.value !== null
+		|| prefilledBillId.value !== null
+		|| prefilledPayslipId.value !== null
+	);
+
 	const todayISO = (): string => {
 		const d = new Date();
 		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -223,6 +269,14 @@
 	const seedPayslip = prefilledPayslipId.value
 		? payslipsStore.payslips.find((p) => p.id === prefilledPayslipId.value) ?? null
 		: null;
+
+	// When recording a payment for a payslip, the voucher date must
+	// be on or after the payslip's pay_date — paying before the pay
+	// date doesn't make accounting sense. Bills and invoices don't
+	// share the same constraint (you can pay a bill the day it
+	// arrives, even before its issue/due date in edge cases) so we
+	// only clamp the payslip case.
+	const dateMin: string | null = seedPayslip?.pay_date ?? null;
 
 	const seedVendorName = (() => {
 		if (!seedBill) return "";
@@ -275,7 +329,14 @@
 			: seedBill ? `Payment for ${seedBill.number}` : "";
 
 	const voucherType = ref<VoucherType>(initialType);
-	const voucherDate = ref<string>(todayISO());
+	// Default to today, but never earlier than the payslip's pay_date
+	// when one's prefilled — saves the user a manual fix when they
+	// open the form before the salary is officially due.
+	const initialDate = (() => {
+		const t = todayISO();
+		return dateMin && t < dateMin ? dateMin : t;
+	})();
+	const voucherDate = ref<string>(initialDate);
 	const partyName = ref<string>(initialPartyName);
 	const amountDisplay = ref<string>(seedAmountDisplay);
 	const amountCents = ref<number>(seedAmountCents);
@@ -315,6 +376,20 @@
 			.filter((b) => b.status !== "cancelled")
 			.map((b) => ({ label: `${b.number} · ${parseSnapshot(b.vendor_snapshot, "(vendor)")}`, value: b.id }))
 	]);
+	const payslipOptions = computed(() => [
+		{ label: "—", value: null },
+		...payslipsStore.payslips
+			.filter((p) => p.status !== "cancelled")
+			.map((p) => ({ label: `${p.number} · ${parsePayslipName(p.employee_snapshot)}`, value: p.id }))
+	]);
+
+	function parsePayslipName(snap: string): string {
+		try {
+			return (JSON.parse(snap) as { full_name?: string }).full_name ?? "(employee)";
+		} catch {
+			return "(employee)";
+		}
+	}
 
 	function parseClient(snap: string): string {
 		return parseSnapshot(snap, "(client)");
@@ -343,15 +418,23 @@
 		if (voucherType.value !== "receipt" || relatedInvoiceId.value === null) return null;
 		return invoicesStore.invoices.find((i) => i.id === relatedInvoiceId.value) ?? null;
 	});
+	const linkedPayslip = computed(() => {
+		if (voucherType.value !== "payment" || relatedPayslipId.value === null) return null;
+		return payslipsStore.payslips.find((p) => p.id === relatedPayslipId.value) ?? null;
+	});
 
-	const linkedDocKind = computed<"bill" | "invoice" | null>(() => {
+	const linkedDocKind = computed<"bill" | "invoice" | "payslip" | null>(() => {
 		if (linkedBill.value) return "bill";
 		if (linkedInvoice.value) return "invoice";
+		if (linkedPayslip.value) return "payslip";
 		return null;
 	});
 
 	const linkedDocNumber = computed(() =>
-		linkedBill.value?.number ?? linkedInvoice.value?.number ?? ""
+		linkedBill.value?.number
+		?? linkedInvoice.value?.number
+		?? linkedPayslip.value?.number
+		?? ""
 	);
 
 	const linkedDocPartyLabel = computed(() => {
@@ -369,23 +452,65 @@
 				return "";
 			}
 		}
+		if (linkedPayslip.value) {
+			try {
+				return (JSON.parse(linkedPayslip.value.employee_snapshot) as EmployeeSnapshot).full_name ?? "";
+			} catch {
+				return "";
+			}
+		}
 		return "";
 	});
 
 	const linkedDocTotalCents = computed(() => {
 		if (linkedBill.value) return linkedBill.value.total_cents;
 		if (linkedInvoice.value) return linkedInvoice.value.total_cents;
+		if (linkedPayslip.value) return linkedPayslip.value.net_cents;
 		return 0;
 	});
 
 	const linkedDocAlreadyPaidCents = computed(() => {
 		if (linkedBill.value) return billsStore.paidCentsFor(linkedBill.value.id);
 		if (linkedInvoice.value) return invoicesStore.paidCentsFor(linkedInvoice.value.id);
+		if (linkedPayslip.value) return payslipsStore.paidCentsFor(linkedPayslip.value.id);
 		return 0;
 	});
 
 	const linkedDocRemainingCents = computed(() =>
 		Math.max(0, linkedDocTotalCents.value - linkedDocAlreadyPaidCents.value)
+	);
+
+	// Per-kind copy for the context block + overpayment warning. Keeps
+	// the template readable instead of nested ternaries.
+	const linkedDocIcon = computed(() => {
+		switch (linkedDocKind.value) {
+		case "invoice": return "i-lucide-receipt";
+		case "payslip": return "i-lucide-file-spreadsheet";
+		default: return "i-lucide-file-input"; // bill
+		}
+	});
+	const linkedDocNoun = computed(() => {
+		switch (linkedDocKind.value) {
+		case "invoice": return "invoice";
+		case "payslip": return "payslip";
+		default: return "bill";
+		}
+	});
+	const linkedDocTotalLabel = computed(() => {
+		switch (linkedDocKind.value) {
+		case "invoice": return "Invoice total";
+		case "payslip": return "Net pay";
+		default: return "Bill total";
+		}
+	});
+	const linkedDocPaidLabel = computed(() =>
+		linkedDocKind.value === "invoice" ? "Already received" : "Already paid"
+	);
+	const overpaymentVerb = computed(() =>
+		linkedDocKind.value === "invoice" ? "receipt" : "payment"
+	);
+	const overpaymentTotalVerb = computed(() =>
+		linkedDocKind.value === "invoice" ? "received" : "paid"
 	);
 
 	// "Overpayment" = sum of existing payments + this new voucher

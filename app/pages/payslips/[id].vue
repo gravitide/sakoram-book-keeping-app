@@ -54,7 +54,7 @@
 					Record payment
 				</UButton>
 				<UButton
-					v-if="row && row.status !== 'cancelled'"
+					v-if="canCancel"
 					icon="i-lucide-circle-x"
 					variant="soft"
 					color="neutral"
@@ -194,19 +194,30 @@
 						No payments recorded yet.
 					</div>
 					<ul v-else class="text-sm divide-y divide-(--ui-border)">
+						<!-- Two-line row: voucher number + amount on the
+							top line, secondary metadata (date · method)
+							muted underneath. Amount is right-aligned and
+							gets the visual weight; the date no longer
+							floats awkwardly between two strong fields. -->
 						<li
 							v-for="v in payments"
 							:key="v.id"
-							class="py-2 flex items-center justify-between gap-3"
+							class="py-2.5"
 						>
-							<NuxtLink
-								:to="`/vouchers/${v.id}`"
-								class="font-medium tabular-nums hover:text-(--ui-primary)"
-							>
-								{{ v.number }}
-							</NuxtLink>
-							<span class="text-xs text-(--ui-text-muted)">{{ v.voucher_date }}</span>
-							<span class="font-medium tabular-nums">{{ formatMoney(v.amount_cents) }}</span>
+							<div class="flex items-center justify-between gap-3">
+								<NuxtLink
+									:to="`/vouchers/${v.id}`"
+									class="font-medium tabular-nums hover:text-(--ui-primary)"
+								>
+									{{ v.number }}
+								</NuxtLink>
+								<span class="font-medium tabular-nums">{{ formatMoney(v.amount_cents) }}</span>
+							</div>
+							<div class="text-xs text-(--ui-text-muted) mt-0.5 tabular-nums">
+								{{ v.voucher_date }}<template v-if="paymentMethodLabel(v.payment_method)">
+									· {{ paymentMethodLabel(v.payment_method) }}
+								</template>
+							</div>
 						</li>
 					</ul>
 					<div v-if="row" class="mt-3 pt-3 border-t border-(--ui-border) text-sm tabular-nums">
@@ -265,7 +276,10 @@
 			@cancel="pdf.onCancel"
 		/>
 
-		<!-- Delete confirmation -->
+		<!-- Delete confirmation. Plain double-confirm — no typed-name
+			gate; payslips are easy to recreate from the bulk page if a
+			delete was accidental, and the gate just slowed the user
+			down for the common case. -->
 		<UModal v-model:open="confirmDelete" title="Delete this payslip?">
 			<template #body>
 				<div class="space-y-3 text-sm">
@@ -277,8 +291,6 @@
 					<p v-if="payments.length > 0" class="text-(--ui-warning)">
 						Heads up: {{ payments.length }} payment voucher(s) link to this payslip.
 					</p>
-					<p>Type the payslip number to confirm:</p>
-					<UInput v-model="confirmText" :placeholder="row?.number" />
 				</div>
 			</template>
 			<template #footer>
@@ -288,7 +300,6 @@
 					</UButton>
 					<UButton
 						color="error"
-						:disabled="confirmText !== row?.number"
 						:loading="busy"
 						icon="i-lucide-trash-2"
 						@click="onDelete"
@@ -395,6 +406,16 @@
 	const balanceCents = computed(() => row.value ? store.balanceCentsFor(row.value) : 0);
 	const payments = computed(() => row.value ? store.linkedPayments(row.value.id) : []);
 
+	// Cancel is offered only when the store would actually allow it.
+	// The store FSM refuses cancel on an issued payslip with linked
+	// payments (caller must delete the vouchers first); reflecting
+	// that here keeps the button from being a dead-end click.
+	const canCancel = computed(() => {
+		if (!row.value || row.value.status === "cancelled") return false;
+		if (row.value.status === "issued" && paidCents.value > 0) return false;
+		return true;
+	});
+
 	const canIssue = computed(() => {
 		if (!row.value) return false;
 		if (row.value.status !== "draft") return false;
@@ -407,7 +428,6 @@
 	const saving = ref(false);
 	const busy = ref(false);
 	const confirmDelete = ref(false);
-	const confirmText = ref("");
 
 	const onSave = async () => {
 		if (!row.value) return;
@@ -495,6 +515,20 @@
 		} finally {
 			busy.value = false;
 		}
+	};
+
+	// Friendly label for a voucher's payment_method, used as the
+	// muted secondary line in the Payments panel.
+	const paymentMethodLabel = (m: string | null): string | null => {
+		if (!m) return null;
+		const map: Record<string, string> = {
+			bank_transfer: "Bank transfer",
+			cash: "Cash",
+			cheque: "Cheque",
+			card: "Card",
+			other: "Other"
+		};
+		return map[m] ?? m;
 	};
 
 	const recordPayment = () => {
