@@ -1,13 +1,20 @@
 <template>
-	<!-- Centered narrow shape, same as Settings → Appearance / PDF.
-		The form's intrinsic width (max-w-2xl) is much smaller than
-		the wider main-content cap, and a left-anchored block looks
-		off on a wide monitor. -->
 	<div class="max-w-2xl mx-auto">
+		<!-- Centered narrow shape, same as Settings → Appearance / PDF.
+			The form's intrinsic width (max-w-2xl) is much smaller than
+			the wider main-content cap, and a left-anchored block looks
+			off on a wide monitor. The comment lives *inside* the root
+			div — leaving it at the template top makes the page have two
+			top-level nodes, which breaks Nuxt route transitions and ends
+			up rendering as an empty page after navigation. -->
 		<header class="mb-6">
-			<NuxtLink to="/vouchers" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) flex items-center gap-1">
+			<!-- Back link follows the prefill: if the user arrived from a
+				bill / invoice / payslip's "Record payment" button, we
+				return them there on cancel rather than dumping them on
+				the vouchers list. -->
+			<NuxtLink :to="backLink.to" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) flex items-center gap-1">
 				<UIcon name="i-lucide-arrow-left" class="size-4" />
-				Back to vouchers
+				{{ backLink.label }}
 			</NuxtLink>
 			<h1 class="text-2xl font-semibold mt-1">
 				New voucher
@@ -405,14 +412,26 @@
 		&& /^\d{4}-\d{2}-\d{2}$/.test(voucherDate.value)
 	);
 
+	// Where to go when the user backs out — both the top-of-page
+	// "Back…" link and the Cancel button consult this so they stay in
+	// sync. When prefilled from a "Record payment" click, return to
+	// the originating document; otherwise the vouchers list (the
+	// canonical home of the standalone-create flow).
+	const backLink = computed<{ to: string, label: string }>(() => {
+		if (prefilledInvoiceId.value) {
+			return { to: `/invoices/${prefilledInvoiceId.value}`, label: "Back to invoice" };
+		}
+		if (prefilledPayslipId.value) {
+			return { to: `/payslips/${prefilledPayslipId.value}`, label: "Back to payslip" };
+		}
+		if (prefilledBillId.value) {
+			return { to: `/bills/${prefilledBillId.value}`, label: "Back to bill" };
+		}
+		return { to: "/vouchers", label: "Back to vouchers" };
+	});
+
 	const onCancel = () => {
-		// Bounce back where we came from when prefilled; otherwise the
-		// vouchers list (the canonical home of the standalone-create
-		// flow).
-		if (prefilledInvoiceId.value) router.push(`/invoices/${prefilledInvoiceId.value}`);
-		else if (prefilledPayslipId.value) router.push(`/payslips/${prefilledPayslipId.value}`);
-		else if (prefilledBillId.value) router.push(`/bills/${prefilledBillId.value}`);
-		else router.push("/vouchers");
+		router.push(backLink.value.to);
 	};
 
 	const create = async () => {

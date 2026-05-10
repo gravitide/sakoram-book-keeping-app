@@ -51,6 +51,7 @@ pub fn run() {
 			pdf::export_invoice_pdf,
 			pdf::export_bill_pdf,
 			pdf::export_voucher_pdf,
+			pdf::export_payslip_pdf,
 			pdf::copy_file,
 			pdf::open_path,
 			tenants::list_tenants,

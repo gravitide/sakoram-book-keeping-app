@@ -4,6 +4,8 @@
 		:model-value="cdValue"
 		:disabled="disabled"
 		:placeholder="placeholder"
+		:min-value="cdMin"
+		:max-value="cdMax"
 		@update:model-value="onUpdate"
 	>
 		<template #trailing>
@@ -18,7 +20,13 @@
 					class="px-0"
 				/>
 				<template #content>
-					<UCalendar :model-value="cdValue" class="p-2" @update:model-value="onUpdate" />
+					<UCalendar
+						:model-value="cdValue"
+						:min-value="cdMin"
+						:max-value="cdMax"
+						class="p-2"
+						@update:model-value="onUpdate"
+					/>
 				</template>
 			</UPopover>
 		</template>
@@ -45,6 +53,11 @@
 		modelValue: string | null
 		disabled?: boolean
 		placeholder?: string
+		// ISO YYYY-MM-DD strings — the same shape as modelValue. We pass
+		// these straight through to UInputDate and UCalendar as
+		// CalendarDate so callers stay string-based.
+		minValue?: string | null
+		maxValue?: string | null
 	}
 
 	const props = defineProps<Props>();
@@ -64,6 +77,8 @@
 	};
 
 	const cdValue = computed<CalendarDate | null>(() => isoToCalendarDate(props.modelValue));
+	const cdMin = computed<CalendarDate | undefined>(() => isoToCalendarDate(props.minValue ?? null) ?? undefined);
+	const cdMax = computed<CalendarDate | undefined>(() => isoToCalendarDate(props.maxValue ?? null) ?? undefined);
 
 	const onUpdate = (next: CalendarDate | null | undefined) => {
 		emit("update:modelValue", next ? next.toString() : null);

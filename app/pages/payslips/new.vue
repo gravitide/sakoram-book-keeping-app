@@ -31,22 +31,37 @@
 						<DateField v-model="periodStart" />
 					</UFormField>
 					<UFormField label="Period end" required>
-						<DateField v-model="periodEnd" />
+						<DateField
+							v-model="periodEnd"
+							:min-value="periodStart"
+						/>
 					</UFormField>
 				</div>
 
-				<UFormField label="Pay date" required>
-					<DateField v-model="payDate" />
+				<UFormField label="Pay date" required hint="Must fall within the pay period.">
+					<DateField
+						v-model="payDate"
+						:min-value="periodStart"
+						:max-value="periodEnd"
+					/>
 				</UFormField>
 
 				<div v-if="duplicateExists" class="rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/10 px-3 py-2 text-xs flex items-start gap-2">
 					<UIcon name="i-lucide-triangle-alert" class="size-4 text-(--ui-warning) shrink-0 mt-0.5" />
-					<div>
-						This employee already has a payslip starting on
-						<span class="font-medium tabular-nums">{{ periodStart }}</span>.
-						The DB enforces uniqueness on (employee, period_start), so
-						creation will fail. Pick a different period start (or open
-						the existing payslip).
+					<div class="flex-1">
+						<div>
+							A payslip already exists for this employee for the period starting
+							<span class="font-medium tabular-nums">{{ periodStart }}</span>.
+							Choose a different period, or open the existing one.
+						</div>
+						<NuxtLink
+							v-if="duplicateId"
+							:to="`/payslips/${duplicateId}`"
+							class="inline-flex items-center gap-1 mt-1 text-(--ui-primary) hover:underline"
+						>
+							Open existing payslip
+							<UIcon name="i-lucide-arrow-right" class="size-3" />
+						</NuxtLink>
 					</div>
 				</div>
 			</div>
@@ -101,19 +116,39 @@
 	const periodEnd = ref<string | null>(initialBounds.end);
 	const payDate = ref<string | null>(initialBounds.end);
 
+	// When the user changes period_start, snap period_end to the last
+	// day of *that* month and pull pay_date in if it has fallen out of
+	// the new range. Saves the user from manually fixing two fields
+	// every time they shift the period.
+	watch(periodStart, (next, prev) => {
+		if (!next || next === prev) return;
+		const bounds = monthBounds(next);
+		periodEnd.value = bounds.end;
+		if (!payDate.value || payDate.value < bounds.start) payDate.value = bounds.end;
+		else if (payDate.value > bounds.end) payDate.value = bounds.end;
+	});
+
+	// If the user shrinks period_end, drag pay_date back into range.
+	watch(periodEnd, (next) => {
+		if (!next) return;
+		if (payDate.value && payDate.value > next) payDate.value = next;
+	});
+
 	const onPick = (e: EmployeeRow) => {
 		picked.value = e;
 	};
 
 	// Soft pre-flight check against the UNIQUE (employee_id, period_start)
 	// constraint. Pure UI hint — the DB still owns the truth.
-	const duplicateExists = computed(() => {
-		if (employeeId.value === null || !periodStart.value) return false;
-		return store.payslips.some((p) =>
+	const duplicate = computed(() => {
+		if (employeeId.value === null || !periodStart.value) return null;
+		return store.payslips.find((p) =>
 			p.employee_id === employeeId.value
 			&& p.period_start === periodStart.value
-		);
+		) ?? null;
 	});
+	const duplicateExists = computed(() => duplicate.value !== null);
+	const duplicateId = computed(() => duplicate.value?.id ?? null);
 
 	const canCreate = computed(() =>
 		employeeId.value !== null

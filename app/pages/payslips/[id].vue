@@ -27,6 +27,16 @@
 
 			<div class="flex items-center gap-2 flex-wrap">
 				<UButton
+					icon="i-lucide-file-down"
+					variant="soft"
+					color="neutral"
+					:disabled="!row || dirty || pdf.state.rendering"
+					:loading="pdf.state.rendering"
+					@click="onPdfClick"
+				>
+					PDF
+				</UButton>
+				<UButton
 					v-if="row?.status === 'draft'"
 					icon="i-lucide-send"
 					:disabled="!canIssue"
@@ -238,12 +248,22 @@
 					<UButton variant="ghost" color="neutral" :disabled="saving" @click="onDiscard">
 						Discard
 					</UButton>
-					<UButton :loading="saving" :disabled="!dirty || locked" icon="i-lucide-save" @click="onSave">
-						Save changes
+					<UButton :loading="saving" :disabled="!dirty" icon="i-lucide-save" @click="onSave">
+						{{ locked ? "Save notes" : "Save changes" }}
 					</UButton>
 				</div>
 			</div>
 		</div>
+
+		<PdfPreviewModal
+			v-model:open="pdf.state.open"
+			:asset-url="pdf.state.assetUrl"
+			:suggested-file-name="pdf.state.suggestedFileName"
+			:saving="pdf.state.saving"
+			title="Payslip PDF preview"
+			@save="pdf.onSave"
+			@cancel="pdf.onCancel"
+		/>
 
 		<!-- Delete confirmation -->
 		<UModal v-model:open="confirmDelete" title="Delete this payslip?">
@@ -283,8 +303,12 @@
 
 <script setup lang="ts">
 	import type { EmployeeSnapshot, PayslipLineDraft, PayslipLineRow, PayslipRow } from "~/stores/payslips";
-	import { formatMoney } from "~/lib/money";
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
+	import { usePdfPreview } from "~/composables/usePdfPreview";
+	import { formatLKR, formatMoney } from "~/lib/money";
+	import { themeHex } from "~/lib/theme";
 	import { usePayslipsStore } from "~/stores/payslips";
+	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Payslip" });
@@ -293,6 +317,8 @@
 	const router = useRouter();
 	const store = usePayslipsStore();
 	const vouchersStore = useVouchersStore();
+	const settingsStore = useSettingsStore();
+	const currency = useActiveCurrency();
 	const toast = useToast();
 
 	const idParam = String(route.params.id ?? "");
@@ -304,6 +330,8 @@
 	// Make sure the vouchers store has loaded so derived paid-state
 	// works without flicker.
 	if (vouchersStore.vouchers.length === 0) await vouchersStore.load();
+	// Settings drive theme color, PDF font, business name, header logo.
+	await settingsStore.ensureLoaded();
 
 	const row = ref<PayslipRow | null>(null);
 	const employee = computed<EmployeeSnapshot | null>(() => {
@@ -382,19 +410,28 @@
 	const confirmText = ref("");
 
 	const onSave = async () => {
-		if (!row.value || locked.value) return;
+		if (!row.value) return;
 		saving.value = true;
 		try {
-			const totals = await store.replaceLines(row.value.id, form.lines);
-			await store.update(row.value.id, {
-				period_start: form.period_start ?? row.value.period_start,
-				period_end: form.period_end ?? row.value.period_end,
-				pay_date: form.pay_date ?? row.value.pay_date,
-				notes: form.notes.trim() || null,
-				earnings_cents: totals.earnings_cents,
-				deductions_cents: totals.deductions_cents,
-				net_cents: totals.net_cents
-			});
+			if (locked.value) {
+				// Issued / cancelled payslips are immutable except for the
+				// notes field — we persist that and nothing else, even if
+				// the form's other slots somehow ended up dirty.
+				await store.update(row.value.id, {
+					notes: form.notes.trim() || null
+				});
+			} else {
+				const totals = await store.replaceLines(row.value.id, form.lines);
+				await store.update(row.value.id, {
+					period_start: form.period_start ?? row.value.period_start,
+					period_end: form.period_end ?? row.value.period_end,
+					pay_date: form.pay_date ?? row.value.pay_date,
+					notes: form.notes.trim() || null,
+					earnings_cents: totals.earnings_cents,
+					deductions_cents: totals.deductions_cents,
+					net_cents: totals.net_cents
+				});
+			}
 			await store.load();
 			await hydrate();
 			refreshBaseline();
@@ -463,6 +500,89 @@
 	const recordPayment = () => {
 		if (!row.value) return;
 		router.push(`/vouchers/new?payslip=${row.value.id}`);
+	};
+
+	// PDF rendering. We send the lines split into earnings / deductions so
+	// the Typst template can iterate each side independently. Money fields
+	// get pre-formatted (currency-aware, comma-separated) in the payload —
+	// the template only needs to concatenate the symbol back on.
+	const buildPdfPayload = () => {
+		const r = row.value;
+		const e = employee.value;
+		if (!r || !e) return {};
+		const earnings = form.lines
+			.filter((l) => l.kind === "earning")
+			.map((l) => ({
+				label: l.label || "(unnamed)",
+				amount_display: formatLKR(l.amount_cents, { withSymbol: false })
+			}));
+		const deductions = form.lines
+			.filter((l) => l.kind === "deduction")
+			.map((l) => ({
+				label: l.label || "(unnamed)",
+				amount_display: formatLKR(l.amount_cents, { withSymbol: false })
+			}));
+
+		const earningsTotal = form.lines
+			.filter((l) => l.kind === "earning")
+			.reduce((s, l) => s + l.amount_cents, 0);
+		const deductionsTotal = form.lines
+			.filter((l) => l.kind === "deduction")
+			.reduce((s, l) => s + l.amount_cents, 0);
+		const net = Math.max(0, earningsTotal - deductionsTotal);
+
+		const paidC = paidCents.value;
+		const balanceC = balanceCents.value;
+
+		return {
+			number: r.number,
+			theme_color: themeHex(settingsStore.settings?.theme_color),
+			font_family: settingsStore.settings?.pdf_font ?? "Inter",
+			currency_code: currency.value.code,
+			currency_symbol: currency.value.symbol,
+			period_start: r.period_start,
+			period_end: r.period_end,
+			period_display: `${r.period_start} → ${r.period_end}`,
+			pay_date: r.pay_date,
+			employee: {
+				full_name: e.full_name,
+				designation: e.designation ?? null,
+				nic: e.nic ?? null,
+				bank_name: e.bank_name ?? null,
+				bank_branch: e.bank_branch ?? null,
+				bank_account_number: e.bank_account_number ?? null,
+				bank_account_name: e.bank_account_name ?? null
+			},
+			earnings,
+			deductions,
+			formatted: {
+				earnings: formatLKR(earningsTotal, { withSymbol: false }),
+				deductions: formatLKR(deductionsTotal, { withSymbol: false }),
+				net: formatLKR(net, { withSymbol: false })
+			},
+			paid_cents: paidC > 0 ? paidC : null,
+			paid_display: paidC > 0 ? formatLKR(paidC, { withSymbol: false }) : null,
+			balance_display: paidC > 0 ? formatLKR(balanceC, { withSymbol: false }) : null,
+			notes: r.notes,
+			business_name: settingsStore.settings?.business_name ?? null,
+			website: settingsStore.settings?.website ?? null,
+			phone: settingsStore.settings?.phone ?? null,
+			address_line1: settingsStore.settings?.address_line1 ?? null,
+			city: settingsStore.settings?.city ?? null,
+			logo_path: settingsStore.settings?.pdf_header_logo_path ?? null
+		};
+	};
+
+	const pdf = usePdfPreview({
+		command: "export_payslip_pdf",
+		buildPayload: () => buildPdfPayload(),
+		fileName: () => `${row.value?.number ?? "payslip"}.pdf`,
+		title: "Payslip PDF preview"
+	});
+
+	const onPdfClick = () => {
+		if (!row.value || dirty.value) return;
+		pdf.open();
 	};
 
 	const onDelete = async () => {

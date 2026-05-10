@@ -26,7 +26,8 @@ export type PdfCommand
 	= | "export_quote_pdf"
 		| "export_invoice_pdf"
 		| "export_bill_pdf"
-		| "export_voucher_pdf";
+		| "export_voucher_pdf"
+		| "export_payslip_pdf";
 
 export type PdfResult
 	= | { ok: true, path: string }

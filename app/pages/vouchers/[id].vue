@@ -1,8 +1,11 @@
 <template>
-	<!-- Centered narrow shape, same as the new-voucher page and the
-		Appearance / PDF settings pages. The form's intrinsic width is
-		much smaller than the wider main-content cap. -->
 	<div v-if="voucher" class="max-w-2xl mx-auto">
+		<!-- Centered narrow shape, same as the new-voucher page and the
+			Appearance / PDF settings pages. The form's intrinsic width is
+			much smaller than the wider main-content cap. Comment lives
+			inside the root so the page has a single top-level node — a
+			leading sibling comment breaks Nuxt route transitions and
+			renders blank on subsequent navigations. -->
 		<header class="mb-6 flex items-start justify-between gap-4 flex-wrap">
 			<div>
 				<NuxtLink to="/vouchers" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) flex items-center gap-1">
