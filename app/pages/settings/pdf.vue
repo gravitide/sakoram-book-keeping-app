@@ -229,9 +229,9 @@
 
 	// Same curated list the Appearance page used. The Typst template falls
 	// through these for any missing glyph; free-text input lets the user pick
-	// any face installed on their machine, but only the bundled three are
+	// any face installed on their machine, but only the bundled four are
 	// guaranteed to render identically across machines.
-	const bundledFonts = ["Inter", "Inter Tight", "Miriam Libre"];
+	const bundledFonts = ["Inter", "Inter Tight", "Stack Sans Text", "Miriam Libre"];
 
 	const pdfPreviewFontStack = computed(() =>
 		`'${form.pdf_font || "Inter"}', 'Inter', serif`
