@@ -29,6 +29,7 @@ export interface VoucherRow {
 	description: string | null
 	related_invoice_id: number | null
 	related_bill_id: number | null
+	related_payslip_id: number | null
 	attachment_path: string | null
 	created_at: string
 }
@@ -118,8 +119,8 @@ export const useVouchersStore = defineStore("vouchers", () => {
 			`INSERT INTO vouchers (
 				number, voucher_type, voucher_date, party_name, amount_cents,
 				payment_method, reference, description,
-				related_invoice_id, related_bill_id, attachment_path
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				related_invoice_id, related_bill_id, related_payslip_id, attachment_path
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				allocation.number,
 				input.voucher_type,
@@ -131,6 +132,7 @@ export const useVouchersStore = defineStore("vouchers", () => {
 				input.description,
 				input.related_invoice_id,
 				input.related_bill_id,
+				input.related_payslip_id,
 				input.attachment_path
 			]
 		);
@@ -148,6 +150,7 @@ export const useVouchersStore = defineStore("vouchers", () => {
 		"description",
 		"related_invoice_id",
 		"related_bill_id",
+		"related_payslip_id",
 		"attachment_path"
 	];
 

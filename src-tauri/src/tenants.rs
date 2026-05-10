@@ -58,6 +58,8 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(13, "bills payments via vouchers", include_str!("../migrations/0013_bills_payments_via_vouchers.sql")),
 	(14, "invoices payments via vouchers", include_str!("../migrations/0014_invoices_payments_via_vouchers.sql")),
 	(15, "employees", include_str!("../migrations/0015_employees.sql")),
+	(16, "payslips", include_str!("../migrations/0016_payslips.sql")),
+	(17, "vouchers payslip link", include_str!("../migrations/0017_vouchers_payslip_link.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
