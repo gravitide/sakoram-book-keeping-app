@@ -74,18 +74,29 @@
 					</div>
 				</div>
 
-				<UFormField label="Type" required>
-					<USelect v-model="voucherType" :items="typeOptions" value-key="value" class="w-full" />
+				<UFormField
+					label="Type"
+					required
+					:hint="prefilled ? 'Locked — set by the document you came from.' : undefined"
+				>
+					<USelect
+						v-model="voucherType"
+						:items="typeOptions"
+						value-key="value"
+						class="w-full"
+						:disabled="prefilled"
+					/>
 				</UFormField>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<UFormField label="Date" required>
-						<DateField v-model="voucherDate" />
+						<DateField v-model="voucherDate" :disabled="prefilled" />
 					</UFormField>
 					<UFormField label="Amount" required>
 						<UInput
 							:model-value="amountDisplay"
 							placeholder="0.00"
+							:disabled="prefilled"
 							@update:model-value="onAmountInput"
 						>
 							<template #trailing>
@@ -112,7 +123,7 @@
 				</div>
 
 				<UFormField :label="voucherType === 'receipt' ? 'Received from' : 'Paid to'" required>
-					<UInput v-model="partyName" />
+					<UInput v-model="partyName" :disabled="prefilled" />
 				</UFormField>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -129,13 +140,31 @@
 				</UFormField>
 
 				<UFormField v-if="voucherType === 'receipt'" label="Linked invoice (optional)">
-					<USelect v-model="relatedInvoiceId" :items="invoiceOptions" value-key="value" class="w-full" />
+					<USelect
+						v-model="relatedInvoiceId"
+						:items="invoiceOptions"
+						value-key="value"
+						class="w-full"
+						:disabled="prefilled"
+					/>
 				</UFormField>
 				<UFormField v-if="voucherType === 'payment'" label="Linked bill (optional)">
-					<USelect v-model="relatedBillId" :items="billOptions" value-key="value" class="w-full" />
+					<USelect
+						v-model="relatedBillId"
+						:items="billOptions"
+						value-key="value"
+						class="w-full"
+						:disabled="prefilled"
+					/>
 				</UFormField>
 				<UFormField v-if="voucherType === 'payment'" label="Linked payslip (optional)">
-					<USelect v-model="relatedPayslipId" :items="payslipOptions" value-key="value" class="w-full" />
+					<USelect
+						v-model="relatedPayslipId"
+						:items="payslipOptions"
+						value-key="value"
+						class="w-full"
+						:disabled="prefilled"
+					/>
 				</UFormField>
 			</div>
 
@@ -206,6 +235,17 @@
 		const n = Number(v);
 		return Number.isFinite(n) && n > 0 ? n : null;
 	});
+
+	// True when the user arrived via 'Record payment' on a known
+	// document — type / date / amount / party / linked-doc all come
+	// from that document and shouldn't be edited here. We still let
+	// them tweak Method / Reference / Description (those are the
+	// transaction-specific bits the source document doesn't know).
+	const prefilled = computed(() =>
+		prefilledInvoiceId.value !== null
+		|| prefilledBillId.value !== null
+		|| prefilledPayslipId.value !== null
+	);
 
 	const todayISO = (): string => {
 		const d = new Date();
