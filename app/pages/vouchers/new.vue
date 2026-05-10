@@ -134,6 +134,9 @@
 				<UFormField v-if="voucherType === 'payment'" label="Linked bill (optional)">
 					<USelect v-model="relatedBillId" :items="billOptions" value-key="value" class="w-full" />
 				</UFormField>
+				<UFormField v-if="voucherType === 'payment'" label="Linked payslip (optional)">
+					<USelect v-model="relatedPayslipId" :items="payslipOptions" value-key="value" class="w-full" />
+				</UFormField>
 			</div>
 
 			<template #footer>
@@ -315,6 +318,20 @@
 			.filter((b) => b.status !== "cancelled")
 			.map((b) => ({ label: `${b.number} · ${parseSnapshot(b.vendor_snapshot, "(vendor)")}`, value: b.id }))
 	]);
+	const payslipOptions = computed(() => [
+		{ label: "—", value: null },
+		...payslipsStore.payslips
+			.filter((p) => p.status !== "cancelled")
+			.map((p) => ({ label: `${p.number} · ${parsePayslipName(p.employee_snapshot)}`, value: p.id }))
+	]);
+
+	function parsePayslipName(snap: string): string {
+		try {
+			return (JSON.parse(snap) as { full_name?: string }).full_name ?? "(employee)";
+		} catch {
+			return "(employee)";
+		}
+	}
 
 	function parseClient(snap: string): string {
 		return parseSnapshot(snap, "(client)");

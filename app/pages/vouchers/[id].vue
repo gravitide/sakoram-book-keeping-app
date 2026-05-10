@@ -90,9 +90,14 @@
 				<UFormField v-if="isReceipt" label="Linked invoice">
 					<USelect v-model="relatedInvoiceId" :items="invoiceOptions" value-key="value" class="w-full" />
 				</UFormField>
-				<UFormField v-else label="Linked bill">
-					<USelect v-model="relatedBillId" :items="billOptions" value-key="value" class="w-full" />
-				</UFormField>
+				<template v-else>
+					<UFormField label="Linked bill">
+						<USelect v-model="relatedBillId" :items="billOptions" value-key="value" class="w-full" />
+					</UFormField>
+					<UFormField label="Linked payslip">
+						<USelect v-model="relatedPayslipId" :items="payslipOptions" value-key="value" class="w-full" />
+					</UFormField>
+				</template>
 
 				<NuxtLink
 					v-if="linkedInvoice"
@@ -109,6 +114,14 @@
 				>
 					<UIcon name="i-lucide-link" class="size-3" />
 					View bill {{ linkedBill.number }}
+				</NuxtLink>
+				<NuxtLink
+					v-if="linkedPayslip"
+					:to="`/payslips/${linkedPayslip.id}`"
+					class="text-xs text-(--ui-primary) hover:underline inline-flex items-center gap-1"
+				>
+					<UIcon name="i-lucide-link" class="size-3" />
+					View payslip {{ linkedPayslip.number }}
 				</NuxtLink>
 			</div>
 		</UCard>
@@ -155,6 +168,7 @@
 	import { themeHex } from "~/lib/theme";
 	import { useBillsStore } from "~/stores/bills";
 	import { useInvoicesStore } from "~/stores/invoices";
+	import { usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
 
@@ -167,6 +181,7 @@
 	const store = useVouchersStore();
 	const invoicesStore = useInvoicesStore();
 	const billsStore = useBillsStore();
+	const payslipsStore = usePayslipsStore();
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
 	settingsStore.ensureLoaded().catch(() => { /* surfaced elsewhere */ });
@@ -189,6 +204,7 @@
 	const description = ref<string>("");
 	const relatedInvoiceId = ref<number | null>(null);
 	const relatedBillId = ref<number | null>(null);
+	const relatedPayslipId = ref<number | null>(null);
 
 	const methodOptions: { label: string, value: VoucherMethod | null }[] = [
 		{ label: "Bank transfer", value: "bank_transfer" },
@@ -199,7 +215,7 @@
 		{ label: "—", value: null }
 	];
 
-	await Promise.all([invoicesStore.load(), billsStore.load()]);
+	await Promise.all([invoicesStore.load(), billsStore.load(), payslipsStore.load()]);
 
 	const hydrate = async () => {
 		const row = await store.get(voucherId);
@@ -216,12 +232,13 @@
 		description.value = row.description ?? "";
 		relatedInvoiceId.value = row.related_invoice_id;
 		relatedBillId.value = row.related_bill_id;
+		relatedPayslipId.value = row.related_payslip_id;
 		dirty.value = false;
 	};
 
 	await hydrate();
 
-	watch([voucherDate, partyName, amountCents, method, reference, description, relatedInvoiceId, relatedBillId], () => {
+	watch([voucherDate, partyName, amountCents, method, reference, description, relatedInvoiceId, relatedBillId, relatedPayslipId], () => {
 		dirty.value = true;
 	}, { deep: true });
 
@@ -254,12 +271,25 @@
 			return { label: `${b.number} · ${name}`, value: b.id };
 		})
 	]);
+	const payslipOptions = computed(() => [
+		{ label: "—", value: null },
+		...payslipsStore.payslips.map((p) => {
+			let name = "(employee)";
+			try {
+				name = (JSON.parse(p.employee_snapshot) as { full_name?: string }).full_name ?? name;
+			} catch { /* ignore */ }
+			return { label: `${p.number} · ${name}`, value: p.id };
+		})
+	]);
 
 	const linkedInvoice = computed(() =>
 		relatedInvoiceId.value ? invoicesStore.invoices.find((i) => i.id === relatedInvoiceId.value) : null
 	);
 	const linkedBill = computed(() =>
 		relatedBillId.value ? billsStore.bills.find((b) => b.id === relatedBillId.value) : null
+	);
+	const linkedPayslip = computed(() =>
+		relatedPayslipId.value ? payslipsStore.payslips.find((p) => p.id === relatedPayslipId.value) : null
 	);
 
 	const save = async () => {
@@ -278,7 +308,8 @@
 				reference: reference.value.trim() || null,
 				description: description.value.trim() || null,
 				related_invoice_id: isReceipt.value ? relatedInvoiceId.value : null,
-				related_bill_id: !isReceipt.value ? relatedBillId.value : null
+				related_bill_id: !isReceipt.value ? relatedBillId.value : null,
+				related_payslip_id: !isReceipt.value ? relatedPayslipId.value : null
 			});
 			await hydrate();
 			toast.add({ title: "Voucher saved", color: "success", icon: "i-lucide-check" });
@@ -321,12 +352,29 @@
 		const counterSig = isReceiptDoc ? "Received by" : "Paid to (signature)";
 		const amountColor = isReceiptDoc ? "#16a34a" : "#dc2626";
 
-		const linked = isReceiptDoc
-			? (v.related_invoice_id ? invoicesStore.invoices.find((i) => i.id === v.related_invoice_id) : null)
-			: (v.related_bill_id ? billsStore.bills.find((b) => b.id === v.related_bill_id) : null);
-		const relatedLabel = linked
-			? (isReceiptDoc ? `Invoice ${linked.number}` : `Bill ${linked.number}`)
-			: null;
+		// Receipts can link only to invoices; payments to a bill *or* a
+		// payslip. Bill wins ties (a single voucher should never link
+		// to both — the UI dropdowns are mutually exclusive in spirit,
+		// though the schema allows both columns).
+		let relatedLabel: string | null = null;
+		if (isReceiptDoc) {
+			const inv = v.related_invoice_id
+				? invoicesStore.invoices.find((i) => i.id === v.related_invoice_id)
+				: null;
+			if (inv) relatedLabel = `Invoice ${inv.number}`;
+		} else {
+			const bill = v.related_bill_id
+				? billsStore.bills.find((b) => b.id === v.related_bill_id)
+				: null;
+			if (bill) {
+				relatedLabel = `Bill ${bill.number}`;
+			} else {
+				const ps = v.related_payslip_id
+					? payslipsStore.payslips.find((p) => p.id === v.related_payslip_id)
+					: null;
+				if (ps) relatedLabel = `Payslip ${ps.number}`;
+			}
+		}
 
 		// LKR amount as a string — formatLKR returns "LKR 1,234.56", we
 		// strip the prefix because the template re-adds it.
