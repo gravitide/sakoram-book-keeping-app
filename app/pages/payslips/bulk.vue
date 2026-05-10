@@ -9,9 +9,9 @@
 				Bulk create payslips
 			</h1>
 			<p class="text-sm text-(--ui-text-muted)">
-				One pay period, one pay date, one click — we'll create a draft
-				payslip for each selected employee, seeded with their saved
-				basic salary. Review and issue each one individually after.
+				One pay period, one pay date, one click. Optionally issue and
+				record the full payment in the same run — useful when most
+				employees just receive their basic salary.
 			</p>
 		</header>
 
@@ -37,6 +37,45 @@
 						:max-value="periodEnd"
 					/>
 				</UFormField>
+			</div>
+		</UCard>
+
+		<UCard class="mb-6">
+			<template #header>
+				<h2 class="font-semibold">
+					Run options
+				</h2>
+				<p class="text-xs text-(--ui-text-muted)">
+					Skip extra clicks per employee by chaining the next steps
+					into the same run.
+				</p>
+			</template>
+			<div class="space-y-4">
+				<UCheckbox v-model="autoIssue" label="Mark issued after create" />
+				<UCheckbox
+					v-model="autoPay"
+					label="Record full payment"
+					:disabled="!autoIssue"
+					:hint="autoIssue ? undefined : 'Issuing is required before payment.'"
+				/>
+
+				<div v-if="autoPay" class="space-y-4 pl-6 border-l-2 border-(--ui-border)">
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<UFormField label="Payment method">
+							<USelect v-model="paymentMethod" :items="methodOptions" value-key="value" class="w-full" />
+						</UFormField>
+						<UFormField label="Reference" hint="Cheque #, transaction ID…">
+							<UInput v-model="reference" />
+						</UFormField>
+					</div>
+					<UFormField label="Description">
+						<UInput v-model="description" :placeholder="defaultDescription" />
+					</UFormField>
+					<p class="text-xs text-(--ui-text-muted)">
+						One payment voucher per payslip, dated <span class="font-medium tabular-nums">{{ payDate }}</span>,
+						amount equal to the payslip's net.
+					</p>
+				</div>
 			</div>
 		</UCard>
 
@@ -124,7 +163,7 @@
 							{{ formatMoney(row.employee.basic_salary_cents) }}
 						</div>
 						<div class="text-xs text-(--ui-text-muted)">
-							basic
+							{{ runStepsLabel }}
 						</div>
 					</div>
 				</li>
@@ -133,10 +172,10 @@
 			<template #footer>
 				<div class="flex items-center justify-between gap-4">
 					<div class="text-xs text-(--ui-text-muted)">
-						<span v-if="creating">Creating {{ progress }} of {{ selectedCount }}…</span>
+						<span v-if="creating">{{ progressMessage }}</span>
 						<span v-else-if="selectedCount === 0">Pick at least one employee to continue.</span>
 						<span v-else>
-							{{ selectedCount }} draft payslip{{ selectedCount === 1 ? "" : "s" }} will be created.
+							{{ ctaSummary }}
 						</span>
 					</div>
 					<div class="flex gap-2">
@@ -152,9 +191,9 @@
 							:loading="creating"
 							:disabled="!canCreate"
 							icon="i-lucide-plus"
-							@click="createAll"
+							@click="runAll"
 						>
-							Create {{ selectedCount }} payslip{{ selectedCount === 1 ? "" : "s" }}
+							{{ ctaLabel }}
 						</UButton>
 					</div>
 				</div>
@@ -165,9 +204,11 @@
 
 <script setup lang="ts">
 	import type { EmployeeRow } from "~/stores/employees";
+	import type { VoucherMethod } from "~/stores/vouchers";
 	import { formatMoney } from "~/lib/money";
 	import { useEmployeesStore } from "~/stores/employees";
 	import { monthBounds, usePayslipsStore } from "~/stores/payslips";
+	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Bulk payslips" });
 
@@ -175,10 +216,12 @@
 	const toast = useToast();
 	const store = usePayslipsStore();
 	const employeesStore = useEmployeesStore();
+	const vouchersStore = useVouchersStore();
 
 	await Promise.all([
 		store.load(),
-		employeesStore.employees.length === 0 ? employeesStore.load() : Promise.resolve()
+		employeesStore.employees.length === 0 ? employeesStore.load() : Promise.resolve(),
+		vouchersStore.vouchers.length === 0 ? vouchersStore.load() : Promise.resolve()
 	]);
 
 	// Default to the current calendar month — the most common case.
@@ -205,11 +248,40 @@
 		if (payDate.value && payDate.value > next) payDate.value = next;
 	});
 
-	// Per-employee row state. We back this with a reactive object so the
-	// checkboxes are independent per row and we can mutate them in
-	// selectAll / deselectAll. Re-derived whenever the period changes —
-	// otherwise an employee that just had a payslip created in another
-	// tab would still appear pre-checked here.
+	// Run options. Auto-pay is only legal when auto-issue is on — recording
+	// a payment against a draft is nonsense, and the persisted FSM goes
+	// draft → issued → ... so we must issue first.
+	const autoIssue = ref(true);
+	const autoPay = ref(true);
+	watch(autoIssue, (v) => {
+		if (!v) autoPay.value = false;
+	});
+
+	const paymentMethod = ref<VoucherMethod | null>("bank_transfer");
+	const reference = ref<string>("");
+	const description = ref<string>("");
+
+	const methodOptions: { label: string, value: VoucherMethod | null }[] = [
+		{ label: "Bank transfer", value: "bank_transfer" },
+		{ label: "Cash", value: "cash" },
+		{ label: "Cheque", value: "cheque" },
+		{ label: "Card", value: "card" },
+		{ label: "Other", value: "other" },
+		{ label: "—", value: null }
+	];
+
+	// "Salary for May 2026" — used as a placeholder + fallback when the
+	// user hasn't typed their own description.
+	const defaultDescription = computed(() => {
+		if (!periodStart.value) return "Salary";
+		const [y, m] = periodStart.value.split("-").map(Number) as [number, number];
+		const fmt = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" });
+		return `Salary for ${fmt.format(new Date(y, m - 1, 1))}`;
+	});
+
+	// Per-employee row state. Re-derived whenever the period changes — an
+	// employee that just had a payslip created in another tab shouldn't
+	// stay pre-checked.
 	interface BulkRow {
 		employee: EmployeeRow
 		alreadyExists: boolean
@@ -253,8 +325,29 @@
 		for (const r of rows.value) r.checked = false;
 	};
 
+	const runStepsLabel = computed(() => {
+		if (autoPay.value) return "create + issue + pay";
+		if (autoIssue.value) return "create + issue";
+		return "create draft";
+	});
+
+	const ctaLabel = computed(() => {
+		const n = selectedCount.value;
+		const suffix = n === 1 ? "payslip" : "payslips";
+		if (autoPay.value) return `Create, issue & pay ${n} ${suffix}`;
+		if (autoIssue.value) return `Create + issue ${n} ${suffix}`;
+		return `Create ${n} ${suffix}`;
+	});
+
+	const ctaSummary = computed(() => {
+		const n = selectedCount.value;
+		const what = autoPay.value ? "create + issue + pay" : autoIssue.value ? "create + issue" : "create draft";
+		return `${n} payslip${n === 1 ? "" : "s"} will be processed (${what}).`;
+	});
+
 	const creating = ref(false);
 	const progress = ref(0);
+	const progressMessage = ref("");
 
 	const canCreate = computed(() =>
 		!creating.value
@@ -264,22 +357,29 @@
 		&& payDate.value !== null
 	);
 
-	const createAll = async () => {
+	const runAll = async () => {
 		if (!canCreate.value || !periodStart.value || !periodEnd.value || !payDate.value) return;
 		creating.value = true;
 		progress.value = 0;
 
 		const targets = rows.value.filter((r) => r.checked && !r.alreadyExists);
-		let created = 0;
-		const errors: { name: string, message: string }[] = [];
+		let createdCount = 0;
+		let issuedCount = 0;
+		let paidCount = 0;
+		const errors: { name: string, stage: string, message: string }[] = [];
 
-		// Sequential — sqlite-plugin's connection pool means we can't run
-		// these concurrently anyway (no client-side transactions). For a
-		// realistic SL business head-count this is fine.
+		// Sequential — sqlite-plugin's connection pool can't handle
+		// concurrent writes from JS (no transactions), and per-row failures
+		// shouldn't roll back earlier successful rows.
 		for (const row of targets) {
 			progress.value += 1;
+			progressMessage.value = `Processing ${row.employee.full_name} (${progress.value} of ${targets.length})…`;
+
+			let payslipId: number | null = null;
+
+			// Step 1: create
 			try {
-				await store.createPayslip({
+				payslipId = await store.createPayslip({
 					employee: {
 						id: row.employee.id,
 						full_name: row.employee.full_name,
@@ -304,43 +404,97 @@
 					periodEnd: periodEnd.value,
 					payDate: payDate.value
 				});
-				created += 1;
+				createdCount += 1;
 			} catch (err) {
 				errors.push({
 					name: row.employee.full_name,
+					stage: "create",
 					message: err instanceof Error ? err.message : String(err)
 				});
+				continue;
+			}
+
+			// Step 2 & 3 require a positive net. Basic salary 0 is a likely
+			// data-entry oversight — surface as an error so the user knows
+			// to set it on the employee record, but don't fail the whole
+			// run.
+			const netCents = row.employee.basic_salary_cents;
+			if (netCents <= 0) {
+				if (autoIssue.value || autoPay.value) {
+					errors.push({
+						name: row.employee.full_name,
+						stage: "issue/pay",
+						message: "Net is zero — set a basic salary on the employee record."
+					});
+				}
+				continue;
+			}
+
+			// Step 2: issue
+			if (autoIssue.value) {
+				try {
+					await store.setStatus(payslipId, "issued");
+					issuedCount += 1;
+				} catch (err) {
+					errors.push({
+						name: row.employee.full_name,
+						stage: "issue",
+						message: err instanceof Error ? err.message : String(err)
+					});
+					continue;
+				}
+			}
+
+			// Step 3: pay
+			if (autoPay.value) {
+				try {
+					await vouchersStore.create({
+						voucher_type: "payment",
+						voucher_date: payDate.value,
+						party_name: row.employee.full_name,
+						amount_cents: netCents,
+						payment_method: paymentMethod.value,
+						reference: reference.value.trim() || null,
+						description: description.value.trim() || defaultDescription.value,
+						related_invoice_id: null,
+						related_bill_id: null,
+						related_payslip_id: payslipId,
+						attachment_path: null
+					});
+					paidCount += 1;
+				} catch (err) {
+					errors.push({
+						name: row.employee.full_name,
+						stage: "pay",
+						message: err instanceof Error ? err.message : String(err)
+					});
+				}
 			}
 		}
 
 		creating.value = false;
+		progressMessage.value = "";
 
-		if (created > 0) {
-			toast.add({
-				title: errors.length === 0
-					? `Created ${created} draft payslip${created === 1 ? "" : "s"}`
-					: `Created ${created}, ${errors.length} failed`,
-				description: errors.length > 0
-					? errors.map((e) => `${e.name}: ${e.message}`).join("\n")
-					: undefined,
-				color: errors.length === 0 ? "success" : "warning",
-				icon: errors.length === 0 ? "i-lucide-check" : "i-lucide-triangle-alert"
-			});
-		} else {
-			toast.add({
-				title: "No payslips created",
-				description: errors.length > 0
-					? errors.map((e) => `${e.name}: ${e.message}`).join("\n")
-					: "Nothing was selected.",
-				color: "error",
-				icon: "i-lucide-circle-alert"
-			});
-		}
+		// Build a single concise summary toast. Per-row failures get
+		// concatenated into the description so the user sees what to fix.
+		const summaryParts: string[] = [];
+		summaryParts.push(`Created ${createdCount}`);
+		if (autoIssue.value) summaryParts.push(`issued ${issuedCount}`);
+		if (autoPay.value) summaryParts.push(`paid ${paidCount}`);
+		if (errors.length > 0) summaryParts.push(`${errors.length} error${errors.length === 1 ? "" : "s"}`);
+
+		toast.add({
+			title: summaryParts.join(" · "),
+			description: errors.length > 0
+				? errors.map((e) => `${e.name} (${e.stage}): ${e.message}`).join("\n")
+				: undefined,
+			color: errors.length === 0 ? "success" : "warning",
+			icon: errors.length === 0 ? "i-lucide-check" : "i-lucide-triangle-alert"
+		});
 
 		// Land the user on the list filtered to the month they just
-		// generated — they can scan what was created and click into any
-		// one to edit.
-		if (created > 0) {
+		// generated.
+		if (createdCount > 0) {
 			store.periodFrom = periodStart.value;
 			store.periodTo = periodEnd.value;
 			await router.push("/payslips");
