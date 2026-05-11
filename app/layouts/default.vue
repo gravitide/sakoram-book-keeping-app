@@ -301,6 +301,7 @@
 				{ to: "/settings/company", label: "Company details", icon: "i-lucide-building-2" },
 				{ to: "/settings/pdf", label: "PDF", icon: "i-lucide-file-text" },
 				{ to: "/settings/appearance", label: "Appearance", icon: "i-lucide-palette" },
+				{ to: "/settings/payroll", label: "Payroll", icon: "i-lucide-calendar-clock" },
 				{ to: "/settings/businesses", label: "Businesses", icon: "i-lucide-briefcase" }
 			]
 		}

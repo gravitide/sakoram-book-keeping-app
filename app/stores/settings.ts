@@ -35,6 +35,13 @@ export interface CompanySettingsRow {
 	ui_font: string
 	pdf_font: string
 	theme_color: string
+	// Payroll cycle template — day-of-month integers (1..31). Clamped at
+	// runtime to the actual length of the target month, so 31 means
+	// "last day of whatever month this is" (Feb → 28/29, Apr → 30…).
+	// Resolution lives in app/lib/payroll-cycle.ts.
+	payroll_period_start_day: number
+	payroll_period_end_day: number
+	payroll_pay_day: number
 	updated_at: string
 }
 
@@ -66,7 +73,10 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"currency_code",
 	"ui_font",
 	"pdf_font",
-	"theme_color"
+	"theme_color",
+	"payroll_period_start_day",
+	"payroll_period_end_day",
+	"payroll_pay_day"
 ];
 
 export const useSettingsStore = defineStore("settings", () => {

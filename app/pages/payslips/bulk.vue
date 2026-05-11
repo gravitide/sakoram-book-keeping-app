@@ -17,26 +17,66 @@
 
 		<UCard class="mb-6">
 			<template #header>
-				<h2 class="font-semibold">
-					Period
-				</h2>
+				<div class="flex items-center justify-between gap-4 flex-wrap">
+					<h2 class="font-semibold">
+						Period
+					</h2>
+					<div class="flex items-center gap-2">
+						<NuxtLink
+							to="/settings/payroll"
+							class="text-xs text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1"
+						>
+							<UIcon name="i-lucide-calendar-clock" class="size-3.5" />
+							Cycle settings
+						</NuxtLink>
+						<UButton
+							size="xs"
+							variant="ghost"
+							color="neutral"
+							@click="overrideDates = !overrideDates"
+						>
+							{{ overrideDates ? "Use cycle from settings" : "Override dates" }}
+						</UButton>
+					</div>
+				</div>
 			</template>
 			<div class="space-y-4">
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<UFormField label="Period start" required>
-						<DateField v-model="periodStart" />
-					</UFormField>
-					<UFormField label="Period end" required>
-						<DateField v-model="periodEnd" :min-value="periodStart" />
-					</UFormField>
-				</div>
-				<UFormField label="Pay date" required hint="Must fall within the pay period.">
-					<DateField
-						v-model="payDate"
-						:min-value="periodStart"
-						:max-value="periodEnd"
+				<UFormField v-if="!overrideDates" label="Month" required hint="Period and pay date are derived from your payroll cycle settings.">
+					<USelectMenu
+						v-model="targetMonth"
+						:items="monthOptions"
+						value-key="value"
+						class="md:w-64"
+						:search-input="{ placeholder: 'Month…' }"
 					/>
 				</UFormField>
+
+				<div v-if="!overrideDates" class="text-sm rounded-md border border-(--ui-border) bg-(--ui-bg-muted) px-3 py-2 tabular-nums">
+					<span class="text-(--ui-text-muted)">Period</span>
+					<span class="font-medium ml-1">{{ periodStart }}</span>
+					<span class="text-(--ui-text-muted)">→</span>
+					<span class="font-medium">{{ periodEnd }}</span>
+					<span class="text-(--ui-text-muted) ml-3">Pay date</span>
+					<span class="font-medium ml-1">{{ payDate }}</span>
+				</div>
+
+				<template v-else>
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<UFormField label="Period start" required>
+							<DateField v-model="periodStart" />
+						</UFormField>
+						<UFormField label="Period end" required>
+							<DateField v-model="periodEnd" :min-value="periodStart" />
+						</UFormField>
+					</div>
+					<UFormField label="Pay date" required hint="Must fall within the pay period.">
+						<DateField
+							v-model="payDate"
+							:min-value="periodStart"
+							:max-value="periodEnd"
+						/>
+					</UFormField>
+				</template>
 			</div>
 		</UCard>
 
@@ -213,8 +253,10 @@
 	import type { EmployeeRow } from "~/stores/employees";
 	import type { VoucherMethod } from "~/stores/vouchers";
 	import { formatMoney } from "~/lib/money";
+	import { formatMonthLabel, nextPayrollCycle, resolvePayrollCycle } from "~/lib/payroll-cycle";
 	import { useEmployeesStore } from "~/stores/employees";
 	import { monthBounds, usePayslipsStore } from "~/stores/payslips";
+	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Bulk payslips" });
@@ -224,26 +266,79 @@
 	const store = usePayslipsStore();
 	const employeesStore = useEmployeesStore();
 	const vouchersStore = useVouchersStore();
+	const settingsStore = useSettingsStore();
 
 	await Promise.all([
 		store.load(),
 		employeesStore.employees.length === 0 ? employeesStore.load() : Promise.resolve(),
-		vouchersStore.vouchers.length === 0 ? vouchersStore.load() : Promise.resolve()
+		vouchersStore.vouchers.length === 0 ? vouchersStore.load() : Promise.resolve(),
+		settingsStore.ensureLoaded()
 	]);
 
-	// Default to the current calendar month — the most common case.
 	const todayISO = (() => {
 		const d = new Date();
 		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 	})();
-	const initialBounds = monthBounds(todayISO);
-	const periodStart = ref<string | null>(initialBounds.start);
-	const periodEnd = ref<string | null>(initialBounds.end);
-	const payDate = ref<string | null>(initialBounds.end);
 
-	// Same auto-snap as /payslips/new — change period_start, period_end
-	// follows; pay_date is dragged into range.
+	// Cycle template from settings — read at mount, doesn't auto-update
+	// while the page is open. Defaults model "1st → last, pay last".
+	const cycleConfig = computed(() => ({
+		payroll_period_start_day: settingsStore.settings?.payroll_period_start_day ?? 1,
+		payroll_period_end_day: settingsStore.settings?.payroll_period_end_day ?? 31,
+		payroll_pay_day: settingsStore.settings?.payroll_pay_day ?? 31
+	}));
+
+	// Target month for the auto-derived cycle. Default = whatever the
+	// `nextPayrollCycle` heuristic picks (current month if its pay date
+	// hasn't passed; otherwise next month). User can switch via picker.
+	const initialTarget = nextPayrollCycle(todayISO, cycleConfig.value);
+	const targetMonth = ref<string>(
+		`${initialTarget.year}-${String(initialTarget.month).padStart(2, "0")}`
+	);
+
+	// Month options: current month plus the next 11 — covers a full
+	// year of forward planning. Past months are reachable via the
+	// override toggle (manual date pickers).
+	const monthOptions = computed(() => {
+		const opts: { label: string, value: string }[] = [];
+		const today = new Date();
+		for (let i = 0; i < 12; i++) {
+			const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+			const y = d.getFullYear();
+			const m = d.getMonth() + 1;
+			opts.push({
+				label: formatMonthLabel(y, m),
+				value: `${y}-${String(m).padStart(2, "0")}`
+			});
+		}
+		return opts;
+	});
+
+	// "Override dates" toggle hides the month picker and re-exposes the
+	// three manual date fields. Off by default — manual is the exception.
+	const overrideDates = ref(false);
+
+	// Resolve cycle → ISO dates when the month or settings change. When
+	// the user flips on override mode we leave the existing values
+	// alone so they can hand-tweak from a sane starting point.
+	const periodStart = ref<string | null>(initialTarget.cycle.periodStart);
+	const periodEnd = ref<string | null>(initialTarget.cycle.periodEnd);
+	const payDate = ref<string | null>(initialTarget.cycle.payDate);
+
+	watch([targetMonth, cycleConfig], () => {
+		if (overrideDates.value) return;
+		const [yStr, mStr] = targetMonth.value.split("-");
+		const resolved = resolvePayrollCycle(Number(yStr), Number(mStr), cycleConfig.value);
+		periodStart.value = resolved.periodStart;
+		periodEnd.value = resolved.periodEnd;
+		payDate.value = resolved.payDate;
+	}, { deep: true });
+
+	// Manual-override watchers (same auto-snap as /payslips/new) — only
+	// active while the user is hand-editing. The override toggle gates
+	// these so they don't fight the month-resolver above.
 	watch(periodStart, (next, prev) => {
+		if (!overrideDates.value) return;
 		if (!next || next === prev) return;
 		const bounds = monthBounds(next);
 		periodEnd.value = bounds.end;
@@ -251,6 +346,7 @@
 		else if (payDate.value > bounds.end) payDate.value = bounds.end;
 	});
 	watch(periodEnd, (next) => {
+		if (!overrideDates.value) return;
 		if (!next) return;
 		if (payDate.value && payDate.value > next) payDate.value = next;
 	});
