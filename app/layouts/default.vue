@@ -272,11 +272,12 @@
 		{ to: "/bills", label: "Bills", icon: "i-lucide-file-input" },
 		{ to: "/vouchers", label: "Vouchers", icon: "i-lucide-ticket" },
 		{
-			to: "/employees",
+			to: "/payroll",
 			label: "Payroll",
 			icon: "i-lucide-wallet",
 			divider: true,
 			children: [
+				{ to: "/payroll", label: "Dashboard", icon: "i-lucide-layout-dashboard" },
 				{ to: "/employees", label: "Employees", icon: "i-lucide-users-round" },
 				{ to: "/payslips", label: "Payslips", icon: "i-lucide-file-spreadsheet" }
 			]
