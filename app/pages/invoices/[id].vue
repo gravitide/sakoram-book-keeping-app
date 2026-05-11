@@ -35,15 +35,6 @@
 					Record payment
 				</UButton>
 				<UButton
-					v-if="editable"
-					:loading="saving"
-					:disabled="!dirty"
-					icon="i-lucide-save"
-					@click="save"
-				>
-					Save
-				</UButton>
-				<UButton
 					color="neutral"
 					variant="outline"
 					icon="i-lucide-file-down"
@@ -318,6 +309,45 @@
 					</UFormField>
 				</div>
 			</UCard>
+
+			<!-- Sticky save bar — same accented variant the quote / client /
+				employee pages use. Only visible while the invoice is still
+				editable (draft) and the form is dirty. -->
+			<div
+				v-if="editable"
+				class="sticky bottom-0 -mx-2 mt-6 transition-all duration-200"
+				:class="dirty
+					? 'opacity-100 translate-y-0 pointer-events-auto'
+					: 'opacity-0 translate-y-3 pointer-events-none'"
+			>
+				<div class="rounded-xl backdrop-blur-md bg-(--ui-bg)/90 border-2 border-(--ui-primary)/50 shadow-2xl px-4 py-3 flex items-center justify-between gap-4">
+					<div class="flex items-center gap-2 text-sm">
+						<span class="relative flex size-2">
+							<span class="absolute inline-flex h-full w-full rounded-full bg-(--ui-warning) opacity-75 animate-ping" />
+							<span class="relative inline-flex size-2 rounded-full bg-(--ui-warning)" />
+						</span>
+						<span class="text-(--ui-text)">Unsaved changes</span>
+					</div>
+					<div class="flex items-center gap-2">
+						<UButton
+							variant="ghost"
+							color="neutral"
+							:disabled="saving"
+							@click="onDiscard"
+						>
+							Discard
+						</UButton>
+						<UButton
+							:loading="saving"
+							:disabled="!dirty"
+							icon="i-lucide-save"
+							@click="save"
+						>
+							Save changes
+						</UButton>
+					</div>
+				</div>
+			</div>
 		</div>
 
 		<UModal v-model:open="showDeleteDialog" :title="`Delete ${invoice.number}?`">
@@ -635,6 +665,14 @@
 		} finally {
 			saving.value = false;
 		}
+	};
+
+	// Sticky save bar's Discard action: re-hydrate from the DB which
+	// resets the form refs and clears `dirty`.
+	const onDiscard = async () => {
+		if (saving.value) return;
+		await hydrate();
+		toast.add({ title: "Changes discarded", color: "neutral", icon: "i-lucide-rotate-ccw" });
 	};
 
 	// Persisted status transitions are now extremely simple — only the

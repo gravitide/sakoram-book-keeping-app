@@ -29,7 +29,8 @@
 			<div class="flex gap-2 items-center">
 				<!-- Read-only by default; flip to edit mode explicitly so
 					a stray click on a saved voucher can't introduce
-					unintended changes. -->
+					unintended changes. Save / Cancel live on the sticky
+					bar below once edit mode is on. -->
 				<UButton
 					v-if="!editing"
 					icon="i-lucide-pencil"
@@ -39,19 +40,6 @@
 				>
 					Edit
 				</UButton>
-				<template v-else>
-					<UButton
-						color="neutral"
-						variant="ghost"
-						:disabled="saving"
-						@click="cancelEdit"
-					>
-						Cancel
-					</UButton>
-					<UButton :loading="saving" :disabled="!dirty" icon="i-lucide-save" @click="save">
-						Save
-					</UButton>
-				</template>
 				<UButton
 					color="neutral"
 					variant="outline"
@@ -148,6 +136,50 @@
 				</NuxtLink>
 			</div>
 		</UCard>
+
+		<!-- Sticky save bar — visible the whole time edit mode is on
+			(not gated on dirty), since entering edit mode is an explicit
+			decision and the user needs Cancel/Save controls in reach.
+			The status indicator changes from a neutral 'Editing…' to a
+			pulsing 'Unsaved changes' once anything actually changes. -->
+		<div
+			v-if="editing"
+			class="sticky bottom-0 -mx-2 mt-6"
+		>
+			<div class="rounded-xl backdrop-blur-md bg-(--ui-bg)/90 border-2 border-(--ui-primary)/50 shadow-2xl px-4 py-3 flex items-center justify-between gap-4">
+				<div class="flex items-center gap-2 text-sm">
+					<template v-if="dirty">
+						<span class="relative flex size-2">
+							<span class="absolute inline-flex h-full w-full rounded-full bg-(--ui-warning) opacity-75 animate-ping" />
+							<span class="relative inline-flex size-2 rounded-full bg-(--ui-warning)" />
+						</span>
+						<span class="text-(--ui-text)">Unsaved changes</span>
+					</template>
+					<template v-else>
+						<span class="inline-flex size-2 rounded-full bg-(--ui-primary)" />
+						<span class="text-(--ui-text-muted)">Editing voucher</span>
+					</template>
+				</div>
+				<div class="flex items-center gap-2">
+					<UButton
+						variant="ghost"
+						color="neutral"
+						:disabled="saving"
+						@click="cancelEdit"
+					>
+						Cancel
+					</UButton>
+					<UButton
+						:loading="saving"
+						:disabled="!dirty"
+						icon="i-lucide-save"
+						@click="save"
+					>
+						Save changes
+					</UButton>
+				</div>
+			</div>
+		</div>
 
 		<UModal v-model:open="showDeleteDialog" :title="`Delete ${voucher.number}?`">
 			<template #body>
