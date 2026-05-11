@@ -235,7 +235,7 @@
 					? 'opacity-100 translate-y-0 pointer-events-auto'
 					: 'opacity-0 translate-y-3 pointer-events-none'"
 			>
-				<div class="rounded-xl backdrop-blur-md bg-(--ui-bg)/90 border border-(--ui-border) shadow-lg px-4 py-3 flex items-center justify-between gap-4">
+				<div class="rounded-xl backdrop-blur-md bg-(--ui-bg)/90 border-2 border-(--ui-primary)/50 shadow-2xl px-4 py-3 flex items-center justify-between gap-4">
 					<div class="flex items-center gap-2 text-sm">
 						<span class="relative flex size-2">
 							<span class="absolute inline-flex h-full w-full rounded-full bg-(--ui-warning) opacity-75 animate-ping" />
