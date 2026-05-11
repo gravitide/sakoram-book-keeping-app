@@ -103,11 +103,49 @@
 				</div>
 			</div>
 
-			<table v-else class="w-full text-sm">
+			<!-- Selection action bar — renders above the table whenever any
+				row is ticked, regardless of pagination/filter state. -->
+			<div
+				v-if="selectedIds.size > 0 && !store.loading && !store.error"
+				class="mb-3 flex items-center justify-between gap-3 px-3 py-2 rounded-md border border-(--ui-primary)/30 bg-(--ui-primary)/10 text-sm"
+			>
+				<div>
+					<span class="font-medium">{{ selectedIds.size }} selected</span>
+					<span class="text-(--ui-text-muted)"> · across all filters / pages</span>
+				</div>
+				<div class="flex items-center gap-2">
+					<UButton
+						size="xs"
+						color="neutral"
+						variant="ghost"
+						@click="clearSelection"
+					>
+						Clear
+					</UButton>
+					<UButton
+						size="xs"
+						icon="i-lucide-file-down"
+						:loading="bulkPdf.running"
+						@click="generateBulkPdfs"
+					>
+						Generate PDFs
+					</UButton>
+				</div>
+			</div>
+
+			<table v-if="!store.loading && !store.error && store.filtered.length > 0" class="w-full text-sm">
 				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
 					<tr>
+						<th class="py-2 pl-3 pr-2 w-8">
+							<UCheckbox
+								:model-value="pageSelectionState === 'all'"
+								:indeterminate="pageSelectionState === 'some'"
+								aria-label="Select all on this page"
+								@update:model-value="togglePageSelection"
+							/>
+						</th>
 						<SortableTh
-							th-class="py-2 pl-3 pr-2 font-medium"
+							th-class="py-2 px-2 font-medium"
 							:active="list.sortKey === 'number'"
 							:dir="list.sortDir"
 							@sort="list.toggleSort('number')"
@@ -166,9 +204,17 @@
 					>
 						<tr
 							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+							:class="selectedIds.has(r.id) ? 'bg-(--ui-primary)/5' : ''"
 							@click="open(r)"
 						>
-							<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
+							<td class="py-2 pl-3 pr-2 w-8" @click.stop>
+								<UCheckbox
+									:model-value="selectedIds.has(r.id)"
+									:aria-label="`Select ${r.number}`"
+									@update:model-value="(v: boolean) => toggleSelected(r.id, v)"
+								/>
+							</td>
+							<td class="py-2 px-2 font-medium tabular-nums">
 								{{ r.number }}
 							</td>
 							<td class="py-2 px-2">
@@ -215,11 +261,77 @@
 			@save="pdf.onSave"
 			@cancel="pdf.onCancel"
 		/>
+
+		<!-- Bulk PDF progress modal. We deliberately don't allow closing
+			while it's running — only Cancel after the current file
+			finishes. close-on-overlay is off for the same reason. -->
+		<UModal
+			:open="bulkPdf.modalOpen"
+			:dismissible="false"
+			:close="false"
+			title="Generating payslip PDFs"
+		>
+			<template #body>
+				<div class="space-y-3">
+					<div class="text-sm">
+						<div class="flex justify-between tabular-nums">
+							<span>{{ bulkPdf.progress }} of {{ bulkPdf.total }}</span>
+							<span class="text-(--ui-text-muted)">{{ bulkPdf.errors.length }} error{{ bulkPdf.errors.length === 1 ? "" : "s" }}</span>
+						</div>
+						<div class="mt-2 h-2 rounded-full bg-(--ui-bg-muted) overflow-hidden">
+							<div
+								class="h-full bg-(--ui-primary) transition-all duration-150"
+								:style="{ width: bulkPdf.total === 0 ? '0%' : `${Math.round((bulkPdf.progress / bulkPdf.total) * 100)}%` }"
+							/>
+						</div>
+					</div>
+					<div v-if="bulkPdf.currentName" class="text-xs text-(--ui-text-muted) truncate">
+						Rendering <span class="font-medium">{{ bulkPdf.currentName }}</span>…
+					</div>
+					<div v-if="bulkPdf.errors.length > 0" class="max-h-32 overflow-auto text-xs space-y-1 rounded-md border border-(--ui-error)/30 bg-(--ui-error)/5 p-2">
+						<div v-for="(e, i) in bulkPdf.errors" :key="i">
+							<span class="font-medium">{{ e.name }}:</span>
+							<span class="text-(--ui-text-muted)"> {{ e.message }}</span>
+						</div>
+					</div>
+				</div>
+			</template>
+			<template #footer>
+				<div class="flex justify-end gap-2 w-full">
+					<UButton
+						v-if="bulkPdf.running"
+						color="neutral"
+						variant="outline"
+						@click="bulkPdf.cancelled = true"
+					>
+						{{ bulkPdf.cancelled ? "Cancelling…" : "Cancel" }}
+					</UButton>
+					<UButton
+						v-else-if="bulkPdf.outputDir"
+						color="neutral"
+						variant="outline"
+						icon="i-lucide-folder-open"
+						@click="openOutputFolder"
+					>
+						Open folder
+					</UButton>
+					<UButton
+						v-if="!bulkPdf.running"
+						@click="bulkPdf.modalOpen = false"
+					>
+						Done
+					</UButton>
+				</div>
+			</template>
+		</UModal>
 	</div>
 </template>
 
 <script setup lang="ts">
 	import type { EmployeeSnapshot, PayslipLineDraft, PayslipRow, PayslipStatus } from "~/stores/payslips";
+	import { invoke } from "@tauri-apps/api/core";
+	import { join } from "@tauri-apps/api/path";
+	import { open as openDialog } from "@tauri-apps/plugin-dialog";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { useListView } from "~/composables/useListView";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
@@ -453,5 +565,182 @@
 			}
 		}];
 		return [lifecycle, exports];
+	};
+
+	// --- Bulk PDF generation ----------------------------------------------
+	//
+	// Selection is per-id (not per-row reference) so it survives filter,
+	// sort, pagination, and store reloads. Reactive Set isn't natively
+	// reactive in Vue 3 templates — we wrap mutation in a re-assignment to
+	// trigger updates, but for simplicity we just store a ref<Set> and call
+	// .add()/.delete() then reassign to a new Set so reactivity fires.
+	const selectedIds = ref<Set<number>>(new Set<number>());
+
+	const toggleSelected = (id: number, on: boolean) => {
+		const next = new Set(selectedIds.value);
+		if (on) next.add(id);
+		else next.delete(id);
+		selectedIds.value = next;
+	};
+
+	const clearSelection = () => {
+		selectedIds.value = new Set<number>();
+	};
+
+	// Header checkbox state — "all" / "some" / "none" — tri-state for the
+	// current visible page. Toggling it flips every row on this page.
+	const pageSelectionState = computed<"none" | "some" | "all">(() => {
+		const ids = list.paged.map((r) => r.id);
+		if (ids.length === 0) return "none";
+		const selectedHere = ids.filter((id) => selectedIds.value.has(id)).length;
+		if (selectedHere === 0) return "none";
+		if (selectedHere === ids.length) return "all";
+		return "some";
+	});
+
+	const togglePageSelection = () => {
+		const ids = list.paged.map((r) => r.id);
+		const next = new Set(selectedIds.value);
+		if (pageSelectionState.value === "all") {
+			for (const id of ids) next.delete(id);
+		} else {
+			for (const id of ids) next.add(id);
+		}
+		selectedIds.value = next;
+	};
+
+	// Bulk-render state. modalOpen drives the progress dialog; running
+	// gates the action bar's spinner; cancelled is checked between
+	// iterations so the user can abort.
+	const bulkPdf = reactive({
+		modalOpen: false,
+		running: false,
+		cancelled: false,
+		progress: 0,
+		total: 0,
+		currentName: "",
+		outputDir: "" as string,
+		errors: [] as { name: string, message: string }[]
+	});
+
+	const openOutputFolder = async () => {
+		if (!bulkPdf.outputDir) return;
+		try {
+			await invoke("open_path", { path: bulkPdf.outputDir });
+		} catch (err) {
+			toast.add({
+				title: "Could not open folder",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	// Slugify the payslip number for the output filename. Numbers are
+	// already filesystem-safe ("PSL-2026-0001") but defensive sanitising
+	// doesn't hurt.
+	const safeName = (s: string): string => s.replace(/[^\w.-]+/g, "_");
+
+	const generateBulkPdfs = async () => {
+		if (bulkPdf.running) return;
+		if (selectedIds.value.size === 0) return;
+
+		// Folder picker — directory mode. Tauri's open() returns null on
+		// cancel (or string array if multiple, but we don't enable that).
+		let folder: string | null = null;
+		try {
+			const picked = await openDialog({ directory: true, multiple: false });
+			folder = Array.isArray(picked) ? picked[0] ?? null : picked;
+		} catch (err) {
+			toast.add({
+				title: "Could not open folder picker",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+			return;
+		}
+		if (!folder) return; // cancelled
+
+		// Snapshot the selection — if the user keeps clicking around
+		// while it runs, we still process exactly what they kicked off.
+		const targets: PayslipRow[] = [];
+		for (const p of store.payslips) {
+			if (selectedIds.value.has(p.id)) targets.push(p);
+		}
+		// Sort by number for predictable filename order.
+		targets.sort((a, b) => a.number.localeCompare(b.number));
+
+		bulkPdf.modalOpen = true;
+		bulkPdf.running = true;
+		bulkPdf.cancelled = false;
+		bulkPdf.progress = 0;
+		bulkPdf.total = targets.length;
+		bulkPdf.currentName = "";
+		bulkPdf.outputDir = folder;
+		bulkPdf.errors = [];
+
+		for (const row of targets) {
+			if (bulkPdf.cancelled) break;
+			bulkPdf.currentName = row.number;
+
+			try {
+				// 1. Load lines (single SELECT)
+				const rows = await store.getLines(row.id);
+				const lines: PayslipLineDraft[] = rows.map((l) => ({
+					sort_order: l.sort_order,
+					kind: l.kind,
+					label: l.label,
+					amount_cents: l.amount_cents
+				}));
+
+				// 2. Build payload — same shape the detail page and the
+				//    per-row "Generate PDF" action use.
+				const payload = buildPayslipPdfPayload({
+					row,
+					lines,
+					settings: settingsStore.settings,
+					currency: currency.value,
+					paidCents: store.paidCentsFor(row.id),
+					balanceCents: store.balanceCentsFor(row)
+				});
+
+				// 3. Render direct to the chosen folder. Tauri's join() picks
+				//    the right path separator per platform — landmine in
+				//    CLAUDE.md flags hand-built backslash paths. The Tauri
+				//    scope validator on shell:allow-execute only checks the
+				//    sidecar args (.typ / .pdf extensions) — output path is
+				//    whatever the user picks.
+				const outputPath = await join(folder, `${safeName(row.number)}.pdf`);
+				await invoke("export_payslip_pdf", { data: payload, outputPath });
+			} catch (err) {
+				bulkPdf.errors.push({
+					name: row.number,
+					message: err instanceof Error ? err.message : String(err)
+				});
+			} finally {
+				bulkPdf.progress += 1;
+			}
+		}
+
+		bulkPdf.running = false;
+		bulkPdf.currentName = "";
+
+		const successCount = bulkPdf.progress - bulkPdf.errors.length;
+		const cancelledTail = bulkPdf.cancelled ? ` · ${bulkPdf.total - bulkPdf.progress} skipped` : "";
+		toast.add({
+			title: bulkPdf.cancelled
+				? `Cancelled — ${successCount} of ${bulkPdf.total} done${cancelledTail}`
+				: `Generated ${successCount} of ${bulkPdf.total} PDFs`,
+			description: bulkPdf.errors.length > 0
+				? `${bulkPdf.errors.length} error${bulkPdf.errors.length === 1 ? "" : "s"} — see modal for details.`
+				: undefined,
+			color: bulkPdf.errors.length === 0 && !bulkPdf.cancelled ? "success" : "warning",
+			icon: bulkPdf.errors.length === 0 && !bulkPdf.cancelled ? "i-lucide-check" : "i-lucide-triangle-alert"
+		});
+
+		// Don't auto-close the modal — let the user click "Open folder"
+		// or "Done" themselves so they can read errors.
 	};
 </script>
