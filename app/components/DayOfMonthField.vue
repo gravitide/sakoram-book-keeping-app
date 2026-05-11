@@ -9,6 +9,7 @@
 				@update:model-value="onValue"
 			/>
 			<UCheckbox
+				v-if="showLastDayToggle"
 				:model-value="isLastDay"
 				label="Last day of month"
 				@update:model-value="onToggleLast"
@@ -31,9 +32,13 @@
 		modelValue: number
 		label: string
 		hint?: string
+		// Show the "Last day of month" shortcut. Off for fields like
+		// period-start-day where snapping to the last day makes no
+		// semantic sense (no business starts a pay period on the 31st).
+		showLastDayToggle?: boolean
 	}
 
-	const props = defineProps<Props>();
+	const props = withDefaults(defineProps<Props>(), { showLastDayToggle: true });
 	const emit = defineEmits<{ "update:modelValue": [value: number] }>();
 
 	const isLastDay = computed(() => props.modelValue === 31);

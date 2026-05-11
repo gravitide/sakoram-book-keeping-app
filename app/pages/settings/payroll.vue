@@ -30,6 +30,7 @@
 						v-model="periodStart"
 						label="Period start day"
 						hint="When the pay period begins (e.g. 1st of the month)."
+						:show-last-day-toggle="false"
 					/>
 					<DayOfMonthField
 						v-model="periodEnd"
