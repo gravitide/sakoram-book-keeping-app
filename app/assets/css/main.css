@@ -171,3 +171,14 @@ a,
 [data-unavailable] {
 	opacity: 0.35;
 }
+
+/* Match the sticky save bar's accent border on Reka UI's portaled
+   panels (dropdown menu, select menu, context menu, popover, calendar)
+   so floating surfaces share a visual language. The popper wrapper
+   contains a single child — the actual panel — which we target. */
+[data-reka-popper-content-wrapper] > * {
+	border: 2px solid color-mix(in oklab, var(--ui-primary) 50%, transparent);
+	box-shadow:
+		0 25px 50px -12px rgb(0 0 0 / 0.5),
+		0 12px 24px -8px rgb(0 0 0 / 0.35);
+}
