@@ -87,8 +87,10 @@
 
 <script setup lang="ts">
 	import type { EmployeeRow } from "~/stores/employees";
+	import { nextPayrollCycle } from "~/lib/payroll-cycle";
 	import { useEmployeesStore } from "~/stores/employees";
 	import { monthBounds, usePayslipsStore } from "~/stores/payslips";
+	import { useSettingsStore } from "~/stores/settings";
 
 	definePageMeta({ title: "New payslip" });
 
@@ -97,10 +99,12 @@
 	const toast = useToast();
 	const store = usePayslipsStore();
 	const employeesStore = useEmployeesStore();
+	const settingsStore = useSettingsStore();
 
 	await Promise.all([
 		store.load(),
-		employeesStore.employees.length === 0 ? employeesStore.load() : Promise.resolve()
+		employeesStore.employees.length === 0 ? employeesStore.load() : Promise.resolve(),
+		settingsStore.ensureLoaded()
 	]);
 
 	// Optional ?employee=ID query — used by the "Create payslip" action on
@@ -119,15 +123,23 @@
 	const picked = ref<EmployeeRow | null>(preselected);
 	const creating = ref(false);
 
-	// Default to the current calendar month — the most common case.
+	// Seed the three date fields from the tenant's payroll cycle for
+	// "the next pay cycle relative to today". The user can hand-edit
+	// any of them — the watchers below still snap things together for
+	// off-template inputs, just like before.
 	const todayISO = (() => {
 		const d = new Date();
 		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 	})();
-	const initialBounds = monthBounds(todayISO);
-	const periodStart = ref<string | null>(initialBounds.start);
-	const periodEnd = ref<string | null>(initialBounds.end);
-	const payDate = ref<string | null>(initialBounds.end);
+	const cycleConfig = {
+		payroll_period_start_day: settingsStore.settings?.payroll_period_start_day ?? 1,
+		payroll_period_end_day: settingsStore.settings?.payroll_period_end_day ?? 31,
+		payroll_pay_day: settingsStore.settings?.payroll_pay_day ?? 31
+	};
+	const initialCycle = nextPayrollCycle(todayISO, cycleConfig).cycle;
+	const periodStart = ref<string | null>(initialCycle.periodStart);
+	const periodEnd = ref<string | null>(initialCycle.periodEnd);
+	const payDate = ref<string | null>(initialCycle.payDate);
 
 	// When the user changes period_start, snap period_end to the last
 	// day of *that* month and pull pay_date in if it has fallen out of
