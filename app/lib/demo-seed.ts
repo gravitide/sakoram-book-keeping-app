@@ -23,7 +23,9 @@ import type { VendorRow } from "~/stores/vendors";
 import { buildCategorySnapshot, useBillCategoriesStore } from "~/stores/bill_categories";
 import { useBillsStore } from "~/stores/bills";
 import { useClientsStore } from "~/stores/clients";
+import { useEmployeesStore } from "~/stores/employees";
 import { useInvoicesStore } from "~/stores/invoices";
+import { usePayslipsStore } from "~/stores/payslips";
 import { useQuotesStore } from "~/stores/quotes";
 import { useSettingsStore } from "~/stores/settings";
 import { useTenantsStore } from "~/stores/tenants";
@@ -625,6 +627,302 @@ const seedVouchers = async (cs: ClientIds, vs: VendorIds, bs: BillIds, is: Invoi
 	});
 };
 
+// ---------- Payroll: employees + payslips --------------------------------
+
+// 10 staff covering a plausible range of roles, salaries, and bank
+// details so the payroll dashboard, employees list, and payslip flows
+// all have realistic content to render. Joining dates are spread across
+// the last 5 years so "joining_date" filtering / sorting looks lived-in.
+interface DemoEmployee {
+	full_name: string
+	employee_number: string
+	nic: string
+	designation: string
+	email: string
+	phone: string
+	address_line1: string
+	city: string
+	joining_date: string // ISO
+	basic_salary_cents: number
+	bank_branch: string
+	bank_account_number: string
+}
+
+const DEMO_EMPLOYEES: DemoEmployee[] = [
+	{
+		full_name: "Nimal Perera",
+		employee_number: "E001",
+		nic: "198512345678",
+		designation: "Managing Director",
+		email: "nimal@acme.example",
+		phone: "+94 77 111 2233",
+		address_line1: "42 Bauddhaloka Mawatha",
+		city: "Colombo",
+		joining_date: daysAgo(1825), // 5y
+		basic_salary_cents: 50000000, // LKR 500,000
+		bank_branch: "Colombo Main",
+		bank_account_number: "0049-1000-0001"
+	},
+	{
+		full_name: "Saman Fernando",
+		employee_number: "E002",
+		nic: "199023456789",
+		designation: "Operations Manager",
+		email: "saman@acme.example",
+		phone: "+94 77 222 3344",
+		address_line1: "18 Lake Drive",
+		city: "Kandy",
+		joining_date: daysAgo(1460), // 4y
+		basic_salary_cents: 27500000, // 275,000
+		bank_branch: "Kandy",
+		bank_account_number: "0049-1000-0002"
+	},
+	{
+		full_name: "Kumari Wijesinghe",
+		employee_number: "E003",
+		nic: "198734567890",
+		designation: "Senior Accountant",
+		email: "kumari@acme.example",
+		phone: "+94 77 333 4455",
+		address_line1: "7 Marine Avenue",
+		city: "Colombo",
+		joining_date: daysAgo(1280),
+		basic_salary_cents: 22500000, // 225,000
+		bank_branch: "Colombo Main",
+		bank_account_number: "0049-1000-0003"
+	},
+	{
+		full_name: "Ravindra De Silva",
+		employee_number: "E004",
+		nic: "199145678901",
+		designation: "Software Engineer",
+		email: "ravi@acme.example",
+		phone: "+94 77 444 5566",
+		address_line1: "55 Galle Road",
+		city: "Colombo",
+		joining_date: daysAgo(910),
+		basic_salary_cents: 18500000, // 185,000
+		bank_branch: "Colombo Main",
+		bank_account_number: "0049-1000-0004"
+	},
+	{
+		full_name: "Anushka Bandara",
+		employee_number: "E005",
+		nic: "199256789012",
+		designation: "Sales Executive",
+		email: "anushka@acme.example",
+		phone: "+94 77 555 6677",
+		address_line1: "12 Hill Street",
+		city: "Negombo",
+		joining_date: daysAgo(730),
+		basic_salary_cents: 12500000, // 125,000
+		bank_branch: "Negombo",
+		bank_account_number: "0049-1000-0005"
+	},
+	{
+		full_name: "Tharindu Jayasooriya",
+		employee_number: "E006",
+		nic: "199367890123",
+		designation: "Marketing Coordinator",
+		email: "tharindu@acme.example",
+		phone: "+94 77 666 7788",
+		address_line1: "88 Temple Road",
+		city: "Galle",
+		joining_date: daysAgo(640),
+		basic_salary_cents: 11000000, // 110,000
+		bank_branch: "Galle",
+		bank_account_number: "0049-1000-0006"
+	},
+	{
+		full_name: "Dilani Senanayake",
+		employee_number: "E007",
+		nic: "199478901234",
+		designation: "HR & Admin Officer",
+		email: "dilani@acme.example",
+		phone: "+94 77 777 8899",
+		address_line1: "3 Park Lane",
+		city: "Colombo",
+		joining_date: daysAgo(540),
+		basic_salary_cents: 9500000, // 95,000
+		bank_branch: "Colombo Main",
+		bank_account_number: "0049-1000-0007"
+	},
+	{
+		full_name: "Pradeep Kumar",
+		employee_number: "E008",
+		nic: "199589012345",
+		designation: "Logistics Coordinator",
+		email: "pradeep@acme.example",
+		phone: "+94 77 888 9900",
+		address_line1: "21 Station Road",
+		city: "Kurunegala",
+		joining_date: daysAgo(420),
+		basic_salary_cents: 8500000, // 85,000
+		bank_branch: "Kurunegala",
+		bank_account_number: "0049-1000-0008"
+	},
+	{
+		full_name: "Chathura Hettiarachchi",
+		employee_number: "E009",
+		nic: "199690123456",
+		designation: "Office Assistant",
+		email: "chathura@acme.example",
+		phone: "+94 77 999 0011",
+		address_line1: "9 Beach Road",
+		city: "Matara",
+		joining_date: daysAgo(310),
+		basic_salary_cents: 7000000, // 70,000
+		bank_branch: "Matara",
+		bank_account_number: "0049-1000-0009"
+	},
+	{
+		full_name: "Sandun Rathnayake",
+		employee_number: "E010",
+		nic: "199801234567",
+		designation: "Driver",
+		email: "sandun@acme.example",
+		phone: "+94 77 121 3344",
+		address_line1: "44 Old Road",
+		city: "Anuradhapura",
+		joining_date: daysAgo(180),
+		basic_salary_cents: 6000000, // 60,000
+		bank_branch: "Anuradhapura",
+		bank_account_number: "0049-1000-0010"
+	}
+];
+
+const seedEmployees = async (): Promise<number[]> => {
+	const store = useEmployeesStore();
+	const ids: number[] = [];
+	for (const e of DEMO_EMPLOYEES) {
+		const id = await store.create({
+			full_name: e.full_name,
+			employee_number: e.employee_number,
+			nic: e.nic,
+			designation: e.designation,
+			email: e.email,
+			phone: e.phone,
+			address_line1: e.address_line1,
+			address_line2: null,
+			city: e.city,
+			postal_code: null,
+			country: "Sri Lanka",
+			joining_date: e.joining_date,
+			basic_salary_cents: e.basic_salary_cents,
+			bank_name: "Hatton National Bank",
+			bank_branch: e.bank_branch,
+			bank_account_number: e.bank_account_number,
+			bank_account_name: e.full_name,
+			notes: null
+		});
+		ids.push(id);
+	}
+	return ids;
+};
+
+// First-and-last-day-of-month helpers tuned for "the month N months back
+// from today". monthOffset = 0 → current month, -1 → previous, etc.
+function monthBoundsFromOffset(offset: number): { start: string, end: string } {
+	const today = new Date();
+	const ref = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+	const start = new Date(ref.getFullYear(), ref.getMonth(), 1);
+	const end = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
+	const iso = (d: Date) =>
+		`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+	return { start: iso(start), end: iso(end) };
+}
+
+// Seed three months of payslips for every employee so the dashboard /
+// recent-runs / chart have something to plot.
+//
+// Timeline (offset = months from current):
+//   -2: every employee, issued + fully paid     ← "Complete" run
+//   -1: every employee, issued; one partial,
+//                       one unpaid; rest paid    ← "Pending" run
+//    0: half draft, half issued (some paid)     ← current cycle in progress
+const seedPayslips = async (employeeIds: number[]): Promise<void> => {
+	const payslips = usePayslipsStore();
+	const vouchers = useVouchersStore();
+	const employees = useEmployeesStore();
+
+	for (let offsetIdx = 0; offsetIdx < 3; offsetIdx++) {
+		const offset = -2 + offsetIdx; // -2, -1, 0
+		const bounds = monthBoundsFromOffset(offset);
+		const payDate = bounds.end;
+
+		for (let i = 0; i < employeeIds.length; i++) {
+			const empId = employeeIds[i]!;
+			const e = employees.employees.find((x) => x.id === empId);
+			if (!e) continue;
+
+			const payslipId = await payslips.createPayslip({
+				employee: {
+					id: e.id,
+					full_name: e.full_name,
+					employee_number: e.employee_number,
+					nic: e.nic,
+					designation: e.designation,
+					email: e.email,
+					phone: e.phone,
+					address_line1: e.address_line1,
+					address_line2: e.address_line2,
+					city: e.city,
+					postal_code: e.postal_code,
+					country: e.country,
+					joining_date: e.joining_date,
+					basic_salary_cents: e.basic_salary_cents,
+					bank_name: e.bank_name,
+					bank_branch: e.bank_branch,
+					bank_account_number: e.bank_account_number,
+					bank_account_name: e.bank_account_name
+				},
+				periodStart: bounds.start,
+				periodEnd: bounds.end,
+				payDate
+			});
+
+			// Decide status + payment per the timeline above. The default
+			// payslip seed only has the Basic earning line, so net ==
+			// basic_salary_cents (good enough for the dashboard plots).
+			const net = e.basic_salary_cents;
+			let issue = true;
+			let payAmount: number | null = null;
+			if (offset === -2) {
+				payAmount = net; // fully paid
+			} else if (offset === -1) {
+				if (i === 0) payAmount = Math.round(net / 2); // partial
+				else if (i === 1) payAmount = null; // unpaid
+				else payAmount = net; // paid
+			} else {
+				// Current month: alternate draft / issued. Pay half of
+				// the issued ones so "in progress" tells a believable story.
+				if (i % 2 === 0) {
+					issue = false; // draft
+				} else {
+					payAmount = i % 4 === 1 ? net : null;
+				}
+			}
+
+			if (issue) await payslips.setStatus(payslipId, "issued");
+			if (payAmount !== null && payAmount > 0) {
+				await vouchers.create({
+					voucher_type: "payment",
+					voucher_date: payDate,
+					party_name: e.full_name,
+					amount_cents: payAmount,
+					payment_method: "bank_transfer",
+					reference: `TXN-${payDate.replace(/-/g, "")}-${e.employee_number ?? e.id}`,
+					description: `Salary for ${bounds.start.slice(0, 7)}`,
+					related_invoice_id: null,
+					related_bill_id: null,
+					related_payslip_id: payslipId,
+					attachment_path: null
+				});
+			}
+		}
+	}
+};
+
 // ---------- Bulk fill (for pagination / list-perf testing) ---------------
 
 // How many extra rows of each entity to add on top of the curated seed.
@@ -943,6 +1241,11 @@ export const createDemoBusiness = async (
 	const invoices = await seedInvoices(clients, quotes);
 	const bills = await seedBills(vendors, categories);
 	await seedVouchers(clients, vendors, bills, invoices);
+
+	// Payroll: 10 employees + 3 months of payslips with realistic status
+	// mix so the dashboard / chart / recent-runs all light up.
+	const employeeIds = await seedEmployees();
+	await seedPayslips(employeeIds);
 
 	// 4. Bulk fill. Adds ~22 more rows of each entity on top of the curated
 	// set so list pages have realistic volume to scroll/filter/paginate.
