@@ -161,6 +161,40 @@
 		<div class="text-center text-xs text-(--ui-text-muted) mt-6">
 			v{{ pkg.version }}
 		</div>
+
+		<!-- Full-screen blocking overlay while the demo seed is running.
+			Without this, tenants.create() inserts the partially-seeded
+			tenant into the registry list visible on the welcome page and
+			the user can click into it before the seed finishes — landing
+			on a half-built dashboard. The overlay sits below the
+			titlebar so window controls still work. -->
+		<Teleport to="body">
+			<div
+				v-if="seedingDemo"
+				class="fixed inset-0 z-40 flex items-center justify-center bg-(--ui-bg-muted)/95 backdrop-blur-sm"
+			>
+				<div class="text-center max-w-md px-6">
+					<img
+						:src="sakoramLogo"
+						alt="Sakoram"
+						class="h-16 w-auto mx-auto mb-6 dark:invert dark:hue-rotate-180"
+					>
+					<UIcon
+						name="i-lucide-loader-circle"
+						class="size-10 animate-spin text-(--ui-primary) mx-auto mb-4"
+					/>
+					<h2 class="text-xl font-semibold mb-2">
+						Setting up your demo business
+					</h2>
+					<p class="text-sm text-(--ui-text-muted)">
+						Seeding clients, vendors, employees, quotes, invoices,
+						bills, vouchers, and payslips — this usually takes a few
+						seconds. The dashboard will open automatically when it's
+						ready.
+					</p>
+				</div>
+			</div>
+		</Teleport>
 	</div>
 </template>
 
