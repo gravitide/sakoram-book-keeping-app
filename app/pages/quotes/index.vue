@@ -127,6 +127,26 @@
 							{{ STATUS_LABEL[s] }}
 						</button>
 					</div>
+
+					<!-- Quick issue-date preset chips. Clicking one sets
+						issuedFrom / issuedTo to the preset's bounds;
+						clicking the active preset clears it. The
+						Advanced popover stays the source of truth for
+						custom ranges and Valid-until filtering. -->
+					<div class="flex items-center gap-1.5 flex-wrap">
+						<UIcon name="i-lucide-calendar" class="size-3.5 text-(--ui-text-muted) shrink-0 mr-1" />
+						<span class="text-xs text-(--ui-text-muted) mr-1">Issued:</span>
+						<button
+							v-for="p in DATE_PRESETS"
+							:key="p.key"
+							type="button"
+							class="text-xs px-2.5 py-1 rounded-full border transition select-none cursor-pointer"
+							:class="datePresetClasses(p.key)"
+							@click="toggleDatePreset(p.key)"
+						>
+							{{ p.label }}
+						</button>
+					</div>
 				</div>
 			</template>
 
@@ -348,6 +368,69 @@
 	const inactiveChip = "bg-transparent border-(--ui-border) text-(--ui-text-muted) hover:bg-(--ui-bg-muted) hover:text-(--ui-text)";
 	const statusChipClasses = (s: QuoteStatus): string =>
 		store.statusFilters.includes(s) ? STATUS_ACTIVE_CLASSES[s] : inactiveChip;
+
+	// Quick issue-date presets. Each resolves to a concrete ISO bound
+	// pair at click time, so "This month" always means the current
+	// calendar month — no stale dates if the user leaves the page
+	// open across a boundary.
+	type DatePresetKey = "today" | "this_week" | "this_month" | "this_year";
+	const DATE_PRESETS: { key: DatePresetKey, label: string }[] = [
+		{ key: "today", label: "Today" },
+		{ key: "this_week", label: "This week" },
+		{ key: "this_month", label: "This month" },
+		{ key: "this_year", label: "This year" }
+	];
+
+	const isoFromDate = (d: Date): string =>
+		`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+	const datePresetBounds = (key: DatePresetKey): { from: string, to: string } => {
+		const now = new Date();
+		if (key === "today") {
+			const iso = isoFromDate(now);
+			return { from: iso, to: iso };
+		}
+		if (key === "this_week") {
+			// Monday-anchored week. getDay(): 0 Sun..6 Sat → days since Mon.
+			const dow = now.getDay();
+			const daysSinceMon = (dow + 6) % 7;
+			const monday = new Date(now);
+			monday.setDate(now.getDate() - daysSinceMon);
+			const sunday = new Date(monday);
+			sunday.setDate(monday.getDate() + 6);
+			return { from: isoFromDate(monday), to: isoFromDate(sunday) };
+		}
+		if (key === "this_month") {
+			const first = new Date(now.getFullYear(), now.getMonth(), 1);
+			const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+			return { from: isoFromDate(first), to: isoFromDate(last) };
+		}
+		// this_year
+		const first = new Date(now.getFullYear(), 0, 1);
+		const last = new Date(now.getFullYear(), 11, 31);
+		return { from: isoFromDate(first), to: isoFromDate(last) };
+	};
+
+	const isDatePresetActive = (key: DatePresetKey): boolean => {
+		const { from, to } = datePresetBounds(key);
+		return store.issuedFrom === from && store.issuedTo === to;
+	};
+
+	const toggleDatePreset = (key: DatePresetKey) => {
+		if (isDatePresetActive(key)) {
+			store.issuedFrom = null;
+			store.issuedTo = null;
+			return;
+		}
+		const { from, to } = datePresetBounds(key);
+		store.issuedFrom = from;
+		store.issuedTo = to;
+	};
+
+	const datePresetClasses = (key: DatePresetKey): string =>
+		isDatePresetActive(key)
+			? "bg-(--ui-info)/15 border-(--ui-info)/40 text-(--ui-info)"
+			: inactiveChip;
 
 	// Function declaration (not const arrow) so it hoists above the
 	// useListView() call site, which references it in a column getValue.
