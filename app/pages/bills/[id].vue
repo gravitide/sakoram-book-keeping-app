@@ -130,7 +130,7 @@
 								<DateField v-model="formIssueDate" :disabled="!editable" />
 							</UFormField>
 							<UFormField label="Due date">
-								<DateField v-model="formDueDate" :disabled="!editable" />
+								<DateField v-model="formDueDate" :min-value="formIssueDate || undefined" :disabled="!editable" />
 							</UFormField>
 						</div>
 					</div>
@@ -569,6 +569,16 @@
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
 	);
+
+	// Keep due_date >= issue_date. min-value on the DateField blocks
+	// picking an earlier date directly; this watcher handles the
+	// reverse direction (pushing issue forward past due).
+	watch(formIssueDate, (next) => {
+		if (!editable.value || hydrating.value || !next) return;
+		if (formDueDate.value && formDueDate.value < next) {
+			formDueDate.value = next;
+		}
+	});
 
 	function centsToRupees(c: number): string {
 		if (!Number.isInteger(c) || c === 0) return "";
