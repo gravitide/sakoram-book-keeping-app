@@ -43,11 +43,26 @@
 					<UIcon name="i-lucide-link" class="size-4" />
 					View linked invoice
 				</NuxtLink>
-				<UDropdownMenu v-if="transitionItems.length > 0" :items="transitionItems">
-					<UButton color="neutral" variant="outline" trailing-icon="i-lucide-chevron-down">
-						Status
-					</UButton>
-				</UDropdownMenu>
+				<!-- Legal next-state transitions as individual buttons —
+					replaces an opaque 'Status' dropdown so the available
+					moves are visible at a glance. Hidden when no
+					transitions are legal (terminal states). -->
+				<UButton
+					v-for="t in transitionActions"
+					:key="t.label"
+					color="neutral"
+					variant="outline"
+					:icon="t.icon"
+					@click="t.onSelect"
+				>
+					{{ t.label }}
+				</UButton>
+
+				<!-- Visual separator before the destructive action so the
+					delete button doesn't sit shoulder-to-shoulder with the
+					everyday actions and get accidentally clicked. -->
+				<div class="h-6 w-px bg-(--ui-border) mx-1" />
+
 				<UButton
 					color="error"
 					variant="ghost"
@@ -783,13 +798,25 @@
 		}
 	};
 
-	const transitionItems = computed(() => {
+	// Legal next-state actions for the current status. Rendered as
+	// individual buttons in the header so the available transitions are
+	// visible at a glance — no dropdown to click through. Short verbs
+	// keep the header compact.
+	interface TransitionAction {
+		label: string
+		icon: string
+		onSelect: () => void
+	}
+	const transitionActions = computed<TransitionAction[]>(() => {
 		const cur = status.value;
-		const items: { label: string, icon: string, onSelect: () => void }[] = [];
-		if (canTransition(cur, "sent")) items.push({ label: "Mark as Sent", icon: "i-lucide-send", onSelect: () => transition("sent") });
-		if (canTransition(cur, "accepted")) items.push({ label: "Mark as Accepted", icon: "i-lucide-thumbs-up", onSelect: () => transition("accepted") });
-		if (canTransition(cur, "rejected")) items.push({ label: "Mark as Rejected", icon: "i-lucide-thumbs-down", onSelect: () => transition("rejected") });
-		if (canTransition(cur, "expired")) items.push({ label: "Mark as Expired", icon: "i-lucide-calendar-x", onSelect: () => transition("expired") });
-		return items.length > 0 ? [items] : [];
+		const items: TransitionAction[] = [];
+		// Reopen comes first so it's the most prominent button on a
+		// rejected/expired quote — the most likely thing the user wants.
+		if (canTransition(cur, "draft")) items.push({ label: "Reopen as draft", icon: "i-lucide-rotate-ccw", onSelect: () => transition("draft") });
+		if (canTransition(cur, "sent")) items.push({ label: "Send", icon: "i-lucide-send", onSelect: () => transition("sent") });
+		if (canTransition(cur, "accepted")) items.push({ label: "Accept", icon: "i-lucide-thumbs-up", onSelect: () => transition("accepted") });
+		if (canTransition(cur, "rejected")) items.push({ label: "Reject", icon: "i-lucide-thumbs-down", onSelect: () => transition("rejected") });
+		if (canTransition(cur, "expired")) items.push({ label: "Expire", icon: "i-lucide-calendar-x", onSelect: () => transition("expired") });
+		return items;
 	});
 </script>

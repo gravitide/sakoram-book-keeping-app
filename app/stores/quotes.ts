@@ -84,8 +84,11 @@ const STATUS_TRANSITIONS: Record<QuoteStatus, QuoteStatus[]> = {
 	draft: ["sent", "rejected"],
 	sent: ["accepted", "rejected", "expired"],
 	accepted: ["converted"],
-	rejected: [],
-	expired: [],
+	// Rejected and expired are user-decision states, not data-loss
+	// states — allow reopening back to draft so an accidental click
+	// or a customer change of mind doesn't burn the quote number.
+	rejected: ["draft"],
+	expired: ["draft"],
 	converted: []
 };
 
