@@ -98,7 +98,18 @@ export const useQuotesStore = defineStore("quotes", () => {
 	const error = ref<string | null>(null);
 
 	const search = ref("");
-	const statusFilter = ref<QuoteStatus | "all">("all");
+	// Multi-select status filter. Empty array = show everything (no
+	// narrowing). Each clicked badge in the list-page header toggles its
+	// status in/out of this array.
+	const statusFilters = ref<QuoteStatus[]>([]);
+	const toggleStatusFilter = (s: QuoteStatus) => {
+		const idx = statusFilters.value.indexOf(s);
+		if (idx === -1) statusFilters.value.push(s);
+		else statusFilters.value.splice(idx, 1);
+	};
+	const clearStatusFilters = () => {
+		statusFilters.value = [];
+	};
 	// "all" = no narrowing; otherwise the FK id of a single client to
 	// scope the list to. Filters on client_id (the FK), not the snapshot
 	// name — clients keep the same id even after a rename.
@@ -126,7 +137,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 	const filtered = computed(() => {
 		const q = search.value.trim().toLowerCase();
 		return quotes.value.filter((row) => {
-			if (statusFilter.value !== "all" && row.status !== statusFilter.value) return false;
+			if (statusFilters.value.length > 0 && !statusFilters.value.includes(row.status)) return false;
 			if (clientFilter.value !== "all" && row.client_id !== clientFilter.value) return false;
 			if (issuedFrom.value && row.issue_date < issuedFrom.value) return false;
 			if (issuedTo.value && row.issue_date > issuedTo.value) return false;
@@ -423,7 +434,9 @@ export const useQuotesStore = defineStore("quotes", () => {
 		loading,
 		error,
 		search,
-		statusFilter,
+		statusFilters,
+		toggleStatusFilter,
+		clearStatusFilters,
 		clientFilter,
 		issuedFrom,
 		issuedTo,

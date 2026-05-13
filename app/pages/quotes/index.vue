@@ -44,13 +44,25 @@
 							class="w-56"
 							:search-input="{ placeholder: 'Filter clients…' }"
 						/>
-						<USelect
-							v-model="store.statusFilter"
-							:items="statusOptions"
-							value-key="value"
-							icon="i-lucide-flag"
-							class="w-40"
-						/>
+					</div>
+
+					<!-- Multi-select status filter. Each chip toggles its
+						status in/out of the active set. Empty set = show
+						all. The colour ring matches StatusBadge so the
+						filter chip and the row badge speak the same
+						visual language. -->
+					<div class="flex items-center gap-1.5 flex-wrap">
+						<UIcon name="i-lucide-flag" class="size-3.5 text-(--ui-text-muted) shrink-0 mr-1" />
+						<button
+							v-for="s in QUOTE_STATUSES"
+							:key="s"
+							type="button"
+							class="text-xs px-2.5 py-1 rounded-full border transition select-none cursor-pointer"
+							:class="statusChipClasses(s)"
+							@click="store.toggleStatusFilter(s)"
+						>
+							{{ STATUS_LABEL[s] }}
+						</button>
 					</div>
 
 					<!-- Row 2 — date ranges + reset. Inline compact labels
@@ -251,14 +263,14 @@
 	// of the "Reset filters" pill in the toolbar.
 	const hasAnyFilter = computed(() =>
 		store.search.trim() !== ""
-		|| store.statusFilter !== "all"
+		|| store.statusFilters.length > 0
 		|| store.clientFilter !== "all"
 		|| store.hasDateFilters
 	);
 
 	const resetFilters = () => {
 		store.search = "";
-		store.statusFilter = "all";
+		store.clearStatusFilters();
 		store.clientFilter = "all";
 		store.clearDateFilters();
 	};
@@ -273,15 +285,40 @@
 			.map((c) => ({ label: c.name, value: c.id }))
 	]);
 
-	const statusOptions: { label: string, value: QuoteStatus | "all" }[] = [
-		{ label: "All", value: "all" },
-		{ label: "Draft", value: "draft" },
-		{ label: "Sent", value: "sent" },
-		{ label: "Accepted", value: "accepted" },
-		{ label: "Rejected", value: "rejected" },
-		{ label: "Expired", value: "expired" },
-		{ label: "Converted", value: "converted" }
+	// Status chip metadata — display order, label, and the colour family
+	// each chip uses when active. Mirrors StatusBadge's colour map so the
+	// filter chip and the row badge speak the same visual language.
+	const QUOTE_STATUSES: QuoteStatus[] = [
+		"draft",
+		"sent",
+		"accepted",
+		"rejected",
+		"expired",
+		"converted"
 	];
+	const STATUS_LABEL: Record<QuoteStatus, string> = {
+		draft: "Draft",
+		sent: "Sent",
+		accepted: "Accepted",
+		rejected: "Rejected",
+		expired: "Expired",
+		converted: "Converted"
+	};
+	// Tailwind class strings for active / inactive chip per status. Each
+	// active state uses the same colour the StatusBadge does for the
+	// corresponding row badge — picked from the static semantic palette
+	// (no primary, so chips stay theme-stable).
+	const STATUS_ACTIVE_CLASSES: Record<QuoteStatus, string> = {
+		draft: "bg-(--ui-bg-muted) border-(--ui-text-muted)/40 text-(--ui-text)",
+		sent: "bg-(--ui-info)/15 border-(--ui-info)/40 text-(--ui-info)",
+		accepted: "bg-(--ui-success)/15 border-(--ui-success)/40 text-(--ui-success)",
+		rejected: "bg-(--ui-error)/15 border-(--ui-error)/40 text-(--ui-error)",
+		expired: "bg-(--ui-warning)/15 border-(--ui-warning)/40 text-(--ui-warning)",
+		converted: "bg-(--ui-success)/15 border-(--ui-success)/40 text-(--ui-success)"
+	};
+	const inactiveChip = "bg-transparent border-(--ui-border) text-(--ui-text-muted) hover:bg-(--ui-bg-muted) hover:text-(--ui-text)";
+	const statusChipClasses = (s: QuoteStatus): string =>
+		store.statusFilters.includes(s) ? STATUS_ACTIVE_CLASSES[s] : inactiveChip;
 
 	// Function declaration (not const arrow) so it hoists above the
 	// useListView() call site, which references it in a column getValue.
