@@ -200,21 +200,24 @@ sakoram_app/
 │  │  └─ sakoram-wordmark.svg         ← wide wordmark used in the welcome screen + About modal
 │  ├─ pages/
 │  │  ├─ index.vue                    ← Dashboard (KPI tiles + 4 charts + recent activity)
-│  │  ├─ welcome.vue                  ← business picker (landing screen)
+│  │  ├─ welcome.vue                  ← business picker (landing screen); demo-seed overlay while building
+│  │  ├─ onboarding.vue               ← 4-step wizard after creating a new tenant
 │  │  ├─ clients/                     ← list, [id]
 │  │  ├─ vendors/                     ← list, [id] (mirrors clients)
 │  │  ├─ employees/                   ← list, [id] (mirrors vendors + payroll fields)
 │  │  ├─ categories/                  ← list page only — modal-driven CRUD for bill categories
-│  │  ├─ quotes/                      ← list, new, [id] (PDF preview, convert to invoice)
-│  │  ├─ invoices/                    ← list, new, [id] (PDF preview, payment ledger)
+│  │  ├─ quotes/                      ← list w/ row context menu, new, [id] (PDF, convert to invoice)
+│  │  ├─ invoices/                    ← list w/ row context menu, new, [id] (PDF, payment ledger)
 │  │  ├─ bills/                       ← list, new, [id] (vendor-FK + snapshot)
 │  │  ├─ vouchers/                    ← list, new, [id] (money in/out; read-only by default → click Edit to mutate)
-│  │  ├─ payslips/                    ← list, new, [id], bulk
+│  │  ├─ payroll/                     ← dashboard (upcoming-cycle hero, MoM chart, recent runs, outstanding)
+│  │  ├─ payslips/                    ← list (multi-select bulk PDF), new, [id], bulk (auto-issue + auto-pay)
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
 │  │     ├─ company.vue               ← business info, address, bank, defaults, logo
 │  │     ├─ pdf.vue                   ← PDF font + PDF header logo
 │  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), zoom (6 discrete steps)
+│  │     ├─ payroll.vue               ← cycle template (period_start_day / period_end_day / pay_day)
 │  │     └─ businesses.vue            ← tenant CRUD + Export/Import
 │  ├─ components/
 │  │  ├─ TitleBar.vue                 ← custom titlebar (sidebar toggle + drag region + min/max/close); pixel-pinned sizing so zoom doesn't scale it
@@ -224,16 +227,18 @@ sakoram_app/
 │  │  ├─ CategoryPicker.vue           ← bill-category dropdown w/ inline "+ New" modal
 │  │  ├─ CategoryFormModal.vue        ← create/edit category (8-color × 16-icon picker)
 │  │  ├─ SectionCard.vue              ← header-with-icon card; used on company / client / vendor / employee edit pages
-│  │  ├─ DateField.vue                ← UInputDate + UCalendar wrapper; ISO-string v-model + optional min/max
+│  │  ├─ DateField.vue                ← UInputDate + UCalendar wrapper; ISO-string v-model + min/max with is-date-unavailable strikethrough
 │  │  ├─ DateRangeField.vue           ← same idea, range mode (v-model:from / v-model:to)
+│  │  ├─ DayOfMonthField.vue          ← 1–31 integer input + "Last day of month" toggle (used on payroll settings)
 │  │  ├─ DocumentLineEditor.vue       ← bundle/itemized line-item editor for quotes/invoices/bills
 │  │  ├─ PayslipLineEditor.vue        ← two-section earnings/deductions editor with live subtotals + net
 │  │  ├─ ListPagination.vue           ← page-size selector + first/prev/next/last + range readout
 │  │  ├─ SortableTh.vue               ← clickable header cell w/ 3-state arrow icon
 │  │  ├─ MoneyInput.vue               ← integer-cents v-model
 │  │  ├─ PdfPreviewModal.vue          ← embeds rendered PDF in <iframe>
-│  │  ├─ StatusBadge.vue              ← color-coded status badges
+│  │  ├─ StatusBadge.vue              ← color-coded status badges (no `primary` — theme-stable semantic colours only)
 │  │  ├─ MonthlyCashFlowChart.vue     ← dashboard: 12-month receipts vs payments
+│  │  ├─ MonthlySalaryPaidChart.vue   ← payroll dashboard: 12-month salary-paid bars
 │  │  ├─ ReceivablesAgingChart.vue    ← dashboard: outstanding invoices by days-past-due bucket
 │  │  ├─ ExpensesByCategoryChart.vue  ← dashboard: bills donut by category, last 90 days
 │  │  └─ TopClientsChart.vue          ← dashboard: top clients by invoiced revenue, last 12 months
@@ -245,11 +250,14 @@ sakoram_app/
 │  │  └─ useActiveCurrency.ts         ← live ref of the active business's currency meta
 │  ├─ lib/
 │  │  ├─ db.ts                        ← getDb() (lazy, reads active tenant URL), select/execute
-│  │  ├─ demo-seed.ts                 ← createDemoBusiness() — curated + bulk-fill (~25/section)
+│  │  ├─ demo-seed.ts                 ← createDemoBusiness() — curated + bulk-fill (~25/section) + 10 employees + 3 months of payslips
 │  │  ├─ money.ts                     ← toCents, formatMoney/formatLKR, computeLineTotals (integer math)
 │  │  ├─ numbering.ts                 ← allocateDocumentNumber (single-statement atomic)
 │  │  ├─ pdf.ts                       ← preview/commit/legacy export helpers; PdfCommand union
+│  │  ├─ quote-pdf.ts                 ← shared payload builder; detail page + list-row Generate-PDF call this
+│  │  ├─ invoice-pdf.ts               ← same shape as quote-pdf; takes paidCents for the paid/balance row
 │  │  ├─ payslip-pdf.ts               ← shared payload builder used by both payslip detail page and list-row Generate-PDF action
+│  │  ├─ payroll-cycle.ts             ← resolvePayrollCycle + nextPayrollCycle: turn (year, month, settings) → ISO dates with clamping (31 = last day of month)
 │  │  └─ theme.ts                     ← THEME_COLORS palette (name → hex)
 │  ├─ middleware/
 │  │  └─ tenant.global.ts             ← redirect to /welcome if no active tenant
@@ -567,7 +575,11 @@ See `src-tauri/migrations/` for the source of truth. High-level:
 
 - `company_settings` — singleton (`id=1` CHECK), per-tenant. Includes
   `ui_font`, `pdf_font`, `theme_color`, `currency_code`,
-  `pdf_header_logo_path`, fiscal-year start.
+  `pdf_header_logo_path`, fiscal-year start, and the **payroll cycle
+  template**: `payroll_period_start_day`, `payroll_period_end_day`,
+  `payroll_pay_day` (1–31 integers, clamped to month length at
+  runtime — 31 ≡ last day of month). Resolved via
+  `app/lib/payroll-cycle.ts`.
 - `clients` — id, name, contact info, archived flag.
 - `vendors` — same shape as `clients`. Address book for the bills side
   of the ledger.
@@ -594,14 +606,19 @@ See `src-tauri/migrations/` for the source of truth. High-level:
   the user-visible draft / sent / partial / paid / overdue state is
   **derived** in JS from the sum of linked receipt vouchers +
   `total_cents` + today vs `due_date`. See `app/stores/invoices.ts`:
-  `derivedStatus()`, `paidCentsFor()`, `linkedPayments()`.
+  `derivedStatus()`, `paidCentsFor()`, `linkedPayments()`. Cancelling
+  an invoice with recorded receipts is refused at the store level
+  (`setStatus("cancelled")` throws); delete the receipt vouchers
+  first.
 - `bills` + `bill_lines` — vendor bills. `vendor_id` FK → `vendors`
   with a `vendor_snapshot` JSON copy frozen at creation time;
   `category_id` FK → `bill_categories` with a `category_snapshot` JSON
   copy. **No `paid_cents` column** — removed in migration 0013.
   Payments via `vouchers.related_bill_id`. Persisted `status` is
   `open | cancelled`; user-visible unpaid / partial / paid / overdue
-  state is **derived** in JS the same way invoices work.
+  state is **derived** in JS the same way invoices work. Cancelling a
+  fully-paid bill is refused at the store level — payment vouchers
+  must be deleted first.
 - `payslips` + `payslip_lines` — per-employee, per-period pay records.
   `employee_id` FK + `employee_snapshot` (JSON, frozen at create).
   `UNIQUE (employee_id, period_start)` enforces "one payslip per
@@ -651,6 +668,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0016_payslips.sql                       ← payslips + payslip_lines, UNIQUE (employee_id, period_start)
 0017_vouchers_payslip_link.sql          ← vouchers.related_payslip_id (ON DELETE SET NULL)
 0018_employee_number.sql                ← nullable text column on employees, indexed
+0019_payroll_cycle.sql                  ← payroll_period_start_day / payroll_period_end_day / payroll_pay_day on company_settings
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,
@@ -670,8 +688,9 @@ sides.**
 
 ```
 quotes:    draft → sent → accepted → converted (terminal)
-                       ↘ rejected | expired (terminal)
+                       ↘ rejected | expired
                 draft → rejected (cancel)
+                rejected | expired → draft (reopen — common mistake escape)
 
 invoices:  persisted: draft ↔ sent ↔ cancelled (the only user transitions)
            derived:   draft           → draft
@@ -680,13 +699,18 @@ invoices:  persisted: draft ↔ sent ↔ cancelled (the only user transitions)
                       cancelled is sticky
            ("Record payment" creates a receipt voucher with
             related_invoice_id; partial/paid/overdue states fall
-            out of that.)
+            out of that.) Cancel is refused once any receipt
+            voucher is linked — vouchers must be deleted first.
+            The detail page also hides "Record payment" once the
+            balance hits zero.
 
 bills:     persisted: open ↔ cancelled (the only user transitions)
            derived:   open + payments → unpaid | partial | paid
                       open + due_date < today + balance > 0 → overdue
                       cancelled is sticky
            ("Record payment" creates a voucher with related_bill_id.)
+           Cancel is refused once the bill is fully paid — payment
+           vouchers must be deleted first.
 
 payslips:  persisted: draft ↔ issued ↔ cancelled
            derived:   draft           → draft
@@ -698,6 +722,17 @@ payslips:  persisted: draft ↔ issued ↔ cancelled
             page hides Cancel in that state.)
 
 vouchers:  no transitions; voucher_type (receipt/payment) is locked at create
+
+Detail-page UI for transitions: each legal next-state is rendered as an
+explicit button in the header (no dropdown). On the list pages, the
+row context menu and overflow ⋯ menu surface the most common ones.
+
+Date invariants enforced via DateField's min-value + a watcher that
+drags the second date forward when the first moves past it:
+  - quotes:    valid_until >= issue_date
+  - invoices:  due_date    >= issue_date
+  - bills:     due_date    >= issue_date
+  - payslips:  pay_date in [period_start, period_end]
 ```
 
 ---
@@ -723,6 +758,24 @@ stays consistent and each page stays small:
    `UContextMenu`. New actions land in both places automatically.
    Group items into sub-arrays to render a divider (e.g. `[lifecycle, exports]`
    on the payslips list separates Open / Mark issued from Generate PDF).
+   The Reka UI `as-child` trigger on `UContextMenu` keeps `<tr>` as the
+   actual DOM element (no wrapper `<div>` between `<tbody>` and `<tr>`).
+   Pattern is now on quotes, invoices, payslips, and employees lists.
+6. **Filter strip** is consistent across the document lists (quotes,
+   invoices, bills, vouchers, payslips):
+   - Row 1: search + FK pickers (client/vendor/employee) + **Advanced**
+     button (a `UPopover` hosting the date-range fields, with a small
+     info-dot indicating when any date filter is active) + **Reset**.
+   - Row 2: multi-select status chips. Empty set = show everything.
+     Each chip's active colour matches the row's `StatusBadge` for
+     visual continuity. Stored as `store.statusFilters` (array) with
+     `toggleStatusFilter` / `clearStatusFilters` helpers.
+   - Row 3 (where applicable): quick date-preset chips (Today / This
+     week / This month / This year). Each resolves to concrete ISO
+     bounds at click time, so "This month" is always the current
+     calendar month — no staleness. Clicking the active preset
+     clears the range. Payslips replaces this with a month picker
+     since the common payroll query is "show me April 2026".
 
 `useListView` returns a `reactive()` object so consumers do
 `list.sortKey` / `list.page = 2` (no `.value` noise) and templates
@@ -790,6 +843,7 @@ Bills
 Vouchers
 ─── (divider)
 Payroll
+  ├─ Dashboard       ← /payroll — cycle / KPIs / MoM chart / recent runs
   ├─ Employees
   └─ Payslips
 ─── (divider)
@@ -798,12 +852,20 @@ Lists
   ├─ Vendors
   └─ Bill categories
 ─── (divider)
-Settings
+Settings                ← per-tenant business config (exported in backups)
   ├─ Company details
   ├─ PDF
+  └─ Payroll          ← cycle template (period_start_day / period_end_day / pay_day)
+─── (divider)
+App                     ← UI + multi-tenant administration
   ├─ Appearance
   └─ Businesses
 ```
+
+URLs all live under `/settings/*` even for the App group — only the
+sidebar grouping splits them. \`Settings\` items are per-tenant data
+that travels with the export bundle; \`App\` items are UI prefs and
+multi-tenant admin that don't belong to any single business.
 
 The sidebar itself is a floating card (`m-2 mt-0 rounded-lg shadow-lg`)
 sitting against the floor of the titlebar; main content is flush with
@@ -817,7 +879,7 @@ persisted to localStorage).
 
 ### Done
 
-- ✅ DB schema + migrations 0001..0018 (`SCHEMA_VERSION` 18)
+- ✅ DB schema + migrations 0001..0019 (`SCHEMA_VERSION` 19)
 - ✅ Clients / Vendors / Employees CRUD (hero + SectionCard layout)
 - ✅ Quotes (full lifecycle, PDF, convert-to-invoice; default VAT seeded
   from settings on draft creation)
@@ -828,10 +890,26 @@ persisted to localStorage).
 - ✅ Vouchers (money in/out, PDF, big amount card layout; "Record
   payment" prefill + bounce-back; voucher detail page is read-only
   by default with explicit Edit toggle)
-- ✅ **Payroll**: Employees, Payslips (single create + bulk create
-  for all employees, period auto-snap, pay-date constrained,
-  duplicate-period guard with link to existing), PDF, status FSM,
-  payments via vouchers with `related_payslip_id`
+- ✅ **Payroll** (huge surface):
+  - Employees CRUD with payroll fields (basic salary, bank, NIC, etc.)
+  - Payslips lifecycle: create, edit lines, issue, cancel, pay; PDF
+  - **Cycle template** on `company_settings` (period_start_day /
+    period_end_day / pay_day, 1–31 with month-length clamping;
+    settable at `/settings/payroll`). Resolved via
+    `app/lib/payroll-cycle.ts`.
+  - **Bulk payslip flow** at `/payslips/bulk` — pick a month, the
+    three dates fall out of the cycle template; chain auto-issue
+    and auto-record-payment in one run. Per-row payment references
+    (TXN ID / cheque #); voucher defaults (method, description)
+    bulk for the run.
+  - **Bulk PDF export** on the payslips list — multi-select rows
+    via checkbox column, pick output folder, progress modal, one
+    `{number}.pdf` per row.
+  - **Payroll dashboard** at `/payroll` — upcoming-cycle hero with
+    urgency badge (overdue red / 7-day amber / further green), KPI
+    tiles (active employees / outstanding payroll / paid this year),
+    12-month salaries-paid bar chart, recent runs panel, outstanding
+    list.
 - ✅ Universal delete on quotes/invoices/bills/payslips. Linked
   vouchers stay intact (their `related_*_id` is nulled on delete).
 - ✅ Dashboard (KPI tiles, monthly cash-flow chart, receivables aging,
@@ -842,8 +920,10 @@ persisted to localStorage).
   color from settings, user-chosen `pdf_font`, business-name
   wordmark fallback when no PDF logo uploaded)
 - ✅ PDF preview modal (iframe-embedded, save-as via temp file copy)
-- ✅ Settings split: `/settings/company`, `/settings/pdf`,
-  `/settings/appearance`, `/settings/businesses`
+- ✅ Settings split into two sidebar groups: **Settings** (per-tenant
+  business config — Company / PDF / Payroll cycle) and **App**
+  (UI prefs + multi-tenant admin — Appearance / Businesses). URLs
+  all stay at `/settings/*`.
 - ✅ Appearance: independent UI/PDF font pickers (5 bundled +
   free-text), 8-color theme palette, **UI zoom** (80–150% in 6
   steps) via root-`font-size` cascade
@@ -861,9 +941,39 @@ persisted to localStorage).
   scale with UI zoom.
 - ✅ **Disabled defaults**: webview right-click context menu (except
   on inputs), text selection on UI chrome (sidebar, buttons, etc.)
-- ✅ **Row context menus** on the payslips and employees list pages —
-  same items the overflow ⋯ button shows; uses `UContextMenu` with
-  `as-child` trigger so the `<tr>` stays the actual DOM element
+- ✅ **Row context menus** on the quotes, invoices, payslips, and
+  employees list pages — same items the overflow ⋯ button shows;
+  uses `UContextMenu` with `as-child` trigger so the `<tr>` stays
+  the actual DOM element. Quote / invoice row PDF generation calls
+  shared payload builders in `app/lib/quote-pdf.ts` and
+  `app/lib/invoice-pdf.ts`.
+- ✅ **Chip-style multi-select filters + Advanced popover** on every
+  document list page (quotes, invoices, bills, vouchers, payslips).
+  Empty chip set = show everything; multiple chips = union. Date
+  ranges hide in a single Advanced popover with an active-state dot.
+  Quick date presets (Today / This week / This month / This year)
+  live under the status row.
+- ✅ **Sticky save bar** on detail pages (quote / invoice / bill /
+  voucher / payslip / client / vendor / employee / settings):
+  primary-coloured border at 50% opacity + shadow-2xl + backdrop
+  blur. Fades in when the form is dirty; Discard / Save changes.
+  Reka UI popper panels share the same border treatment globally
+  via a CSS rule in `main.css`.
+- ✅ **Explicit transition buttons** on detail page headers (quote /
+  invoice) — replaces the opaque "Status ▾" dropdown so available
+  next-states are visible at a glance. Short verb labels (Send /
+  Accept / Reject / Expire / Reopen / Cancel) keep the row compact.
+  A small vertical separator sits before the Delete button.
+- ✅ **Reopen rejected/expired quotes back to draft** — saves the
+  user from burning a quote number on a misclick or a client change
+  of mind.
+- ✅ **Cancel guards** on invoices and bills — refused at the store
+  level once payment vouchers exist (delete vouchers first). UI
+  hides the cancel button in that state.
+- ✅ **Date invariants** on quote (valid >= issue), invoice / bill
+  (due >= issue) via `DateField` `min-value` + an issue-date
+  watcher. `is-date-unavailable` strikes through out-of-range dates
+  on the calendar.
 - ✅ Window title syncs with active tenant
 - ✅ Sidebar grouped (Dashboard / documents / Payroll / Lists /
   Settings) with thin separators between groups
@@ -871,10 +981,19 @@ persisted to localStorage).
   + icon (16 Lucide options); inline "+ New" modal on the bill page
 - ✅ Default bill categories seeded into every fresh tenant
 - ✅ Welcome screen with the new Sakoram wordmark and side-by-side
-  cards on first run
+  cards on first run. **Demo seed overlay** blocks the welcome page
+  while the demo business is being built so the user can't click
+  the half-seeded tenant.
+- ✅ **Onboarding wizard** at `/onboarding` — 4-step flow after
+  creating a new tenant (Identity / Contact / Money defaults /
+  Banking). Each step saves directly so partial completion sticks.
+  Step 1 has a "Skip onboarding" link for power users.
 - ✅ Allow deleting the active / last business
 - ✅ Pagination + click-to-sort columns on every list page
-- ✅ Demo seed bulk-fills ~22 extra rows of each entity
+- ✅ Demo seed bulk-fills ~22 extra rows of each entity plus 10
+  curated employees and ~30 payslips across 3 months with a
+  realistic status mix so the payroll dashboard / chart light up
+  on a freshly-seeded demo tenant.
 - ✅ Line-ending normalization via `.gitattributes`
 - ✅ Production build pipeline (MSI + NSIS installers)
 - ✅ CI release workflow (Windows + macOS Apple Silicon installers)
@@ -883,6 +1002,9 @@ persisted to localStorage).
 
 - **Cmd/Ctrl+K command palette** — biggest "feels native" win still
   outstanding. Routes + recent docs + new-thing actions in one input.
+- **Bill / vendor context menu + bulk PDF** — the row-context-menu
+  pattern lives on quotes / invoices / payslips / employees today;
+  bills + vouchers + vendors are still dropdown-less.
 - **Bill/voucher attachment upload UI** — `attachment_path` columns
   exist on the schema; no UI yet.
 - **DB-side pagination** — see "List view conventions". Today every
