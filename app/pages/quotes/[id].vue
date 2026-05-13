@@ -377,10 +377,10 @@
 
 	import type { LineDraft } from "~/components/DocumentLineEditor.vue";
 	import type { ClientRow } from "~/stores/clients";
-	import type { BankSnapshot, ClientSnapshot, PricingMode, QuoteLineRow, QuoteRow, QuoteStatus } from "~/stores/quotes";
+	import type { ClientSnapshot, PricingMode, QuoteLineRow, QuoteRow, QuoteStatus } from "~/stores/quotes";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
-	import { computeLineTotals, formatLKR, formatQty, formatRate, sumCents, toCents } from "~/lib/money";
-	import { themeHex } from "~/lib/theme";
+	import { computeLineTotals, formatLKR, sumCents, toCents } from "~/lib/money";
+	import { buildQuotePdfPayload } from "~/lib/quote-pdf";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { canTransition, useQuotesStore } from "~/stores/quotes";
@@ -628,88 +628,15 @@
 	};
 
 	// Build the JSON payload the unified `document.typ` template consumes.
-	// Anything the PDF needs goes through here — once we hand off to the
-	// typst sidecar there's no callback for "look up X". We pre-format
-	// money / quantities / rates in JS so the template stays simple.
-	const buildPdfPayload = (lineRows: QuoteLineRow[]) => {
-		const q = quote.value!;
-		const c = clientSnapshot.value;
-		const cityLine = [c?.city, c?.postal_code].filter(Boolean).join(" ").trim();
-		const addressLines = [c?.address_line1, c?.address_line2, cityLine || null, c?.country]
-			.filter((s): s is string => Boolean(s && s.trim()));
-		const hasVat = (q.tax_cents ?? 0) !== 0;
-		let bank: BankSnapshot | null = null;
-		try {
-			if (q.bank_details_snapshot) bank = JSON.parse(q.bank_details_snapshot) as BankSnapshot;
-		} catch { /* ignore */ }
-
-		const fmt = (cents: number) => formatLKR(cents);
-		const fmtNoSym = (cents: number) => formatLKR(cents, { withSymbol: false });
-
-		return {
-			kind: "quote",
-			number: q.number,
-			title: "QUOTATION",
-			theme_color: themeHex(settingsStore.settings?.theme_color),
-			font_family: settingsStore.settings?.pdf_font ?? "Inter",
-			currency_code: currency.value.code,
-			currency_symbol: currency.value.symbol,
-			// Meta block labels (drives the right-hand grid in document.typ)
-			primary_label: "Quote",
-			date_label: "Date",
-			date_value: q.issue_date,
-			secondary_label: "Valid till",
-			secondary_value: q.valid_until,
-			vendor_invoice_label: null,
-			vendor_invoice_value: null,
-			// Party block (left in meta block)
-			party_label: "Quote to",
-			party: c
-				? {
-					name: c.name,
-					tax_id: c.tax_id ?? null,
-					address_lines: addressLines
-				}
-				: { name: "(no client)", tax_id: null, address_lines: [] },
-			// Headline + body
-			project_title: q.project_title || "",
-			pricing_mode: q.pricing_mode,
-			has_vat: hasVat,
-			notes: q.notes ?? "",
-			notes_paragraphs: (q.notes ?? "").split(/\n\s*\n/).filter((p) => p.trim().length > 0),
-			prepared_by: q.prepared_by ?? "",
-			// Quotes don't have payments — keep paid_cents null so the
-			// template suppresses the paid/balance row.
-			paid_cents: null,
-			paid_display: null,
-			balance_display: null,
-			// Settings
-			business_name: settingsStore.settings?.business_name ?? null,
-			website: settingsStore.settings?.website ?? null,
-			phone: settingsStore.settings?.phone ?? null,
-			address_line1: settingsStore.settings?.address_line1 ?? null,
-			city: settingsStore.settings?.city ?? null,
-			logo_path: settingsStore.settings?.pdf_header_logo_path ?? null,
-			bank,
-			// Line items, both raw & pre-formatted for the template
-			lines: lineRows.map((l) => ({
-				item_label: l.item_label,
-				description: l.description,
-				qty_display: formatQty(l.quantity_milli) + (l.unit ? ` ${l.unit}` : ""),
-				unit_price_display: fmtNoSym(l.unit_price_cents),
-				vat_display: formatRate(l.tax_rate_basis_points),
-				total_display: fmtNoSym(l.line_total_cents)
-			})),
-			formatted: {
-				subtotal: fmt(q.subtotal_cents),
-				subtotal_no_symbol: fmtNoSym(q.subtotal_cents),
-				tax: fmt(q.tax_cents),
-				tax_no_symbol: fmtNoSym(q.tax_cents),
-				total: fmt(q.total_cents),
-				total_no_symbol: fmtNoSym(q.total_cents)
-			}
-		};
-	};
+	// The actual builder lives in app/lib/quote-pdf.ts so the list page
+	// can call it from its row context menu without duplicating logic.
+	const buildPdfPayload = (lineRows: QuoteLineRow[]) =>
+		buildQuotePdfPayload({
+			row: quote.value!,
+			lines: lineRows,
+			settings: settingsStore.settings,
+			currency: currency.value
+		});
 
 	// Cache of line rows fetched at preview time. We can't make
 	// buildPayload async (the composable expects sync), so we pre-fetch

@@ -209,48 +209,61 @@
 							Balance
 						</SortableTh>
 						<SortableTh
-							th-class="py-2 pl-2 pr-3 font-medium"
+							th-class="py-2 px-2 font-medium"
 							:active="list.sortKey === 'status'"
 							:dir="list.sortDir"
 							@sort="list.toggleSort('status')"
 						>
 							Status
 						</SortableTh>
+						<th class="py-2 pl-2 pr-3 w-10" />
 					</tr>
 				</thead>
 				<tbody>
-					<tr
+					<!-- Right-click any row → same actions menu as the
+						overflow ⋯ button. Reka UI's as-child trigger
+						keeps the <tr> as the actual DOM element. -->
+					<UContextMenu
 						v-for="i in list.paged"
 						:key="i.id"
-						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-						@click="open(i)"
+						:items="itemsFor(i)"
 					>
-						<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
-							{{ i.number }}
-						</td>
-						<td class="py-2 px-2">
-							{{ clientName(i.client_snapshot) }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted) max-w-xs truncate">
-							{{ i.project_title || "—" }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-							{{ i.issue_date }}
-						</td>
-						<td class="py-2 px-2 tabular-nums" :class="statusOf(i) === 'overdue' ? 'text-(--ui-error) font-medium' : 'text-(--ui-text-muted)'">
-							{{ i.due_date }}
-						</td>
-						<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap">
-							{{ formatLKR(i.total_cents) }}
-						</td>
-						<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap">
-							<span v-if="balanceOf(i) === 0" class="text-(--ui-text-muted)">—</span>
-							<span v-else>{{ formatLKR(balanceOf(i)) }}</span>
-						</td>
-						<td class="py-2 pl-2 pr-3">
-							<StatusBadge :status="statusOf(i)" />
-						</td>
-					</tr>
+						<tr
+							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+							@click="open(i)"
+						>
+							<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
+								{{ i.number }}
+							</td>
+							<td class="py-2 px-2">
+								{{ clientName(i.client_snapshot) }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted) max-w-xs truncate">
+								{{ i.project_title || "—" }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
+								{{ i.issue_date }}
+							</td>
+							<td class="py-2 px-2 tabular-nums" :class="statusOf(i) === 'overdue' ? 'text-(--ui-error) font-medium' : 'text-(--ui-text-muted)'">
+								{{ i.due_date }}
+							</td>
+							<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap">
+								{{ formatLKR(i.total_cents) }}
+							</td>
+							<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap">
+								<span v-if="balanceOf(i) === 0" class="text-(--ui-text-muted)">—</span>
+								<span v-else>{{ formatLKR(balanceOf(i)) }}</span>
+							</td>
+							<td class="py-2 px-2">
+								<StatusBadge :status="statusOf(i)" />
+							</td>
+							<td class="py-2 pl-2 pr-3 text-right" @click.stop>
+								<UDropdownMenu :items="itemsFor(i)">
+									<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
+								</UDropdownMenu>
+							</td>
+						</tr>
+					</UContextMenu>
 				</tbody>
 			</table>
 
@@ -263,29 +276,46 @@
 				:range-end="list.rangeEnd"
 			/>
 		</UCard>
+
+		<PdfPreviewModal
+			v-model:open="pdf.state.open"
+			:asset-url="pdf.state.assetUrl"
+			:suggested-file-name="pdf.state.suggestedFileName"
+			:saving="pdf.state.saving"
+			title="Invoice PDF preview"
+			@save="pdf.onSave"
+			@cancel="pdf.onCancel"
+		/>
 	</div>
 </template>
 
 <script setup lang="ts">
-	import type { InvoiceRow, InvoiceStatus } from "~/stores/invoices";
+	import type { InvoiceLineRow, InvoiceRow, InvoiceStatus } from "~/stores/invoices";
 	import type { ClientSnapshot } from "~/stores/quotes";
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { useListView } from "~/composables/useListView";
+	import { usePdfPreview } from "~/composables/usePdfPreview";
+	import { buildInvoicePdfPayload } from "~/lib/invoice-pdf";
 	import { formatLKR } from "~/lib/money";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
+	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Invoices" });
 
 	const router = useRouter();
+	const toast = useToast();
 	const store = useInvoicesStore();
 	const clientsStore = useClientsStore();
 	const vouchersStore = useVouchersStore();
+	const settingsStore = useSettingsStore();
+	const currency = useActiveCurrency();
 
 	// Load every store the list / filter dropdowns / derived status
 	// reach into, in parallel. Vouchers are essential because invoice
 	// status and balance are derived from linked receipt vouchers.
-	await Promise.all([store.load(), clientsStore.load(), vouchersStore.load()]);
+	await Promise.all([store.load(), clientsStore.load(), vouchersStore.load(), settingsStore.ensureLoaded()]);
 
 	const list = useListView<InvoiceRow>(
 		() => store.filtered,
@@ -427,4 +457,90 @@
 	// due date) — see invoices store. The list table just delegates.
 	const balanceOf = (i: InvoiceRow) => store.balanceCentsFor(i);
 	const statusOf = (i: InvoiceRow) => store.derivedStatus(i);
+
+	// --- Row actions: PDF preview + transitions + record payment ----
+
+	const currentInvoice = ref<InvoiceRow | null>(null);
+	const currentLines = ref<InvoiceLineRow[]>([]);
+	const pdf = usePdfPreview({
+		command: "export_invoice_pdf",
+		buildPayload: () => {
+			if (!currentInvoice.value) return {};
+			return buildInvoicePdfPayload({
+				row: currentInvoice.value,
+				lines: currentLines.value,
+				settings: settingsStore.settings,
+				currency: currency.value,
+				paidCents: store.paidCentsFor(currentInvoice.value.id)
+			});
+		},
+		fileName: () => `${currentInvoice.value?.number ?? "invoice"}.pdf`,
+		title: "Invoice PDF preview"
+	});
+
+	const onPdfClick = async (i: InvoiceRow) => {
+		currentInvoice.value = i;
+		try {
+			currentLines.value = await store.getLines(i.id);
+		} catch (err) {
+			toast.add({
+				title: "Could not load lines",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+			return;
+		}
+		pdf.open();
+	};
+
+	const markSent = async (i: InvoiceRow) => {
+		try {
+			await store.setStatus(i.id, "sent");
+			toast.add({ title: `${i.number} marked as sent`, color: "info", icon: "i-lucide-send" });
+		} catch (err) {
+			toast.add({
+				title: "Action failed",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	const recordPayment = (i: InvoiceRow) => {
+		router.push(`/vouchers/new?invoice=${i.id}`);
+	};
+
+	const itemsFor = (i: InvoiceRow) => {
+		const lifecycle: { label: string, icon: string, onSelect: () => void }[] = [
+			{ label: "Open", icon: "i-lucide-pencil", onSelect: () => open(i) }
+		];
+		if (i.status === "draft") {
+			lifecycle.push({
+				label: "Mark sent",
+				icon: "i-lucide-send",
+				onSelect: () => {
+					void markSent(i);
+				}
+			});
+		}
+		// Receipts are only legal on sent invoices that still have a
+		// balance — mirrors the detail page's `canRecordPayments`.
+		if (i.status === "sent" && balanceOf(i) > 0) {
+			lifecycle.push({
+				label: "Record payment",
+				icon: "i-lucide-circle-dollar-sign",
+				onSelect: () => recordPayment(i)
+			});
+		}
+		const exports = [{
+			label: "Generate PDF",
+			icon: "i-lucide-file-down",
+			onSelect: () => {
+				void onPdfClick(i);
+			}
+		}];
+		return [lifecycle, exports];
+	};
 </script>
