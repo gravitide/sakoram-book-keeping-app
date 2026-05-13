@@ -22,7 +22,7 @@
 					labels. A single "Reset" pill surfaces on the far right
 					of row 2 whenever any filter is active. -->
 				<div class="flex flex-col gap-3">
-					<!-- Row 1 — quick filters -->
+					<!-- Row 1 — quick filters + advanced popover trigger -->
 					<div class="flex items-center gap-2 flex-wrap">
 						<UInput
 							v-model="store.search"
@@ -44,6 +44,69 @@
 							class="w-56"
 							:search-input="{ placeholder: 'Filter clients…' }"
 						/>
+						<!-- Advanced filters popover — date ranges live here so
+							the main row stays glanceable. A small dot on the
+							icon signals whether any date filter is active. -->
+						<UPopover :ui="{ content: 'p-4 w-80' }">
+							<UButton
+								color="neutral"
+								variant="outline"
+								icon="i-lucide-sliders-horizontal"
+								class="relative"
+							>
+								Advanced
+								<span
+									v-if="store.hasDateFilters"
+									class="absolute -top-1 -right-1 size-2 rounded-full bg-(--ui-info)"
+								/>
+							</UButton>
+							<template #content>
+								<div class="space-y-4">
+									<div>
+										<div class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted) mb-1.5 flex items-center gap-1.5">
+											<UIcon name="i-lucide-calendar" class="size-3.5" />
+											Issue date
+										</div>
+										<DateRangeField
+											v-model:from="store.issuedFrom"
+											v-model:to="store.issuedTo"
+										/>
+									</div>
+									<div>
+										<div class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted) mb-1.5 flex items-center gap-1.5">
+											<UIcon name="i-lucide-calendar-clock" class="size-3.5" />
+											Valid until
+										</div>
+										<DateRangeField
+											v-model:from="store.validFrom"
+											v-model:to="store.validTo"
+										/>
+									</div>
+									<div v-if="store.hasDateFilters" class="pt-2 border-t border-(--ui-border) flex justify-end">
+										<UButton
+											size="xs"
+											variant="ghost"
+											color="neutral"
+											icon="i-lucide-x"
+											@click="store.clearDateFilters"
+										>
+											Clear date filters
+										</UButton>
+									</div>
+								</div>
+							</template>
+						</UPopover>
+						<UButton
+							v-if="hasAnyFilter"
+							size="md"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-x"
+							class="ml-auto"
+							@click="resetFilters"
+						>
+							Reset
+						</UButton>
 					</div>
 
 					<!-- Multi-select status filter. Each chip toggles its
@@ -63,40 +126,6 @@
 						>
 							{{ STATUS_LABEL[s] }}
 						</button>
-					</div>
-
-					<!-- Row 2 — date ranges + reset. Inline compact labels
-						instead of stacked UFormField — at this density the
-						extra label height made the section feel busier than
-						it needed to. -->
-					<div class="flex items-center gap-4 flex-wrap text-sm">
-						<div class="flex items-center gap-2">
-							<UIcon name="i-lucide-calendar" class="size-3.5 text-(--ui-text-muted)" />
-							<span class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted)">Issued</span>
-							<DateRangeField
-								v-model:from="store.issuedFrom"
-								v-model:to="store.issuedTo"
-							/>
-						</div>
-						<div class="flex items-center gap-2">
-							<UIcon name="i-lucide-calendar-clock" class="size-3.5 text-(--ui-text-muted)" />
-							<span class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted)">Valid</span>
-							<DateRangeField
-								v-model:from="store.validFrom"
-								v-model:to="store.validTo"
-							/>
-						</div>
-						<UButton
-							v-if="hasAnyFilter"
-							size="xs"
-							variant="soft"
-							color="neutral"
-							icon="i-lucide-x"
-							class="ml-auto"
-							@click="resetFilters"
-						>
-							Reset filters
-						</UButton>
 					</div>
 				</div>
 			</template>
