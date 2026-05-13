@@ -125,7 +125,7 @@
 								<DateField v-model="formIssueDate" :disabled="!editable" />
 							</UFormField>
 							<UFormField label="Valid until">
-								<DateField v-model="formValidUntil" :disabled="!editable" />
+								<DateField v-model="formValidUntil" :min-value="formIssueDate || undefined" :disabled="!editable" />
 							</UFormField>
 						</div>
 					</div>
@@ -480,6 +480,17 @@
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
 	);
+
+	// Keep valid_until >= issue_date. min-value on the DateField blocks
+	// the user from picking an earlier date directly; this handles the
+	// reverse: pushing issue_date forward past valid_until drags it
+	// along so the invariant always holds.
+	watch(formIssueDate, (next) => {
+		if (!editable.value || hydrating.value || !next) return;
+		if (formValidUntil.value && formValidUntil.value < next) {
+			formValidUntil.value = next;
+		}
+	});
 
 	function centsToRupees(c: number): string {
 		if (!Number.isInteger(c) || c === 0) return "";
