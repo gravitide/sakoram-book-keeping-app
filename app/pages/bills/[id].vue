@@ -9,11 +9,11 @@
 				<h1 class="text-2xl font-semibold mt-1 flex items-center gap-3 flex-wrap">
 					<span class="tabular-nums">{{ bill.number }}</span>
 					<StatusBadge :status="status" size="md" />
-					<span v-if="!editable" class="text-xs text-(--ui-text-muted) font-normal">
+					<span v-if="!editable" class="app-chrome text-xs text-(--ui-text-muted) font-normal">
 						read-only
 					</span>
 				</h1>
-				<p class="text-sm text-(--ui-text-muted) mt-1">
+				<p class="app-chrome text-sm text-(--ui-text-muted) mt-1">
 					From {{ vendorSnapshot?.name || "(no vendor)" }}
 					<span v-if="formVendorInvoiceNumber"> · #{{ formVendorInvoiceNumber }}</span>
 				</p>
@@ -38,7 +38,13 @@
 				>
 					PDF
 				</UButton>
+				<!-- Cancellation is only legal while there's still a balance
+					owed. Once the bill is fully paid (paidCents covers
+					total), cancellation would orphan the payment vouchers
+					and leave the books in an inconsistent state — the
+					user should delete the vouchers first. -->
 				<UButton
+					v-if="isCancelled || balanceCents > 0"
 					color="neutral"
 					variant="outline"
 					:icon="isCancelled ? 'i-lucide-rotate-ccw' : 'i-lucide-ban'"
@@ -46,6 +52,11 @@
 				>
 					{{ isCancelled ? "Reopen bill" : "Mark cancelled" }}
 				</UButton>
+
+				<!-- Visual separator before the destructive action so a
+					stray click on Cancel doesn't land on Delete. -->
+				<div class="h-6 w-px bg-(--ui-border) mx-1" />
+
 				<UButton
 					color="error"
 					variant="ghost"
@@ -60,8 +71,8 @@
 		<div class="space-y-6">
 			<UCard>
 				<template #header>
-					<div class="flex items-center justify-between">
-						<div class="font-medium">
+					<div class="app-chrome flex items-center justify-between">
+						<div class="app-chrome font-medium">
 							Vendor &amp; reference
 						</div>
 						<UButton
@@ -128,8 +139,8 @@
 
 			<UCard>
 				<template #header>
-					<div class="flex items-center justify-between gap-4 flex-wrap">
-						<div class="font-medium">
+					<div class="app-chrome flex items-center justify-between gap-4 flex-wrap">
+						<div class="app-chrome font-medium">
 							Items
 						</div>
 						<div v-if="editable" class="flex border border-(--ui-border) rounded-md overflow-hidden text-xs">
@@ -179,9 +190,8 @@
 						</UInput>
 					</UFormField>
 					<UFormField label="VAT rate (%)">
-						<UInput
+						<UInputNumber
 							v-model="vatRatePct"
-							type="number"
 							:step="0.01"
 							:min="0"
 							:max="100"
@@ -226,9 +236,9 @@
 				payment voucher pre-filled against this bill. -->
 			<UCard>
 				<template #header>
-					<div class="flex items-center justify-between">
+					<div class="app-chrome flex items-center justify-between">
 						<div>
-							<div class="font-medium">
+							<div class="app-chrome font-medium">
 								Payments
 							</div>
 							<div class="text-xs text-(--ui-text-muted) mt-0.5">
@@ -301,7 +311,7 @@
 
 			<UCard>
 				<template #header>
-					<div class="font-medium">
+					<div class="app-chrome font-medium">
 						Notes
 					</div>
 				</template>

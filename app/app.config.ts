@@ -37,7 +37,12 @@ export default defineAppConfig({
 		},
 		formField: {
 			slots: {
-				root: "w-full"
+				root: "w-full",
+				// Helper text shouldn't drag-select like data — same
+				// rationale as the global `label` rule in main.css.
+				hint: "select-none",
+				description: "select-none",
+				help: "select-none"
 			}
 		},
 		input: {

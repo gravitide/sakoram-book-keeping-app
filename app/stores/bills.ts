@@ -369,6 +369,18 @@ export const useBillsStore = defineStore("bills", () => {
 	/// record intact (the user can manually delete the vouchers if
 	/// the cancellation was a real refund).
 	const setCancelled = async (id: number, cancelled: boolean): Promise<void> => {
+		// Refuse to cancel a bill that's already covered by payment
+		// vouchers — cancelling would leave money paid out against a
+		// voided bill, which is a books inconsistency. The user must
+		// delete the relevant payment vouchers first.
+		if (cancelled) {
+			const row = await get(id);
+			if (row && paidCentsFor(id) >= row.total_cents && row.total_cents > 0) {
+				throw new Error(
+					"This bill is fully paid. Delete the payment vouchers first, then cancel."
+				);
+			}
+		}
 		await execute(
 			"UPDATE bills SET status = ?, updated_at = datetime('now') WHERE id = ?",
 			[cancelled ? "cancelled" : "open", id]
