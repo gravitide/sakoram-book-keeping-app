@@ -483,6 +483,13 @@ export const useInvoicesStore = defineStore("invoices", () => {
 	/// We don't model "draft → cancelled → draft" since the user is
 	/// likely to just delete a never-sent invoice instead.
 	const setStatus = async (id: number, target: InvoicePersistedStatus): Promise<void> => {
+		// Cancelling an invoice with recorded receipts would orphan
+		// those vouchers (cash in the bank, no liability on record).
+		// Refuse and tell the user to delete the receipts first, same
+		// guard payslips uses for the equivalent flow.
+		if (target === "cancelled" && paidCentsFor(id) > 0) {
+			throw new Error("This invoice has recorded payments. Delete the receipt vouchers first, then cancel.");
+		}
 		await execute(
 			"UPDATE invoices SET status = ?, updated_at = datetime('now') WHERE id = ?",
 			[target, id]
