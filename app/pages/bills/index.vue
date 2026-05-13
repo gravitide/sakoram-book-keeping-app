@@ -19,9 +19,9 @@
 
 		<UCard>
 			<template #header>
-				<!-- Filter strip — bills have more dimensions than the
-					quote/invoice equivalents (vendor + category + dates),
-					so the second row stretches a bit wider. -->
+				<!-- Filter strip — chips + Advanced popover, matches the
+					quotes/invoices pattern. Vendor and category live in
+					row 1; date ranges are tucked into the popover. -->
 				<div class="flex flex-col gap-3">
 					<div class="flex items-center gap-2 flex-wrap">
 						<UInput
@@ -49,43 +49,84 @@
 							class="w-48"
 							:search-input="{ placeholder: 'Filter categories…' }"
 						/>
-						<USelect
-							v-model="store.statusFilter"
-							:items="statusOptions"
-							value-key="value"
-							icon="i-lucide-flag"
-							class="w-44"
-						/>
-					</div>
-
-					<div class="flex items-center gap-4 flex-wrap text-sm">
-						<div class="flex items-center gap-2">
-							<UIcon name="i-lucide-calendar" class="size-3.5 text-(--ui-text-muted)" />
-							<span class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted)">Issued</span>
-							<DateRangeField
-								v-model:from="store.issuedFrom"
-								v-model:to="store.issuedTo"
-							/>
-						</div>
-						<div class="flex items-center gap-2">
-							<UIcon name="i-lucide-calendar-clock" class="size-3.5 text-(--ui-text-muted)" />
-							<span class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted)">Due</span>
-							<DateRangeField
-								v-model:from="store.dueFrom"
-								v-model:to="store.dueTo"
-							/>
-						</div>
+						<UPopover>
+							<UButton color="neutral" variant="outline" icon="i-lucide-sliders-horizontal" class="relative">
+								Advanced
+								<span
+									v-if="store.hasDateFilters"
+									class="absolute -top-1 -right-1 size-2 rounded-full bg-(--ui-info)"
+								/>
+							</UButton>
+							<template #content>
+								<div class="p-4 w-[420px] space-y-4">
+									<div>
+										<div class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted) mb-1.5 flex items-center gap-1.5">
+											<UIcon name="i-lucide-calendar" class="size-3.5" />
+											Issue date
+										</div>
+										<DateRangeField
+											v-model:from="store.issuedFrom"
+											v-model:to="store.issuedTo"
+										/>
+									</div>
+									<div>
+										<div class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted) mb-1.5 flex items-center gap-1.5">
+											<UIcon name="i-lucide-calendar-clock" class="size-3.5" />
+											Due date
+										</div>
+										<DateRangeField
+											v-model:from="store.dueFrom"
+											v-model:to="store.dueTo"
+										/>
+									</div>
+									<div v-if="store.hasDateFilters" class="pt-2 border-t border-(--ui-border) flex justify-end">
+										<UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-x" @click="store.clearDateFilters">
+											Clear date filters
+										</UButton>
+									</div>
+								</div>
+							</template>
+						</UPopover>
 						<UButton
 							v-if="hasAnyFilter"
-							size="xs"
+							size="md"
 							variant="soft"
 							color="neutral"
 							icon="i-lucide-x"
 							class="ml-auto"
 							@click="resetFilters"
 						>
-							Reset filters
+							Reset
 						</UButton>
+					</div>
+
+					<div class="flex items-center gap-1.5 flex-wrap">
+						<UIcon name="i-lucide-flag" class="size-3.5 text-(--ui-text-muted) shrink-0 mr-1" />
+						<button
+							v-for="s in BILL_STATUSES"
+							:key="s"
+							type="button"
+							class="text-xs px-2.5 py-1 rounded-full border transition select-none cursor-pointer"
+							:class="statusChipClasses(s)"
+							@click="store.toggleStatusFilter(s)"
+						>
+							{{ STATUS_LABEL[s] }}
+						</button>
+					</div>
+
+					<div class="flex items-center gap-1.5 flex-wrap">
+						<UIcon name="i-lucide-calendar" class="size-3.5 text-(--ui-text-muted) shrink-0 mr-1" />
+						<span class="text-xs text-(--ui-text-muted) mr-1">Issued:</span>
+						<button
+							v-for="p in DATE_PRESETS"
+							:key="p.key"
+							type="button"
+							class="text-xs px-2.5 py-1 rounded-full border transition select-none cursor-pointer"
+							:class="datePresetClasses(p.key)"
+							@click="toggleDatePreset(p.key)"
+						>
+							{{ p.label }}
+						</button>
 					</div>
 				</div>
 			</template>
@@ -310,7 +351,7 @@
 
 	const hasAnyFilter = computed(() =>
 		store.search.trim() !== ""
-		|| store.statusFilter !== "all"
+		|| store.statusFilters.length > 0
 		|| store.vendorFilter !== "all"
 		|| store.categoryFilter !== "all"
 		|| store.hasDateFilters
@@ -318,21 +359,90 @@
 
 	const resetFilters = () => {
 		store.search = "";
-		store.statusFilter = "all";
+		store.clearStatusFilters();
 		store.vendorFilter = "all";
 		store.categoryFilter = "all";
 		store.clearDateFilters();
 	};
 
-	const statusOptions: { label: string, value: BillStatus | "all" | "outstanding" }[] = [
-		{ label: "All", value: "all" },
-		{ label: "Outstanding", value: "outstanding" },
-		{ label: "Unpaid", value: "unpaid" },
-		{ label: "Partial", value: "partial" },
-		{ label: "Paid", value: "paid" },
-		{ label: "Overdue", value: "overdue" },
-		{ label: "Cancelled", value: "cancelled" }
+	// Status chips. Colour map mirrors StatusBadge so the filter and
+	// the row badge speak the same visual language.
+	const BILL_STATUSES: BillStatus[] = [
+		"unpaid",
+		"partial",
+		"paid",
+		"overdue",
+		"cancelled"
 	];
+	const STATUS_LABEL: Record<BillStatus, string> = {
+		unpaid: "Unpaid",
+		partial: "Partial",
+		paid: "Paid",
+		overdue: "Overdue",
+		cancelled: "Cancelled"
+	};
+	const STATUS_ACTIVE_CLASSES: Record<BillStatus, string> = {
+		unpaid: "bg-(--ui-warning)/15 border-(--ui-warning)/40 text-(--ui-warning)",
+		partial: "bg-(--ui-warning)/15 border-(--ui-warning)/40 text-(--ui-warning)",
+		paid: "bg-(--ui-success)/15 border-(--ui-success)/40 text-(--ui-success)",
+		overdue: "bg-(--ui-error)/15 border-(--ui-error)/40 text-(--ui-error)",
+		cancelled: "bg-(--ui-bg-muted) border-(--ui-text-muted)/40 text-(--ui-text-muted)"
+	};
+	const inactiveChip = "bg-transparent border-(--ui-border) text-(--ui-text-muted) hover:bg-(--ui-bg-muted) hover:text-(--ui-text)";
+	const statusChipClasses = (s: BillStatus): string =>
+		store.statusFilters.includes(s) ? STATUS_ACTIVE_CLASSES[s] : inactiveChip;
+
+	// Quick issue-date presets — same shape as Quotes / Invoices.
+	type DatePresetKey = "today" | "this_week" | "this_month" | "this_year";
+	const DATE_PRESETS: { key: DatePresetKey, label: string }[] = [
+		{ key: "today", label: "Today" },
+		{ key: "this_week", label: "This week" },
+		{ key: "this_month", label: "This month" },
+		{ key: "this_year", label: "This year" }
+	];
+	const isoFromDate = (d: Date): string =>
+		`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+	const datePresetBounds = (key: DatePresetKey): { from: string, to: string } => {
+		const now = new Date();
+		if (key === "today") {
+			const iso = isoFromDate(now);
+			return { from: iso, to: iso };
+		}
+		if (key === "this_week") {
+			const daysSinceMon = (now.getDay() + 6) % 7;
+			const monday = new Date(now);
+			monday.setDate(now.getDate() - daysSinceMon);
+			const sunday = new Date(monday);
+			sunday.setDate(monday.getDate() + 6);
+			return { from: isoFromDate(monday), to: isoFromDate(sunday) };
+		}
+		if (key === "this_month") {
+			const first = new Date(now.getFullYear(), now.getMonth(), 1);
+			const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+			return { from: isoFromDate(first), to: isoFromDate(last) };
+		}
+		const first = new Date(now.getFullYear(), 0, 1);
+		const last = new Date(now.getFullYear(), 11, 31);
+		return { from: isoFromDate(first), to: isoFromDate(last) };
+	};
+	const isDatePresetActive = (key: DatePresetKey): boolean => {
+		const { from, to } = datePresetBounds(key);
+		return store.issuedFrom === from && store.issuedTo === to;
+	};
+	const toggleDatePreset = (key: DatePresetKey) => {
+		if (isDatePresetActive(key)) {
+			store.issuedFrom = null;
+			store.issuedTo = null;
+			return;
+		}
+		const { from, to } = datePresetBounds(key);
+		store.issuedFrom = from;
+		store.issuedTo = to;
+	};
+	const datePresetClasses = (key: DatePresetKey): string =>
+		isDatePresetActive(key)
+			? "bg-(--ui-info)/15 border-(--ui-info)/40 text-(--ui-info)"
+			: inactiveChip;
 
 	// Balance + status are derived from the linked payment vouchers
 	// (and due date) — see bills store. The list table just delegates.

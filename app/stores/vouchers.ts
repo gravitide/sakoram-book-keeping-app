@@ -51,7 +51,18 @@ export const useVouchersStore = defineStore("vouchers", () => {
 	const error = ref<string | null>(null);
 
 	const search = ref("");
-	const typeFilter = ref<VoucherType | "all">("all");
+	// Multi-select type filter (receipt / payment). Empty = show both.
+	// Kept as an array for visual consistency with the chip-style
+	// status filters on quotes / invoices / bills / payslips.
+	const typeFilters = ref<VoucherType[]>([]);
+	const toggleTypeFilter = (t: VoucherType) => {
+		const idx = typeFilters.value.indexOf(t);
+		if (idx === -1) typeFilters.value.push(t);
+		else typeFilters.value.splice(idx, 1);
+	};
+	const clearTypeFilters = () => {
+		typeFilters.value = [];
+	};
 	// Optional date-range narrowing on voucher_date.
 	const dateFrom = ref<string | null>(null);
 	const dateTo = ref<string | null>(null);
@@ -66,7 +77,7 @@ export const useVouchersStore = defineStore("vouchers", () => {
 	const filtered = computed(() => {
 		const q = search.value.trim().toLowerCase();
 		return vouchers.value.filter((row) => {
-			if (typeFilter.value !== "all" && row.voucher_type !== typeFilter.value) return false;
+			if (typeFilters.value.length > 0 && !typeFilters.value.includes(row.voucher_type)) return false;
 			if (dateFrom.value && row.voucher_date < dateFrom.value) return false;
 			if (dateTo.value && row.voucher_date > dateTo.value) return false;
 			if (!q) return true;
@@ -177,7 +188,9 @@ export const useVouchersStore = defineStore("vouchers", () => {
 		loading,
 		error,
 		search,
-		typeFilter,
+		typeFilters,
+		toggleTypeFilter,
+		clearTypeFilters,
 		dateFrom,
 		dateTo,
 		hasDateFilters,
