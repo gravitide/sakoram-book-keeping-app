@@ -294,6 +294,8 @@
 			]
 		},
 		{
+			// Per-tenant business configuration — the data here is part
+			// of the business and travels with the export bundle.
 			to: "/settings",
 			label: "Settings",
 			icon: "i-lucide-settings",
@@ -301,8 +303,18 @@
 			children: [
 				{ to: "/settings/company", label: "Company details", icon: "i-lucide-building-2" },
 				{ to: "/settings/pdf", label: "PDF", icon: "i-lucide-file-text" },
+				{ to: "/settings/payroll", label: "Payroll", icon: "i-lucide-calendar-clock" }
+			]
+		},
+		{
+			// Application-level concerns that aren't tied to a single
+			// business — UI preferences and the multi-tenant administration.
+			to: "/settings/appearance",
+			label: "App",
+			icon: "i-lucide-app-window",
+			divider: true,
+			children: [
 				{ to: "/settings/appearance", label: "Appearance", icon: "i-lucide-palette" },
-				{ to: "/settings/payroll", label: "Payroll", icon: "i-lucide-calendar-clock" },
 				{ to: "/settings/businesses", label: "Businesses", icon: "i-lucide-briefcase" }
 			]
 		}
