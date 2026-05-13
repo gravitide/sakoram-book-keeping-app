@@ -217,44 +217,60 @@
 							Total
 						</SortableTh>
 						<SortableTh
-							th-class="py-2 pl-2 pr-3 font-medium"
+							th-class="py-2 px-2 font-medium"
 							:active="list.sortKey === 'status'"
 							:dir="list.sortDir"
 							@sort="list.toggleSort('status')"
 						>
 							Status
 						</SortableTh>
+						<th class="py-2 pl-2 pr-3 w-10" />
 					</tr>
 				</thead>
 				<tbody>
-					<tr
+					<!-- Each row is wrapped in a UContextMenu so right-click
+						surfaces the same actions as the overflow button.
+						Reka UI's as-child trigger keeps the <tr> as the
+						actual DOM element — no wrapper <div> between
+						<tbody> and <tr>. Same pattern as the payslips and
+						employees lists. -->
+					<UContextMenu
 						v-for="q in list.paged"
 						:key="q.id"
-						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-						@click="open(q)"
+						:items="itemsFor(q)"
 					>
-						<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
-							{{ q.number }}
-						</td>
-						<td class="py-2 px-2">
-							{{ clientName(q.client_snapshot) }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted) max-w-xs truncate">
-							{{ q.project_title || "—" }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-							{{ q.issue_date }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-							{{ q.valid_until }}
-						</td>
-						<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap">
-							{{ formatLKR(q.total_cents) }}
-						</td>
-						<td class="py-2 pl-2 pr-3">
-							<StatusBadge :status="q.status" />
-						</td>
-					</tr>
+						<tr
+							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+							@click="open(q)"
+						>
+							<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
+								{{ q.number }}
+							</td>
+							<td class="py-2 px-2">
+								{{ clientName(q.client_snapshot) }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted) max-w-xs truncate">
+								{{ q.project_title || "—" }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
+								{{ q.issue_date }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
+								{{ q.valid_until }}
+							</td>
+							<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap">
+								{{ formatLKR(q.total_cents) }}
+							</td>
+							<td class="py-2 px-2">
+								<StatusBadge :status="q.status" />
+							</td>
+							<td class="py-2 pl-2 pr-3 text-right" @click.stop>
+								<UDropdownMenu :items="itemsFor(q)">
+									<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
+								</UDropdownMenu>
+							</td>
+						</tr>
+					</UContextMenu>
 				</tbody>
 			</table>
 
@@ -267,26 +283,43 @@
 				:range-end="list.rangeEnd"
 			/>
 		</UCard>
+
+		<PdfPreviewModal
+			v-model:open="pdf.state.open"
+			:asset-url="pdf.state.assetUrl"
+			:suggested-file-name="pdf.state.suggestedFileName"
+			:saving="pdf.state.saving"
+			title="Quote PDF preview"
+			@save="pdf.onSave"
+			@cancel="pdf.onCancel"
+		/>
 	</div>
 </template>
 
 <script setup lang="ts">
-	import type { ClientSnapshot, QuoteRow, QuoteStatus } from "~/stores/quotes";
+	import type { ClientSnapshot, QuoteLineRow, QuoteRow, QuoteStatus } from "~/stores/quotes";
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { useListView } from "~/composables/useListView";
+	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { formatLKR } from "~/lib/money";
+	import { buildQuotePdfPayload } from "~/lib/quote-pdf";
 	import { useClientsStore } from "~/stores/clients";
-	import { useQuotesStore } from "~/stores/quotes";
+	import { canTransition, useQuotesStore } from "~/stores/quotes";
+	import { useSettingsStore } from "~/stores/settings";
 
 	definePageMeta({ title: "Quotes" });
 
 	const router = useRouter();
+	const toast = useToast();
 	const store = useQuotesStore();
 	const clientsStore = useClientsStore();
+	const settingsStore = useSettingsStore();
+	const currency = useActiveCurrency();
 
-	// Load both stores in parallel so the filter dropdown is populated by
+	// Load stores in parallel so the filter dropdown is populated by
 	// the time the table renders. Clients are needed only for the
 	// "Filter by client" select — the row itself reads off the snapshot.
-	await Promise.all([store.load(), clientsStore.load()]);
+	await Promise.all([store.load(), clientsStore.load(), settingsStore.ensureLoaded()]);
 	// Auto-expire any sent quotes past their valid_until on every list load.
 	await store.expireOverdue().catch(() => { /* non-fatal */ });
 
@@ -454,4 +487,99 @@
 		for (const q of store.quotes) c[q.status]++;
 		return c;
 	});
+
+	// --- Row actions: PDF preview + transitions ------------------------------
+
+	// Per-row PDF generation. We hand usePdfPreview a callback that reads
+	// from `currentQuote` + a fetched lines list — set by onPdfClick
+	// before opening the modal. The shared payload builder takes it
+	// from there.
+	const currentQuote = ref<QuoteRow | null>(null);
+	const currentLines = ref<QuoteLineRow[]>([]);
+	const pdf = usePdfPreview({
+		command: "export_quote_pdf",
+		buildPayload: () => {
+			if (!currentQuote.value) return {};
+			return buildQuotePdfPayload({
+				row: currentQuote.value,
+				lines: currentLines.value,
+				settings: settingsStore.settings,
+				currency: currency.value
+			});
+		},
+		fileName: () => `${currentQuote.value?.number ?? "quote"}.pdf`,
+		title: "Quote PDF preview"
+	});
+
+	const onPdfClick = async (q: QuoteRow) => {
+		currentQuote.value = q;
+		try {
+			currentLines.value = await store.getLines(q.id);
+		} catch (err) {
+			toast.add({
+				title: "Could not load lines",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+			return;
+		}
+		pdf.open();
+	};
+
+	// Quick status transition from the row dropdown — saves a click
+	// into the detail page when the action is unambiguous. Refused at
+	// the store level if the transition is illegal; toast surfaces it.
+	const transitionTo = async (q: QuoteRow, target: QuoteStatus) => {
+		try {
+			await store.setStatus(q.id, target);
+			toast.add({ title: `${q.number} marked as ${target}`, color: "info", icon: "i-lucide-check" });
+		} catch (err) {
+			toast.add({
+				title: "Action failed",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	// UDropdownMenu / UContextMenu render a thin divider between each
+	// top-level group. Lifecycle actions (Open, transitions) sit on
+	// top; the export action (Generate PDF) gets its own group below.
+	const itemsFor = (q: QuoteRow) => {
+		const lifecycle: { label: string, icon: string, onSelect: () => void }[] = [
+			{ label: "Open", icon: "i-lucide-pencil", onSelect: () => open(q) }
+		];
+		// Surface the most-common next-state transition in the row menu.
+		// Multi-step transitions (e.g. sent → accepted, then accept-or-
+		// reject) stay on the detail page so the user reads the full
+		// state before committing.
+		if (canTransition(q.status, "sent")) {
+			lifecycle.push({
+				label: "Mark sent",
+				icon: "i-lucide-send",
+				onSelect: () => {
+					void transitionTo(q, "sent");
+				}
+			});
+		}
+		if (canTransition(q.status, "draft")) {
+			lifecycle.push({
+				label: "Reopen as draft",
+				icon: "i-lucide-rotate-ccw",
+				onSelect: () => {
+					void transitionTo(q, "draft");
+				}
+			});
+		}
+		const exports = [{
+			label: "Generate PDF",
+			icon: "i-lucide-file-down",
+			onSelect: () => {
+				void onPdfClick(q);
+			}
+		}];
+		return [lifecycle, exports];
+	};
 </script>

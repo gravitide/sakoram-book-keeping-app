@@ -433,10 +433,10 @@
 	import type { LineDraft } from "~/components/DocumentLineEditor.vue";
 	import type { ClientRow } from "~/stores/clients";
 	import type { InvoiceLineRow, InvoicePersistedStatus, InvoiceRow, InvoiceStatus } from "~/stores/invoices";
-	import type { BankSnapshot, ClientSnapshot, PricingMode } from "~/stores/quotes";
+	import type { ClientSnapshot, PricingMode } from "~/stores/quotes";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
-	import { computeLineTotals, formatLKR, formatQty, formatRate, sumCents, toCents } from "~/lib/money";
-	import { themeHex } from "~/lib/theme";
+	import { buildInvoicePdfPayload } from "~/lib/invoice-pdf";
+	import { computeLineTotals, formatLKR, sumCents, toCents } from "~/lib/money";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { useSettingsStore } from "~/stores/settings";
@@ -818,84 +818,17 @@
 	};
 
 	// ---- PDF export ----------------------------------------------------------
-	// Same unified document.typ template as quotes — only the labels differ.
-	const buildPdfPayload = (lineRows: InvoiceLineRow[]) => {
-		const inv = invoice.value!;
-		const c = clientSnapshot.value;
-		const cityLine = [c?.city, c?.postal_code].filter(Boolean).join(" ").trim();
-		const addressLines = [c?.address_line1, c?.address_line2, cityLine || null, c?.country]
-			.filter((s): s is string => Boolean(s && s.trim()));
-		const hasVat = (inv.tax_cents ?? 0) !== 0;
-		let bank: BankSnapshot | null = null;
-		try {
-			if (inv.bank_details_snapshot) bank = JSON.parse(inv.bank_details_snapshot) as BankSnapshot;
-		} catch { /* ignore */ }
-
-		const fmt = (cents: number) => formatLKR(cents);
-		const fmtNoSym = (cents: number) => formatLKR(cents, { withSymbol: false });
-
-		const paid = invoicesStore.paidCentsFor(inv.id);
-		const balanceCentsValue = Math.max(0, inv.total_cents - paid);
-
-		return {
-			kind: "invoice",
-			number: inv.number,
-			title: "INVOICE",
-			theme_color: themeHex(settingsStore.settings?.theme_color),
-			font_family: settingsStore.settings?.pdf_font ?? "Inter",
-			currency_code: currency.value.code,
-			currency_symbol: currency.value.symbol,
-			primary_label: "Invoice",
-			date_label: "Date",
-			date_value: inv.issue_date,
-			secondary_label: "Due date",
-			secondary_value: inv.due_date,
-			vendor_invoice_label: null,
-			vendor_invoice_value: null,
-			party_label: "Bill to",
-			party: c
-				? {
-					name: c.name,
-					tax_id: c.tax_id ?? null,
-					address_lines: addressLines
-				}
-				: { name: "(no client)", tax_id: null, address_lines: [] },
-			project_title: inv.project_title || "",
-			pricing_mode: inv.pricing_mode,
-			has_vat: hasVat,
-			notes: inv.notes ?? "",
-			notes_paragraphs: (inv.notes ?? "").split(/\n\s*\n/).filter((p) => p.trim().length > 0),
-			prepared_by: inv.prepared_by ?? "",
-			// Show paid/balance only when something has been paid; null
-			// suppresses the row entirely on a freshly-issued invoice.
-			paid_cents: paid > 0 ? paid : null,
-			paid_display: paid > 0 ? fmtNoSym(paid) : null,
-			balance_display: paid > 0 ? fmtNoSym(balanceCentsValue) : null,
-			business_name: settingsStore.settings?.business_name ?? null,
-			website: settingsStore.settings?.website ?? null,
-			phone: settingsStore.settings?.phone ?? null,
-			address_line1: settingsStore.settings?.address_line1 ?? null,
-			city: settingsStore.settings?.city ?? null,
-			logo_path: settingsStore.settings?.pdf_header_logo_path ?? null,
-			bank,
-			lines: lineRows.map((l) => ({
-				item_label: l.item_label,
-				description: l.description,
-				qty_display: formatQty(l.quantity_milli) + (l.unit ? ` ${l.unit}` : ""),
-				unit_price_display: fmtNoSym(l.unit_price_cents),
-				vat_display: formatRate(l.tax_rate_basis_points),
-				total_display: fmtNoSym(l.line_total_cents)
-			})),
-			formatted: {
-				subtotal: fmt(inv.subtotal_cents),
-				subtotal_no_symbol: fmtNoSym(inv.subtotal_cents),
-				tax: fmt(inv.tax_cents),
-				tax_no_symbol: fmtNoSym(inv.tax_cents),
-				total: fmt(inv.total_cents),
-				total_no_symbol: fmtNoSym(inv.total_cents)
-			}
-		};
-	};
+	// The actual payload builder lives in app/lib/invoice-pdf.ts so the
+	// list page can call it from its row context menu without duplicating
+	// logic.
+	const buildPdfPayload = (lineRows: InvoiceLineRow[]) =>
+		buildInvoicePdfPayload({
+			row: invoice.value!,
+			lines: lineRows,
+			settings: settingsStore.settings,
+			currency: currency.value,
+			paidCents: invoicesStore.paidCentsFor(invoice.value!.id)
+		});
 
 	// Preview-then-save flow. Same pattern as quotes/[id].vue — see there
 	// for the rationale on the linesForPreview cache.
