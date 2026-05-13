@@ -22,7 +22,7 @@
 					labels. A single "Reset" pill surfaces on the far right
 					of row 2 whenever any filter is active. -->
 				<div class="flex flex-col gap-3">
-					<!-- Row 1 — quick filters -->
+					<!-- Row 1 — quick filters + advanced popover trigger -->
 					<div class="flex items-center gap-2 flex-wrap">
 						<UInput
 							v-model="store.search"
@@ -44,47 +44,108 @@
 							class="w-56"
 							:search-input="{ placeholder: 'Filter clients…' }"
 						/>
-						<USelect
-							v-model="store.statusFilter"
-							:items="statusOptions"
-							value-key="value"
-							icon="i-lucide-flag"
-							class="w-40"
-						/>
-					</div>
-
-					<!-- Row 2 — date ranges + reset. Inline compact labels
-						instead of stacked UFormField — at this density the
-						extra label height made the section feel busier than
-						it needed to. -->
-					<div class="flex items-center gap-4 flex-wrap text-sm">
-						<div class="flex items-center gap-2">
-							<UIcon name="i-lucide-calendar" class="size-3.5 text-(--ui-text-muted)" />
-							<span class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted)">Issued</span>
-							<DateRangeField
-								v-model:from="store.issuedFrom"
-								v-model:to="store.issuedTo"
-							/>
-						</div>
-						<div class="flex items-center gap-2">
-							<UIcon name="i-lucide-calendar-clock" class="size-3.5 text-(--ui-text-muted)" />
-							<span class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted)">Valid</span>
-							<DateRangeField
-								v-model:from="store.validFrom"
-								v-model:to="store.validTo"
-							/>
-						</div>
+						<!-- Advanced filters popover — date ranges live here so
+							the main row stays glanceable. A small dot on the
+							icon signals whether any date filter is active. -->
+						<UPopover>
+							<UButton
+								color="neutral"
+								variant="outline"
+								icon="i-lucide-sliders-horizontal"
+								class="relative"
+							>
+								Advanced
+								<span
+									v-if="store.hasDateFilters"
+									class="absolute -top-1 -right-1 size-2 rounded-full bg-(--ui-info)"
+								/>
+							</UButton>
+							<template #content>
+								<div class="p-4 w-[420px] space-y-4">
+									<div>
+										<div class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted) mb-1.5 flex items-center gap-1.5">
+											<UIcon name="i-lucide-calendar" class="size-3.5" />
+											Issue date
+										</div>
+										<DateRangeField
+											v-model:from="store.issuedFrom"
+											v-model:to="store.issuedTo"
+										/>
+									</div>
+									<div>
+										<div class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted) mb-1.5 flex items-center gap-1.5">
+											<UIcon name="i-lucide-calendar-clock" class="size-3.5" />
+											Valid until
+										</div>
+										<DateRangeField
+											v-model:from="store.validFrom"
+											v-model:to="store.validTo"
+										/>
+									</div>
+									<div v-if="store.hasDateFilters" class="pt-2 border-t border-(--ui-border) flex justify-end">
+										<UButton
+											size="xs"
+											variant="ghost"
+											color="neutral"
+											icon="i-lucide-x"
+											@click="store.clearDateFilters"
+										>
+											Clear date filters
+										</UButton>
+									</div>
+								</div>
+							</template>
+						</UPopover>
 						<UButton
 							v-if="hasAnyFilter"
-							size="xs"
+							size="md"
 							variant="soft"
 							color="neutral"
 							icon="i-lucide-x"
 							class="ml-auto"
 							@click="resetFilters"
 						>
-							Reset filters
+							Reset
 						</UButton>
+					</div>
+
+					<!-- Multi-select status filter. Each chip toggles its
+						status in/out of the active set. Empty set = show
+						all. The colour ring matches StatusBadge so the
+						filter chip and the row badge speak the same
+						visual language. -->
+					<div class="flex items-center gap-1.5 flex-wrap">
+						<UIcon name="i-lucide-flag" class="size-3.5 text-(--ui-text-muted) shrink-0 mr-1" />
+						<button
+							v-for="s in QUOTE_STATUSES"
+							:key="s"
+							type="button"
+							class="text-xs px-2.5 py-1 rounded-full border transition select-none cursor-pointer"
+							:class="statusChipClasses(s)"
+							@click="store.toggleStatusFilter(s)"
+						>
+							{{ STATUS_LABEL[s] }}
+						</button>
+					</div>
+
+					<!-- Quick issue-date preset chips. Clicking one sets
+						issuedFrom / issuedTo to the preset's bounds;
+						clicking the active preset clears it. The
+						Advanced popover stays the source of truth for
+						custom ranges and Valid-until filtering. -->
+					<div class="flex items-center gap-1.5 flex-wrap">
+						<UIcon name="i-lucide-calendar" class="size-3.5 text-(--ui-text-muted) shrink-0 mr-1" />
+						<span class="text-xs text-(--ui-text-muted) mr-1">Issued:</span>
+						<button
+							v-for="p in DATE_PRESETS"
+							:key="p.key"
+							type="button"
+							class="text-xs px-2.5 py-1 rounded-full border transition select-none cursor-pointer"
+							:class="datePresetClasses(p.key)"
+							@click="toggleDatePreset(p.key)"
+						>
+							{{ p.label }}
+						</button>
 					</div>
 				</div>
 			</template>
@@ -251,14 +312,14 @@
 	// of the "Reset filters" pill in the toolbar.
 	const hasAnyFilter = computed(() =>
 		store.search.trim() !== ""
-		|| store.statusFilter !== "all"
+		|| store.statusFilters.length > 0
 		|| store.clientFilter !== "all"
 		|| store.hasDateFilters
 	);
 
 	const resetFilters = () => {
 		store.search = "";
-		store.statusFilter = "all";
+		store.clearStatusFilters();
 		store.clientFilter = "all";
 		store.clearDateFilters();
 	};
@@ -273,15 +334,103 @@
 			.map((c) => ({ label: c.name, value: c.id }))
 	]);
 
-	const statusOptions: { label: string, value: QuoteStatus | "all" }[] = [
-		{ label: "All", value: "all" },
-		{ label: "Draft", value: "draft" },
-		{ label: "Sent", value: "sent" },
-		{ label: "Accepted", value: "accepted" },
-		{ label: "Rejected", value: "rejected" },
-		{ label: "Expired", value: "expired" },
-		{ label: "Converted", value: "converted" }
+	// Status chip metadata — display order, label, and the colour family
+	// each chip uses when active. Mirrors StatusBadge's colour map so the
+	// filter chip and the row badge speak the same visual language.
+	const QUOTE_STATUSES: QuoteStatus[] = [
+		"draft",
+		"sent",
+		"accepted",
+		"rejected",
+		"expired",
+		"converted"
 	];
+	const STATUS_LABEL: Record<QuoteStatus, string> = {
+		draft: "Draft",
+		sent: "Sent",
+		accepted: "Accepted",
+		rejected: "Rejected",
+		expired: "Expired",
+		converted: "Converted"
+	};
+	// Tailwind class strings for active / inactive chip per status. Each
+	// active state uses the same colour the StatusBadge does for the
+	// corresponding row badge — picked from the static semantic palette
+	// (no primary, so chips stay theme-stable).
+	const STATUS_ACTIVE_CLASSES: Record<QuoteStatus, string> = {
+		draft: "bg-(--ui-bg-muted) border-(--ui-text-muted)/40 text-(--ui-text)",
+		sent: "bg-(--ui-info)/15 border-(--ui-info)/40 text-(--ui-info)",
+		accepted: "bg-(--ui-success)/15 border-(--ui-success)/40 text-(--ui-success)",
+		rejected: "bg-(--ui-error)/15 border-(--ui-error)/40 text-(--ui-error)",
+		expired: "bg-(--ui-warning)/15 border-(--ui-warning)/40 text-(--ui-warning)",
+		converted: "bg-(--ui-success)/15 border-(--ui-success)/40 text-(--ui-success)"
+	};
+	const inactiveChip = "bg-transparent border-(--ui-border) text-(--ui-text-muted) hover:bg-(--ui-bg-muted) hover:text-(--ui-text)";
+	const statusChipClasses = (s: QuoteStatus): string =>
+		store.statusFilters.includes(s) ? STATUS_ACTIVE_CLASSES[s] : inactiveChip;
+
+	// Quick issue-date presets. Each resolves to a concrete ISO bound
+	// pair at click time, so "This month" always means the current
+	// calendar month — no stale dates if the user leaves the page
+	// open across a boundary.
+	type DatePresetKey = "today" | "this_week" | "this_month" | "this_year";
+	const DATE_PRESETS: { key: DatePresetKey, label: string }[] = [
+		{ key: "today", label: "Today" },
+		{ key: "this_week", label: "This week" },
+		{ key: "this_month", label: "This month" },
+		{ key: "this_year", label: "This year" }
+	];
+
+	const isoFromDate = (d: Date): string =>
+		`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+	const datePresetBounds = (key: DatePresetKey): { from: string, to: string } => {
+		const now = new Date();
+		if (key === "today") {
+			const iso = isoFromDate(now);
+			return { from: iso, to: iso };
+		}
+		if (key === "this_week") {
+			// Monday-anchored week. getDay(): 0 Sun..6 Sat → days since Mon.
+			const dow = now.getDay();
+			const daysSinceMon = (dow + 6) % 7;
+			const monday = new Date(now);
+			monday.setDate(now.getDate() - daysSinceMon);
+			const sunday = new Date(monday);
+			sunday.setDate(monday.getDate() + 6);
+			return { from: isoFromDate(monday), to: isoFromDate(sunday) };
+		}
+		if (key === "this_month") {
+			const first = new Date(now.getFullYear(), now.getMonth(), 1);
+			const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+			return { from: isoFromDate(first), to: isoFromDate(last) };
+		}
+		// this_year
+		const first = new Date(now.getFullYear(), 0, 1);
+		const last = new Date(now.getFullYear(), 11, 31);
+		return { from: isoFromDate(first), to: isoFromDate(last) };
+	};
+
+	const isDatePresetActive = (key: DatePresetKey): boolean => {
+		const { from, to } = datePresetBounds(key);
+		return store.issuedFrom === from && store.issuedTo === to;
+	};
+
+	const toggleDatePreset = (key: DatePresetKey) => {
+		if (isDatePresetActive(key)) {
+			store.issuedFrom = null;
+			store.issuedTo = null;
+			return;
+		}
+		const { from, to } = datePresetBounds(key);
+		store.issuedFrom = from;
+		store.issuedTo = to;
+	};
+
+	const datePresetClasses = (key: DatePresetKey): string =>
+		isDatePresetActive(key)
+			? "bg-(--ui-info)/15 border-(--ui-info)/40 text-(--ui-info)"
+			: inactiveChip;
 
 	// Function declaration (not const arrow) so it hoists above the
 	// useListView() call site, which references it in a column getValue.
