@@ -71,13 +71,16 @@
 					<UFormField label="Country">
 						<UInput v-model="form.country" placeholder="Sri Lanka" />
 					</UFormField>
-					<UFormField label="Currency" hint="ISO 4217 alpha code; drives PDF totals.">
+					<UFormField label="Currency">
 						<USelect v-model="form.currency_code" :items="currencyOptions" value-key="value" class="w-full" />
 					</UFormField>
 				</div>
 
-				<UFormField label="Tax ID" hint="VAT / GST / TIN — appears on invoices.">
+				<UFormField label="Tax ID (VAT / GST / TIN)">
 					<UInput v-model="form.tax_id" placeholder="e.g. VAT-123456789" />
+					<template #help>
+						<span class="text-xs text-(--ui-text-muted)">Optional. Printed on invoices.</span>
+					</template>
 				</UFormField>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -212,11 +215,17 @@
 				</UFormField>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<UFormField label="Payment terms (days)" hint="Default due date = issue + N days.">
+					<UFormField label="Payment terms (days)">
 						<UInputNumber v-model="form.default_payment_terms_days" :min="0" :max="365" class="w-full" />
+						<template #help>
+							<span class="text-xs text-(--ui-text-muted)">Default due date = issue + N days.</span>
+						</template>
 					</UFormField>
-					<UFormField label="Quote validity (days)" hint="Default expiry on new quotes.">
+					<UFormField label="Quote validity (days)">
 						<UInputNumber v-model="form.default_quote_validity_days" :min="0" :max="365" class="w-full" />
+						<template #help>
+							<span class="text-xs text-(--ui-text-muted)">Default expiry on new quotes.</span>
+						</template>
 					</UFormField>
 				</div>
 			</div>
