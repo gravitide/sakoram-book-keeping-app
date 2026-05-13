@@ -133,7 +133,18 @@ export const useInvoicesStore = defineStore("invoices", () => {
 	const error = ref<string | null>(null);
 
 	const search = ref("");
-	const statusFilter = ref<InvoiceStatus | "all" | "outstanding">("all");
+	// Multi-select status filter. Empty = show everything (no narrowing).
+	// "Outstanding" is no longer a single sentinel — with multi-select
+	// the user just ticks sent + partial + overdue to express it.
+	const statusFilters = ref<InvoiceStatus[]>([]);
+	const toggleStatusFilter = (s: InvoiceStatus) => {
+		const idx = statusFilters.value.indexOf(s);
+		if (idx === -1) statusFilters.value.push(s);
+		else statusFilters.value.splice(idx, 1);
+	};
+	const clearStatusFilters = () => {
+		statusFilters.value = [];
+	};
 	// "all" = no narrowing; otherwise the FK id of a single client.
 	// Filters on client_id (not the snapshot name) so renames don't
 	// orphan the filter.
@@ -202,11 +213,7 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		const q = search.value.trim().toLowerCase();
 		return invoices.value.filter((row) => {
 			const ds = derivedStatus(row, today);
-			if (statusFilter.value === "outstanding") {
-				if (!["sent", "partial", "overdue"].includes(ds)) return false;
-			} else if (statusFilter.value !== "all" && ds !== statusFilter.value) {
-				return false;
-			}
+			if (statusFilters.value.length > 0 && !statusFilters.value.includes(ds)) return false;
 			if (clientFilter.value !== "all" && row.client_id !== clientFilter.value) return false;
 			if (issuedFrom.value && row.issue_date < issuedFrom.value) return false;
 			if (issuedTo.value && row.issue_date > issuedTo.value) return false;
@@ -524,7 +531,9 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		loading,
 		error,
 		search,
-		statusFilter,
+		statusFilters,
+		toggleStatusFilter,
+		clearStatusFilters,
 		clientFilter,
 		issuedFrom,
 		issuedTo,

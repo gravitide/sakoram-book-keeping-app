@@ -27,60 +27,91 @@
 
 		<UCard>
 			<template #header>
-				<!-- Filter strip — same shape as bills / invoices. -->
-				<div class="space-y-3">
-					<div class="flex items-center gap-3 flex-wrap">
+				<!-- Filter strip — chips + month shortcut + Advanced popover
+					for custom date ranges. Month picker stays first-class
+					(common payroll question is 'show me April 2026'). -->
+				<div class="flex flex-col gap-3">
+					<div class="flex items-center gap-2 flex-wrap">
 						<UInput
 							v-model="store.search"
 							placeholder="Search by number or employee…"
 							icon="i-lucide-search"
-							class="md:w-72"
+							size="md"
+							class="flex-1 min-w-64"
 						/>
 						<USelectMenu
 							v-model="employeeSelection"
 							:items="employeeOptions"
 							value-key="value"
-							class="md:w-56"
+							icon="i-lucide-users"
+							class="w-56"
 							:search-input="{ placeholder: 'Employee…' }"
 						/>
-						<USelect
-							v-model="store.statusFilter"
-							:items="statusOptions"
-							value-key="value"
-							class="md:w-40"
-						/>
-						<UButton
-							v-if="anyFilterActive"
-							size="xs"
-							variant="soft"
-							color="neutral"
-							icon="i-lucide-rotate-ccw"
-							@click="resetFilters"
-						>
-							Reset filters
-						</UButton>
-					</div>
-					<div class="flex items-center gap-3 flex-wrap">
-						<!-- Month / year shortcut: 90% of the time the user is
-							asking 'show me April 2026' — picking from a single
-							list is much faster than two date fields. The
-							underlying period_from / period_to filters still
-							drive the query; this just sets them to the chosen
-							month's bounds. The custom-range fields below stay
-							for the rarer multi-month or partial-month case. -->
 						<USelectMenu
 							v-model="monthSelection"
 							:items="monthOptions"
 							value-key="value"
-							class="md:w-48"
+							icon="i-lucide-calendar"
+							class="w-48"
 							:search-input="{ placeholder: 'Month…' }"
 						/>
-						<DateRangeField
-							v-model:from="store.periodFrom"
-							v-model:to="store.periodTo"
-							from-label="Custom from"
-							to-label="Custom to"
-						/>
+						<UPopover>
+							<UButton color="neutral" variant="outline" icon="i-lucide-sliders-horizontal" class="relative">
+								Advanced
+								<span
+									v-if="customRangeActive"
+									class="absolute -top-1 -right-1 size-2 rounded-full bg-(--ui-info)"
+								/>
+							</UButton>
+							<template #content>
+								<div class="p-4 w-[420px] space-y-4">
+									<div>
+										<div class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted) mb-1.5 flex items-center gap-1.5">
+											<UIcon name="i-lucide-calendar" class="size-3.5" />
+											Custom period range
+										</div>
+										<DateRangeField
+											v-model:from="store.periodFrom"
+											v-model:to="store.periodTo"
+										/>
+										<p class="text-xs text-(--ui-text-muted) mt-2">
+											Use the month picker for a single month; this range
+											is for multi-month or partial-month queries.
+										</p>
+									</div>
+									<div v-if="store.hasDateFilters" class="pt-2 border-t border-(--ui-border) flex justify-end">
+										<UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-x" @click="store.clearDateFilters">
+											Clear date filter
+										</UButton>
+									</div>
+								</div>
+							</template>
+						</UPopover>
+						<UButton
+							v-if="anyFilterActive"
+							size="md"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-x"
+							class="ml-auto"
+							@click="resetFilters"
+						>
+							Reset
+						</UButton>
+					</div>
+
+					<div class="flex items-center gap-1.5 flex-wrap">
+						<UIcon name="i-lucide-flag" class="size-3.5 text-(--ui-text-muted) shrink-0 mr-1" />
+						<button
+							v-for="s in PAYSLIP_STATUSES"
+							:key="s"
+							type="button"
+							class="text-xs px-2.5 py-1 rounded-full border transition select-none cursor-pointer"
+							:class="statusChipClasses(s)"
+							@click="store.toggleStatusFilter(s)"
+						>
+							{{ STATUS_LABEL[s] }}
+						</button>
 					</div>
 				</div>
 			</template>
@@ -452,29 +483,55 @@
 		}
 	});
 
-	const statusOptions: { label: string, value: PayslipStatus | "all" | "outstanding" }[] = [
-		{ label: "All statuses", value: "all" },
-		{ label: "Outstanding", value: "outstanding" },
-		{ label: "Draft", value: "draft" },
-		{ label: "Unpaid", value: "unpaid" },
-		{ label: "Partial", value: "partial" },
-		{ label: "Paid", value: "paid" },
-		{ label: "Cancelled", value: "cancelled" }
-	];
-
 	const anyFilterActive = computed(() =>
 		store.search.trim() !== ""
-		|| store.statusFilter !== "all"
+		|| store.statusFilters.length > 0
 		|| store.employeeFilter !== "all"
 		|| store.hasDateFilters
 	);
 
 	const resetFilters = () => {
 		store.search = "";
-		store.statusFilter = "all";
+		store.clearStatusFilters();
 		store.employeeFilter = "all";
 		store.clearDateFilters();
 	};
+
+	// "Custom range active" = a date filter is set AND it doesn't equal
+	// any month's bounds. Used to light up the Advanced button's dot
+	// only when the user actually has a custom range applied.
+	const customRangeActive = computed(() => {
+		if (!store.hasDateFilters) return false;
+		// If the current range matches the active month-picker selection,
+		// it's a month pick, not a custom range.
+		return monthSelection.value === "all";
+	});
+
+	// Status chips. Mirrors StatusBadge's semantic colours.
+	const PAYSLIP_STATUSES: PayslipStatus[] = [
+		"draft",
+		"unpaid",
+		"partial",
+		"paid",
+		"cancelled"
+	];
+	const STATUS_LABEL: Record<PayslipStatus, string> = {
+		draft: "Draft",
+		unpaid: "Unpaid",
+		partial: "Partial",
+		paid: "Paid",
+		cancelled: "Cancelled"
+	};
+	const STATUS_ACTIVE_CLASSES: Record<PayslipStatus, string> = {
+		draft: "bg-(--ui-bg-muted) border-(--ui-text-muted)/40 text-(--ui-text)",
+		unpaid: "bg-(--ui-warning)/15 border-(--ui-warning)/40 text-(--ui-warning)",
+		partial: "bg-(--ui-warning)/15 border-(--ui-warning)/40 text-(--ui-warning)",
+		paid: "bg-(--ui-success)/15 border-(--ui-success)/40 text-(--ui-success)",
+		cancelled: "bg-(--ui-bg-muted) border-(--ui-text-muted)/40 text-(--ui-text-muted)"
+	};
+	const inactiveChip = "bg-transparent border-(--ui-border) text-(--ui-text-muted) hover:bg-(--ui-bg-muted) hover:text-(--ui-text)";
+	const statusChipClasses = (s: PayslipStatus): string =>
+		store.statusFilters.includes(s) ? STATUS_ACTIVE_CLASSES[s] : inactiveChip;
 
 	const open = (r: PayslipRow) => router.push(`/payslips/${r.id}`);
 

@@ -97,7 +97,18 @@ export const usePayslipsStore = defineStore("payslips", () => {
 	const error = ref<string | null>(null);
 
 	const search = ref("");
-	const statusFilter = ref<PayslipStatus | "all" | "outstanding">("all");
+	// Multi-select status filter. Empty = show everything. The previous
+	// 'outstanding' sentinel is no longer needed — with multi-select
+	// the user just ticks unpaid + partial to express it.
+	const statusFilters = ref<PayslipStatus[]>([]);
+	const toggleStatusFilter = (s: PayslipStatus) => {
+		const idx = statusFilters.value.indexOf(s);
+		if (idx === -1) statusFilters.value.push(s);
+		else statusFilters.value.splice(idx, 1);
+	};
+	const clearStatusFilters = () => {
+		statusFilters.value = [];
+	};
 	const employeeFilter = ref<number | "all">("all");
 	const periodFrom = ref<string | null>(null);
 	const periodTo = ref<string | null>(null);
@@ -136,11 +147,7 @@ export const usePayslipsStore = defineStore("payslips", () => {
 		const q = search.value.trim().toLowerCase();
 		return payslips.value.filter((row) => {
 			const ds = derivedStatus(row);
-			if (statusFilter.value === "outstanding") {
-				if (!["unpaid", "partial"].includes(ds)) return false;
-			} else if (statusFilter.value !== "all" && ds !== statusFilter.value) {
-				return false;
-			}
+			if (statusFilters.value.length > 0 && !statusFilters.value.includes(ds)) return false;
 			if (employeeFilter.value !== "all" && row.employee_id !== employeeFilter.value) return false;
 			if (periodFrom.value && row.period_start < periodFrom.value) return false;
 			if (periodTo.value && row.period_end > periodTo.value) return false;
@@ -359,7 +366,9 @@ export const usePayslipsStore = defineStore("payslips", () => {
 		loading,
 		error,
 		search,
-		statusFilter,
+		statusFilters,
+		toggleStatusFilter,
+		clearStatusFilters,
 		employeeFilter,
 		periodFrom,
 		periodTo,

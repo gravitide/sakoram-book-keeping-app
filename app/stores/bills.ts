@@ -104,7 +104,18 @@ export const useBillsStore = defineStore("bills", () => {
 	const error = ref<string | null>(null);
 
 	const search = ref("");
-	const statusFilter = ref<BillStatus | "all" | "outstanding">("all");
+	// Multi-select status filter. Empty = show everything. The previous
+	// 'outstanding' sentinel is no longer needed — the user just ticks
+	// unpaid + partial + overdue to express it.
+	const statusFilters = ref<BillStatus[]>([]);
+	const toggleStatusFilter = (s: BillStatus) => {
+		const idx = statusFilters.value.indexOf(s);
+		if (idx === -1) statusFilters.value.push(s);
+		else statusFilters.value.splice(idx, 1);
+	};
+	const clearStatusFilters = () => {
+		statusFilters.value = [];
+	};
 	const vendorFilter = ref<number | "all">("all");
 	const categoryFilter = ref<number | "all" | "uncategorised">("all");
 	const issuedFrom = ref<string | null>(null);
@@ -165,11 +176,7 @@ export const useBillsStore = defineStore("bills", () => {
 		const q = search.value.trim().toLowerCase();
 		return bills.value.filter((row) => {
 			const ds = derivedStatus(row, today);
-			if (statusFilter.value === "outstanding") {
-				if (!["unpaid", "partial", "overdue"].includes(ds)) return false;
-			} else if (statusFilter.value !== "all" && ds !== statusFilter.value) {
-				return false;
-			}
+			if (statusFilters.value.length > 0 && !statusFilters.value.includes(ds)) return false;
 			if (vendorFilter.value !== "all" && row.vendor_id !== vendorFilter.value) return false;
 			if (categoryFilter.value === "uncategorised") {
 				if (row.category_id !== null) return false;
@@ -395,7 +402,9 @@ export const useBillsStore = defineStore("bills", () => {
 		loading,
 		error,
 		search,
-		statusFilter,
+		statusFilters,
+		toggleStatusFilter,
+		clearStatusFilters,
 		vendorFilter,
 		categoryFilter,
 		issuedFrom,
