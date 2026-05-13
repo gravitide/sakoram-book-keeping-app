@@ -9,7 +9,7 @@
 				<h1 class="text-2xl font-semibold mt-1 flex items-center gap-3 flex-wrap">
 					<span class="tabular-nums">{{ invoice.number }}</span>
 					<StatusBadge :status="status" size="md" />
-					<span v-if="!editable" class="text-xs text-(--ui-text-muted) font-normal">
+					<span v-if="!editable" class="app-chrome text-xs text-(--ui-text-muted) font-normal">
 						read-only after issue
 					</span>
 				</h1>
@@ -45,11 +45,25 @@
 				>
 					PDF
 				</UButton>
-				<UDropdownMenu v-if="statusActionItems.length > 0" :items="statusActionItems">
-					<UButton color="neutral" variant="outline" trailing-icon="i-lucide-chevron-down">
-						Status
-					</UButton>
-				</UDropdownMenu>
+				<!-- Legal next-state transitions as individual buttons —
+					replaces an opaque 'Status' dropdown so the available
+					moves are visible at a glance. Same pattern as quotes. -->
+				<UButton
+					v-for="a in transitionActions"
+					:key="a.label"
+					color="neutral"
+					variant="outline"
+					:icon="a.icon"
+					@click="a.onSelect"
+				>
+					{{ a.label }}
+				</UButton>
+
+				<!-- Visual separator before the destructive action so the
+					delete button doesn't sit shoulder-to-shoulder with the
+					everyday actions and get accidentally clicked. -->
+				<div class="h-6 w-px bg-(--ui-border) mx-1" />
+
 				<UButton
 					color="error"
 					variant="ghost"
@@ -64,8 +78,8 @@
 		<div class="space-y-6">
 			<UCard>
 				<template #header>
-					<div class="flex items-center justify-between">
-						<div class="font-medium">
+					<div class="app-chrome flex items-center justify-between">
+						<div class="app-chrome font-medium">
 							Client &amp; project
 						</div>
 						<UButton
@@ -112,7 +126,7 @@
 								<DateField v-model="formIssueDate" :disabled="!editable" />
 							</UFormField>
 							<UFormField label="Due date">
-								<DateField v-model="formDueDate" :disabled="!editable" />
+								<DateField v-model="formDueDate" :min-value="formIssueDate || undefined" :disabled="!editable" />
 							</UFormField>
 						</div>
 					</div>
@@ -121,8 +135,8 @@
 
 			<UCard>
 				<template #header>
-					<div class="flex items-center justify-between gap-4 flex-wrap">
-						<div class="font-medium">
+					<div class="app-chrome flex items-center justify-between gap-4 flex-wrap">
+						<div class="app-chrome font-medium">
 							Items
 						</div>
 						<div v-if="editable" class="flex border border-(--ui-border) rounded-md overflow-hidden text-xs">
@@ -155,7 +169,7 @@
 
 			<UCard>
 				<template #header>
-					<div class="font-medium">
+					<div class="app-chrome font-medium">
 						Totals &amp; payments
 					</div>
 				</template>
@@ -218,9 +232,9 @@
 				new receipt voucher pre-filled against this invoice. -->
 			<UCard v-if="!isDraft">
 				<template #header>
-					<div class="flex items-center justify-between">
+					<div class="app-chrome flex items-center justify-between">
 						<div>
-							<div class="font-medium">
+							<div class="app-chrome font-medium">
 								Payments
 							</div>
 							<div class="text-xs text-(--ui-text-muted) mt-0.5">
@@ -293,7 +307,7 @@
 
 			<UCard>
 				<template #header>
-					<div class="font-medium">
+					<div class="app-chrome font-medium">
 						Notes &amp; sign-off
 					</div>
 				</template>
@@ -472,8 +486,11 @@
 	const isDraft = computed(() => persistedStatus.value === "draft");
 	const editable = computed(() => isDraft.value);
 	// Receipts can only be recorded against issued, non-cancelled
-	// invoices. Drafts and cancellations bail out.
-	const canRecordPayments = computed(() => persistedStatus.value === "sent");
+	// invoices that still have an outstanding balance. Drafts /
+	// cancellations / fully-paid invoices bail out — the persisted
+	// status stays 'sent' forever after issue (the user-visible
+	// paid/partial/overdue states are derived), so balanceCents > 0
+	// is the right check for 'still expecting money'.
 
 	const totalCents = computed(() => invoice.value?.total_cents ?? 0);
 	const paidCents = computed(() => (invoice.value ? invoicesStore.paidCentsFor(invoice.value.id) : 0));
@@ -482,6 +499,10 @@
 	// still reads "paid" (capped); this is purely informational.
 	const overpaymentCents = computed(() => Math.max(0, paidCents.value - totalCents.value));
 	const overpaid = computed(() => overpaymentCents.value > 0);
+
+	const canRecordPayments = computed(() =>
+		persistedStatus.value === "sent" && balanceCents.value > 0
+	);
 
 	// Receipt vouchers linked to this invoice, most-recent first.
 	// Reactive against the vouchers store so creating/editing/deleting
@@ -568,6 +589,17 @@
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
 	);
+
+	// If the user pushes the issue date forward past the due date, drag
+	// the due date along so the invariant 'due >= issue' always holds.
+	// The min-value on the DateField stops them typing/picking an
+	// earlier due date directly; this handles the reverse direction.
+	watch(formIssueDate, (next) => {
+		if (!editable.value || hydrating.value || !next) return;
+		if (formDueDate.value && formDueDate.value < next) {
+			formDueDate.value = next;
+		}
+	});
 
 	function centsToRupees(c: number): string {
 		if (!Number.isInteger(c) || c === 0) return "";
@@ -706,18 +738,31 @@
 		}
 	};
 
-	const statusActionItems = computed(() => {
+	// Legal next-state actions for the current persisted status. Rendered
+	// as individual buttons in the header so the available transitions
+	// are visible at a glance — no dropdown. Same pattern as quotes.
+	interface TransitionAction {
+		label: string
+		icon: string
+		onSelect: () => void
+	}
+	const transitionActions = computed<TransitionAction[]>(() => {
 		const cur = persistedStatus.value;
-		const items: { label: string, icon: string, onSelect: () => void }[] = [];
+		const items: TransitionAction[] = [];
 		if (cur === "draft") {
-			items.push({ label: "Mark as Sent", icon: "i-lucide-send", onSelect: () => setPersistedStatus("sent") });
-			items.push({ label: "Cancel invoice", icon: "i-lucide-ban", onSelect: () => setPersistedStatus("cancelled") });
+			items.push({ label: "Send", icon: "i-lucide-send", onSelect: () => setPersistedStatus("sent") });
+			items.push({ label: "Cancel", icon: "i-lucide-ban", onSelect: () => setPersistedStatus("cancelled") });
 		} else if (cur === "sent") {
-			items.push({ label: "Cancel invoice", icon: "i-lucide-ban", onSelect: () => setPersistedStatus("cancelled") });
+			// Hide Cancel once any payment has landed — the store also
+			// refuses this with a clear error, but keeping the button
+			// off-screen is friendlier UX.
+			if (paidCents.value === 0) {
+				items.push({ label: "Cancel", icon: "i-lucide-ban", onSelect: () => setPersistedStatus("cancelled") });
+			}
 		} else if (cur === "cancelled") {
-			items.push({ label: "Reopen as Sent", icon: "i-lucide-rotate-ccw", onSelect: () => setPersistedStatus("sent") });
+			items.push({ label: "Reopen", icon: "i-lucide-rotate-ccw", onSelect: () => setPersistedStatus("sent") });
 		}
-		return items.length > 0 ? [items] : [];
+		return items;
 	});
 
 	const showDeleteDialog = ref(false);
