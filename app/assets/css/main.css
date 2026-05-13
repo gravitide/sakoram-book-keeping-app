@@ -108,6 +108,7 @@ body {
  * client names, totals, etc. */
 button,
 a,
+label,
 [role="button"],
 [role="tab"],
 [role="menuitem"],
