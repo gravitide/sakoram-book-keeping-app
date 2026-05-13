@@ -61,7 +61,7 @@
 								/>
 							</UButton>
 							<template #content>
-								<div class="p-4 w-80 space-y-4">
+								<div class="p-4 w-[420px] space-y-4">
 									<div>
 										<div class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted) mb-1.5 flex items-center gap-1.5">
 											<UIcon name="i-lucide-calendar" class="size-3.5" />
