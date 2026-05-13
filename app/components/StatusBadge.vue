@@ -13,7 +13,10 @@
 	}
 	const props = withDefaults(defineProps<Props>(), { size: "sm" });
 
-	type BadgeColor = "neutral" | "info" | "success" | "warning" | "error" | "primary";
+	// All semantic colors — deliberately no `primary` here. The badge
+	// meaning shouldn't shift just because the user changed their
+	// accent in Settings → Appearance.
+	type BadgeColor = "neutral" | "info" | "success" | "warning" | "error";
 
 	const STATUS_COLOR: Record<string, BadgeColor> = {
 		// quotes
@@ -22,7 +25,7 @@
 		accepted: "success",
 		rejected: "error",
 		expired: "warning",
-		converted: "primary",
+		converted: "success",
 		// invoices add: partial, paid, overdue, cancelled
 		partial: "warning",
 		paid: "success",
