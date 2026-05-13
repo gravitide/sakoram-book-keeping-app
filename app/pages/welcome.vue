@@ -305,9 +305,13 @@
 			toast.add({ title: `${t.name} created`, color: "success", icon: "i-lucide-check" });
 			newName.value = "";
 			showCreate.value = false;
-			// Auto-enter the new business — the most likely thing the user
-			// wants right after creating it.
-			await switchTo(t.id);
+			// Activate then route into the multi-step onboarding so the
+			// user fills in company / contact / defaults / banking before
+			// landing on an empty dashboard. The onboarding page has a
+			// "Skip onboarding" link on step 1 for power users who want
+			// the old fast path.
+			await tenants.activate(t.id);
+			window.location.assign("/onboarding");
 		} catch (err) {
 			toast.add({
 				title: "Could not create business",
