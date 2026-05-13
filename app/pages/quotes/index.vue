@@ -47,7 +47,7 @@
 						<!-- Advanced filters popover — date ranges live here so
 							the main row stays glanceable. A small dot on the
 							icon signals whether any date filter is active. -->
-						<UPopover :ui="{ content: 'p-4 w-80' }">
+						<UPopover>
 							<UButton
 								color="neutral"
 								variant="outline"
@@ -61,7 +61,7 @@
 								/>
 							</UButton>
 							<template #content>
-								<div class="space-y-4">
+								<div class="p-4 w-80 space-y-4">
 									<div>
 										<div class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted) mb-1.5 flex items-center gap-1.5">
 											<UIcon name="i-lucide-calendar" class="size-3.5" />
