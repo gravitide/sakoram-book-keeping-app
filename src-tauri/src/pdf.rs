@@ -71,11 +71,14 @@ impl From<tauri_plugin_shell::Error> for PdfError {
 /// extraction permitted. The intent is tamper-resistance on issued
 /// invoices / bills, not secrecy.
 ///
-/// qpdf can't write back into the file it's reading, so we encrypt to a
-/// sibling temp file and rename it over the original.
+/// `QPdf::read(path)` keeps the input file handle open for lazy object
+/// access, so writing the encrypted result back to the same path fails on
+/// Windows with os error 5 (ACCESS_DENIED). We read the rendered PDF fully
+/// into memory first — that closes the file handle immediately — then let
+/// qpdf write the encrypted copy straight back over `path`.
 fn encrypt_pdf(path: &Path, owner_password: &str) -> Result<(), PdfError> {
-	let pdf = QPdf::read(path).map_err(|e| PdfError::Encrypt(e.to_string()))?;
-	let tmp = path.with_extension("enc.pdf.tmp");
+	let bytes = std::fs::read(path)?;
+	let pdf = QPdf::read_from_memory(&bytes).map_err(|e| PdfError::Encrypt(e.to_string()))?;
 
 	let mut writer = pdf.writer();
 	writer.encryption_params(EncryptionParams::R6(EncryptionParamsR6 {
@@ -90,9 +93,7 @@ fn encrypt_pdf(path: &Path, owner_password: &str) -> Result<(), PdfError> {
 		allow_print: PrintPermission::Full,
 		encrypt_metadata: true,
 	}));
-	writer.write(&tmp).map_err(|e| PdfError::Encrypt(e.to_string()))?;
-
-	std::fs::rename(&tmp, path)?;
+	writer.write(path).map_err(|e| PdfError::Encrypt(e.to_string()))?;
 	Ok(())
 }
 
