@@ -14,12 +14,13 @@
 			class="max-w-5xl mx-auto"
 			@submit="onSubmit"
 		>
-			<!-- Two-column layout: the left column groups how the PDF *looks*
-				(font, header logo); the right groups what it *says* and how
-				it's secured (footer notes, protection). items-start keeps the
-				shorter column from stretching to the taller one's height. -->
-			<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-				<div class="space-y-6">
+			<!-- Layout: Font + Header logo sit side by side on top (both are
+				compact), then Footer notes and Document protection each span
+				the full width below — those have wider content (textareas, a
+				password field + a row of toggles) that reads better wide.
+				items-start keeps the top row from stretching to equal height. -->
+			<div class="space-y-6">
+				<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 					<SectionCard
 						icon="i-lucide-type"
 						title="Font"
@@ -143,63 +144,61 @@
 					</SectionCard>
 				</div>
 
-				<div class="space-y-6">
-					<SectionCard
-						icon="i-lucide-file-text"
-						title="Footer notes"
-						subtitle="Appended at the bottom of generated documents — payment instructions, thanks, fine print."
+				<SectionCard
+					icon="i-lucide-file-text"
+					title="Footer notes"
+					subtitle="Appended at the bottom of generated documents — payment instructions, thanks, fine print."
+				>
+					<UFormField label="Invoice footer" name="invoice_footer_notes">
+						<UTextarea v-model="form.invoice_footer_notes" :rows="5" autoresize class="w-full" />
+					</UFormField>
+					<UFormField label="Quote footer" name="quote_footer_notes">
+						<UTextarea v-model="form.quote_footer_notes" :rows="5" autoresize class="w-full" />
+					</UFormField>
+				</SectionCard>
+
+				<SectionCard
+					icon="i-lucide-shield-check"
+					title="Document protection"
+					subtitle="Encrypt generated PDFs with an owner password. Protected documents still open without a password, but editing, copying, and annotating are blocked — printing stays allowed. Use it to keep issued invoices and bills from being altered."
+				>
+					<UFormField
+						label="Owner password"
+						name="pdf_protect_password"
+						help="Leave blank to disable protection. Keep this safe — it's needed to remove restrictions later."
 					>
-						<UFormField label="Invoice footer" name="invoice_footer_notes">
-							<UTextarea v-model="form.invoice_footer_notes" :rows="5" autoresize class="w-full" />
-						</UFormField>
-						<UFormField label="Quote footer" name="quote_footer_notes">
-							<UTextarea v-model="form.quote_footer_notes" :rows="5" autoresize class="w-full" />
-						</UFormField>
-					</SectionCard>
+						<UInput
+							v-model="form.pdf_protect_password"
+							type="password"
+							placeholder="No protection"
+							icon="i-lucide-lock"
+							class="w-full max-w-md"
+						/>
+					</UFormField>
 
-					<SectionCard
-						icon="i-lucide-shield-check"
-						title="Document protection"
-						subtitle="Encrypt generated PDFs with an owner password. Protected documents still open without a password, but editing, copying, and annotating are blocked — printing stays allowed. Use it to keep issued invoices and bills from being altered."
+					<div>
+						<div class="text-xs text-(--ui-text-muted) mb-2">
+							Protect these document types:
+						</div>
+						<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+							<UCheckbox v-model="form.protect_quote" label="Quotes" />
+							<UCheckbox v-model="form.protect_invoice" label="Invoices" />
+							<UCheckbox v-model="form.protect_bill" label="Bills" />
+							<UCheckbox v-model="form.protect_voucher" label="Vouchers" />
+							<UCheckbox v-model="form.protect_payslip" label="Payslips" />
+						</div>
+					</div>
+
+					<div
+						v-if="protectionGapWarning"
+						class="flex items-start gap-2 p-3 rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/5 text-sm"
 					>
-						<UFormField
-							label="Owner password"
-							name="pdf_protect_password"
-							help="Leave blank to disable protection. Keep this safe — it's needed to remove restrictions later."
-						>
-							<UInput
-								v-model="form.pdf_protect_password"
-								type="password"
-								placeholder="No protection"
-								icon="i-lucide-lock"
-								class="w-full"
-							/>
-						</UFormField>
-
-						<div>
-							<div class="text-xs text-(--ui-text-muted) mb-2">
-								Protect these document types:
-							</div>
-							<div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-								<UCheckbox v-model="form.protect_quote" label="Quotes" />
-								<UCheckbox v-model="form.protect_invoice" label="Invoices" />
-								<UCheckbox v-model="form.protect_bill" label="Bills" />
-								<UCheckbox v-model="form.protect_voucher" label="Vouchers" />
-								<UCheckbox v-model="form.protect_payslip" label="Payslips" />
-							</div>
-						</div>
-
-						<div
-							v-if="protectionGapWarning"
-							class="flex items-start gap-2 p-3 rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/5 text-sm"
-						>
-							<UIcon name="i-lucide-triangle-alert" class="size-4 mt-0.5 text-(--ui-warning) shrink-0" />
-							<span class="text-(--ui-text-muted)">
-								You've selected document types to protect but haven't set a password — nothing will be encrypted until you enter one above.
-							</span>
-						</div>
-					</SectionCard>
-				</div>
+						<UIcon name="i-lucide-triangle-alert" class="size-4 mt-0.5 text-(--ui-warning) shrink-0" />
+						<span class="text-(--ui-text-muted)">
+							You've selected document types to protect but haven't set a password — nothing will be encrypted until you enter one above.
+						</span>
+					</div>
+				</SectionCard>
 			</div>
 
 			<!-- Sticky save bar — same shape as the one on /settings/company.
