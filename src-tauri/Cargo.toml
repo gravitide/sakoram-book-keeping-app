@@ -1,6 +1,6 @@
 [package]
 name = "sakoram_billing"
-version = "0.56.1"
+version = "0.57.0"
 description = "Sakoram Bookkeeping — desktop app for quotes, invoices, bills and vouchers"
 authors = [ "Sakoram" ]
 license = "MIT"
@@ -38,6 +38,13 @@ sqlx = { version = "0.8", features = [
 
 # Used by the data_io module to bundle/extract export archives.
 zip = { version = "2", default-features = false, features = [ "deflate" ] }
+
+# Owner-password PDF encryption applied as a post-process after Typst
+# renders a document (see src/pdf.rs). `vendored` builds libqpdf from the
+# bundled C/C++ source via the `cc` crate — no system libqpdf, no CMake,
+# and the crate ships pre-generated bindings for our build targets so no
+# libclang/bindgen is needed either.
+qpdf = { version = "0.3", features = [ "vendored" ] }
 
 [dependencies.tauri-plugin-sql]
 version = "2.4"

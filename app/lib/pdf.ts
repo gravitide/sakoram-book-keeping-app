@@ -17,10 +17,12 @@
 //   - temp file naming (so the same document overwrites its own preview
 //     instead of accumulating one per click)
 
+import type { CompanySettingsRow } from "~/stores/settings";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { appLocalDataDir, join } from "@tauri-apps/api/path";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { mkdir } from "@tauri-apps/plugin-fs";
+import { useSettingsStore } from "~/stores/settings";
 
 export type PdfCommand
 	= | "export_quote_pdf"
@@ -51,6 +53,34 @@ const mapInvokeError = (err: unknown): { kind: "locked" | "failed", message: str
 		: { kind: "failed", message: raw };
 };
 
+// Each PDF command maps to the per-type protection toggle on
+// company_settings. When that toggle is on and an owner password is
+// configured, we hand the password to the Rust side, which encrypts the
+// rendered PDF (AES-256, owner-password only — opens freely, editing
+// blocked). See src-tauri/src/pdf.rs.
+const PROTECT_FLAG: Record<PdfCommand, keyof CompanySettingsRow> = {
+	export_quote_pdf: "pdf_protect_quote",
+	export_invoice_pdf: "pdf_protect_invoice",
+	export_bill_pdf: "pdf_protect_bill",
+	export_voucher_pdf: "pdf_protect_voucher",
+	export_payslip_pdf: "pdf_protect_payslip"
+};
+
+// Resolve the owner password to encrypt this document type with, or null
+// when protection is off (no password set, or this type's toggle is off).
+// Exported so callers that `invoke` an export command directly (e.g. the
+// payslips bulk-PDF loop) can apply the same protection the preview flow
+// gets for free.
+export const resolveProtectPassword = async (command: PdfCommand): Promise<string | null> => {
+	const store = useSettingsStore();
+	await store.ensureLoaded();
+	const s = store.settings;
+	if (!s) return null;
+	const password = s.pdf_protect_password?.trim();
+	if (!password) return null;
+	return s[PROTECT_FLAG[command]] ? password : null;
+};
+
 // Slugify a document number (e.g. "QT-2026-0001") into a filesystem-safe
 // stem. We deliberately don't include a timestamp — same doc previewed
 // twice should overwrite the same temp file, not pile up.
@@ -71,7 +101,8 @@ export const renderPdfPreview = async (args: {
 		await mkdir(previewDir, { recursive: true }).catch(() => { /* exists */ });
 
 		const tempPath = await join(previewDir, slug(args.suggestedFileName));
-		await invoke(args.command, { data: args.data, outputPath: tempPath });
+		const protectPassword = await resolveProtectPassword(args.command);
+		await invoke(args.command, { data: args.data, outputPath: tempPath, protectPassword });
 
 		// Cache-bust so the iframe re-fetches when the same doc is re-rendered.
 		const assetUrl = `${convertFileSrc(tempPath)}?t=${Date.now()}`;
@@ -127,7 +158,8 @@ export const exportPdfDocument = async (args: {
 	if (!chosen) return { ok: false, kind: "cancelled" };
 
 	try {
-		await invoke(args.command, { data: args.data, outputPath: chosen });
+		const protectPassword = await resolveProtectPassword(args.command);
+		await invoke(args.command, { data: args.data, outputPath: chosen, protectPassword });
 		return { ok: true, path: chosen };
 	} catch (err) {
 		const mapped = mapInvokeError(err);

@@ -18,7 +18,8 @@
 // Templates are embedded at compile time (`include_str!`) so the binary
 // is self-contained.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use qpdf::{EncryptionParams, EncryptionParamsR6, PrintPermission, QPdf};
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_shell::ShellExt;
@@ -37,6 +38,8 @@ pub enum PdfError {
 	Tauri(String),
 	#[error("typst: {0}")]
 	Typst(String),
+	#[error("encrypt: {0}")]
+	Encrypt(String),
 }
 
 impl serde::Serialize for PdfError {
@@ -59,12 +62,48 @@ impl From<tauri_plugin_shell::Error> for PdfError {
 /// `template_name` is the on-disk filename written into the work dir (e.g.
 /// "document.typ"). It must end in `.typ` to satisfy the shell capability
 /// validator on the sidecar invocation.
+/// Encrypt `path` in place with an owner password (AES-256, R6).
+///
+/// The user password is left empty, so the PDF still opens with no prompt;
+/// only the owner-restricted operations are gated. We block editing,
+/// content extraction, page assembly, annotation, and form filling — but
+/// keep full-resolution printing allowed and accessibility (screen reader)
+/// extraction permitted. The intent is tamper-resistance on issued
+/// invoices / bills, not secrecy.
+///
+/// `QPdf::read(path)` keeps the input file handle open for lazy object
+/// access, so writing the encrypted result back to the same path fails on
+/// Windows with os error 5 (ACCESS_DENIED). We read the rendered PDF fully
+/// into memory first — that closes the file handle immediately — then let
+/// qpdf write the encrypted copy straight back over `path`.
+fn encrypt_pdf(path: &Path, owner_password: &str) -> Result<(), PdfError> {
+	let bytes = std::fs::read(path)?;
+	let pdf = QPdf::read_from_memory(&bytes).map_err(|e| PdfError::Encrypt(e.to_string()))?;
+
+	let mut writer = pdf.writer();
+	writer.encryption_params(EncryptionParams::R6(EncryptionParamsR6 {
+		user_password: String::new(),
+		owner_password: owner_password.to_string(),
+		allow_accessibility: true,
+		allow_extract: false,
+		allow_assemble: false,
+		allow_annotate_and_form: false,
+		allow_form_filling: false,
+		allow_modify_other: false,
+		allow_print: PrintPermission::Full,
+		encrypt_metadata: true,
+	}));
+	writer.write(path).map_err(|e| PdfError::Encrypt(e.to_string()))?;
+	Ok(())
+}
+
 async fn render_pdf(
 	app: &AppHandle,
 	template_name: &str,
 	template_src: &str,
 	mut data: Value,
 	output_path: PathBuf,
+	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
 	debug_assert!(template_name.ends_with(".typ"));
 
@@ -169,6 +208,15 @@ async fn render_pdf(
 		return Err(PdfError::Typst(user_message));
 	}
 
+	// 7. Optional owner-password encryption. A blank/whitespace password
+	//    is treated as "no protection" — the JS side only sends one when
+	//    the document type's toggle is on and a password is configured.
+	if let Some(pw) = protect_password {
+		if !pw.trim().is_empty() {
+			encrypt_pdf(&output_path, &pw)?;
+		}
+	}
+
 	Ok(())
 }
 
@@ -208,8 +256,9 @@ pub async fn export_quote_pdf(
 	app: AppHandle,
 	data: Value,
 	output_path: String,
+	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "document.typ", DOCUMENT_TEMPLATE, data, PathBuf::from(output_path)).await
+	render_pdf(&app, "document.typ", DOCUMENT_TEMPLATE, data, PathBuf::from(output_path), protect_password).await
 }
 
 #[tauri::command]
@@ -217,8 +266,9 @@ pub async fn export_invoice_pdf(
 	app: AppHandle,
 	data: Value,
 	output_path: String,
+	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "document.typ", DOCUMENT_TEMPLATE, data, PathBuf::from(output_path)).await
+	render_pdf(&app, "document.typ", DOCUMENT_TEMPLATE, data, PathBuf::from(output_path), protect_password).await
 }
 
 #[tauri::command]
@@ -226,8 +276,9 @@ pub async fn export_bill_pdf(
 	app: AppHandle,
 	data: Value,
 	output_path: String,
+	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "document.typ", DOCUMENT_TEMPLATE, data, PathBuf::from(output_path)).await
+	render_pdf(&app, "document.typ", DOCUMENT_TEMPLATE, data, PathBuf::from(output_path), protect_password).await
 }
 
 #[tauri::command]
@@ -235,8 +286,9 @@ pub async fn export_payslip_pdf(
 	app: AppHandle,
 	data: Value,
 	output_path: String,
+	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "payslip.typ", PAYSLIP_TEMPLATE, data, PathBuf::from(output_path)).await
+	render_pdf(&app, "payslip.typ", PAYSLIP_TEMPLATE, data, PathBuf::from(output_path), protect_password).await
 }
 
 #[tauri::command]
@@ -244,8 +296,9 @@ pub async fn export_voucher_pdf(
 	app: AppHandle,
 	data: Value,
 	output_path: String,
+	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "voucher.typ", VOUCHER_TEMPLATE, data, PathBuf::from(output_path)).await
+	render_pdf(&app, "voucher.typ", VOUCHER_TEMPLATE, data, PathBuf::from(output_path), protect_password).await
 }
 
 /// Copy a file from `src` to `dst`. Used by the PDF preview flow: we
