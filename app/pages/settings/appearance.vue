@@ -115,6 +115,35 @@
 			<UCard>
 				<template #header>
 					<div class="font-medium">
+						Theme
+					</div>
+					<div class="text-xs text-(--ui-text-muted) mt-1">
+						Light vs dark. Saved on this machine, separate from
+						business settings. "System" follows the OS preference
+						and flips automatically when the OS does.
+					</div>
+				</template>
+
+				<div class="flex flex-wrap gap-2">
+					<button
+						v-for="t in THEME_OPTIONS"
+						:key="t.value"
+						type="button"
+						class="rounded-md border px-3 py-1.5 text-sm transition flex items-center gap-2"
+						:class="colorMode.preference === t.value
+							? 'border-(--ui-primary) bg-(--ui-primary)/10 text-(--ui-primary) font-medium'
+							: 'border-(--ui-border) hover:border-(--ui-text-muted)'"
+						@click="colorMode.preference = t.value"
+					>
+						<UIcon :name="t.icon" class="size-4" />
+						{{ t.label }}
+					</button>
+				</div>
+			</UCard>
+
+			<UCard>
+				<template #header>
+					<div class="font-medium">
 						Zoom
 					</div>
 					<div class="text-xs text-(--ui-text-muted) mt-1">
@@ -177,6 +206,15 @@
 	// than a per-tenant business field. Sits on this page since it's
 	// part of the same 'how the app looks' bucket the user expects.
 	const { zoomLevel, setZoomLevel } = useUiState();
+	// Color mode (light / dark / system) — backed by @nuxtjs/color-mode
+	// which persists the choice to localStorage and flips the `.dark`
+	// class on <html> in real time. Per-machine, not per-tenant.
+	const colorMode = useColorMode();
+	const THEME_OPTIONS = [
+		{ value: "system", label: "System", icon: "i-lucide-monitor" },
+		{ value: "light", label: "Light", icon: "i-lucide-sun" },
+		{ value: "dark", label: "Dark", icon: "i-lucide-moon" }
+	] as const;
 
 	await store.ensureLoaded();
 
