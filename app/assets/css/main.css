@@ -61,6 +61,29 @@
 	--color-error: var(--ui-color-error-500)
 }
 
+/* Light theme: replace NuxtUI's default cool zinc surfaces with a warm
+   paper-feeling palette. The `html:not(.dark)` selector matches the
+   light-mode root (when @nuxtjs/color-mode hasn't added the .dark
+   class). Dark mode is left untouched — NuxtUI's zinc-based dark
+   defaults already read well.
+
+   Surface tokens, warmest → coolest:
+     --ui-bg          page background ............... warm cream
+     --ui-bg-muted    cards, subtle fills ........... slightly deeper cream
+     --ui-bg-elevated popovers / dropdowns .......... near-white (keeps shadows readable)
+     --ui-bg-accented hover states .................. one shade deeper than muted
+     --ui-border      lines, dividers ............... soft warm border
+*/
+html:not(.dark) {
+	--ui-bg: #fbf7ee;
+	--ui-bg-muted: #f4efe2;
+	--ui-bg-elevated: #fffefa;
+	--ui-bg-accented: #ede6d5;
+	--ui-border: #e3dcc9;
+	--ui-border-muted: #ece6d6;
+	--ui-border-accented: #d6cdb6;
+}
+
 /* The shell layout (default.vue) uses h-screen + a single scrollable
  * <main>. Stop the document itself from scrolling so we don't show two
  * vertical scrollbars (document + main) on long pages. Outside @layer so
