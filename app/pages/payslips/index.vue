@@ -368,6 +368,7 @@
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { formatMoney } from "~/lib/money";
 	import { buildPayslipPdfPayload } from "~/lib/payslip-pdf";
+	import { resolveProtectPassword } from "~/lib/pdf";
 	import { useEmployeesStore } from "~/stores/employees";
 	import { monthBounds, usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
@@ -738,6 +739,11 @@
 		bulkPdf.outputDir = folder;
 		bulkPdf.errors = [];
 
+		// Resolve owner-password protection once for the whole run — the
+		// preview flow gets this automatically, but the bulk loop invokes
+		// the export command directly so it must thread the password too.
+		const protectPassword = await resolveProtectPassword("export_payslip_pdf");
+
 		for (const row of targets) {
 			if (bulkPdf.cancelled) break;
 			bulkPdf.currentName = row.number;
@@ -770,7 +776,7 @@
 				//    sidecar args (.typ / .pdf extensions) — output path is
 				//    whatever the user picks.
 				const outputPath = await join(folder, `${safeName(row.number)}.pdf`);
-				await invoke("export_payslip_pdf", { data: payload, outputPath });
+				await invoke("export_payslip_pdf", { data: payload, outputPath, protectPassword });
 			} catch (err) {
 				bulkPdf.errors.push({
 					name: row.number,

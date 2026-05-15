@@ -42,6 +42,16 @@ export interface CompanySettingsRow {
 	payroll_period_start_day: number
 	payroll_period_end_day: number
 	payroll_pay_day: number
+	// PDF owner-password protection. `pdf_protect_password` is the owner
+	// password (null/empty = protection off). The five flags are per-type
+	// opt-ins, stored as 0/1 INTEGERs. A document is encrypted only when
+	// its flag is 1 AND a password is set. See app/lib/pdf.ts.
+	pdf_protect_password: string | null
+	pdf_protect_quote: number
+	pdf_protect_invoice: number
+	pdf_protect_bill: number
+	pdf_protect_voucher: number
+	pdf_protect_payslip: number
 	updated_at: string
 }
 
@@ -76,7 +86,13 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"theme_color",
 	"payroll_period_start_day",
 	"payroll_period_end_day",
-	"payroll_pay_day"
+	"payroll_pay_day",
+	"pdf_protect_password",
+	"pdf_protect_quote",
+	"pdf_protect_invoice",
+	"pdf_protect_bill",
+	"pdf_protect_voucher",
+	"pdf_protect_payslip"
 ];
 
 export const useSettingsStore = defineStore("settings", () => {

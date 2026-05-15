@@ -278,7 +278,7 @@ sakoram_app/
 │     ├─ vouchers.ts                  ← receipts/payments; carries related_invoice_id, related_bill_id, related_payslip_id
 │     └─ tenants.ts                   ← bridges JS to Rust tenant registry
 └─ src-tauri/
-   ├─ Cargo.toml                      ← Rust deps (tauri 2.10, sqlx 0.8, zip 2)
+   ├─ Cargo.toml                      ← Rust deps (tauri 2.10, sqlx 0.8, zip 2, qpdf 0.3 vendored)
    ├─ tauri.conf.json                 ← productName, identifier, sidecars, capabilities, decorations: false
    ├─ capabilities/
    │  └─ main.json                    ← fs scopes, sql, dialog, window controls, shell-execute (typst arg validators)
@@ -595,7 +595,9 @@ See `src-tauri/migrations/` for the source of truth. High-level:
   template**: `payroll_period_start_day`, `payroll_period_end_day`,
   `payroll_pay_day` (1–31 integers, clamped to month length at
   runtime — 31 ≡ last day of month). Resolved via
-  `app/lib/payroll-cycle.ts`.
+  `app/lib/payroll-cycle.ts`. Also holds **PDF protection**:
+  `pdf_protect_password` (owner password; null/empty = off) and five
+  `pdf_protect_{quote,invoice,bill,voucher,payslip}` 0/1 flags.
 - `clients` — id, name, contact info, archived flag.
 - `vendors` — same shape as `clients`. Address book for the bills side
   of the ledger.
@@ -685,6 +687,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0017_vouchers_payslip_link.sql          ← vouchers.related_payslip_id (ON DELETE SET NULL)
 0018_employee_number.sql                ← nullable text column on employees, indexed
 0019_payroll_cycle.sql                  ← payroll_period_start_day / payroll_period_end_day / payroll_pay_day on company_settings
+0020_pdf_protection.sql                 ← pdf_protect_password + 5 per-type pdf_protect_* flags on company_settings
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,
@@ -895,7 +898,7 @@ persisted to localStorage).
 
 ### Done
 
-- ✅ DB schema + migrations 0001..0019 (`SCHEMA_VERSION` 19)
+- ✅ DB schema + migrations 0001..0020 (`SCHEMA_VERSION` 20)
 - ✅ Clients / Vendors / Employees CRUD (hero + SectionCard layout)
 - ✅ Quotes (full lifecycle, PDF, convert-to-invoice; default VAT seeded
   from settings on draft creation)
@@ -936,6 +939,14 @@ persisted to localStorage).
   color from settings, user-chosen `pdf_font`, business-name
   wordmark fallback when no PDF logo uploaded)
 - ✅ PDF preview modal (iframe-embedded, save-as via temp file copy)
+- ✅ **Password-protected PDFs** — optional owner-password encryption
+  (AES-256 / R6) applied by the `qpdf` crate as a post-process after
+  Typst renders. Owner-password only: the PDF opens with no prompt but
+  editing / copying / annotating are blocked, printing stays allowed.
+  Configured at `/settings/pdf` — one owner password + a per-document-type
+  toggle (quote / invoice / bill / voucher / payslip). `lib/pdf.ts`
+  resolves the password from settings and threads it to the matching
+  `export_*_pdf` command; `encrypt_pdf()` in `pdf.rs` does the work.
 - ✅ Settings split into two sidebar groups: **Settings** (per-tenant
   business config — Company / PDF / Payroll cycle) and **App**
   (UI prefs + multi-tenant admin — Appearance / Businesses). URLs

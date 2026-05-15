@@ -160,6 +160,51 @@
 				</SectionCard>
 			</div>
 
+			<div class="mt-6">
+				<SectionCard
+					icon="i-lucide-shield-check"
+					title="Document protection"
+					subtitle="Encrypt generated PDFs with an owner password. Protected documents still open without a password, but editing, copying, and annotating are blocked — printing stays allowed. Use it to keep issued invoices and bills from being altered."
+				>
+					<UFormField
+						label="Owner password"
+						name="pdf_protect_password"
+						help="Leave blank to disable protection. Keep this safe — it's needed to remove restrictions later."
+					>
+						<UInput
+							v-model="form.pdf_protect_password"
+							type="password"
+							placeholder="No protection"
+							icon="i-lucide-lock"
+							class="w-full"
+						/>
+					</UFormField>
+
+					<div>
+						<div class="text-xs text-(--ui-text-muted) mb-2">
+							Protect these document types:
+						</div>
+						<div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+							<UCheckbox v-model="form.protect_quote" label="Quotes" />
+							<UCheckbox v-model="form.protect_invoice" label="Invoices" />
+							<UCheckbox v-model="form.protect_bill" label="Bills" />
+							<UCheckbox v-model="form.protect_voucher" label="Vouchers" />
+							<UCheckbox v-model="form.protect_payslip" label="Payslips" />
+						</div>
+					</div>
+
+					<div
+						v-if="protectionGapWarning"
+						class="flex items-start gap-2 p-3 rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/5 text-sm"
+					>
+						<UIcon name="i-lucide-triangle-alert" class="size-4 mt-0.5 text-(--ui-warning) shrink-0" />
+						<span class="text-(--ui-text-muted)">
+							You've selected document types to protect but haven't set a password — nothing will be encrypted until you enter one above.
+						</span>
+					</div>
+				</SectionCard>
+			</div>
+
 			<!-- Sticky save bar — same shape as the one on /settings/company.
 				Only appears when textarea contents differ from the loaded
 				settings; logo upload/remove writes immediately so the user
@@ -218,14 +263,37 @@
 	// Only the PDF-flavoured fields live on this page. Logo paths are kept on
 	// the form so dirty-tracking can spot a removal/upload that would otherwise
 	// only mutate the store.
-	type PdfForm = Pick<SettingsUpdate, "invoice_footer_notes" | "quote_footer_notes" | "pdf_header_logo_path" | "pdf_font">;
+	// The five per-type protect flags are 0/1 INTEGERs in the DB; we model
+	// them as booleans on the form and convert on hydrate / save.
+	type PdfForm = Pick<SettingsUpdate, "invoice_footer_notes" | "quote_footer_notes" | "pdf_header_logo_path" | "pdf_font"> & {
+		pdf_protect_password: string
+		protect_quote: boolean
+		protect_invoice: boolean
+		protect_bill: boolean
+		protect_voucher: boolean
+		protect_payslip: boolean
+	};
 
 	const form = reactive<PdfForm>({
 		invoice_footer_notes: "",
 		quote_footer_notes: "",
 		pdf_header_logo_path: null,
-		pdf_font: "Inter"
+		pdf_font: "Inter",
+		pdf_protect_password: "",
+		protect_quote: false,
+		protect_invoice: false,
+		protect_bill: false,
+		protect_voucher: false,
+		protect_payslip: false
 	});
+
+	// Surfaced as an inline warning: toggles on but no password means
+	// nothing actually gets encrypted.
+	const protectionGapWarning = computed(() =>
+		!form.pdf_protect_password.trim()
+		&& (form.protect_quote || form.protect_invoice || form.protect_bill
+			|| form.protect_voucher || form.protect_payslip)
+	);
 
 	// Same curated list the Appearance page used. The Typst template falls
 	// through these for any missing glyph; free-text input lets the user pick
@@ -244,6 +312,12 @@
 		form.quote_footer_notes = s.quote_footer_notes ?? "";
 		form.pdf_header_logo_path = s.pdf_header_logo_path;
 		form.pdf_font = s.pdf_font || "Inter";
+		form.pdf_protect_password = s.pdf_protect_password ?? "";
+		form.protect_quote = !!s.pdf_protect_quote;
+		form.protect_invoice = !!s.pdf_protect_invoice;
+		form.protect_bill = !!s.pdf_protect_bill;
+		form.protect_voucher = !!s.pdf_protect_voucher;
+		form.protect_payslip = !!s.pdf_protect_payslip;
 	};
 
 	await store.ensureLoaded();
@@ -262,7 +336,13 @@
 			await store.save({
 				invoice_footer_notes: form.invoice_footer_notes,
 				quote_footer_notes: form.quote_footer_notes,
-				pdf_font: form.pdf_font.trim() || "Inter"
+				pdf_font: form.pdf_font.trim() || "Inter",
+				pdf_protect_password: form.pdf_protect_password.trim() || null,
+				pdf_protect_quote: form.protect_quote ? 1 : 0,
+				pdf_protect_invoice: form.protect_invoice ? 1 : 0,
+				pdf_protect_bill: form.protect_bill ? 1 : 0,
+				pdf_protect_voucher: form.protect_voucher ? 1 : 0,
+				pdf_protect_payslip: form.protect_payslip ? 1 : 0
 			});
 			refreshBaseline();
 			toast.add({ title: "PDF settings saved", color: "success", icon: "i-lucide-check" });
