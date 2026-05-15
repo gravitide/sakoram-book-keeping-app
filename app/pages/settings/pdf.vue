@@ -1,208 +1,205 @@
 <template>
 	<div>
-		<!-- Same narrow-and-centered shape as Settings → Appearance: this
-			page only has a handful of inputs and would look stretched at
-			the wider main-content width the data tables use. -->
-		<header class="mb-6 max-w-2xl mx-auto">
+		<header class="mb-6 max-w-5xl mx-auto">
 			<h1 class="text-2xl font-semibold">
 				PDF
 			</h1>
 			<p class="text-sm text-(--ui-text-muted)">
-				Header logo and footer notes printed on every generated quote, invoice, bill, and voucher.
+				Font, header logo, footer notes, and password protection for every generated quote, invoice, bill, voucher, and payslip.
 			</p>
 		</header>
 
 		<UForm
 			:state="form"
-			class="max-w-2xl mx-auto"
+			class="max-w-5xl mx-auto"
 			@submit="onSubmit"
 		>
-			<SectionCard
-				icon="i-lucide-type"
-				title="Font"
-				subtitle="Used when rendering quotes, invoices, bills, and vouchers. Pick a bundled font for guaranteed availability — Typst falls back to Inter if it can't resolve your choice."
-			>
-				<UFormField label="Font family" name="pdf_font">
-					<UInput v-model="form.pdf_font" placeholder="e.g. Inter" />
-				</UFormField>
+			<!-- Two-column layout: the left column groups how the PDF *looks*
+				(font, header logo); the right groups what it *says* and how
+				it's secured (footer notes, protection). items-start keeps the
+				shorter column from stretching to the taller one's height. -->
+			<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+				<div class="space-y-6">
+					<SectionCard
+						icon="i-lucide-type"
+						title="Font"
+						subtitle="Used when rendering quotes, invoices, bills, and vouchers. Pick a bundled font for guaranteed availability — Typst falls back to Inter if it can't resolve your choice."
+					>
+						<UFormField label="Font family" name="pdf_font">
+							<UInput v-model="form.pdf_font" placeholder="e.g. Inter" />
+						</UFormField>
 
-				<div>
-					<div class="text-xs text-(--ui-text-muted) mb-2">
-						Bundled fonts:
-					</div>
-					<div class="flex flex-wrap gap-2">
-						<UButton
-							v-for="suggestion in bundledFonts"
-							:key="suggestion"
-							size="xs"
-							variant="soft"
-							color="primary"
-							@click="form.pdf_font = suggestion"
-						>
-							{{ suggestion }}
-						</UButton>
-					</div>
-				</div>
-
-				<div class="p-4 border border-(--ui-border) rounded-md bg-(--ui-bg-muted)">
-					<div class="text-xs text-(--ui-text-muted) uppercase tracking-wide mb-2">
-						Preview (the PDF pulls the same TTF, so it'll look identical)
-					</div>
-					<div :style="{ fontFamily: pdfPreviewFontStack }" class="space-y-1">
-						<div class="text-2xl font-semibold">
-							INVOICE INV-2026-0042
+						<div>
+							<div class="text-xs text-(--ui-text-muted) mb-2">
+								Bundled fonts:
+							</div>
+							<div class="flex flex-wrap gap-2">
+								<UButton
+									v-for="suggestion in bundledFonts"
+									:key="suggestion"
+									size="xs"
+									variant="soft"
+									color="primary"
+									@click="form.pdf_font = suggestion"
+								>
+									{{ suggestion }}
+								</UButton>
+							</div>
 						</div>
-						<div class="text-sm tabular-nums">
-							Total: 12,345.00 — due 2026-06-15
-						</div>
-					</div>
-				</div>
-			</SectionCard>
 
-			<div class="mt-6">
-				<SectionCard
-					icon="i-lucide-image"
-					title="Header logo"
-					subtitle="Letterhead-style PNG, JPG, or SVG. Different from the square Company logo, which is only used in the sidebar."
-				>
-					<div class="flex flex-col sm:flex-row sm:items-center gap-4">
-						<div
-							class="group relative h-28 w-80 shrink-0 rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition cursor-pointer"
-							:class="[
-								pdfLogoDragOver
-									? 'border-(--ui-primary) bg-(--ui-primary)/5 scale-[1.01]'
-									: 'border-(--ui-border) bg-(--ui-bg-muted) hover:border-(--ui-primary)/60'
-							]"
-							role="button"
-							tabindex="0"
-							aria-label="Upload PDF header logo"
-							@click="pickPdfLogo"
-							@keydown.enter.prevent="pickPdfLogo"
-							@keydown.space.prevent="pickPdfLogo"
-							@dragover.prevent="pdfLogoDragOver = true"
-							@dragenter.prevent="pdfLogoDragOver = true"
-							@dragleave.prevent="pdfLogoDragOver = false"
-							@drop.prevent="onPdfLogoDrop"
-						>
-							<input
-								ref="pdfLogoInput"
-								type="file"
-								accept="image/png,image/jpeg,image/webp,image/svg+xml"
-								class="hidden"
-								@change="onPdfLogoFileChange"
-							>
-							<img
-								v-if="store.pdfHeaderLogoSrc"
-								:src="store.pdfHeaderLogoSrc"
-								alt="PDF header logo"
-								class="max-w-full max-h-full object-contain p-3"
-							>
-							<div v-else class="flex flex-col items-center gap-1 text-(--ui-text-muted)">
-								<UIcon name="i-lucide-image-up" class="size-7" />
-								<div class="text-[10px] uppercase tracking-wider">
-									Drop wide logo
+						<div class="p-4 border border-(--ui-border) rounded-md bg-(--ui-bg-muted)">
+							<div class="text-xs text-(--ui-text-muted) uppercase tracking-wide mb-2">
+								Preview (the PDF pulls the same TTF, so it'll look identical)
+							</div>
+							<div :style="{ fontFamily: pdfPreviewFontStack }" class="space-y-1">
+								<div class="text-2xl font-semibold">
+									INVOICE INV-2026-0042
+								</div>
+								<div class="text-sm tabular-nums">
+									Total: 12,345.00 — due 2026-06-15
 								</div>
 							</div>
+						</div>
+					</SectionCard>
+
+					<SectionCard
+						icon="i-lucide-image"
+						title="Header logo"
+						subtitle="Letterhead-style PNG, JPG, or SVG. Different from the square Company logo, which is only used in the sidebar."
+					>
+						<div class="flex flex-col gap-3">
 							<div
-								v-if="store.pdfHeaderLogoSrc"
-								class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100"
+								class="group relative h-28 w-full rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition cursor-pointer"
+								:class="[
+									pdfLogoDragOver
+										? 'border-(--ui-primary) bg-(--ui-primary)/5 scale-[1.01]'
+										: 'border-(--ui-border) bg-(--ui-bg-muted) hover:border-(--ui-primary)/60'
+								]"
+								role="button"
+								tabindex="0"
+								aria-label="Upload PDF header logo"
+								@click="pickPdfLogo"
+								@keydown.enter.prevent="pickPdfLogo"
+								@keydown.space.prevent="pickPdfLogo"
+								@dragover.prevent="pdfLogoDragOver = true"
+								@dragenter.prevent="pdfLogoDragOver = true"
+								@dragleave.prevent="pdfLogoDragOver = false"
+								@drop.prevent="onPdfLogoDrop"
 							>
-								<UIcon name="i-lucide-upload" class="size-5 text-white" />
-								<span class="text-[10px] uppercase tracking-wider text-white">
-									Replace
+								<input
+									ref="pdfLogoInput"
+									type="file"
+									accept="image/png,image/jpeg,image/webp,image/svg+xml"
+									class="hidden"
+									@change="onPdfLogoFileChange"
+								>
+								<img
+									v-if="store.pdfHeaderLogoSrc"
+									:src="store.pdfHeaderLogoSrc"
+									alt="PDF header logo"
+									class="max-w-full max-h-full object-contain p-3"
+								>
+								<div v-else class="flex flex-col items-center gap-1 text-(--ui-text-muted)">
+									<UIcon name="i-lucide-image-up" class="size-7" />
+									<div class="text-[10px] uppercase tracking-wider">
+										Drop wide logo
+									</div>
+								</div>
+								<div
+									v-if="store.pdfHeaderLogoSrc"
+									class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100"
+								>
+									<UIcon name="i-lucide-upload" class="size-5 text-white" />
+									<span class="text-[10px] uppercase tracking-wider text-white">
+										Replace
+									</span>
+								</div>
+							</div>
+							<div class="flex flex-wrap items-center gap-2">
+								<UButton
+									v-if="store.settings?.pdf_header_logo_path"
+									icon="i-lucide-trash-2"
+									size="xs"
+									variant="ghost"
+									color="neutral"
+									@click="removePdfLogo"
+								>
+									Remove
+								</UButton>
+								<UButton
+									v-else
+									icon="i-lucide-upload"
+									size="xs"
+									variant="soft"
+									@click="pickPdfLogo"
+								>
+									Upload header
+								</UButton>
+								<span v-if="pdfLogoFileName" class="text-xs text-(--ui-text-muted) truncate">
+									{{ pdfLogoFileName }}
 								</span>
 							</div>
 						</div>
-						<div class="flex flex-wrap items-center gap-2">
-							<UButton
-								v-if="store.settings?.pdf_header_logo_path"
-								icon="i-lucide-trash-2"
-								size="xs"
-								variant="ghost"
-								color="neutral"
-								@click="removePdfLogo"
-							>
-								Remove
-							</UButton>
-							<UButton
-								v-else
-								icon="i-lucide-upload"
-								size="xs"
-								variant="soft"
-								@click="pickPdfLogo"
-							>
-								Upload header
-							</UButton>
-							<span v-if="pdfLogoFileName" class="text-xs text-(--ui-text-muted) truncate">
-								{{ pdfLogoFileName }}
+					</SectionCard>
+				</div>
+
+				<div class="space-y-6">
+					<SectionCard
+						icon="i-lucide-file-text"
+						title="Footer notes"
+						subtitle="Appended at the bottom of generated documents — payment instructions, thanks, fine print."
+					>
+						<UFormField label="Invoice footer" name="invoice_footer_notes">
+							<UTextarea v-model="form.invoice_footer_notes" :rows="5" autoresize class="w-full" />
+						</UFormField>
+						<UFormField label="Quote footer" name="quote_footer_notes">
+							<UTextarea v-model="form.quote_footer_notes" :rows="5" autoresize class="w-full" />
+						</UFormField>
+					</SectionCard>
+
+					<SectionCard
+						icon="i-lucide-shield-check"
+						title="Document protection"
+						subtitle="Encrypt generated PDFs with an owner password. Protected documents still open without a password, but editing, copying, and annotating are blocked — printing stays allowed. Use it to keep issued invoices and bills from being altered."
+					>
+						<UFormField
+							label="Owner password"
+							name="pdf_protect_password"
+							help="Leave blank to disable protection. Keep this safe — it's needed to remove restrictions later."
+						>
+							<UInput
+								v-model="form.pdf_protect_password"
+								type="password"
+								placeholder="No protection"
+								icon="i-lucide-lock"
+								class="w-full"
+							/>
+						</UFormField>
+
+						<div>
+							<div class="text-xs text-(--ui-text-muted) mb-2">
+								Protect these document types:
+							</div>
+							<div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+								<UCheckbox v-model="form.protect_quote" label="Quotes" />
+								<UCheckbox v-model="form.protect_invoice" label="Invoices" />
+								<UCheckbox v-model="form.protect_bill" label="Bills" />
+								<UCheckbox v-model="form.protect_voucher" label="Vouchers" />
+								<UCheckbox v-model="form.protect_payslip" label="Payslips" />
+							</div>
+						</div>
+
+						<div
+							v-if="protectionGapWarning"
+							class="flex items-start gap-2 p-3 rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/5 text-sm"
+						>
+							<UIcon name="i-lucide-triangle-alert" class="size-4 mt-0.5 text-(--ui-warning) shrink-0" />
+							<span class="text-(--ui-text-muted)">
+								You've selected document types to protect but haven't set a password — nothing will be encrypted until you enter one above.
 							</span>
 						</div>
-					</div>
-				</SectionCard>
-			</div>
-
-			<div class="mt-6">
-				<SectionCard
-					icon="i-lucide-file-text"
-					title="Footer notes"
-					subtitle="Appended at the bottom of generated documents — payment instructions, thanks, fine print."
-				>
-					<!-- Stacked vertically instead of side-by-side: at the
-						narrower max-w-2xl page width a two-column textarea
-						grid is too cramped. The two fields rarely need to be
-						compared at a glance, so a single column reads cleaner. -->
-					<UFormField label="Invoice footer" name="invoice_footer_notes">
-						<UTextarea v-model="form.invoice_footer_notes" :rows="5" autoresize class="w-full" />
-					</UFormField>
-					<UFormField label="Quote footer" name="quote_footer_notes">
-						<UTextarea v-model="form.quote_footer_notes" :rows="5" autoresize class="w-full" />
-					</UFormField>
-				</SectionCard>
-			</div>
-
-			<div class="mt-6">
-				<SectionCard
-					icon="i-lucide-shield-check"
-					title="Document protection"
-					subtitle="Encrypt generated PDFs with an owner password. Protected documents still open without a password, but editing, copying, and annotating are blocked — printing stays allowed. Use it to keep issued invoices and bills from being altered."
-				>
-					<UFormField
-						label="Owner password"
-						name="pdf_protect_password"
-						help="Leave blank to disable protection. Keep this safe — it's needed to remove restrictions later."
-					>
-						<UInput
-							v-model="form.pdf_protect_password"
-							type="password"
-							placeholder="No protection"
-							icon="i-lucide-lock"
-							class="w-full"
-						/>
-					</UFormField>
-
-					<div>
-						<div class="text-xs text-(--ui-text-muted) mb-2">
-							Protect these document types:
-						</div>
-						<div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-							<UCheckbox v-model="form.protect_quote" label="Quotes" />
-							<UCheckbox v-model="form.protect_invoice" label="Invoices" />
-							<UCheckbox v-model="form.protect_bill" label="Bills" />
-							<UCheckbox v-model="form.protect_voucher" label="Vouchers" />
-							<UCheckbox v-model="form.protect_payslip" label="Payslips" />
-						</div>
-					</div>
-
-					<div
-						v-if="protectionGapWarning"
-						class="flex items-start gap-2 p-3 rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/5 text-sm"
-					>
-						<UIcon name="i-lucide-triangle-alert" class="size-4 mt-0.5 text-(--ui-warning) shrink-0" />
-						<span class="text-(--ui-text-muted)">
-							You've selected document types to protect but haven't set a password — nothing will be encrypted until you enter one above.
-						</span>
-					</div>
-				</SectionCard>
+					</SectionCard>
+				</div>
 			</div>
 
 			<!-- Sticky save bar — same shape as the one on /settings/company.
