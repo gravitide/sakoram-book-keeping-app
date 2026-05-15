@@ -216,7 +216,7 @@ sakoram_app/
 │  │     ├─ index.vue                 ← redirect to /settings/company
 │  │     ├─ company.vue               ← business info, address, bank, defaults, logo
 │  │     ├─ pdf.vue                   ← PDF font + PDF header logo
-│  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), zoom (6 discrete steps)
+│  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), light/dark/system toggle, zoom (6 discrete steps)
 │  │     ├─ payroll.vue               ← cycle template (period_start_day / period_end_day / pay_day)
 │  │     └─ businesses.vue            ← tenant CRUD + Export/Import
 │  ├─ components/
@@ -566,6 +566,22 @@ We're a desktop app expected to work offline — that fails. Fix:
 `@iconify-json/lucide` as a dev dep + `icon.clientBundle.scan: true`
 in `nuxt.config.ts`. Vite scans templates and inlines only the icons
 actually used (~70 icons). Zero runtime network dependency.
+
+### Why the light theme uses a paper palette (not pure white)
+
+Pure-white surfaces feel clinical for an app you stare at for hours
+of bookkeeping. The light-mode override under `html:not(.dark)` in
+`main.css` swaps `--ui-bg` and its lifted variants for a warm cream
+(`#fbf7ee` page bg, `#f4efe2` cards, `#fffefa` popovers,
+`#ede6d5` hover). Borders shift to a matching warm tone so they
+don't fight the cream. Dark mode keeps NuxtUI's stock zinc — it
+already reads well.
+
+The picker on `/settings/appearance` uses `useColorMode()` from
+`@nuxtjs/color-mode` (transitive of `@nuxt/ui`), with three values:
+`system` (default — follows the OS), `light`, `dark`. Preference is
+per-machine (localStorage), not per-tenant — doesn't ride the export
+bundle.
 
 ---
 
@@ -926,7 +942,13 @@ persisted to localStorage).
   all stay at `/settings/*`.
 - ✅ Appearance: independent UI/PDF font pickers (5 bundled +
   free-text), 8-color theme palette, **UI zoom** (80–150% in 6
-  steps) via root-`font-size` cascade
+  steps) via root-`font-size` cascade, and **light/dark/system
+  theme toggle** backed by `useColorMode()` (persists to
+  localStorage; flips the `.dark` class on `<html>` live).
+  Light mode uses a warm paper palette (`#fbf7ee` page bg with
+  matching warmer borders) under `html:not(.dark)` in `main.css`
+  so it doesn't feel clinical; dark mode keeps NuxtUI's zinc
+  defaults.
 - ✅ Bundled fonts (Inter / Inter Tight / Stack Sans Text / Miriam
   Libre / Amarna) — UI via `@font-face`, PDF via Typst `--font-path`
 - ✅ Bundled icons (Lucide) — zero runtime network dependency
