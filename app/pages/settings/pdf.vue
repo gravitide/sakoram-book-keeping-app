@@ -67,9 +67,9 @@
 						title="Header logo"
 						subtitle="Letterhead-style PNG, JPG, or SVG. Different from the square Company logo, which is only used in the sidebar."
 					>
-						<div class="flex flex-col sm:flex-row sm:items-center gap-4">
+						<div class="flex flex-col gap-3">
 							<div
-								class="group relative h-28 w-80 shrink-0 rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition cursor-pointer"
+								class="group relative h-28 w-full rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition cursor-pointer"
 								:class="[
 									pdfLogoDragOver
 										? 'border-(--ui-primary) bg-(--ui-primary)/5 scale-[1.01]'
