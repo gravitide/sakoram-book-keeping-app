@@ -874,10 +874,18 @@ Lists
 Settings                ← per-tenant business config (exported in backups)
   ├─ Company details
   ├─ PDF
+  │   ├─ Font                ← third-level in-page #anchors, shown only
+  │   ├─ Header logo            while /settings/pdf is the active route
+  │   ├─ Footer notes
+  │   └─ Protection
   └─ Payroll          ← cycle template (period_start_day / period_end_day / pay_day)
 ─── (divider)
 App                     ← UI + multi-tenant administration
   ├─ Appearance
+  │   ├─ UI font             ← same in-page #anchor pattern as PDF,
+  │   ├─ Theme color            shown only on /settings/appearance
+  │   ├─ Theme
+  │   └─ Zoom
   └─ Businesses
 ```
 
@@ -885,6 +893,16 @@ URLs all live under `/settings/*` even for the App group — only the
 sidebar grouping splits them. \`Settings\` items are per-tenant data
 that travels with the export bundle; \`App\` items are UI prefs and
 multi-tenant admin that don't belong to any single business.
+
+The sidebar nav supports three levels: top-level items, `children`
+(always visible), and an optional third level of `sections` — in-page
+`#anchor` links that appear under a child only while that child's own
+route is active (currently PDF and Appearance). Section links scroll
+to the matching card; the active section is matched on `route.hash`.
+Each target card is wrapped in an `id`'d `<div>` with `scroll-mt-*`,
+and `scrollToSection()` in `default.vue` does the scroll by hand
+(the main content scrolls in its own container, so Vue Router's
+window-level hash handling doesn't reach it).
 
 The sidebar itself is a floating card (`m-2 mt-0 rounded-lg shadow-lg`)
 sitting against the floor of the titlebar; main content is flush with

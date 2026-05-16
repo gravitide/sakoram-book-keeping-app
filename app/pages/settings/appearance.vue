@@ -16,158 +16,166 @@
 		</header>
 
 		<div class="space-y-6 max-w-2xl mx-auto">
-			<UCard>
-				<template #header>
-					<div class="font-medium">
-						UI font
-					</div>
-					<div class="text-xs text-(--ui-text-muted) mt-1">
-						Used in the app interface. Five fonts (Inter, Inter Tight,
-						Stack Sans Text, Miriam Libre, Amarna) ship with the app;
-						anything else falls through to what's installed on your
-						system.
-					</div>
-				</template>
+			<div id="ui-font" class="scroll-mt-6">
+				<UCard>
+					<template #header>
+						<div class="font-medium">
+							UI font
+						</div>
+						<div class="text-xs text-(--ui-text-muted) mt-1">
+							Used in the app interface. Five fonts (Inter, Inter Tight,
+							Stack Sans Text, Miriam Libre, Amarna) ship with the app;
+							anything else falls through to what's installed on your
+							system.
+						</div>
+					</template>
 
-				<UFormField label="Font family">
-					<UInput v-model="uiFont" placeholder="e.g. Inter" />
-				</UFormField>
+					<UFormField label="Font family">
+						<UInput v-model="uiFont" placeholder="e.g. Inter" />
+					</UFormField>
 
-				<div class="mt-4">
-					<div class="text-xs text-(--ui-text-muted) mb-2">
-						Bundled fonts (always available):
+					<div class="mt-4">
+						<div class="text-xs text-(--ui-text-muted) mb-2">
+							Bundled fonts (always available):
+						</div>
+						<div class="flex flex-wrap gap-2 mb-3">
+							<UButton
+								v-for="suggestion in bundledFonts"
+								:key="suggestion"
+								size="xs"
+								variant="soft"
+								color="primary"
+								@click="uiFont = suggestion"
+							>
+								{{ suggestion }}
+							</UButton>
+						</div>
+						<div class="text-xs text-(--ui-text-muted) mb-2">
+							System fonts (only if installed):
+						</div>
+						<div class="flex flex-wrap gap-2">
+							<UButton
+								v-for="suggestion in systemFonts"
+								:key="suggestion"
+								size="xs"
+								variant="soft"
+								color="neutral"
+								@click="uiFont = suggestion"
+							>
+								{{ suggestion }}
+							</UButton>
+						</div>
 					</div>
-					<div class="flex flex-wrap gap-2 mb-3">
-						<UButton
-							v-for="suggestion in bundledFonts"
-							:key="suggestion"
-							size="xs"
-							variant="soft"
-							color="primary"
-							@click="uiFont = suggestion"
+
+					<div class="mt-6 p-4 border border-(--ui-border) rounded-md bg-(--ui-bg-muted)">
+						<div class="text-xs text-(--ui-text-muted) uppercase tracking-wide mb-2">
+							Preview
+						</div>
+						<div :style="{ fontFamily: previewFontStack }" class="space-y-1">
+							<div class="text-2xl font-semibold">
+								The quick brown fox jumps over the lazy dog
+							</div>
+							<div class="text-sm">
+								Sphinx of black quartz, judge my vow. 0123456789
+							</div>
+						</div>
+					</div>
+				</UCard>
+			</div>
+
+			<div id="theme-color" class="scroll-mt-6">
+				<UCard>
+					<template #header>
+						<div class="font-medium">
+							Theme color
+						</div>
+						<div class="text-xs text-(--ui-text-muted) mt-1">
+							Drives buttons, links, badges, and the header rule on PDFs.
+						</div>
+					</template>
+
+					<div class="grid grid-cols-4 sm:grid-cols-8 gap-3">
+						<button
+							v-for="c in colors"
+							:key="c.value"
+							type="button"
+							class="group flex flex-col items-center gap-1.5"
+							:title="c.label"
+							@click="themeColor = c.value"
 						>
-							{{ suggestion }}
-						</UButton>
+							<span
+								class="size-10 rounded-full border-2 transition"
+								:class="themeColor === c.value ? 'border-(--ui-text) scale-110' : 'border-(--ui-border) group-hover:border-(--ui-text-muted)'"
+								:style="{ backgroundColor: c.hex }"
+							/>
+							<span class="text-xs" :class="themeColor === c.value ? 'text-(--ui-text) font-medium' : 'text-(--ui-text-muted)'">
+								{{ c.label }}
+							</span>
+						</button>
 					</div>
-					<div class="text-xs text-(--ui-text-muted) mb-2">
-						System fonts (only if installed):
-					</div>
+				</UCard>
+			</div>
+
+			<div id="theme" class="scroll-mt-6">
+				<UCard>
+					<template #header>
+						<div class="font-medium">
+							Theme
+						</div>
+						<div class="text-xs text-(--ui-text-muted) mt-1">
+							Light vs dark. Saved on this machine, separate from
+							business settings. "System" follows the OS preference
+							and flips automatically when the OS does.
+						</div>
+					</template>
+
 					<div class="flex flex-wrap gap-2">
-						<UButton
-							v-for="suggestion in systemFonts"
-							:key="suggestion"
-							size="xs"
-							variant="soft"
-							color="neutral"
-							@click="uiFont = suggestion"
+						<button
+							v-for="t in THEME_OPTIONS"
+							:key="t.value"
+							type="button"
+							class="rounded-md border px-3 py-1.5 text-sm transition flex items-center gap-2"
+							:class="colorMode.preference === t.value
+								? 'border-(--ui-primary) bg-(--ui-primary)/10 text-(--ui-primary) font-medium'
+								: 'border-(--ui-border) hover:border-(--ui-text-muted)'"
+							@click="colorMode.preference = t.value"
 						>
-							{{ suggestion }}
-						</UButton>
+							<UIcon :name="t.icon" class="size-4" />
+							{{ t.label }}
+						</button>
 					</div>
-				</div>
+				</UCard>
+			</div>
 
-				<div class="mt-6 p-4 border border-(--ui-border) rounded-md bg-(--ui-bg-muted)">
-					<div class="text-xs text-(--ui-text-muted) uppercase tracking-wide mb-2">
-						Preview
-					</div>
-					<div :style="{ fontFamily: previewFontStack }" class="space-y-1">
-						<div class="text-2xl font-semibold">
-							The quick brown fox jumps over the lazy dog
+			<div id="zoom" class="scroll-mt-6">
+				<UCard>
+					<template #header>
+						<div class="font-medium">
+							Zoom
 						</div>
-						<div class="text-sm">
-							Sphinx of black quartz, judge my vow. 0123456789
+						<div class="text-xs text-(--ui-text-muted) mt-1">
+							Scales the whole interface — text, icons, spacing, modals.
+							Saved on this machine, separate from business settings.
+							The titlebar and PDFs are intentionally unaffected.
 						</div>
-					</div>
-				</div>
-			</UCard>
+					</template>
 
-			<UCard>
-				<template #header>
-					<div class="font-medium">
-						Theme color
+					<div class="flex flex-wrap gap-2">
+						<button
+							v-for="z in ZOOM_LEVELS"
+							:key="z"
+							type="button"
+							class="rounded-md border px-3 py-1.5 text-sm transition tabular-nums"
+							:class="zoomLevel === z
+								? 'border-(--ui-primary) bg-(--ui-primary)/10 text-(--ui-primary) font-medium'
+								: 'border-(--ui-border) hover:border-(--ui-text-muted)'"
+							@click="setZoomLevel(z)"
+						>
+							{{ z }}%
+						</button>
 					</div>
-					<div class="text-xs text-(--ui-text-muted) mt-1">
-						Drives buttons, links, badges, and the header rule on PDFs.
-					</div>
-				</template>
-
-				<div class="grid grid-cols-4 sm:grid-cols-8 gap-3">
-					<button
-						v-for="c in colors"
-						:key="c.value"
-						type="button"
-						class="group flex flex-col items-center gap-1.5"
-						:title="c.label"
-						@click="themeColor = c.value"
-					>
-						<span
-							class="size-10 rounded-full border-2 transition"
-							:class="themeColor === c.value ? 'border-(--ui-text) scale-110' : 'border-(--ui-border) group-hover:border-(--ui-text-muted)'"
-							:style="{ backgroundColor: c.hex }"
-						/>
-						<span class="text-xs" :class="themeColor === c.value ? 'text-(--ui-text) font-medium' : 'text-(--ui-text-muted)'">
-							{{ c.label }}
-						</span>
-					</button>
-				</div>
-			</UCard>
-
-			<UCard>
-				<template #header>
-					<div class="font-medium">
-						Theme
-					</div>
-					<div class="text-xs text-(--ui-text-muted) mt-1">
-						Light vs dark. Saved on this machine, separate from
-						business settings. "System" follows the OS preference
-						and flips automatically when the OS does.
-					</div>
-				</template>
-
-				<div class="flex flex-wrap gap-2">
-					<button
-						v-for="t in THEME_OPTIONS"
-						:key="t.value"
-						type="button"
-						class="rounded-md border px-3 py-1.5 text-sm transition flex items-center gap-2"
-						:class="colorMode.preference === t.value
-							? 'border-(--ui-primary) bg-(--ui-primary)/10 text-(--ui-primary) font-medium'
-							: 'border-(--ui-border) hover:border-(--ui-text-muted)'"
-						@click="colorMode.preference = t.value"
-					>
-						<UIcon :name="t.icon" class="size-4" />
-						{{ t.label }}
-					</button>
-				</div>
-			</UCard>
-
-			<UCard>
-				<template #header>
-					<div class="font-medium">
-						Zoom
-					</div>
-					<div class="text-xs text-(--ui-text-muted) mt-1">
-						Scales the whole interface — text, icons, spacing, modals.
-						Saved on this machine, separate from business settings.
-						The titlebar and PDFs are intentionally unaffected.
-					</div>
-				</template>
-
-				<div class="flex flex-wrap gap-2">
-					<button
-						v-for="z in ZOOM_LEVELS"
-						:key="z"
-						type="button"
-						class="rounded-md border px-3 py-1.5 text-sm transition tabular-nums"
-						:class="zoomLevel === z
-							? 'border-(--ui-primary) bg-(--ui-primary)/10 text-(--ui-primary) font-medium'
-							: 'border-(--ui-border) hover:border-(--ui-text-muted)'"
-						@click="setZoomLevel(z)"
-					>
-						{{ z }}%
-					</button>
-				</div>
-			</UCard>
+				</UCard>
+			</div>
 
 			<div class="flex justify-end gap-2">
 				<UButton
