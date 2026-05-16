@@ -79,6 +79,7 @@
 										:class="route.hash === section.hash
 											? '!text-(--ui-primary) font-medium'
 											: 'text-(--ui-text-muted)'"
+										@click="scrollToSection(section.hash)"
 									>
 										<UIcon :name="section.icon" class="size-3" />
 										{{ section.label }}
@@ -284,6 +285,18 @@
 	// Reactive current route — used to reveal a child's in-page section
 	// anchors (third nav level) only while that child's page is open.
 	const route = useRoute();
+
+	// Scroll a section anchor into view. The `:to` on the link still
+	// updates the URL hash (which drives the active-section highlight),
+	// but the visible scroll has to be done by hand: the main content
+	// scrolls inside its own container, so Vue Router's hash handling —
+	// which only moves the window — does nothing here. scrollIntoView
+	// walks up to the real scrollable ancestor and respects scroll-margin.
+	const scrollToSection = (hash: string) => {
+		if (typeof document === "undefined") return;
+		const el = document.getElementById(hash.replace(/^#/, ""));
+		el?.scrollIntoView({ behavior: "smooth", block: "start" });
+	};
 
 	// Sidebar nav — Settings is a parent with two children. Sub-items are
 	// always visible (no click-to-expand) since the tree is small.
