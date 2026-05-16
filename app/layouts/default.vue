@@ -370,7 +370,17 @@
 			icon: "i-lucide-app-window",
 			divider: true,
 			children: [
-				{ to: "/settings/appearance", label: "Appearance", icon: "i-lucide-palette" },
+				{
+					to: "/settings/appearance",
+					label: "Appearance",
+					icon: "i-lucide-palette",
+					sections: [
+						{ hash: "#ui-font", label: "UI font", icon: "i-lucide-type" },
+						{ hash: "#theme-color", label: "Theme color", icon: "i-lucide-palette" },
+						{ hash: "#theme", label: "Theme", icon: "i-lucide-sun-moon" },
+						{ hash: "#zoom", label: "Zoom", icon: "i-lucide-zoom-in" }
+					]
+				},
 				{ to: "/settings/businesses", label: "Businesses", icon: "i-lucide-briefcase" }
 			]
 		}
