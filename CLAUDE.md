@@ -264,6 +264,7 @@ sakoram_app/
 │  ├─ plugins/
 │  │  ├─ window-title.client.ts       ← syncs Tauri window title with active tenant
 │  │  ├─ disable-context-menu.client.ts ← suppresses webview right-click on chrome (skips inputs / Shift bypass)
+│  │  ├─ disable-file-drop-nav.client.ts ← preventDefaults document dragover/drop so a stray file drop can't navigate the webview
 │  │  └─ apply-zoom.client.ts         ← writes the user's zoomLevel onto the root <html> font-size
 │  └─ stores/                         ← Pinia composition stores
 │     ├─ settings.ts                  ← company_settings (singleton, per-tenant)
@@ -479,6 +480,22 @@ Custom per-element context menus (e.g. row right-click) just register
 their own `contextmenu` handler — it runs first via bubbling, opens
 the custom menu, calls `preventDefault`. The document-level handler is
 a harmless no-op afterwards.
+
+### Why `dragDropEnabled: false` on the window
+
+Tauri 2 windows default to `dragDropEnabled: true`, which makes the
+native layer intercept OS file drops — the webview never sees an HTML5
+`drop` event, so the logo upload drop zones (PDF header, company
+identity logo) silently don't work. We don't use Tauri's native
+drag-drop API anywhere, so the window sets `dragDropEnabled: false`
+and the webview handles drops natively.
+
+The trade-off: a webview navigates to any file dropped on the page,
+so a stray miss would replace the whole UI. The
+`disable-file-drop-nav.client.ts` plugin `preventDefault`s document
+`dragover` / `drop` so a miss does nothing. Real drop zones register
+their own `drop` handler — it runs first in the bubble chain and reads
+the file; the document-level guard is a no-op afterwards.
 
 ### Why row context menus use `UContextMenu` with as-child trigger
 
