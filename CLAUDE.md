@@ -874,6 +874,10 @@ Lists
 Settings                ← per-tenant business config (exported in backups)
   ├─ Company details
   ├─ PDF
+  │   ├─ Font                ← third-level in-page #anchors, shown only
+  │   ├─ Header logo            while /settings/pdf is the active route
+  │   ├─ Footer notes
+  │   └─ Protection
   └─ Payroll          ← cycle template (period_start_day / period_end_day / pay_day)
 ─── (divider)
 App                     ← UI + multi-tenant administration
@@ -885,6 +889,12 @@ URLs all live under `/settings/*` even for the App group — only the
 sidebar grouping splits them. \`Settings\` items are per-tenant data
 that travels with the export bundle; \`App\` items are UI prefs and
 multi-tenant admin that don't belong to any single business.
+
+The sidebar nav supports three levels: top-level items, `children`
+(always visible), and an optional third level of `sections` — in-page
+`#anchor` links that appear under a child only while that child's own
+route is active (currently just PDF). Section links scroll to the
+matching card; the active section is matched on `route.hash`.
 
 The sidebar itself is a floating card (`m-2 mt-0 rounded-lg shadow-lg`)
 sitting against the floor of the titlebar; main content is flush with

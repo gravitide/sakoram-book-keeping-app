@@ -53,16 +53,38 @@
 					(no click-to-expand) because the tree is small enough that
 					discoverability beats compactness here. -->
 						<div v-if="item.children" class="ml-3 pl-3 border-l border-(--ui-border) space-y-1">
-							<NuxtLink
-								v-for="child in item.children"
-								:key="child.to"
-								:to="child.to"
-								class="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
-								active-class="!text-(--ui-primary) font-medium"
-							>
-								<UIcon :name="child.icon" class="size-3.5" />
-								{{ child.label }}
-							</NuxtLink>
+							<template v-for="child in item.children" :key="child.to">
+								<NuxtLink
+									:to="child.to"
+									class="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
+									active-class="!text-(--ui-primary) font-medium"
+								>
+									<UIcon :name="child.icon" class="size-3.5" />
+									{{ child.label }}
+								</NuxtLink>
+
+								<!-- Third level: in-page section anchors. Shown only while
+							the user is on this child's own page, so the Settings
+							group doesn't balloon on every other route. The active
+							section is matched on the URL hash. -->
+								<div
+									v-if="child.sections && route.path === child.to"
+									class="ml-3 pl-3 border-l border-(--ui-border) space-y-0.5 mt-0.5"
+								>
+									<NuxtLink
+										v-for="section in child.sections"
+										:key="section.hash"
+										:to="`${child.to}${section.hash}`"
+										class="flex items-center gap-2 px-3 py-1 rounded-md text-xs hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
+										:class="route.hash === section.hash
+											? '!text-(--ui-primary) font-medium'
+											: 'text-(--ui-text-muted)'"
+									>
+										<UIcon :name="section.icon" class="size-3" />
+										{{ section.label }}
+									</NuxtLink>
+								</div>
+							</template>
 						</div>
 					</template>
 				</nav>
@@ -259,13 +281,24 @@
 		settings.ensureLoaded().catch(() => { /* surfaced on dashboard */ });
 	});
 
+	// Reactive current route — used to reveal a child's in-page section
+	// anchors (third nav level) only while that child's page is open.
+	const route = useRoute();
+
 	// Sidebar nav — Settings is a parent with two children. Sub-items are
 	// always visible (no click-to-expand) since the tree is small.
 	// Group order: Dashboard → documents (quotes/invoices/bills/vouchers)
 	// → contacts (clients/vendors) → settings. `divider: true` draws a thin
 	// rule above the item so the eye can pick out group boundaries without
 	// reading every label.
-	const nav = [
+	//
+	// A child may carry `sections`: in-page #anchors rendered as a third
+	// level, shown only when the user is on that child's route.
+	interface NavSection { hash: string, label: string, icon: string }
+	interface NavChild { to: string, label: string, icon: string, sections?: NavSection[] }
+	interface NavItem { to: string, label: string, icon: string, divider?: boolean, children?: NavChild[] }
+
+	const nav: NavItem[] = [
 		{ to: "/", label: "Dashboard", icon: "i-lucide-layout-dashboard" },
 		{ to: "/quotes", label: "Quotes", icon: "i-lucide-file-text", divider: true },
 		{ to: "/invoices", label: "Invoices", icon: "i-lucide-receipt" },
@@ -302,7 +335,17 @@
 			divider: true,
 			children: [
 				{ to: "/settings/company", label: "Company details", icon: "i-lucide-building-2" },
-				{ to: "/settings/pdf", label: "PDF", icon: "i-lucide-file-text" },
+				{
+					to: "/settings/pdf",
+					label: "PDF",
+					icon: "i-lucide-file-text",
+					sections: [
+						{ hash: "#font", label: "Font", icon: "i-lucide-type" },
+						{ hash: "#header-logo", label: "Header logo", icon: "i-lucide-image" },
+						{ hash: "#footer-notes", label: "Footer notes", icon: "i-lucide-file-text" },
+						{ hash: "#document-protection", label: "Protection", icon: "i-lucide-shield-check" }
+					]
+				},
 				{ to: "/settings/payroll", label: "Payroll", icon: "i-lucide-calendar-clock" }
 			]
 		},
@@ -318,5 +361,5 @@
 				{ to: "/settings/businesses", label: "Businesses", icon: "i-lucide-briefcase" }
 			]
 		}
-	] as const;
+	];
 </script>
