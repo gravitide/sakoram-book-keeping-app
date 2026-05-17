@@ -94,38 +94,47 @@
 					</tr>
 				</thead>
 				<tbody>
-					<tr
+					<!-- Each row is wrapped in a UContextMenu so right-click
+						surfaces the same actions as the overflow ⋯ button.
+						UContextMenu uses Reka UI's as-child trigger, so the
+						<tr> stays the actual rendered element — no wrapper
+						div between tbody and tr. -->
+					<UContextMenu
 						v-for="c in list.paged"
 						:key="c.id"
-						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-						@click="openClient(c)"
+						:items="itemsFor(c)"
 					>
-						<td class="py-2 pl-3 pr-2 font-medium">
-							<span class="flex items-center gap-2">
-								{{ c.name }}
-								<UBadge v-if="c.is_archived === 1" color="neutral" variant="subtle" size="sm">
-									Archived
-								</UBadge>
-							</span>
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted)">
-							{{ c.contact_person || "—" }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted)">
-							{{ c.email || "—" }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted)">
-							{{ c.phone || "—" }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted)">
-							{{ c.tax_id || "—" }}
-						</td>
-						<td class="py-2 pl-2 pr-3 text-right" @click.stop>
-							<UDropdownMenu :items="itemsFor(c)">
-								<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
-							</UDropdownMenu>
-						</td>
-					</tr>
+						<tr
+							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+							@click="openClient(c)"
+						>
+							<td class="py-2 pl-3 pr-2 font-medium">
+								<span class="flex items-center gap-2">
+									{{ c.name }}
+									<UBadge v-if="c.is_archived === 1" color="neutral" variant="subtle" size="sm">
+										Archived
+									</UBadge>
+								</span>
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted)">
+								{{ c.contact_person || "—" }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted)">
+								{{ c.email || "—" }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted)">
+								{{ c.phone || "—" }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted)">
+								{{ c.tax_id || "—" }}
+							</td>
+							<td class="py-2 pl-2 pr-3 text-right" @click.stop>
+								<UDropdownMenu :items="itemsFor(c)">
+									<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
+								</UDropdownMenu>
+							</td>
+						</tr>
+					</UContextMenu>
 				</tbody>
 			</table>
 
