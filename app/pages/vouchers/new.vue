@@ -79,16 +79,12 @@
 							type="button"
 							:disabled="prefilled"
 							class="flex items-start gap-3 rounded-lg border p-3 text-left transition disabled:cursor-not-allowed"
-							:class="voucherType === choice.value
-								? 'border-(--ui-primary) bg-(--ui-primary)/10 ring-1 ring-(--ui-primary)'
-								: 'border-(--ui-border) hover:border-(--ui-primary)/50 hover:bg-(--ui-bg-muted) disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:border-(--ui-border)'"
+							:class="tileClass(choice.value)"
 							@click="voucherType = choice.value"
 						>
 							<span
 								class="flex size-9 shrink-0 items-center justify-center rounded-md"
-								:class="voucherType === choice.value
-									? 'bg-(--ui-primary) text-(--ui-bg)'
-									: 'bg-(--ui-bg-muted) text-(--ui-text-muted)'"
+								:class="tileChipClass(choice.value)"
 							>
 								<UIcon :name="choice.icon" class="size-5" />
 							</span>
@@ -111,15 +107,7 @@
 						</template>
 					</UFormField>
 					<UFormField label="Amount" required>
-						<UInput
-							:model-value="amountDisplay"
-							placeholder="0.00"
-							@update:model-value="onAmountInput"
-						>
-							<template #trailing>
-								<span class="text-xs text-(--ui-text-muted) pr-1">LKR</span>
-							</template>
-						</UInput>
+						<MoneyInput v-model="amountCents" />
 						<!-- Soft over-payment warning. We don't block the
 							submission — overpayment can legitimately
 							represent a refund, a rounding adjustment, or a
@@ -163,31 +151,13 @@
 				</UFormField>
 
 				<UFormField v-if="voucherType === 'receipt'" label="Linked invoice (optional)">
-					<USelect
-						v-model="relatedInvoiceId"
-						:items="invoiceOptions"
-						value-key="value"
-						class="w-full"
-						:disabled="prefilled"
-					/>
+					<LinkedInvoiceField v-model="relatedInvoiceId" :disabled="prefilled" />
 				</UFormField>
 				<UFormField v-if="voucherType === 'payment'" label="Linked bill (optional)">
-					<USelect
-						v-model="relatedBillId"
-						:items="billOptions"
-						value-key="value"
-						class="w-full"
-						:disabled="prefilled"
-					/>
+					<LinkedBillField v-model="relatedBillId" :disabled="prefilled" />
 				</UFormField>
 				<UFormField v-if="voucherType === 'payment'" label="Linked payslip (optional)">
-					<USelect
-						v-model="relatedPayslipId"
-						:items="payslipOptions"
-						value-key="value"
-						class="w-full"
-						:disabled="prefilled"
-					/>
+					<LinkedPayslipField v-model="relatedPayslipId" :disabled="prefilled" />
 				</UFormField>
 			</div>
 
@@ -214,7 +184,7 @@
 	import type { EmployeeSnapshot } from "~/stores/payslips";
 	import type { ClientSnapshot } from "~/stores/quotes";
 	import type { VoucherInput, VoucherMethod, VoucherType } from "~/stores/vouchers";
-	import { formatLKR, toCents } from "~/lib/money";
+	import { formatLKR } from "~/lib/money";
 	import { useBillsStore } from "~/stores/bills";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { usePayslipsStore } from "~/stores/payslips";
@@ -331,9 +301,6 @@
 		: seedPayslip
 			? payslipsStore.balanceCentsFor(seedPayslip)
 			: seedBill ? billsStore.balanceCentsFor(seedBill) : 0;
-	const seedAmountDisplay = seedAmountCents > 0
-		? `${Math.floor(seedAmountCents / 100)}.${String(seedAmountCents % 100).padStart(2, "0")}`
-		: "";
 
 	const initialType: VoucherType = seedInvoice ? "receipt" : "payment";
 	const initialPartyName = seedInvoice
@@ -357,7 +324,6 @@
 	})();
 	const voucherDate = ref<string>(initialDate);
 	const partyName = ref<string>(initialPartyName);
-	const amountDisplay = ref<string>(seedAmountDisplay);
 	const amountCents = ref<number>(seedAmountCents);
 	const method = ref<VoucherMethod | null>("bank_transfer");
 	const reference = ref<string>("");
@@ -374,6 +340,26 @@
 		{ value: "receipt", label: "Receipt", desc: "Money received", icon: "i-lucide-arrow-down-left" }
 	];
 
+	// Selected-tile colours match the voucher header badge: receipts
+	// green (success), payments amber (warning). Full class strings so
+	// Tailwind's JIT picks them up.
+	const TYPE_ACTIVE: Record<VoucherType, { tile: string, chip: string }> = {
+		payment: {
+			tile: "border-(--ui-warning) bg-(--ui-warning)/10 ring-1 ring-(--ui-warning)",
+			chip: "bg-(--ui-warning) text-(--ui-bg)"
+		},
+		receipt: {
+			tile: "border-(--ui-success) bg-(--ui-success)/10 ring-1 ring-(--ui-success)",
+			chip: "bg-(--ui-success) text-(--ui-bg)"
+		}
+	};
+	const INACTIVE_TILE = "border-(--ui-border) hover:border-(--ui-text-muted)/50 hover:bg-(--ui-bg-muted) disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:border-(--ui-border)";
+	const INACTIVE_CHIP = "bg-(--ui-bg-muted) text-(--ui-text-muted)";
+	const tileClass = (v: VoucherType): string =>
+		voucherType.value === v ? TYPE_ACTIVE[v].tile : INACTIVE_TILE;
+	const tileChipClass = (v: VoucherType): string =>
+		voucherType.value === v ? TYPE_ACTIVE[v].chip : INACTIVE_CHIP;
+
 	const methodOptions: { label: string, value: VoucherMethod | null }[] = [
 		{ label: "Bank transfer", value: "bank_transfer" },
 		{ label: "Cash", value: "cash" },
@@ -382,49 +368,6 @@
 		{ label: "Other", value: "other" },
 		{ label: "—", value: null }
 	];
-
-	// Receipts can link to invoices we've issued; payments can link to bills
-	// we've received. We surface only the relevant set.
-	const invoiceOptions = computed(() => [
-		{ label: "—", value: null },
-		...invoicesStore.invoices
-			.filter((i) => i.status !== "cancelled")
-			.map((i) => ({ label: `${i.number} · ${parseClient(i.client_snapshot)}`, value: i.id }))
-	]);
-	const billOptions = computed(() => [
-		{ label: "—", value: null },
-		...billsStore.bills
-			.filter((b) => b.status !== "cancelled")
-			.map((b) => ({ label: `${b.number} · ${parseSnapshot(b.vendor_snapshot, "(vendor)")}`, value: b.id }))
-	]);
-	const payslipOptions = computed(() => [
-		{ label: "—", value: null },
-		...payslipsStore.payslips
-			.filter((p) => p.status !== "cancelled")
-			.map((p) => ({ label: `${p.number} · ${parsePayslipName(p.employee_snapshot)}`, value: p.id }))
-	]);
-
-	function parsePayslipName(snap: string): string {
-		try {
-			return (JSON.parse(snap) as { full_name?: string }).full_name ?? "(employee)";
-		} catch {
-			return "(employee)";
-		}
-	}
-
-	function parseClient(snap: string): string {
-		return parseSnapshot(snap, "(client)");
-	}
-
-	// Both client and vendor snapshots share the same shape — a JSON
-	// object with at least a `name` field — so one helper covers both.
-	function parseSnapshot(snap: string, fallback: string): string {
-		try {
-			return (JSON.parse(snap) as { name?: string }).name ?? fallback;
-		} catch {
-			return fallback;
-		}
-	}
 
 	// The document the voucher is currently linked to (whether by
 	// prefill or by the user picking from the dropdown). Drives the
@@ -544,13 +487,6 @@
 		return Math.max(0, sumWithThis - linkedDocTotalCents.value);
 	});
 	const overpaying = computed(() => overpaymentCents.value > 0);
-
-	const onAmountInput = (raw: string | number) => {
-		amountDisplay.value = String(raw);
-		try {
-			amountCents.value = toCents(String(raw));
-		} catch { /* ignore */ }
-	};
 
 	const valid = computed(() =>
 		partyName.value.trim() !== ""
