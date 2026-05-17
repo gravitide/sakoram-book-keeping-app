@@ -184,15 +184,7 @@
 
 					<div v-if="pricingMode === 'bundle' && editable" class="space-y-3">
 						<UFormField label="Invoice subtotal" help="Total exclusive of VAT.">
-							<UInput
-								:model-value="bundleSubtotalDisplay"
-								placeholder="0.00"
-								@update:model-value="onBundleSubtotalInput"
-							>
-								<template #trailing>
-									<span class="text-xs text-(--ui-text-muted) pr-1">{{ currency.code }}</span>
-								</template>
-							</UInput>
+							<MoneyInput v-model="bundleSubtotalCents" />
 						</UFormField>
 						<UFormField label="VAT rate (%)" help="Set to 0 for a tax-free invoice.">
 							<UInputNumber
@@ -444,7 +436,7 @@
 	import type { ClientSnapshot, PricingMode } from "~/stores/quotes";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { buildInvoicePdfPayload } from "~/lib/invoice-pdf";
-	import { computeLineTotals, formatLKR, sumCents, toCents } from "~/lib/money";
+	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { useSettingsStore } from "~/stores/settings";
@@ -474,7 +466,6 @@
 	const hydrating = ref(false);
 
 	const bundleSubtotalCents = ref<number>(0);
-	const bundleSubtotalDisplay = ref<string>("");
 	const vatRatePct = ref<number>(0);
 	const formIssueDate = ref("");
 	const formDueDate = ref("");
@@ -564,7 +555,6 @@
 		formPreparedBy.value = row.prepared_by ?? "";
 		vatRatePct.value = row.vat_rate_basis_points / 100;
 		bundleSubtotalCents.value = row.subtotal_cents;
-		bundleSubtotalDisplay.value = centsToRupees(row.subtotal_cents);
 
 		const lineRows: InvoiceLineRow[] = await invoicesStore.getLines(invoiceId);
 		lines.value = lineRows.map((l) => ({
@@ -592,7 +582,7 @@
 	// it. Re-runs of hydrate() reset dirty to false at the end, so the watcher
 	// firing during a re-hydrate is harmless.
 	watch(
-		[formProjectTitle, formIssueDate, formDueDate, formNotes, formTerms, formPreparedBy, vatRatePct],
+		[formProjectTitle, formIssueDate, formDueDate, formNotes, formTerms, formPreparedBy, vatRatePct, bundleSubtotalCents],
 		() => {
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
@@ -608,22 +598,6 @@
 			formDueDate.value = next;
 		}
 	});
-
-	function centsToRupees(c: number): string {
-		if (!Number.isInteger(c) || c === 0) return "";
-		const r = Math.floor(Math.abs(c) / 100);
-		const cs = Math.abs(c) % 100;
-		const sign = c < 0 ? "-" : "";
-		return `${sign}${r}.${cs.toString().padStart(2, "0")}`;
-	}
-
-	const onBundleSubtotalInput = (raw: string | number) => {
-		bundleSubtotalDisplay.value = String(raw);
-		try {
-			bundleSubtotalCents.value = toCents(String(raw));
-			dirty.value = true;
-		} catch { /* ignore */ }
-	};
 
 	const computedTotals = computed(() => {
 		if (pricingMode.value === "itemized") {
