@@ -5,13 +5,13 @@
 			:disabled="disabled"
 			:placeholder="placeholder"
 			class="w-full"
-			:ui="{ trailing: 'pe-1.5' }"
+			:ui="{ base: 'text-right', leading: 'ps-1.5' }"
 			@input="onInput"
 			@focus="onFocus"
 			@blur="onBlur"
 		>
-			<template v-if="showCurrency" #trailing>
-				<span class="text-xs text-(--ui-text-muted) pr-1">{{ currency.code }}</span>
+			<template v-if="showCurrency" #leading>
+				<span class="text-xs text-(--ui-text-muted) pl-1">{{ currency.code }}</span>
 			</template>
 		</UInput>
 		<div v-if="!focused && modelValue !== 0" class="sr-only">
