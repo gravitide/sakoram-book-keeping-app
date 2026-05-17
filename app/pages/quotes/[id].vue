@@ -171,72 +171,78 @@
 				/>
 			</UCard>
 
-			<UCard>
-				<template #header>
-					<div class="font-medium">
-						Totals
-					</div>
-				</template>
-
-				<div v-if="pricingMode === 'bundle'" class="space-y-3">
-					<UFormField label="Quote subtotal" hint="Total price for this quote, exclusive of VAT.">
-						<UInput
-							:model-value="bundleSubtotalDisplay"
-							placeholder="0.00"
-							:disabled="!editable"
-							@update:model-value="onBundleSubtotalInput"
-						>
-							<template #trailing>
-								<span class="text-xs text-(--ui-text-muted) pr-1">{{ currency.code }}</span>
-							</template>
-						</UInput>
-					</UFormField>
-
-					<UFormField label="VAT rate (%)" hint="Set to 0 for a tax-free quote.">
-						<UInputNumber
-							v-model="vatRatePct"
-							:step="0.01"
-							:min="0"
-							:max="100"
-							:disabled="!editable"
-							class="md:w-32"
-						/>
-					</UFormField>
-				</div>
-
-				<div class="border-t border-(--ui-border) pt-4 mt-4 flex justify-end">
-					<div class="text-sm tabular-nums text-right">
-						<div class="text-(--ui-text-muted)">
-							Subtotal: <span class="text-(--ui-text)">{{ formatLKR(computedTotals.subtotal) }}</span>
+			<!-- Totals + Notes share a row on large screens — same layout
+				as the invoice page. Totals is a compact money summary
+				(~2/5); Notes & sign-off takes the wider ~3/5. items-start
+				so the shorter Totals card doesn't stretch. -->
+			<div class="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+				<UCard class="lg:col-span-2">
+					<template #header>
+						<div class="font-medium">
+							Totals
 						</div>
-						<div v-if="computedTotals.tax !== 0" class="text-(--ui-text-muted)">
-							VAT: <span class="text-(--ui-text)">{{ formatLKR(computedTotals.tax) }}</span>
-						</div>
-						<div class="font-semibold text-base mt-1">
-							Total: {{ formatLKR(computedTotals.total) }}
-						</div>
-					</div>
-				</div>
-			</UCard>
+					</template>
 
-			<UCard>
-				<template #header>
-					<div class="font-medium">
-						Notes &amp; sign-off
+					<div v-if="pricingMode === 'bundle'" class="space-y-3">
+						<UFormField label="Quote subtotal" help="Total price for this quote, exclusive of VAT.">
+							<UInput
+								:model-value="bundleSubtotalDisplay"
+								placeholder="0.00"
+								:disabled="!editable"
+								@update:model-value="onBundleSubtotalInput"
+							>
+								<template #trailing>
+									<span class="text-xs text-(--ui-text-muted) pr-1">{{ currency.code }}</span>
+								</template>
+							</UInput>
+						</UFormField>
+
+						<UFormField label="VAT rate (%)" help="Set to 0 for a tax-free quote.">
+							<UInputNumber
+								v-model="vatRatePct"
+								:step="0.01"
+								:min="0"
+								:max="100"
+								:disabled="!editable"
+								class="md:w-32"
+							/>
+						</UFormField>
 					</div>
-				</template>
-				<div class="grid grid-cols-1 gap-4">
-					<UFormField label="Notes" hint="Free text shown below the items table on the PDF.">
-						<UTextarea v-model="formNotes" :rows="6" :disabled="!editable" />
-					</UFormField>
-					<UFormField label="Terms" hint="Optional — if you keep terms separate from notes.">
-						<UTextarea v-model="formTerms" :rows="3" :disabled="!editable" />
-					</UFormField>
-					<UFormField label="Prepared by" hint="Signature line at the bottom of the PDF.">
-						<UInput v-model="formPreparedBy" placeholder="e.g. Your name" :disabled="!editable" />
-					</UFormField>
-				</div>
-			</UCard>
+
+					<div class="border-t border-(--ui-border) pt-4 mt-4 flex justify-end">
+						<div class="text-sm tabular-nums text-right">
+							<div class="text-(--ui-text-muted)">
+								Subtotal: <span class="text-(--ui-text)">{{ formatLKR(computedTotals.subtotal) }}</span>
+							</div>
+							<div v-if="computedTotals.tax !== 0" class="text-(--ui-text-muted)">
+								VAT: <span class="text-(--ui-text)">{{ formatLKR(computedTotals.tax) }}</span>
+							</div>
+							<div class="font-semibold text-base mt-1">
+								Total: {{ formatLKR(computedTotals.total) }}
+							</div>
+						</div>
+					</div>
+				</UCard>
+
+				<UCard class="lg:col-span-3">
+					<template #header>
+						<div class="font-medium">
+							Notes &amp; sign-off
+						</div>
+					</template>
+					<div class="grid grid-cols-1 gap-4">
+						<UFormField label="Notes" hint="Free text shown below the items table on the PDF.">
+							<UTextarea v-model="formNotes" :rows="6" :disabled="!editable" />
+						</UFormField>
+						<UFormField label="Terms" hint="Optional — if you keep terms separate from notes.">
+							<UTextarea v-model="formTerms" :rows="3" :disabled="!editable" />
+						</UFormField>
+						<UFormField label="Prepared by" hint="Signature line at the bottom of the PDF.">
+							<UInput v-model="formPreparedBy" placeholder="e.g. Your name" :disabled="!editable" />
+						</UFormField>
+					</div>
+				</UCard>
+			</div>
 
 			<!-- Sticky save bar — same pattern as Settings → Company and the
 				client / employee edit pages. Pinned to the bottom of the
