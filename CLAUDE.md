@@ -816,8 +816,8 @@ stays consistent and each page stays small:
 `useListView` returns a `reactive()` object so consumers do
 `list.sortKey` / `list.page = 2` (no `.value` noise) and templates
 auto-unwrap. It snaps page back into range when filters shrink the
-list, and resets to page 1 on sort change. Default page size is 10
-(options: 10 / 25 / 50 / 100).
+list, and resets to page 1 on sort change. Default page size is 15
+(options: 10 / 15 / 25 / 50 / 100).
 
 **Sort defaults that match user expectations:**
 - Documents (quotes / invoices / bills): `issue_date` desc — newest first.

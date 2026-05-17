@@ -87,6 +87,7 @@
 
 	const PAGE_SIZE_OPTIONS = [
 		{ label: "10", value: 10 },
+		{ label: "15", value: 15 },
 		{ label: "25", value: 25 },
 		{ label: "50", value: 50 },
 		{ label: "100", value: 100 }
@@ -94,6 +95,6 @@
 
 	const onPageSize = (v: number | string) => {
 		const n = typeof v === "string" ? Number(v) : v;
-		if (n === 10 || n === 25 || n === 50 || n === 100) emit("update:pageSize", n);
+		if (n === 10 || n === 15 || n === 25 || n === 50 || n === 100) emit("update:pageSize", n);
 	};
 </script>
