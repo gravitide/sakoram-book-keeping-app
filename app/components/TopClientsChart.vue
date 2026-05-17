@@ -17,7 +17,7 @@
 		</div>
 
 		<div v-if="rows.length === 0" class="py-8 text-center text-sm text-(--ui-text-muted)">
-			<UIcon name="i-lucide-users" class="size-8 mx-auto mb-2 opacity-50" />
+			<UIcon name="i-lucide-users" class="size-8 block mx-auto mb-2 opacity-50" />
 			No invoiced revenue in the last 12 months yet.
 		</div>
 
