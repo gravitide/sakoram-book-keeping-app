@@ -60,7 +60,15 @@
 		<UCard>
 			<div class="space-y-4">
 				<UFormField label="Type" hint="Cannot be changed — delete and re-create if it was the wrong type.">
-					<UInput :model-value="isReceipt ? 'Receipt' : 'Payment'" disabled />
+					<div class="flex items-start gap-3 rounded-lg border p-3" :class="typeMeta.tile">
+						<span class="flex size-9 shrink-0 items-center justify-center rounded-md" :class="typeMeta.chip">
+							<UIcon :name="typeMeta.icon" class="size-5" />
+						</span>
+						<span class="min-w-0">
+							<span class="block text-sm font-medium">{{ typeMeta.label }}</span>
+							<span class="block text-xs text-(--ui-text-muted)">{{ typeMeta.desc }}</span>
+						</span>
+					</div>
 				</UFormField>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -68,16 +76,7 @@
 						<DateField v-model="voucherDate" :disabled="!editing" />
 					</UFormField>
 					<UFormField label="Amount" required>
-						<UInput
-							:model-value="amountDisplay"
-							placeholder="0.00"
-							:disabled="!editing"
-							@update:model-value="onAmountInput"
-						>
-							<template #trailing>
-								<span class="text-xs text-(--ui-text-muted) pr-1">LKR</span>
-							</template>
-						</UInput>
+						<MoneyInput v-model="amountCents" :disabled="!editing" />
 					</UFormField>
 				</div>
 
@@ -99,14 +98,14 @@
 				</UFormField>
 
 				<UFormField v-if="isReceipt" label="Linked invoice">
-					<USelect v-model="relatedInvoiceId" :items="invoiceOptions" value-key="value" class="w-full" :disabled="!editing" />
+					<LinkedInvoiceField v-model="relatedInvoiceId" :disabled="!editing" />
 				</UFormField>
 				<template v-else>
 					<UFormField label="Linked bill">
-						<USelect v-model="relatedBillId" :items="billOptions" value-key="value" class="w-full" :disabled="!editing" />
+						<LinkedBillField v-model="relatedBillId" :disabled="!editing" />
 					</UFormField>
 					<UFormField label="Linked payslip">
-						<USelect v-model="relatedPayslipId" :items="payslipOptions" value-key="value" class="w-full" :disabled="!editing" />
+						<LinkedPayslipField v-model="relatedPayslipId" :disabled="!editing" />
 					</UFormField>
 				</template>
 
@@ -219,7 +218,7 @@
 
 	import type { VoucherMethod, VoucherRow } from "~/stores/vouchers";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
-	import { formatLKR, toCents } from "~/lib/money";
+	import { formatLKR } from "~/lib/money";
 	import { themeHex } from "~/lib/theme";
 	import { useBillsStore } from "~/stores/bills";
 	import { useInvoicesStore } from "~/stores/invoices";
@@ -256,7 +255,6 @@
 
 	const voucherDate = ref<string>("");
 	const partyName = ref<string>("");
-	const amountDisplay = ref<string>("");
 	const amountCents = ref<number>(0);
 	const method = ref<VoucherMethod | null>(null);
 	const reference = ref<string>("");
@@ -285,7 +283,6 @@
 		voucherDate.value = row.voucher_date;
 		partyName.value = row.party_name;
 		amountCents.value = row.amount_cents;
-		amountDisplay.value = `${Math.floor(row.amount_cents / 100)}.${String(row.amount_cents % 100).padStart(2, "0")}`;
 		method.value = row.payment_method;
 		reference.value = row.reference ?? "";
 		description.value = row.description ?? "";
@@ -301,45 +298,29 @@
 		dirty.value = true;
 	}, { deep: true });
 
-	const onAmountInput = (raw: string | number) => {
-		amountDisplay.value = String(raw);
-		try {
-			amountCents.value = toCents(String(raw));
-		} catch { /* ignore */ }
-	};
-
 	const isReceipt = computed(() => voucher.value?.voucher_type === "receipt");
 
-	const invoiceOptions = computed(() => [
-		{ label: "—", value: null },
-		...invoicesStore.invoices.map((i) => {
-			let name = "(client)";
-			try {
-				name = (JSON.parse(i.client_snapshot) as { name?: string }).name ?? name;
-			} catch { /* ignore */ }
-			return { label: `${i.number} · ${name}`, value: i.id };
-		})
-	]);
-	const billOptions = computed(() => [
-		{ label: "—", value: null },
-		...billsStore.bills.map((b) => {
-			let name = "(vendor)";
-			try {
-				name = (JSON.parse(b.vendor_snapshot) as { name?: string }).name ?? name;
-			} catch { /* ignore */ }
-			return { label: `${b.number} · ${name}`, value: b.id };
-		})
-	]);
-	const payslipOptions = computed(() => [
-		{ label: "—", value: null },
-		...payslipsStore.payslips.map((p) => {
-			let name = "(employee)";
-			try {
-				name = (JSON.parse(p.employee_snapshot) as { full_name?: string }).full_name ?? name;
-			} catch { /* ignore */ }
-			return { label: `${p.number} · ${name}`, value: p.id };
-		})
-	]);
+	// Voucher type rendered as a prominent (read-only) icon card —
+	// mirrors the selectable tiles on the new-voucher page. Type is
+	// locked post-creation, so this is just the one chosen tile.
+	// Colours match the header badge: receipts green, payments amber.
+	const typeMeta = computed(() =>
+		isReceipt.value
+			? {
+				label: "Receipt",
+				desc: "Money received",
+				icon: "i-lucide-arrow-down-left",
+				tile: "border-(--ui-success) bg-(--ui-success)/10 ring-1 ring-(--ui-success)",
+				chip: "bg-(--ui-success) text-(--ui-bg)"
+			}
+			: {
+				label: "Payment",
+				desc: "Money paid out",
+				icon: "i-lucide-arrow-up-right",
+				tile: "border-(--ui-warning) bg-(--ui-warning)/10 ring-1 ring-(--ui-warning)",
+				chip: "bg-(--ui-warning) text-(--ui-bg)"
+			}
+	);
 
 	const linkedInvoice = computed(() =>
 		relatedInvoiceId.value ? invoicesStore.invoices.find((i) => i.id === relatedInvoiceId.value) : null
