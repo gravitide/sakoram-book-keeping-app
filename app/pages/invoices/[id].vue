@@ -1,5 +1,8 @@
 <template>
-	<div v-if="invoice">
+	<div v-if="invoice" class="select-none">
+		<!-- select-none on the page root: labels, totals, and other static
+			copy aren't drag-selectable; form fields stay selectable via the
+			input rule in main.css, so editing a draft invoice still works. -->
 		<header class="mb-6 flex items-start justify-between gap-4 flex-wrap">
 			<div>
 				<NuxtLink to="/invoices" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) flex items-center gap-1">
