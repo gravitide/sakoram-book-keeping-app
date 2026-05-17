@@ -1,5 +1,5 @@
 <template>
-	<div class="max-w-2xl">
+	<div class="max-w-2xl mx-auto">
 		<header class="mb-6">
 			<NuxtLink to="/bills" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) flex items-center gap-1">
 				<UIcon name="i-lucide-arrow-left" class="size-4" />
