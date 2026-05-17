@@ -1,5 +1,8 @@
 <template>
-	<div>
+	<div class="select-none">
+		<!-- select-none on the page root: static labels and copy aren't
+			selectable; form fields stay selectable via the input rule
+			in main.css. -->
 		<!-- Identity hero -------------------------------------------------- -->
 		<section class="mb-10">
 			<div class="flex flex-col md:flex-row md:items-center gap-6">

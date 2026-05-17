@@ -1,8 +1,8 @@
 <template>
-	<!-- select-none on the page root: the dashboard is a glanceable
-		overview (KPI tiles, charts, activity feed), not data the user
-		copies out — so the whole page opts out of text selection. -->
 	<div class="select-none">
+		<!-- select-none on the page root: the dashboard is a glanceable
+			overview (KPI tiles, charts, activity feed), not data the user
+			copies out — so the whole page opts out of text selection. -->
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
 			<div>
 				<h1 class="text-2xl font-semibold">

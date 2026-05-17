@@ -1,5 +1,7 @@
 <template>
-	<div>
+	<div class="select-none">
+		<!-- select-none on the page root: this list is for navigating to
+			quotes, not copying cell text out of the table. -->
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
 			<div>
 				<h1 class="text-2xl font-semibold">

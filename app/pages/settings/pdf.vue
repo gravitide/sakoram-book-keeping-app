@@ -1,5 +1,8 @@
 <template>
-	<div>
+	<div class="select-none">
+		<!-- select-none on the page root: static labels and copy aren't
+			selectable; form fields stay selectable via the input rule
+			in main.css. -->
 		<header class="mb-6 max-w-5xl mx-auto">
 			<h1 class="text-2xl font-semibold">
 				PDF
