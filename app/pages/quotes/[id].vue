@@ -185,16 +185,10 @@
 
 					<div v-if="pricingMode === 'bundle'" class="space-y-3">
 						<UFormField label="Quote subtotal" help="Total price for this quote, exclusive of VAT.">
-							<UInput
-								:model-value="bundleSubtotalDisplay"
-								placeholder="0.00"
+							<MoneyInput
+								v-model="bundleSubtotalCents"
 								:disabled="!editable"
-								@update:model-value="onBundleSubtotalInput"
-							>
-								<template #trailing>
-									<span class="text-xs text-(--ui-text-muted) pr-1">{{ currency.code }}</span>
-								</template>
-							</UInput>
+							/>
 						</UFormField>
 
 						<UFormField label="VAT rate (%)" help="Set to 0 for a tax-free quote.">
@@ -385,7 +379,7 @@
 	import type { ClientRow } from "~/stores/clients";
 	import type { ClientSnapshot, PricingMode, QuoteLineRow, QuoteRow, QuoteStatus } from "~/stores/quotes";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
-	import { computeLineTotals, formatLKR, sumCents, toCents } from "~/lib/money";
+	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
 	import { buildQuotePdfPayload } from "~/lib/quote-pdf";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
@@ -417,7 +411,6 @@
 
 	// Bundle-mode subtotal entered directly (in cents).
 	const bundleSubtotalCents = ref<number>(0);
-	const bundleSubtotalDisplay = ref<string>("");
 	// VAT rate as percent for the UI (e.g. 18 → 18% → 1800 bp).
 	const vatRatePct = ref<number>(0);
 	// Field-level state that mirrors quote columns.
@@ -460,7 +453,6 @@
 		formPreparedBy.value = row.prepared_by ?? "";
 		vatRatePct.value = row.vat_rate_basis_points / 100;
 		bundleSubtotalCents.value = row.subtotal_cents;
-		bundleSubtotalDisplay.value = centsToRupees(row.subtotal_cents);
 
 		const lineRows: QuoteLineRow[] = await quotesStore.getLines(quoteId);
 		lines.value = lineRows.map((l) => ({
@@ -481,7 +473,7 @@
 	// Mark dirty when any directly v-model'd form field changes. Registered
 	// after the initial hydrate; hydrating-flag guards re-hydrate paths.
 	watch(
-		[formProjectTitle, formIssueDate, formValidUntil, formNotes, formTerms, formPreparedBy, vatRatePct],
+		[formProjectTitle, formIssueDate, formValidUntil, formNotes, formTerms, formPreparedBy, vatRatePct, bundleSubtotalCents],
 		() => {
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
@@ -497,22 +489,6 @@
 			formValidUntil.value = next;
 		}
 	});
-
-	function centsToRupees(c: number): string {
-		if (!Number.isInteger(c) || c === 0) return "";
-		const r = Math.floor(Math.abs(c) / 100);
-		const cs = Math.abs(c) % 100;
-		const sign = c < 0 ? "-" : "";
-		return `${sign}${r}.${cs.toString().padStart(2, "0")}`;
-	}
-
-	const onBundleSubtotalInput = (raw: string | number) => {
-		bundleSubtotalDisplay.value = String(raw);
-		try {
-			bundleSubtotalCents.value = toCents(String(raw));
-			dirty.value = true;
-		} catch { /* ignore in-flight invalid */ }
-	};
 
 	const computedTotals = computed(() => {
 		if (pricingMode.value === "itemized") {
