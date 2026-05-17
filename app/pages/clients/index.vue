@@ -94,38 +94,47 @@
 					</tr>
 				</thead>
 				<tbody>
-					<tr
+					<!-- Each row is wrapped in a UContextMenu so right-click
+						surfaces the same actions as the overflow ⋯ button.
+						UContextMenu uses Reka UI's as-child trigger, so the
+						<tr> stays the actual rendered element — no wrapper
+						div between tbody and tr. -->
+					<UContextMenu
 						v-for="c in list.paged"
 						:key="c.id"
-						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-						@click="openClient(c)"
+						:items="itemsFor(c)"
 					>
-						<td class="py-2 pl-3 pr-2 font-medium">
-							<span class="flex items-center gap-2">
-								{{ c.name }}
-								<UBadge v-if="c.is_archived === 1" color="neutral" variant="subtle" size="sm">
-									Archived
-								</UBadge>
-							</span>
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted)">
-							{{ c.contact_person || "—" }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted)">
-							{{ c.email || "—" }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted)">
-							{{ c.phone || "—" }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted)">
-							{{ c.tax_id || "—" }}
-						</td>
-						<td class="py-2 pl-2 pr-3 text-right" @click.stop>
-							<UDropdownMenu :items="itemsFor(c)">
-								<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
-							</UDropdownMenu>
-						</td>
-					</tr>
+						<tr
+							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+							@click="openClient(c)"
+						>
+							<td class="py-2 pl-3 pr-2 font-medium">
+								<span class="flex items-center gap-2">
+									{{ c.name }}
+									<UBadge v-if="c.is_archived === 1" color="neutral" variant="subtle" size="sm">
+										Archived
+									</UBadge>
+								</span>
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted)">
+								{{ c.contact_person || "—" }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted)">
+								{{ c.email || "—" }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted)">
+								{{ c.phone || "—" }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted)">
+								{{ c.tax_id || "—" }}
+							</td>
+							<td class="py-2 pl-2 pr-3 text-right" @click.stop>
+								<UDropdownMenu :items="itemsFor(c)">
+									<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
+								</UDropdownMenu>
+							</td>
+						</tr>
+					</UContextMenu>
 				</tbody>
 			</table>
 
@@ -145,10 +154,16 @@
 	import type { ClientRow } from "~/stores/clients";
 	import { useListView } from "~/composables/useListView";
 	import { useClientsStore } from "~/stores/clients";
+	import { useInvoicesStore } from "~/stores/invoices";
+	import { useQuotesStore } from "~/stores/quotes";
 
 	definePageMeta({ title: "Clients" });
 
 	const store = useClientsStore();
+	// Quote / invoice stores are only touched to hand off a client filter
+	// before navigating — their list pages bind straight to these refs.
+	const quotesStore = useQuotesStore();
+	const invoicesStore = useInvoicesStore();
 	const toast = useToast();
 	const router = useRouter();
 
@@ -190,17 +205,50 @@
 		}
 	};
 
+	// Jump to the Quotes / Invoices list pre-filtered to this client.
+	// Filters live on those stores (Pinia state survives navigation), so
+	// we clear the others and set the client before routing.
+	const viewQuotes = (c: ClientRow) => {
+		quotesStore.search = "";
+		quotesStore.clearStatusFilters();
+		quotesStore.clearDateFilters();
+		quotesStore.clientFilter = c.id;
+		router.push("/quotes");
+	};
+
+	const viewInvoices = (c: ClientRow) => {
+		invoicesStore.search = "";
+		invoicesStore.clearStatusFilters();
+		invoicesStore.clearDateFilters();
+		invoicesStore.clientFilter = c.id;
+		router.push("/invoices");
+	};
+
 	// Build the per-row dropdown items inline since they need the row.
-	const itemsFor = (c: ClientRow) => [[
-		{
-			label: "Edit",
-			icon: "i-lucide-pencil",
-			onSelect: () => openClient(c)
-		},
-		{
-			label: c.is_archived === 0 ? "Archive" : "Restore",
-			icon: c.is_archived === 0 ? "i-lucide-archive" : "i-lucide-archive-restore",
-			onSelect: () => toggleArchive(c)
-		}
-	]];
+	const itemsFor = (c: ClientRow) => [
+		[
+			{
+				label: "View quotes",
+				icon: "i-lucide-file-text",
+				onSelect: () => viewQuotes(c)
+			},
+			{
+				label: "View invoices",
+				icon: "i-lucide-receipt",
+				onSelect: () => viewInvoices(c)
+			}
+		],
+		[
+			{
+				label: "Edit",
+				icon: "i-lucide-pencil",
+				onSelect: () => openClient(c)
+			},
+			{
+				label: c.is_archived === 0 ? "Archive" : "Restore",
+				icon: c.is_archived === 0 ? "i-lucide-archive" : "i-lucide-archive-restore",
+				onSelect: () => toggleArchive(c)
+			}
+		]
+	];
 </script>
