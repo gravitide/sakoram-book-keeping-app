@@ -183,7 +183,7 @@
 					</template>
 
 					<div v-if="pricingMode === 'bundle' && editable" class="space-y-3">
-						<UFormField label="Invoice subtotal" hint="Total exclusive of VAT.">
+						<UFormField label="Invoice subtotal" help="Total exclusive of VAT.">
 							<UInput
 								:model-value="bundleSubtotalDisplay"
 								placeholder="0.00"
@@ -194,7 +194,7 @@
 								</template>
 							</UInput>
 						</UFormField>
-						<UFormField label="VAT rate (%)" hint="Set to 0 for a tax-free invoice.">
+						<UFormField label="VAT rate (%)" help="Set to 0 for a tax-free invoice.">
 							<UInputNumber
 								v-model="vatRatePct"
 								:step="0.01"
