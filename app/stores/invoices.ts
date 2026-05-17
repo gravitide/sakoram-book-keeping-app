@@ -98,6 +98,16 @@ const addDays = (iso: string, days: number): string => {
 	return `${yy}-${mm}-${dd}`;
 };
 
+// Whole-day gap between two YYYY-MM-DD strings (toISO − fromISO).
+const daysBetween = (fromISO: string, toISO: string): number => {
+	const [y1, m1, d1] = fromISO.split("-").map(Number);
+	const [y2, m2, d2] = toISO.split("-").map(Number);
+	if (!y1 || !m1 || !d1 || !y2 || !m2 || !d2) return 0;
+	const a = new Date(y1, m1 - 1, d1).getTime();
+	const b = new Date(y2, m2 - 1, d2).getTime();
+	return Math.round((b - a) / 86_400_000);
+};
+
 const buildClientSnapshot = (
 	c: { name: string, contact_person?: string | null, email?: string | null, phone?: string | null, address_line1?: string | null, address_line2?: string | null, city?: string | null, postal_code?: string | null, country?: string | null, tax_id?: string | null }
 ): string => JSON.stringify({
@@ -396,6 +406,81 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		return invoiceId;
 	};
 
+	// Clone an existing invoice into a fresh draft. Copies the client, line
+	// items, project, VAT rate, notes/terms, and totals; resets status to
+	// 'draft', allocates a new number, drops the source-quote link, and
+	// re-dates it to today. The payment-term length is preserved (due_date
+	// = today + the original issue→due span). Bank details are
+	// re-snapshotted from current settings, same as any new document.
+	const duplicate = async (id: number): Promise<number> => {
+		const src = await get(id);
+		if (!src) throw new Error("duplicate: invoice not found");
+		const srcLines = await getLines(id);
+
+		const issue = todayISO();
+		const span = Math.max(0, daysBetween(src.issue_date, src.due_date));
+		const due = addDays(issue, span);
+
+		const allocation = await allocateDocumentNumber("invoice", issue);
+		const bankSnap = buildBankSnapshot();
+
+		const result = await execute(
+			`INSERT INTO invoices (
+				number, client_id, client_snapshot, source_quote_id,
+				issue_date, due_date, status, pricing_mode, project_title,
+				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents,
+				notes, terms, prepared_by, bank_details_snapshot
+			) VALUES (?, ?, ?, NULL, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			[
+				allocation.number,
+				src.client_id,
+				src.client_snapshot,
+				issue,
+				due,
+				src.pricing_mode,
+				src.project_title,
+				src.vat_rate_basis_points,
+				src.subtotal_cents,
+				src.tax_cents,
+				src.total_cents,
+				src.notes,
+				src.terms,
+				src.prepared_by,
+				bankSnap
+			]
+		);
+		if (result.lastInsertId === undefined) throw new Error("duplicate: no lastInsertId");
+		const newId = result.lastInsertId;
+
+		for (let i = 0; i < srcLines.length; i++) {
+			const l = srcLines[i];
+			if (!l) continue;
+			await execute(
+				`INSERT INTO invoice_lines (
+					invoice_id, sort_order, item_label, description,
+					quantity_milli, unit, unit_price_cents, tax_rate_basis_points,
+					line_subtotal_cents, line_tax_cents, line_total_cents
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				[
+					newId,
+					i,
+					l.item_label,
+					l.description,
+					l.quantity_milli,
+					l.unit,
+					l.unit_price_cents,
+					l.tax_rate_basis_points,
+					l.line_subtotal_cents,
+					l.line_tax_cents,
+					l.line_total_cents
+				]
+			);
+		}
+
+		await load();
+		return newId;
+	};
+
 	type InvoiceUpdate = Partial<Pick<InvoiceRow, | "client_id" | "client_snapshot" | "issue_date" | "due_date"
 		| "pricing_mode" | "project_title"
 		| "vat_rate_basis_points"
@@ -556,6 +641,7 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		getLines,
 		createDraft,
 		createFromQuote,
+		duplicate,
 		update,
 		replaceLines,
 		setStatus,

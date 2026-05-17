@@ -514,6 +514,24 @@
 		router.push(`/vouchers/new?invoice=${i.id}`);
 	};
 
+	// Clone an invoice into a fresh draft and jump straight into it. Same
+	// client / items / totals, a new number, today's issue date, and a
+	// preserved payment-term window. Any failure surfaces as a toast.
+	const onDuplicate = async (i: InvoiceRow) => {
+		try {
+			const newId = await store.duplicate(i.id);
+			toast.add({ title: `Duplicated ${i.number}`, color: "success", icon: "i-lucide-copy" });
+			router.push(`/invoices/${newId}`);
+		} catch (err) {
+			toast.add({
+				title: "Duplicate failed",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
 	const itemsFor = (i: InvoiceRow) => {
 		const lifecycle: { label: string, icon: string, onSelect: () => void }[] = [
 			{ label: "Open", icon: "i-lucide-pencil", onSelect: () => open(i) }
@@ -536,6 +554,13 @@
 				onSelect: () => recordPayment(i)
 			});
 		}
+		const duplicateAction = [{
+			label: "Duplicate",
+			icon: "i-lucide-copy",
+			onSelect: () => {
+				void onDuplicate(i);
+			}
+		}];
 		const exports = [{
 			label: "Generate PDF",
 			icon: "i-lucide-file-down",
@@ -543,6 +568,6 @@
 				void onPdfClick(i);
 			}
 		}];
-		return [lifecycle, exports];
+		return [lifecycle, duplicateAction, exports];
 	};
 </script>

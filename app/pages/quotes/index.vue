@@ -546,9 +546,28 @@
 		}
 	};
 
+	// Clone a quote into a fresh draft and jump straight into it. Same
+	// client / items / totals, a new number, today's issue date, and a
+	// preserved validity window. Refused-state handling lives in the
+	// store; any failure surfaces as a toast.
+	const onDuplicate = async (q: QuoteRow) => {
+		try {
+			const newId = await store.duplicate(q.id);
+			toast.add({ title: `Duplicated ${q.number}`, color: "success", icon: "i-lucide-copy" });
+			router.push(`/quotes/${newId}`);
+		} catch (err) {
+			toast.add({
+				title: "Duplicate failed",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
 	// UDropdownMenu / UContextMenu render a thin divider between each
 	// top-level group. Lifecycle actions (Open, transitions) sit on
-	// top; the export action (Generate PDF) gets its own group below.
+	// top; Duplicate and the export action each get their own group.
 	const itemsFor = (q: QuoteRow) => {
 		const lifecycle: { label: string, icon: string, onSelect: () => void }[] = [
 			{ label: "Open", icon: "i-lucide-pencil", onSelect: () => open(q) }
@@ -575,6 +594,13 @@
 				}
 			});
 		}
+		const duplicateAction = [{
+			label: "Duplicate",
+			icon: "i-lucide-copy",
+			onSelect: () => {
+				void onDuplicate(q);
+			}
+		}];
 		const exports = [{
 			label: "Generate PDF",
 			icon: "i-lucide-file-down",
@@ -582,6 +608,6 @@
 				void onPdfClick(q);
 			}
 		}];
-		return [lifecycle, exports];
+		return [lifecycle, duplicateAction, exports];
 	};
 </script>
