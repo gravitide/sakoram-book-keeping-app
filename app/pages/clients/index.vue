@@ -154,10 +154,16 @@
 	import type { ClientRow } from "~/stores/clients";
 	import { useListView } from "~/composables/useListView";
 	import { useClientsStore } from "~/stores/clients";
+	import { useInvoicesStore } from "~/stores/invoices";
+	import { useQuotesStore } from "~/stores/quotes";
 
 	definePageMeta({ title: "Clients" });
 
 	const store = useClientsStore();
+	// Quote / invoice stores are only touched to hand off a client filter
+	// before navigating — their list pages bind straight to these refs.
+	const quotesStore = useQuotesStore();
+	const invoicesStore = useInvoicesStore();
 	const toast = useToast();
 	const router = useRouter();
 
@@ -199,17 +205,50 @@
 		}
 	};
 
+	// Jump to the Quotes / Invoices list pre-filtered to this client.
+	// Filters live on those stores (Pinia state survives navigation), so
+	// we clear the others and set the client before routing.
+	const viewQuotes = (c: ClientRow) => {
+		quotesStore.search = "";
+		quotesStore.clearStatusFilters();
+		quotesStore.clearDateFilters();
+		quotesStore.clientFilter = c.id;
+		router.push("/quotes");
+	};
+
+	const viewInvoices = (c: ClientRow) => {
+		invoicesStore.search = "";
+		invoicesStore.clearStatusFilters();
+		invoicesStore.clearDateFilters();
+		invoicesStore.clientFilter = c.id;
+		router.push("/invoices");
+	};
+
 	// Build the per-row dropdown items inline since they need the row.
-	const itemsFor = (c: ClientRow) => [[
-		{
-			label: "Edit",
-			icon: "i-lucide-pencil",
-			onSelect: () => openClient(c)
-		},
-		{
-			label: c.is_archived === 0 ? "Archive" : "Restore",
-			icon: c.is_archived === 0 ? "i-lucide-archive" : "i-lucide-archive-restore",
-			onSelect: () => toggleArchive(c)
-		}
-	]];
+	const itemsFor = (c: ClientRow) => [
+		[
+			{
+				label: "View quotes",
+				icon: "i-lucide-file-text",
+				onSelect: () => viewQuotes(c)
+			},
+			{
+				label: "View invoices",
+				icon: "i-lucide-receipt",
+				onSelect: () => viewInvoices(c)
+			}
+		],
+		[
+			{
+				label: "Edit",
+				icon: "i-lucide-pencil",
+				onSelect: () => openClient(c)
+			},
+			{
+				label: c.is_archived === 0 ? "Archive" : "Restore",
+				icon: c.is_archived === 0 ? "i-lucide-archive" : "i-lucide-archive-restore",
+				onSelect: () => toggleArchive(c)
+			}
+		]
+	];
 </script>
