@@ -14,7 +14,7 @@ import type { MaybeRefOrGetter } from "vue";
 import { computed, reactive, ref, toValue, watch } from "vue";
 
 export type SortDir = "asc" | "desc";
-export type PageSize = 10 | 25 | 50 | 100;
+export type PageSize = 10 | 15 | 25 | 50 | 100;
 
 /// Describes one sortable column to the composable. Pages may have more
 /// columns in their template than they register here — only the ones with
@@ -54,7 +54,7 @@ export function useListView<T>(
 ): UseListViewReturn<T> {
 	const sortKey = ref<string | null>(opts.defaultSortKey ?? null);
 	const sortDir = ref<SortDir>(opts.defaultDir ?? "desc");
-	const pageSize = ref<PageSize>(opts.defaultPageSize ?? 10);
+	const pageSize = ref<PageSize>(opts.defaultPageSize ?? 15);
 	const page = ref<number>(1);
 
 	const sorted = computed<T[]>(() => {
