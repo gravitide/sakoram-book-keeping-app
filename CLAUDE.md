@@ -202,16 +202,16 @@ sakoram_app/
 │  │  ├─ index.vue                    ← Dashboard (KPI tiles + 4 charts + recent activity)
 │  │  ├─ welcome.vue                  ← business picker (landing screen); demo-seed overlay while building
 │  │  ├─ onboarding.vue               ← 4-step wizard after creating a new tenant
-│  │  ├─ clients/                     ← list, [id]
+│  │  ├─ clients/                     ← list w/ row context menu (View quotes/invoices), [id]
 │  │  ├─ vendors/                     ← list, [id] (mirrors clients)
-│  │  ├─ employees/                   ← list, [id] (mirrors vendors + payroll fields)
-│  │  ├─ categories/                  ← list page only — modal-driven CRUD for bill categories
+│  │  ├─ employees/                   ← list w/ row context menu, [id] (mirrors vendors + payroll fields)
+│  │  ├─ categories/                  ← list w/ row context menu (Show bills) + bill counts — modal-driven CRUD
 │  │  ├─ quotes/                      ← list w/ row context menu, new, [id] (PDF, convert to invoice)
 │  │  ├─ invoices/                    ← list w/ row context menu, new, [id] (PDF, payment ledger)
 │  │  ├─ bills/                       ← list, new, [id] (vendor-FK + snapshot)
 │  │  ├─ vouchers/                    ← list, new, [id] (money in/out; read-only by default → click Edit to mutate)
 │  │  ├─ payroll/                     ← dashboard (upcoming-cycle hero, MoM chart, recent runs, outstanding)
-│  │  ├─ payslips/                    ← list (multi-select bulk PDF), new, [id], bulk (auto-issue + auto-pay)
+│  │  ├─ payslips/                    ← list w/ row context menu (multi-select bulk PDF), new, [id], bulk (auto-issue + auto-pay)
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
 │  │     ├─ company.vue               ← business info, address, bank, defaults, logo
@@ -504,8 +504,9 @@ when its default slot is populated) means the trigger element passes
 through — no wrapper `<div>` between `<tbody>` and `<tr>`. Valid HTML,
 no layout breakage. Wrapping each row that way gives right-click → the
 same `itemsFor(row)` callback the overflow ⋯ button consumes — so any
-new action lands in both menus automatically. See `app/pages/payslips/index.vue`
-and `app/pages/employees/index.vue` for the pattern.
+new action lands in both menus automatically. The pattern is on the
+quotes, invoices, payslips, employees, clients, and bill-categories
+list pages — see `app/pages/payslips/index.vue` for a reference.
 
 ### Why no text selection on chrome
 
@@ -513,8 +514,16 @@ Sidebar labels, button text, the titlebar title — none of those should
 be drag-selectable. `app/assets/css/main.css` applies `user-select: none`
 to `button`, `a`, `[role="button"]`, `[role="tab"]`, `[role="menuitem"]`,
 and anything inside an element marked `.app-chrome` (e.g. the floating
-sidebar). Data surfaces (page content, tables, form inputs) stay
-selectable so users can copy invoice numbers, totals, names, etc.
+sidebar).
+
+Beyond chrome, most **list, dashboard, and settings pages opt their
+whole root out of selection** with a `select-none` class — they're
+surfaces for navigating and configuring, not for copying text out of.
+To keep form editing usable, `main.css` has a companion rule that
+forces `input` / `textarea` / `[contenteditable]` back to
+`user-select: text`, so drag-select and double-click-a-word still work
+inside a `select-none` page. A leading template comment must stay
+*inside* the root `<div>` — see the single-root-node landmine.
 
 ### Why the PDF preview re-renders to a temp file
 
@@ -796,7 +805,8 @@ stays consistent and each page stays small:
    on the payslips list separates Open / Mark issued from Generate PDF).
    The Reka UI `as-child` trigger on `UContextMenu` keeps `<tr>` as the
    actual DOM element (no wrapper `<div>` between `<tbody>` and `<tr>`).
-   Pattern is now on quotes, invoices, payslips, and employees lists.
+   Pattern is on the quotes, invoices, payslips, employees, clients,
+   and bill-categories lists.
 6. **Filter strip** is consistent across the document lists (quotes,
    invoices, bills, vouchers, payslips):
    - Row 1: search + FK pickers (client/vendor/employee) + **Advanced**
@@ -1009,12 +1019,14 @@ persisted to localStorage).
   scale with UI zoom.
 - ✅ **Disabled defaults**: webview right-click context menu (except
   on inputs), text selection on UI chrome (sidebar, buttons, etc.)
-- ✅ **Row context menus** on the quotes, invoices, payslips, and
-  employees list pages — same items the overflow ⋯ button shows;
-  uses `UContextMenu` with `as-child` trigger so the `<tr>` stays
-  the actual DOM element. Quote / invoice row PDF generation calls
-  shared payload builders in `app/lib/quote-pdf.ts` and
-  `app/lib/invoice-pdf.ts`.
+- ✅ **Row context menus** on the quotes, invoices, payslips,
+  employees, clients, and bill-categories list pages — same items the
+  overflow ⋯ button shows; uses `UContextMenu` with `as-child` trigger
+  so the `<tr>` stays the actual DOM element. Quote / invoice row PDF
+  generation calls shared payload builders in `app/lib/quote-pdf.ts`
+  and `app/lib/invoice-pdf.ts`. The clients menu also offers View
+  quotes / View invoices, and bill categories offers Show bills —
+  each hands a filter to the target list store before navigating.
 - ✅ **Chip-style multi-select filters + Advanced popover** on every
   document list page (quotes, invoices, bills, vouchers, payslips).
   Empty chip set = show everything; multiple chips = union. Date
@@ -1070,9 +1082,10 @@ persisted to localStorage).
 
 - **Cmd/Ctrl+K command palette** — biggest "feels native" win still
   outstanding. Routes + recent docs + new-thing actions in one input.
-- **Bill / vendor context menu + bulk PDF** — the row-context-menu
-  pattern lives on quotes / invoices / payslips / employees today;
-  bills + vouchers + vendors are still dropdown-less.
+- **Bills / vouchers / vendors context menu + bulk PDF** — the
+  row-context-menu pattern is on quotes / invoices / payslips /
+  employees / clients / bill categories today; the bills, vouchers,
+  and vendors list pages are still dropdown-less.
 - **Bill/voucher attachment upload UI** — `attachment_path` columns
   exist on the schema; no UI yet.
 - **DB-side pagination** — see "List view conventions". Today every
