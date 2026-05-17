@@ -170,63 +170,87 @@
 				/>
 			</UCard>
 
-			<UCard>
-				<template #header>
-					<div class="app-chrome font-medium">
-						Totals &amp; payments
+			<!-- Totals + Notes share a row on large screens: Totals is a
+				compact money summary (~2/5), Notes & sign-off takes the
+				wider ~3/5. items-start so the shorter Totals card doesn't
+				stretch. The Payments table sits full-width below. -->
+			<div class="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+				<UCard class="lg:col-span-2">
+					<template #header>
+						<div class="app-chrome font-medium">
+							Totals &amp; payments
+						</div>
+					</template>
+
+					<div v-if="pricingMode === 'bundle' && editable" class="space-y-3">
+						<UFormField label="Invoice subtotal" hint="Total exclusive of VAT.">
+							<UInput
+								:model-value="bundleSubtotalDisplay"
+								placeholder="0.00"
+								@update:model-value="onBundleSubtotalInput"
+							>
+								<template #trailing>
+									<span class="text-xs text-(--ui-text-muted) pr-1">{{ currency.code }}</span>
+								</template>
+							</UInput>
+						</UFormField>
+						<UFormField label="VAT rate (%)" hint="Set to 0 for a tax-free invoice.">
+							<UInputNumber
+								v-model="vatRatePct"
+								:step="0.01"
+								:min="0"
+								:max="100"
+								class="md:w-32"
+							/>
+						</UFormField>
 					</div>
-				</template>
 
-				<div v-if="pricingMode === 'bundle' && editable" class="space-y-3">
-					<UFormField label="Invoice subtotal" hint="Total exclusive of VAT.">
-						<UInput
-							:model-value="bundleSubtotalDisplay"
-							placeholder="0.00"
-							@update:model-value="onBundleSubtotalInput"
-						>
-							<template #trailing>
-								<span class="text-xs text-(--ui-text-muted) pr-1">{{ currency.code }}</span>
-							</template>
-						</UInput>
-					</UFormField>
-					<UFormField label="VAT rate (%)" hint="Set to 0 for a tax-free invoice.">
-						<UInputNumber
-							v-model="vatRatePct"
-							:step="0.01"
-							:min="0"
-							:max="100"
-							class="md:w-32"
-						/>
-					</UFormField>
-				</div>
-
-				<div class="border-t border-(--ui-border) pt-4 mt-4 flex justify-end">
-					<div class="text-sm tabular-nums text-right space-y-0.5">
-						<div class="text-(--ui-text-muted)">
-							Subtotal: <span class="text-(--ui-text)">{{ formatLKR(computedTotals.subtotal) }}</span>
-						</div>
-						<div v-if="computedTotals.tax !== 0" class="text-(--ui-text-muted)">
-							VAT: <span class="text-(--ui-text)">{{ formatLKR(computedTotals.tax) }}</span>
-						</div>
-						<div class="font-semibold text-base">
-							Total: {{ formatLKR(computedTotals.total) }}
-						</div>
-						<div v-if="paidCents > 0" class="text-(--ui-text-muted) pt-1 border-t border-(--ui-border) mt-1">
-							Paid: <span class="text-(--ui-success)">{{ formatLKR(paidCents) }}</span>
-						</div>
-						<div v-if="paidCents > 0 && !overpaid" class="font-semibold" :class="balanceCents === 0 ? 'text-(--ui-success)' : 'text-(--ui-text)'">
-							Balance: {{ formatLKR(balanceCents) }}
-						</div>
-						<!-- Overpaid pill: linked receipts sum to more than the
+					<div class="border-t border-(--ui-border) pt-4 mt-4 flex justify-end">
+						<div class="text-sm tabular-nums text-right space-y-0.5">
+							<div class="text-(--ui-text-muted)">
+								Subtotal: <span class="text-(--ui-text)">{{ formatLKR(computedTotals.subtotal) }}</span>
+							</div>
+							<div v-if="computedTotals.tax !== 0" class="text-(--ui-text-muted)">
+								VAT: <span class="text-(--ui-text)">{{ formatLKR(computedTotals.tax) }}</span>
+							</div>
+							<div class="font-semibold text-base">
+								Total: {{ formatLKR(computedTotals.total) }}
+							</div>
+							<div v-if="paidCents > 0" class="text-(--ui-text-muted) pt-1 border-t border-(--ui-border) mt-1">
+								Paid: <span class="text-(--ui-success)">{{ formatLKR(paidCents) }}</span>
+							</div>
+							<div v-if="paidCents > 0 && !overpaid" class="font-semibold" :class="balanceCents === 0 ? 'text-(--ui-success)' : 'text-(--ui-text)'">
+								Balance: {{ formatLKR(balanceCents) }}
+							</div>
+							<!-- Overpaid pill: linked receipts sum to more than the
 							invoice total. Soft warning — the user might have
 							a legitimate reason (refund correction, advance)
 							but the discrepancy should be visible. -->
-						<div v-if="overpaid" class="font-semibold text-(--ui-warning) pt-0.5">
-							Overpaid by {{ formatLKR(overpaymentCents) }}
+							<div v-if="overpaid" class="font-semibold text-(--ui-warning) pt-0.5">
+								Overpaid by {{ formatLKR(overpaymentCents) }}
+							</div>
 						</div>
 					</div>
-				</div>
-			</UCard>
+				</UCard>
+				<UCard class="lg:col-span-3">
+					<template #header>
+						<div class="app-chrome font-medium">
+							Notes &amp; sign-off
+						</div>
+					</template>
+					<div class="grid grid-cols-1 gap-4">
+						<UFormField label="Notes">
+							<UTextarea v-model="formNotes" :rows="6" :disabled="!editable" />
+						</UFormField>
+						<UFormField label="Terms">
+							<UTextarea v-model="formTerms" :rows="3" :disabled="!editable" />
+						</UFormField>
+						<UFormField label="Prepared by">
+							<UInput v-model="formPreparedBy" :disabled="!editable" />
+						</UFormField>
+					</div>
+				</UCard>
+			</div>
 
 			<!-- Receipt vouchers linked to this invoice. Vouchers are the
 				single source of truth for cash flow — the "paid" /
@@ -306,25 +330,6 @@
 						</tr>
 					</tbody>
 				</table>
-			</UCard>
-
-			<UCard>
-				<template #header>
-					<div class="app-chrome font-medium">
-						Notes &amp; sign-off
-					</div>
-				</template>
-				<div class="grid grid-cols-1 gap-4">
-					<UFormField label="Notes">
-						<UTextarea v-model="formNotes" :rows="6" :disabled="!editable" />
-					</UFormField>
-					<UFormField label="Terms">
-						<UTextarea v-model="formTerms" :rows="3" :disabled="!editable" />
-					</UFormField>
-					<UFormField label="Prepared by">
-						<UInput v-model="formPreparedBy" :disabled="!editable" />
-					</UFormField>
-				</div>
 			</UCard>
 
 			<!-- Sticky save bar — same accented variant the quote / client /
