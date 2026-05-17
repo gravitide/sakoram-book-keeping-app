@@ -479,15 +479,23 @@
 		}
 	);
 
-	// Keep valid_until >= issue_date. min-value on the DateField blocks
-	// the user from picking an earlier date directly; this handles the
-	// reverse: pushing issue_date forward past valid_until drags it
-	// along so the invariant always holds.
+	// Add N days to a YYYY-MM-DD string.
+	function addDays(iso: string, days: number): string {
+		const [y, m, d] = iso.split("-").map(Number);
+		if (!y || !m || !d) return iso;
+		const dt = new Date(y, m - 1, d);
+		dt.setDate(dt.getDate() + days);
+		return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+	}
+
+	// When the issue date changes, re-derive valid_until from the
+	// business's quote-validity setting (issue + N days) — the same rule
+	// the new-quote flow uses — so the validity window tracks Settings
+	// instead of stranding the old date.
 	watch(formIssueDate, (next) => {
 		if (!editable.value || hydrating.value || !next) return;
-		if (formValidUntil.value && formValidUntil.value < next) {
-			formValidUntil.value = next;
-		}
+		const days = settingsStore.settings?.default_quote_validity_days ?? 0;
+		formValidUntil.value = addDays(next, days);
 	});
 
 	const computedTotals = computed(() => {

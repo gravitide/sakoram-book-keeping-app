@@ -588,15 +588,23 @@
 		}
 	);
 
-	// If the user pushes the issue date forward past the due date, drag
-	// the due date along so the invariant 'due >= issue' always holds.
-	// The min-value on the DateField stops them typing/picking an
-	// earlier due date directly; this handles the reverse direction.
+	// Add N days to a YYYY-MM-DD string.
+	function addDays(iso: string, days: number): string {
+		const [y, m, d] = iso.split("-").map(Number);
+		if (!y || !m || !d) return iso;
+		const dt = new Date(y, m - 1, d);
+		dt.setDate(dt.getDate() + days);
+		return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+	}
+
+	// When the issue date changes, re-derive due_date from the business's
+	// payment-terms setting (issue + N days) — the same rule the
+	// new-invoice flow uses — so the due date tracks Settings instead of
+	// stranding the old date.
 	watch(formIssueDate, (next) => {
 		if (!editable.value || hydrating.value || !next) return;
-		if (formDueDate.value && formDueDate.value < next) {
-			formDueDate.value = next;
-		}
+		const days = settingsStore.settings?.default_payment_terms_days ?? 0;
+		formDueDate.value = addDays(next, days);
 	});
 
 	const computedTotals = computed(() => {
