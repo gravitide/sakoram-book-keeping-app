@@ -72,13 +72,32 @@
 				</div>
 
 				<UFormField label="Type" required>
-					<USelect
-						v-model="voucherType"
-						:items="typeOptions"
-						value-key="value"
-						class="w-full"
-						:disabled="prefilled"
-					/>
+					<div class="grid grid-cols-2 gap-3">
+						<button
+							v-for="choice in typeChoices"
+							:key="choice.value"
+							type="button"
+							:disabled="prefilled"
+							class="flex items-start gap-3 rounded-lg border p-3 text-left transition disabled:cursor-not-allowed"
+							:class="voucherType === choice.value
+								? 'border-(--ui-primary) bg-(--ui-primary)/10 ring-1 ring-(--ui-primary)'
+								: 'border-(--ui-border) hover:border-(--ui-primary)/50 hover:bg-(--ui-bg-muted) disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:border-(--ui-border)'"
+							@click="voucherType = choice.value"
+						>
+							<span
+								class="flex size-9 shrink-0 items-center justify-center rounded-md"
+								:class="voucherType === choice.value
+									? 'bg-(--ui-primary) text-(--ui-bg)'
+									: 'bg-(--ui-bg-muted) text-(--ui-text-muted)'"
+							>
+								<UIcon :name="choice.icon" class="size-5" />
+							</span>
+							<span class="min-w-0">
+								<span class="block text-sm font-medium">{{ choice.label }}</span>
+								<span class="block text-xs text-(--ui-text-muted)">{{ choice.desc }}</span>
+							</span>
+						</button>
+					</div>
 				</UFormField>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -348,9 +367,11 @@
 	const relatedPayslipId = ref<number | null>(seedPayslip?.id ?? null);
 	const creating = ref(false);
 
-	const typeOptions: { label: string, value: VoucherType }[] = [
-		{ label: "Payment (we paid out)", value: "payment" },
-		{ label: "Receipt (we received money)", value: "receipt" }
+	// Voucher type rendered as two selectable tiles (not a dropdown) —
+	// directional arrows carry the money-in / money-out meaning.
+	const typeChoices: { value: VoucherType, label: string, desc: string, icon: string }[] = [
+		{ value: "payment", label: "Payment", desc: "Money paid out", icon: "i-lucide-arrow-up-right" },
+		{ value: "receipt", label: "Receipt", desc: "Money received", icon: "i-lucide-arrow-down-left" }
 	];
 
 	const methodOptions: { label: string, value: VoucherMethod | null }[] = [

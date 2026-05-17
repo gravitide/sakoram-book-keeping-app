@@ -176,27 +176,22 @@
 					@update:model-value="onLinesChange"
 				/>
 
-				<div v-if="pricingMode === 'bundle'" class="space-y-3">
-					<UFormField label="Bill subtotal" hint="Total exclusive of VAT.">
-						<UInput
-							:model-value="bundleSubtotalDisplay"
-							placeholder="0.00"
+				<div v-if="pricingMode === 'bundle'" class="flex flex-col items-end gap-3">
+					<UFormField label="Bill subtotal" hint="Total exclusive of VAT." class="w-72">
+						<MoneyInput
+							v-model="bundleSubtotalCents"
 							:disabled="!editable"
-							@update:model-value="onBundleSubtotalInput"
-						>
-							<template #trailing>
-								<span class="text-xs text-(--ui-text-muted) pr-1">{{ currency.code }}</span>
-							</template>
-						</UInput>
+							class="w-full"
+						/>
 					</UFormField>
-					<UFormField label="VAT rate (%)">
+					<UFormField label="VAT rate (%)" class="w-36">
 						<UInputNumber
 							v-model="vatRatePct"
 							:step="0.01"
 							:min="0"
 							:max="100"
 							:disabled="!editable"
-							class="md:w-32"
+							class="w-full"
 						/>
 					</UFormField>
 				</div>
@@ -422,7 +417,7 @@
 	import type { PricingMode } from "~/stores/quotes";
 	import type { VendorRow } from "~/stores/vendors";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
-	import { computeLineTotals, formatLKR, formatQty, formatRate, sumCents, toCents } from "~/lib/money";
+	import { computeLineTotals, formatLKR, formatQty, formatRate, sumCents } from "~/lib/money";
 	import { themeHex } from "~/lib/theme";
 	import { buildCategorySnapshot, useBillCategoriesStore } from "~/stores/bill_categories";
 	import { useBillsStore } from "~/stores/bills";
@@ -469,7 +464,6 @@
 	const hydrating = ref(false);
 
 	const bundleSubtotalCents = ref<number>(0);
-	const bundleSubtotalDisplay = ref<string>("");
 	const vatRatePct = ref<number>(0);
 
 	const formVendorId = ref<number | null>(null);
@@ -543,7 +537,6 @@
 		formNotes.value = row.notes ?? "";
 		vatRatePct.value = row.vat_rate_basis_points / 100;
 		bundleSubtotalCents.value = row.subtotal_cents;
-		bundleSubtotalDisplay.value = centsToRupees(row.subtotal_cents);
 
 		const lineRows: BillLineRow[] = await store.getLines(billId);
 		lines.value = lineRows.map((l) => ({
@@ -564,7 +557,7 @@
 	// Mark dirty when any directly v-model'd form field changes. Registered
 	// after the initial hydrate; hydrating-flag guards re-hydrate paths.
 	watch(
-		[formVendorInvoiceNumber, formIssueDate, formDueDate, formCategoryId, formNotes, vatRatePct],
+		[formVendorInvoiceNumber, formIssueDate, formDueDate, formCategoryId, formNotes, vatRatePct, bundleSubtotalCents],
 		() => {
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
@@ -580,14 +573,6 @@
 		}
 	});
 
-	function centsToRupees(c: number): string {
-		if (!Number.isInteger(c) || c === 0) return "";
-		const r = Math.floor(Math.abs(c) / 100);
-		const cs = Math.abs(c) % 100;
-		const sign = c < 0 ? "-" : "";
-		return `${sign}${r}.${cs.toString().padStart(2, "0")}`;
-	}
-
 	function snapshotForSelectedCategory(): string | null {
 		if (formCategoryId.value === null) return null;
 		const c = categoriesStore.categories.find((row) => row.id === formCategoryId.value);
@@ -602,14 +587,6 @@
 			return "";
 		}
 	}
-
-	const onBundleSubtotalInput = (raw: string | number) => {
-		bundleSubtotalDisplay.value = String(raw);
-		try {
-			bundleSubtotalCents.value = toCents(String(raw));
-			dirty.value = true;
-		} catch { /* ignore */ }
-	};
 
 	const computedTotals = computed(() => {
 		if (pricingMode.value === "itemized") {
