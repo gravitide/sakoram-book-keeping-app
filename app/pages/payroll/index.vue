@@ -1,5 +1,7 @@
 <template>
-	<div>
+	<div class="select-none">
+		<!-- select-none on the page root: the payroll dashboard is a
+			glanceable overview, not data the user copies out. -->
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
 			<div>
 				<h1 class="text-2xl font-semibold">

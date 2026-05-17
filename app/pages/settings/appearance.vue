@@ -1,5 +1,8 @@
 <template>
-	<div>
+	<div class="select-none">
+		<!-- select-none on the page root: static labels and copy aren't
+			selectable; form fields stay selectable via the input rule
+			in main.css. -->
 		<!-- The form is intentionally narrow (max-w-2xl) — the inputs
 			don't benefit from the wider main-content cap the other pages
 			use. Centering it inside the wider container keeps the page

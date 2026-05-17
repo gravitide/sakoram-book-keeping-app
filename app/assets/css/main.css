@@ -141,6 +141,18 @@ label,
 	-webkit-user-select: none;
 }
 
+/* Form fields always stay text-selectable, even inside a page that
+ * opts its root out of selection with `select-none` — editing a field
+ * needs drag-select and double-click-to-select-word to work. A direct
+ * element rule beats the inherited `none` from a `select-none` ancestor. */
+input,
+textarea,
+[contenteditable=""],
+[contenteditable="true"] {
+	user-select: text;
+	-webkit-user-select: text;
+}
+
 /* Slim, app-like scrollbars. The default Chromium scrollbar is too
  * fat for a desktop app — Claude/Notion/VS Code-style thin tracks read
  * as native chrome. Track stays transparent (the underlying surface
