@@ -19,7 +19,7 @@
 		</div>
 
 		<div v-if="total === 0" class="py-8 text-center text-sm text-(--ui-text-muted)">
-			<UIcon name="i-lucide-circle-check" class="size-8 mx-auto mb-2 text-(--ui-success)" />
+			<UIcon name="i-lucide-circle-check" class="size-8 block mx-auto mb-2 text-(--ui-success)" />
 			Everything paid. Nothing outstanding.
 		</div>
 
