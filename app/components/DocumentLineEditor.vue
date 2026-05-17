@@ -4,92 +4,118 @@
 			No items yet. Add a row to start.
 		</div>
 
-		<!-- Bundle mode: just label + description -->
-		<table v-else-if="mode === 'bundle'" class="w-full text-sm">
-			<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-				<tr>
-					<th class="py-2 pr-2 font-medium w-8" />
-					<th class="py-2 pr-2 font-medium w-1/4">
-						Item
-					</th>
-					<th class="py-2 pr-2 font-medium">
-						Description
-					</th>
-					<th class="py-2 pr-2 font-medium w-8" />
-				</tr>
-			</thead>
-			<tbody>
-				<tr v-for="(line, idx) in lines" :key="idx" class="align-top border-b border-(--ui-border)/60 last:border-0">
-					<td class="py-2 pr-2">
-						<div class="flex flex-col gap-0.5">
-							<UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-arrow-up" :disabled="idx === 0 || disabled" @click="moveRow(idx, -1)" />
-							<UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-arrow-down" :disabled="idx === lines.length - 1 || disabled" @click="moveRow(idx, 1)" />
-						</div>
-					</td>
-					<td class="py-2 pr-2">
+		<!-- ───────────────────────── Bundle mode ───────────────────────── -->
+		<template v-else-if="mode === 'bundle'">
+			<!-- Column header — only on wide windows -->
+			<div class="hidden xl:grid xl:grid-cols-[2.25rem_minmax(14rem,24rem)_minmax(0,1fr)_2.25rem] xl:gap-x-3 text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border) pb-2">
+				<span />
+				<span>Item</span>
+				<span>Description</span>
+				<span />
+			</div>
+
+			<div
+				v-for="(line, idx) in lines"
+				:key="idx"
+				class="flex items-stretch rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated)/40 overflow-hidden
+					xl:grid xl:grid-cols-[2.25rem_minmax(14rem,24rem)_minmax(0,1fr)_2.25rem] xl:gap-x-3 xl:items-start
+					xl:rounded-none xl:border-0 xl:border-b xl:border-(--ui-border)/60 xl:bg-transparent xl:overflow-visible"
+				:class="rowStateClass(idx)"
+				@dragover.prevent="onDragOver(idx)"
+				@drop.prevent="onDrop(idx)"
+				@dragend="resetDrag"
+			>
+				<!-- Drag handle rail -->
+				<div
+					class="flex items-center justify-center w-9 shrink-0 border-r border-(--ui-border) text-(--ui-text-dimmed) transition-colors
+						xl:w-auto xl:border-r-0 xl:self-stretch xl:py-3"
+					:class="disabled ? 'opacity-30' : 'cursor-grab active:cursor-grabbing hover:text-(--ui-text) hover:bg-(--ui-bg-elevated)'"
+					:draggable="!disabled"
+					role="button"
+					aria-label="Drag to reorder"
+					@dragstart="onDragStart(idx, $event)"
+				>
+					<UIcon name="i-lucide-grip-vertical" class="size-4" />
+				</div>
+
+				<!-- Content column -->
+				<div class="flex-1 min-w-0 flex flex-col gap-3 p-3 xl:contents">
+					<div class="min-w-0">
 						<UInput
 							:model-value="line.item_label"
 							placeholder="e.g. App development"
 							:disabled="disabled"
+							class="w-full"
 							@update:model-value="updateField(idx, 'item_label', String($event))"
 						/>
-					</td>
-					<td class="py-2 pr-2">
+					</div>
+					<div class="min-w-0">
+						<span class="block xl:hidden text-xs font-medium uppercase tracking-wide text-(--ui-text-muted) mb-1">Description</span>
 						<UTextarea
 							:model-value="line.description"
 							placeholder="Scope details. Use line breaks for sub-points."
 							:rows="3"
 							:disabled="disabled"
+							class="w-full"
 							@update:model-value="updateField(idx, 'description', String($event))"
 						/>
-					</td>
-					<td class="py-2 pr-2">
-						<UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" :disabled="disabled" @click="removeRow(idx)" />
-					</td>
-				</tr>
-			</tbody>
-		</table>
+					</div>
+				</div>
 
-		<!-- Itemized mode: full pricing columns -->
-		<table v-else class="w-full text-sm">
-			<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-				<tr>
-					<th class="py-2 pr-2 font-medium w-8" />
-					<th class="py-2 pr-2 font-medium w-1/4">
-						Item / description
-					</th>
-					<th class="py-2 pr-2 font-medium text-right w-20">
-						Qty
-					</th>
-					<th class="py-2 pr-2 font-medium w-20">
-						Unit
-					</th>
-					<th class="py-2 pr-2 font-medium text-right w-32">
-						Unit price
-					</th>
-					<th class="py-2 pr-2 font-medium text-right w-32">
-						VAT %
-					</th>
-					<th class="py-2 pr-2 font-medium text-right w-32">
-						Total
-					</th>
-					<th class="py-2 pr-2 font-medium w-8" />
-				</tr>
-			</thead>
-			<tbody>
-				<tr v-for="(line, idx) in lines" :key="idx" class="align-top border-b border-(--ui-border)/60 last:border-0">
-					<td class="py-2 pr-2">
-						<div class="flex flex-col gap-0.5">
-							<UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-arrow-up" :disabled="idx === 0 || disabled" @click="moveRow(idx, -1)" />
-							<UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-arrow-down" :disabled="idx === lines.length - 1 || disabled" @click="moveRow(idx, 1)" />
-						</div>
-					</td>
-					<td class="py-2 pr-2">
+				<!-- Delete rail -->
+				<div class="flex items-center justify-center w-9 shrink-0 border-l border-(--ui-border) xl:w-auto xl:border-l-0 xl:self-stretch xl:py-3">
+					<UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" :disabled="disabled" @click="removeRow(idx)" />
+				</div>
+			</div>
+		</template>
+
+		<!-- ──────────────────────── Itemized mode ───────────────────────── -->
+		<template v-else>
+			<!-- Column header — only on wide windows -->
+			<div class="hidden xl:grid xl:grid-cols-[2.25rem_minmax(12rem,1fr)_7.5rem_6rem_9rem_7.5rem_8rem_2.25rem] xl:gap-x-3 text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border) pb-2">
+				<span />
+				<span>Item / description</span>
+				<span class="text-right">Qty</span>
+				<span>Unit</span>
+				<span class="text-right">Unit price</span>
+				<span class="text-right">VAT %</span>
+				<span class="text-right">Total</span>
+				<span />
+			</div>
+
+			<div
+				v-for="(line, idx) in lines"
+				:key="idx"
+				class="flex items-stretch rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated)/40 overflow-hidden
+					xl:grid xl:grid-cols-[2.25rem_minmax(12rem,1fr)_7.5rem_6rem_9rem_7.5rem_8rem_2.25rem] xl:gap-x-3 xl:items-start
+					xl:rounded-none xl:border-0 xl:border-b xl:border-(--ui-border)/60 xl:bg-transparent xl:overflow-visible"
+				:class="rowStateClass(idx)"
+				@dragover.prevent="onDragOver(idx)"
+				@drop.prevent="onDrop(idx)"
+				@dragend="resetDrag"
+			>
+				<!-- Drag handle rail -->
+				<div
+					class="flex items-center justify-center w-9 shrink-0 border-r border-(--ui-border) text-(--ui-text-dimmed) transition-colors
+						xl:w-auto xl:border-r-0 xl:self-stretch xl:py-3"
+					:class="disabled ? 'opacity-30' : 'cursor-grab active:cursor-grabbing hover:text-(--ui-text) hover:bg-(--ui-bg-elevated)'"
+					:draggable="!disabled"
+					role="button"
+					aria-label="Drag to reorder"
+					@dragstart="onDragStart(idx, $event)"
+				>
+					<UIcon name="i-lucide-grip-vertical" class="size-4" />
+				</div>
+
+				<!-- Content column -->
+				<div class="flex-1 min-w-0 flex flex-col gap-3 p-3 xl:contents">
+					<!-- Item / description -->
+					<div class="flex flex-col gap-2 min-w-0">
 						<UInput
 							:model-value="line.item_label"
 							placeholder="Item name"
 							:disabled="disabled"
-							class="mb-1"
+							class="w-full"
 							@update:model-value="updateField(idx, 'item_label', String($event))"
 						/>
 						<UTextarea
@@ -97,58 +123,80 @@
 							placeholder="Description (optional)"
 							:rows="2"
 							:disabled="disabled"
+							class="w-full"
 							@update:model-value="updateField(idx, 'description', String($event))"
 						/>
-					</td>
-					<td class="py-2 pr-2">
-						<UInput
-							:model-value="qtyDisplay(idx)"
-							placeholder="1"
-							class="text-right"
-							:disabled="disabled"
-							@update:model-value="onQty(idx, String($event))"
-						/>
-					</td>
-					<td class="py-2 pr-2">
-						<UInput
-							:model-value="line.unit ?? ''"
-							placeholder="pcs"
-							:disabled="disabled"
-							@update:model-value="updateField(idx, 'unit', String($event) || null)"
-						/>
-					</td>
-					<td class="py-2 pr-2">
-						<MoneyInput
-							:model-value="line.unit_price_cents"
-							:disabled="disabled"
-							@update:model-value="updateField(idx, 'unit_price_cents', $event)"
-						/>
-					</td>
-					<td class="py-2 pr-2">
-						<UInputNumber
-							:model-value="ratePct(idx)"
-							:step="0.01"
-							:min="0"
-							:max="100"
-							:disabled="disabled"
-							@update:model-value="onRate(idx, $event)"
-						/>
-					</td>
-					<td class="py-2 pr-2 text-right tabular-nums whitespace-nowrap">
-						<div>{{ formatLKR(lineTotals(line).line_total_cents) }}</div>
-						<div v-if="line.tax_rate_basis_points !== 0" class="text-xs text-(--ui-text-muted)">
-							{{ formatLKR(lineTotals(line).line_subtotal_cents, { withSymbol: false }) }}
-							+ {{ formatRate(line.tax_rate_basis_points) }}
-						</div>
-					</td>
-					<td class="py-2 pr-2">
-						<UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" :disabled="disabled" @click="removeRow(idx)" />
-					</td>
-				</tr>
-			</tbody>
-		</table>
+					</div>
 
-		<div class="flex items-center justify-between">
+					<!-- Numeric fields: 2×2 on a small card, single row of 4 on a wide card, 4 table columns at xl -->
+					<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 xl:contents">
+						<div class="min-w-0">
+							<span class="block xl:hidden text-xs font-medium uppercase tracking-wide text-(--ui-text-muted) mb-1">Qty</span>
+							<UInputNumber
+								:model-value="qtyNum(idx)"
+								:step="1"
+								:min="0"
+								:format-options="{ maximumFractionDigits: 3 }"
+								class="w-full"
+								:disabled="disabled"
+								@update:model-value="onQty(idx, $event)"
+							/>
+						</div>
+						<div class="min-w-0">
+							<span class="block xl:hidden text-xs font-medium uppercase tracking-wide text-(--ui-text-muted) mb-1">Unit</span>
+							<UInput
+								:model-value="line.unit ?? ''"
+								placeholder="pcs"
+								class="w-full"
+								:disabled="disabled"
+								@update:model-value="updateField(idx, 'unit', String($event) || null)"
+							/>
+						</div>
+						<div class="min-w-0">
+							<span class="block xl:hidden text-xs font-medium uppercase tracking-wide text-(--ui-text-muted) mb-1">Unit price</span>
+							<MoneyInput
+								:model-value="line.unit_price_cents"
+								:disabled="disabled"
+								@update:model-value="updateField(idx, 'unit_price_cents', $event)"
+							/>
+						</div>
+						<div class="min-w-0">
+							<span class="block xl:hidden text-xs font-medium uppercase tracking-wide text-(--ui-text-muted) mb-1">VAT %</span>
+							<UInputNumber
+								:model-value="ratePct(idx)"
+								:step="0.01"
+								:min="0"
+								:max="100"
+								class="w-full"
+								:disabled="disabled"
+								@update:model-value="onRate(idx, $event)"
+							/>
+						</div>
+					</div>
+
+					<!-- Line total -->
+					<div class="flex items-baseline justify-between border-t border-(--ui-border)/60 pt-2 xl:block xl:border-0 xl:pt-0 xl:text-right">
+						<span class="xl:hidden text-xs font-medium uppercase tracking-wide text-(--ui-text-muted)">Total</span>
+						<div class="tabular-nums whitespace-nowrap">
+							<div class="font-medium">
+								{{ formatLKR(lineTotals(line).line_total_cents) }}
+							</div>
+							<div v-if="line.tax_rate_basis_points !== 0" class="text-xs text-(--ui-text-muted)">
+								{{ formatLKR(lineTotals(line).line_subtotal_cents, { withSymbol: false }) }}
+								+ {{ formatRate(line.tax_rate_basis_points) }}
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- Delete rail -->
+				<div class="flex items-center justify-center w-9 shrink-0 border-l border-(--ui-border) xl:w-auto xl:border-l-0 xl:self-stretch xl:py-3">
+					<UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" :disabled="disabled" @click="removeRow(idx)" />
+				</div>
+			</div>
+		</template>
+
+		<div class="flex flex-wrap items-center justify-between gap-3">
 			<UButton variant="outline" icon="i-lucide-plus" size="sm" :disabled="disabled" @click="addRow">
 				Add row
 			</UButton>
@@ -181,11 +229,20 @@
 //   itemized  — each line carries qty / unit / unit_price / tax %. Line
 //               totals + the document subtotal are computed live below.
 //
+// Layout: each line is a card on narrow windows and reflows into a dense
+// table row at the `xl` breakpoint. The drag handle and delete button live
+// in full-height rails on the card's left/right edges so the content
+// column's fields all share one width. The numeric fields use an
+// `xl:contents` wrapper so the same 2×2 narrow grid promotes to four table
+// columns when wide — one template, no markup duplication.
+//
+// Rows reorder by dragging the grip handle (native HTML5 drag-and-drop).
+//
 // The component owns no data — the parent passes lines via v-model and we
 // emit changes back. Totals are recomputed on every change so the parent
 // can show live grand totals.
 
-	import { computeLineTotals, formatLKR, formatRate, sumCents, toMilli } from "~/lib/money";
+	import { computeLineTotals, formatLKR, formatRate, sumCents } from "~/lib/money";
 
 	export interface LineDraft {
 		item_label: string
@@ -226,18 +283,6 @@
 		emit("update:modelValue", lines.value.filter((_, i) => i !== idx));
 	};
 
-	const moveRow = (idx: number, dir: -1 | 1) => {
-		const target = idx + dir;
-		if (target < 0 || target >= lines.value.length) return;
-		const next = lines.value.slice();
-		const a = next[idx];
-		const b = next[target];
-		if (!a || !b) return;
-		next[idx] = b;
-		next[target] = a;
-		emit("update:modelValue", next);
-	};
-
 	const updateField = <K extends keyof LineDraft>(idx: number, key: K, value: LineDraft[K]) => {
 		const next = lines.value.slice();
 		const row = next[idx];
@@ -246,22 +291,62 @@
 		emit("update:modelValue", next);
 	};
 
-	// String mirrors so the user can type freely. We push to integer state on
-	// change. (For qty: type "2.5" or "0.125" — converted via toMilli.)
-	const qtyDisplay = (idx: number) => {
-		const row = lines.value[idx];
-		if (!row) return "";
-		const m = row.quantity_milli;
-		if (m === 0) return "";
-		const intPart = Math.floor(m / 1000);
-		const frac = m % 1000;
-		if (frac === 0) return intPart.toString();
-		return `${intPart}.${frac.toString().padStart(3, "0").replace(/0+$/, "")}`;
+	// ── Drag-to-reorder (native HTML5 DnD, initiated from the grip handle) ──
+	// dragIndex  — the row currently being dragged
+	// dragOverIndex — the row the pointer is hovering as a drop target
+	const dragIndex = ref<number | null>(null);
+	const dragOverIndex = ref<number | null>(null);
+
+	const resetDrag = () => {
+		dragIndex.value = null;
+		dragOverIndex.value = null;
 	};
-	const onQty = (idx: number, raw: string) => {
-		try {
-			updateField(idx, "quantity_milli", toMilli(raw));
-		} catch { /* invalid in-flight, ignore */ }
+
+	const onDragStart = (idx: number, e: DragEvent) => {
+		if (props.disabled) return;
+		dragIndex.value = idx;
+		if (e.dataTransfer) {
+			e.dataTransfer.effectAllowed = "move";
+			// Some browsers refuse to start a drag unless data is set.
+			e.dataTransfer.setData("text/plain", String(idx));
+		}
+	};
+
+	const onDragOver = (idx: number) => {
+		if (dragIndex.value !== null) dragOverIndex.value = idx;
+	};
+
+	const onDrop = (idx: number) => {
+		const from = dragIndex.value;
+		if (from !== null && from !== idx) {
+			const next = lines.value.slice();
+			const [moved] = next.splice(from, 1);
+			if (moved) {
+				next.splice(idx, 0, moved);
+				emit("update:modelValue", next);
+			}
+		}
+		resetDrag();
+	};
+
+	// Visual state for a row mid-drag: dim the row being dragged, ring the
+	// row it would drop onto.
+	const rowStateClass = (idx: number) => ({
+		"opacity-40": dragIndex.value === idx,
+		"ring-2 ring-(--ui-primary) ring-offset-1 ring-offset-(--ui-bg)":
+			dragOverIndex.value === idx && dragIndex.value !== null && dragIndex.value !== idx
+	});
+
+	// Qty is stored as quantity_milli (qty × 1000, 3 decimal places). The
+	// UInputNumber works in plain decimal units; convert on the way in/out.
+	const qtyNum = (idx: number) => {
+		const row = lines.value[idx];
+		return row ? row.quantity_milli / 1000 : 0;
+	};
+	const onQty = (idx: number, raw: number | string) => {
+		const n = typeof raw === "string" ? Number(raw) : raw;
+		if (!Number.isFinite(n) || n < 0) return;
+		updateField(idx, "quantity_milli", Math.round(n * 1000));
 	};
 
 	const ratePct = (idx: number) => {

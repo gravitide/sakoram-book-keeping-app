@@ -197,7 +197,7 @@
 						</UFormField>
 					</div>
 
-					<div class="border-t border-(--ui-border) pt-4 mt-4 flex justify-end">
+					<div class="flex justify-end" :class="{ 'border-t border-(--ui-border) pt-4 mt-4': pricingMode === 'bundle' && editable }">
 						<div class="text-sm tabular-nums text-right space-y-0.5">
 							<div class="text-(--ui-text-muted)">
 								Subtotal: <span class="text-(--ui-text)">{{ formatLKR(computedTotals.subtotal) }}</span>
