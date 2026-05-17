@@ -235,6 +235,16 @@ export const useQuotesStore = defineStore("quotes", () => {
 		return `${yy}-${mm}-${dd}`;
 	};
 
+	// Whole-day gap between two YYYY-MM-DD strings (toISO − fromISO).
+	const daysBetween = (fromISO: string, toISO: string): number => {
+		const [y1, m1, d1] = fromISO.split("-").map(Number);
+		const [y2, m2, d2] = toISO.split("-").map(Number);
+		if (!y1 || !m1 || !d1 || !y2 || !m2 || !d2) return 0;
+		const a = new Date(y1, m1 - 1, d1).getTime();
+		const b = new Date(y2, m2 - 1, d2).getTime();
+		return Math.round((b - a) / 86_400_000);
+	};
+
 	const createDraft = async (input: { client: ClientSnapshot & { id: number }, project_title?: string }): Promise<number> => {
 		const settingsStore = useSettingsStore();
 		await settingsStore.ensureLoaded();
@@ -276,6 +286,81 @@ export const useQuotesStore = defineStore("quotes", () => {
 		if (result.lastInsertId === undefined) throw new Error("createDraft: no lastInsertId");
 		await load();
 		return result.lastInsertId;
+	};
+
+	// Clone an existing quote into a fresh draft. Copies the client, line
+	// items, project, VAT rate, notes/terms, and totals; resets status to
+	// 'draft', allocates a new number, and re-dates it to today. The
+	// validity window length is preserved (valid_until = today + the
+	// original issue→valid span). Bank details are re-snapshotted from
+	// current settings, same as any other freshly-created document.
+	const duplicate = async (id: number): Promise<number> => {
+		const src = await get(id);
+		if (!src) throw new Error("duplicate: quote not found");
+		const srcLines = await getLines(id);
+
+		const issue = todayISO();
+		const span = Math.max(0, daysBetween(src.issue_date, src.valid_until));
+		const validUntil = addDaysSafe(issue, span);
+
+		const allocation = await allocateDocumentNumber("quote", issue);
+		const bankSnap = buildBankSnapshot();
+
+		const result = await execute(
+			`INSERT INTO quotes (
+				number, client_id, client_snapshot, issue_date, valid_until,
+				status, pricing_mode, project_title,
+				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents,
+				notes, terms, prepared_by, bank_details_snapshot
+			) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			[
+				allocation.number,
+				src.client_id,
+				src.client_snapshot,
+				issue,
+				validUntil,
+				src.pricing_mode,
+				src.project_title,
+				src.vat_rate_basis_points,
+				src.subtotal_cents,
+				src.tax_cents,
+				src.total_cents,
+				src.notes,
+				src.terms,
+				src.prepared_by,
+				bankSnap
+			]
+		);
+		if (result.lastInsertId === undefined) throw new Error("duplicate: no lastInsertId");
+		const newId = result.lastInsertId;
+
+		for (let i = 0; i < srcLines.length; i++) {
+			const l = srcLines[i];
+			if (!l) continue;
+			await execute(
+				`INSERT INTO quote_lines (
+					quote_id, sort_order, item_label, description,
+					quantity_milli, unit, unit_price_cents, tax_rate_basis_points,
+					line_subtotal_cents, line_tax_cents, line_total_cents
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				[
+					newId,
+					i,
+					l.item_label,
+					l.description,
+					l.quantity_milli,
+					l.unit,
+					l.unit_price_cents,
+					l.tax_rate_basis_points,
+					l.line_subtotal_cents,
+					l.line_tax_cents,
+					l.line_total_cents
+				]
+			);
+		}
+
+		await load();
+		return newId;
 	};
 
 	type QuoteUpdate = Partial<Pick<QuoteRow, | "client_id" | "client_snapshot" | "issue_date" | "valid_until"
@@ -452,6 +537,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 		get,
 		getLines,
 		createDraft,
+		duplicate,
 		update,
 		replaceLines,
 		setStatus,
