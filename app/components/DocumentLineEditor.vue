@@ -18,7 +18,7 @@
 				v-for="(line, idx) in lines"
 				:key="idx"
 				class="flex items-stretch rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated)/40 overflow-hidden
-					xl:grid xl:grid-cols-[2.25rem_minmax(14rem,24rem)_minmax(0,1fr)_2.25rem] xl:gap-x-3 xl:items-start
+					xl:grid xl:grid-cols-[2.25rem_minmax(14rem,24rem)_minmax(0,1fr)_2.25rem] xl:gap-x-3 xl:items-start xl:py-3
 					xl:rounded-none xl:border-0 xl:border-b xl:border-(--ui-border)/60 xl:bg-transparent xl:overflow-visible"
 				:class="rowStateClass(idx)"
 				@dragover.prevent="onDragOver(idx)"
@@ -28,7 +28,7 @@
 				<!-- Drag handle rail -->
 				<div
 					class="flex items-center justify-center w-9 shrink-0 border-r border-(--ui-border) text-(--ui-text-dimmed) transition-colors
-						xl:w-auto xl:border-r-0 xl:self-stretch xl:py-3"
+						xl:w-auto xl:border-r-0 xl:self-stretch xl:py-3 xl:rounded-md"
 					:class="disabled ? 'opacity-30' : 'cursor-grab active:cursor-grabbing hover:text-(--ui-text) hover:bg-(--ui-bg-elevated)'"
 					:draggable="!disabled"
 					role="button"
@@ -87,7 +87,7 @@
 				v-for="(line, idx) in lines"
 				:key="idx"
 				class="flex items-stretch rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated)/40 overflow-hidden
-					xl:grid xl:grid-cols-[2.25rem_minmax(12rem,1fr)_7.5rem_6rem_9rem_7.5rem_8rem_2.25rem] xl:gap-x-3 xl:items-start
+					xl:grid xl:grid-cols-[2.25rem_minmax(12rem,1fr)_7.5rem_6rem_9rem_7.5rem_8rem_2.25rem] xl:gap-x-3 xl:items-start xl:py-3
 					xl:rounded-none xl:border-0 xl:border-b xl:border-(--ui-border)/60 xl:bg-transparent xl:overflow-visible"
 				:class="rowStateClass(idx)"
 				@dragover.prevent="onDragOver(idx)"
@@ -97,7 +97,7 @@
 				<!-- Drag handle rail -->
 				<div
 					class="flex items-center justify-center w-9 shrink-0 border-r border-(--ui-border) text-(--ui-text-dimmed) transition-colors
-						xl:w-auto xl:border-r-0 xl:self-stretch xl:py-3"
+						xl:w-auto xl:border-r-0 xl:self-stretch xl:py-3 xl:rounded-md"
 					:class="disabled ? 'opacity-30' : 'cursor-grab active:cursor-grabbing hover:text-(--ui-text) hover:bg-(--ui-bg-elevated)'"
 					:draggable="!disabled"
 					role="button"
