@@ -1,6 +1,6 @@
 [package]
 name = "sakoram_billing"
-version = "0.63.2"
+version = "0.64.0"
 description = "Sakoram Bookkeeping — desktop app for quotes, invoices, bills and vouchers"
 authors = [ "Sakoram" ]
 license = "MIT"
@@ -27,6 +27,22 @@ tauri-plugin-store = "2.4.2"
 tauri-plugin-dialog = "2.7"
 serde_json = "1"
 thiserror = "2"
+
+# Phone-upload feature (src/phone_upload.rs): a small LAN HTTP server so a
+# photo taken on the user's phone can be pushed straight onto an invoice.
+# axum serves the capture page + multipart upload endpoint; local-ip-address
+# resolves this machine's LAN address for the QR; infer content-sniffs the
+# uploaded bytes so a forged Content-Type can't smuggle a non-image through.
+axum = { version = "0.8", features = [ "multipart" ] }
+tokio = { version = "1", features = [
+	"net",
+	"time",
+	"sync",
+	"rt"
+] }
+local-ip-address = "0.6"
+infer = "0.16"
+uuid = { version = "1", features = [ "v4" ] }
 
 # Used directly by the tenants module to run migrations on per-business DBs
 # (tauri-plugin-sql's static add_migrations can't register URLs added at

@@ -5,6 +5,7 @@ use tauri::{
 };
 mod data_io;
 mod pdf;
+mod phone_upload;
 mod tenants;
 
 // Multi-tenancy: each business has its own SQLite file under
@@ -46,6 +47,7 @@ pub fn run() {
 		.plugin(tauri_plugin_os::init())
 		.plugin(tauri_plugin_fs::init())
 		.plugin(tauri_plugin_store::Builder::new().build())
+		.manage(phone_upload::PhoneUploadState::default())
 		.invoke_handler(tauri::generate_handler![
 			pdf::export_quote_pdf,
 			pdf::export_invoice_pdf,
@@ -65,6 +67,9 @@ pub fn run() {
 			data_io::export_tenant_data,
 			data_io::peek_export_manifest,
 			data_io::import_tenant_data,
+			phone_upload::start_phone_upload,
+			phone_upload::cancel_phone_upload,
+			phone_upload::import_invoice_attachment,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
