@@ -64,6 +64,13 @@
 				{ "path": "$APPLOCALDATA/**" }
 			]
 		},
+		{
+			"identifier": "fs:allow-remove",
+			"allow": [
+				{ "path": "$APPDATA/**" },
+				{ "path": "$APPLOCALDATA/**" }
+			]
+		},
 		"shell:allow-open",
 		{
 			"identifier": "shell:allow-execute",

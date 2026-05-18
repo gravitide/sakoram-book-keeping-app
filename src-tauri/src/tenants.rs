@@ -63,6 +63,7 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(18, "employee number", include_str!("../migrations/0018_employee_number.sql")),
 	(19, "payroll cycle", include_str!("../migrations/0019_payroll_cycle.sql")),
 	(20, "pdf protection", include_str!("../migrations/0020_pdf_protection.sql")),
+	(21, "invoice attachments", include_str!("../migrations/0021_invoice_attachments.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -522,6 +523,15 @@ pub async fn create_tenant_internal(app: &AppHandle, name: &str) -> Result<Tenan
 	}
 	write_registry(app, &reg)?;
 	Ok(tenant)
+}
+
+/// The active tenant's slug, or an error if no business is selected.
+/// Consumed by the phone-upload module to scope attachment files per
+/// business (invoice IDs are only unique within a single tenant DB).
+pub fn active_tenant_id(app: &AppHandle) -> Result<String, String> {
+	read_registry(app)?
+		.active_tenant_id
+		.ok_or_else(|| "No active business selected".into())
 }
 
 pub fn set_tenant_logo_internal(
