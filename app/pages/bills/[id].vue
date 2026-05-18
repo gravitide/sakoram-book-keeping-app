@@ -313,6 +313,10 @@
 				<UTextarea v-model="formNotes" :rows="4" :disabled="!editable" placeholder="Internal notes about this bill" />
 			</UCard>
 
+			<!-- Attachments — scans / photos of the vendor's bill. Shared
+				card, same as the quote / invoice / voucher detail pages. -->
+			<AttachmentsCard document-type="bill" :document-id="billId" />
+
 			<!-- Sticky save bar — matches the quote / invoice variant. -->
 			<div
 				v-if="editable"

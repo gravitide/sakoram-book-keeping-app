@@ -50,8 +50,11 @@ const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
 // ---------- Shared state ----------------------------------------------------
 
 struct Session {
-	invoice_id: String,
-	/// Directory the photos land in: invoice_attachments/<tenant>/<invoice>.
+	/// The document this session attaches photos to — one of
+	/// quote / invoice / bill / voucher.
+	document_type: String,
+	document_id: String,
+	/// Directory the photos land in: attachments/<tenant>/<type>/<id>.
 	save_dir: PathBuf,
 	/// Wall-clock expiry. Pruned by the background sweeper and checked on
 	/// every request.
@@ -174,17 +177,48 @@ fn pick_lan_ip() -> Result<IpAddr, String> {
 		.map_err(|e| format!("could not determine this machine's LAN address: {e}"))
 }
 
-/// Resolve (and create) the attachment directory for an invoice in the
-/// active tenant.
-fn attachment_dir(app: &AppHandle, invoice_id: &str) -> Result<PathBuf, String> {
+/// The four document types that can carry attachments. Validated before
+/// any value reaches the filesystem — it becomes a path segment.
+const DOCUMENT_TYPES: &[&str] = &["quote", "invoice", "bill", "voucher"];
+
+/// Reject anything that isn't a known document type or a plain numeric
+/// row id, so neither can smuggle path separators / traversal.
+fn validate_doc(document_type: &str, document_id: &str) -> Result<(), String> {
+	if !DOCUMENT_TYPES.contains(&document_type) {
+		return Err(format!("unknown document type: {document_type}"));
+	}
+	if document_id.is_empty() || !document_id.bytes().all(|b| b.is_ascii_digit()) {
+		return Err(format!("invalid document id: {document_id}"));
+	}
+	Ok(())
+}
+
+/// The attachment directory for a document in the active tenant:
+/// attachments/<tenant>/<type>/<id>. Does not create it.
+fn attachment_dir_path(
+	app: &AppHandle,
+	document_type: &str,
+	document_id: &str,
+) -> Result<PathBuf, String> {
+	validate_doc(document_type, document_id)?;
 	let tenant = tenants::active_tenant_id(app)?;
-	let dir = app
+	Ok(app
 		.path()
 		.app_data_dir()
 		.map_err(|e| e.to_string())?
-		.join("invoice_attachments")
+		.join("attachments")
 		.join(tenant)
-		.join(invoice_id);
+		.join(document_type)
+		.join(document_id))
+}
+
+/// Same, but creates the directory — used by the two write paths.
+fn attachment_dir(
+	app: &AppHandle,
+	document_type: &str,
+	document_id: &str,
+) -> Result<PathBuf, String> {
+	let dir = attachment_dir_path(app, document_type, document_id)?;
 	std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 	Ok(dir)
 }
@@ -195,8 +229,11 @@ fn attachment_dir(app: &AppHandle, invoice_id: &str) -> Result<PathBuf, String> 
 pub async fn start_phone_upload(
 	app: AppHandle,
 	state: tauri::State<'_, PhoneUploadState>,
-	invoice_id: String,
+	document_type: String,
+	document_id: String,
 ) -> Result<UploadSession, String> {
+	// Validate up front so a bad type/id fails before the server starts.
+	validate_doc(&document_type, &document_id)?;
 	// Start the server on first use. Bind to an ephemeral port so we never
 	// collide with whatever else is on the machine.
 	let port = {
@@ -255,12 +292,12 @@ pub async fn start_phone_upload(
 	let ip = pick_lan_ip()?;
 
 	let token = uuid::Uuid::new_v4().to_string();
-	let save_dir = attachment_dir(&app, &invoice_id)?;
+	let save_dir = attachment_dir(&app, &document_type, &document_id)?;
 	let expires_at = SystemTime::now() + SESSION_TTL;
 
 	state.sessions.lock().await.insert(
 		token.clone(),
-		Session { invoice_id, save_dir, expires_at },
+		Session { document_type, document_id, save_dir, expires_at },
 	);
 
 	Ok(UploadSession {
@@ -281,14 +318,15 @@ pub async fn cancel_phone_upload(
 }
 
 /// Import a file the user picked from the desktop file dialog. Validates
-/// it's an image, copies it into the invoice's attachment directory under
-/// our own UUID filename, and returns the metadata the JS store needs to
-/// record the row. Mirrors the shape of the `phone-upload-received` event
-/// so both upload paths feed one insert function.
+/// it's an image, copies it into the document's attachment directory
+/// under our own UUID filename, and returns the metadata the JS store
+/// needs to record the row. Mirrors the shape of the
+/// `phone-upload-received` event so both upload paths feed one insert.
 #[tauri::command]
-pub async fn import_invoice_attachment(
+pub async fn import_document_attachment(
 	app: AppHandle,
-	invoice_id: String,
+	document_type: String,
+	document_id: String,
 	src_path: String,
 ) -> Result<AttachmentFile, String> {
 	let bytes = std::fs::read(&src_path).map_err(|e| format!("could not read file: {e}"))?;
@@ -296,7 +334,7 @@ pub async fn import_invoice_attachment(
 	if kind.matcher_type() != infer::MatcherType::Image {
 		return Err("Only image files can be attached".into());
 	}
-	let dir = attachment_dir(&app, &invoice_id)?;
+	let dir = attachment_dir(&app, &document_type, &document_id)?;
 	let ext = kind.extension();
 	let stored = format!("{}.{ext}", uuid::Uuid::new_v4());
 	let dest = dir.join(&stored);
@@ -314,6 +352,23 @@ pub async fn import_invoice_attachment(
 		size: bytes.len() as u64,
 		mime: kind.mime_type().to_string(),
 	})
+}
+
+/// Delete every attachment file for a document — called when the
+/// document itself is deleted. The `document_attachments` table is
+/// polymorphic (no ON DELETE CASCADE), so the JS store removes the rows
+/// and this clears the files. A missing directory is a no-op.
+#[tauri::command]
+pub fn clear_document_attachments(
+	app: AppHandle,
+	document_type: String,
+	document_id: String,
+) -> Result<(), String> {
+	let dir = attachment_dir_path(&app, &document_type, &document_id)?;
+	if dir.exists() {
+		std::fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
+	}
+	Ok(())
 }
 
 /// If no sessions remain, shut the server down after a grace period.
@@ -378,11 +433,11 @@ async fn handle_upload(
 
 	// Resolve the session up front; clone what we need so we don't hold
 	// the lock across the (slow) multipart read.
-	let (invoice_id, save_dir) = {
+	let (document_type, document_id, save_dir) = {
 		let sessions = state.sessions.lock().await;
 		match sessions.get(&token) {
 			Some(s) if s.expires_at > SystemTime::now() => {
-				(s.invoice_id.clone(), s.save_dir.clone())
+				(s.document_type.clone(), s.document_id.clone(), s.save_dir.clone())
 			}
 			_ => {
 				return (
@@ -459,10 +514,11 @@ async fn handle_upload(
 		s.expires_at = SystemTime::now() + SESSION_TTL;
 	}
 
-	// Tell the desktop. The invoice page filters on invoice_id and writes
-	// the DB row.
+	// Tell the desktop. The document page filters on document_type +
+	// document_id and writes the DB row.
 	let payload = json!({
-		"invoice_id": invoice_id,
+		"document_type": document_type,
+		"document_id": document_id,
 		"token": token,
 		"file_path": dest.to_string_lossy(),
 		"filename": stored,

@@ -238,6 +238,10 @@
 				</UCard>
 			</div>
 
+			<!-- Attachments — scans / photos of the quote. Shared card,
+				same as the invoice / bill / voucher detail pages. -->
+			<AttachmentsCard document-type="quote" :document-id="quoteId" />
+
 			<!-- Sticky save bar — same pattern as Settings → Company and the
 				client / employee edit pages. Pinned to the bottom of the
 				scrollable <main> ancestor; only appears when the form is

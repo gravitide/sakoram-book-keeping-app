@@ -69,7 +69,8 @@ pub fn run() {
 			data_io::import_tenant_data,
 			phone_upload::start_phone_upload,
 			phone_upload::cancel_phone_upload,
-			phone_upload::import_invoice_attachment,
+			phone_upload::import_document_attachment,
+			phone_upload::clear_document_attachments,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");

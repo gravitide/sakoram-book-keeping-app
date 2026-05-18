@@ -21,6 +21,7 @@ import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { computeLineTotals, sumCents } from "~/lib/money";
 import { allocateDocumentNumber } from "~/lib/numbering";
+import { purgeDocumentAttachments } from "~/stores/document_attachments";
 import { useVouchersStore } from "~/stores/vouchers";
 
 // Persisted on `bills.status` — the only two states the user sets
@@ -403,6 +404,7 @@ export const useBillsStore = defineStore("bills", () => {
 			[id]
 		);
 		await execute("DELETE FROM bills WHERE id = ?", [id]);
+		await purgeDocumentAttachments("bill", id);
 		await load();
 		// Refresh vouchers too so the un-linked rows reflect immediately
 		// in the vouchers list.

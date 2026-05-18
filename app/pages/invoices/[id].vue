@@ -324,90 +324,10 @@
 				</table>
 			</UCard>
 
-			<!-- Attachments — scans / photos of the document. Files live on
-				disk under app data; this card just lists the metadata rows.
-				Two ways in: a local file picker, or the phone-upload flow
-				(QR → capture on phone → lands here over the LAN). -->
-			<UCard>
-				<template #header>
-					<div class="app-chrome flex items-center justify-between gap-3 flex-wrap">
-						<div>
-							<div class="app-chrome font-medium">
-								Attachments
-							</div>
-							<div class="text-xs text-(--ui-text-muted) mt-0.5">
-								<span v-if="attachmentsStore.attachments.length === 0">No files attached yet — add a scan or snap a photo from your phone.</span>
-								<span v-else>{{ attachmentsStore.attachments.length }} file{{ attachmentsStore.attachments.length === 1 ? "" : "s" }} attached.</span>
-							</div>
-						</div>
-						<div class="flex gap-2">
-							<UButton
-								size="xs"
-								variant="soft"
-								icon="i-lucide-upload"
-								:loading="uploadingLocal"
-								@click="onUploadLocal"
-							>
-								Upload
-							</UButton>
-							<UButton
-								size="xs"
-								variant="soft"
-								icon="i-lucide-smartphone"
-								@click="showPhoneModal = true"
-							>
-								Upload using phone
-							</UButton>
-						</div>
-					</div>
-				</template>
-
-				<div v-if="attachmentsStore.attachments.length === 0" class="py-6 text-center text-sm text-(--ui-text-muted)">
-					<UIcon name="i-lucide-paperclip" class="size-8 mx-auto mb-2 opacity-50" />
-					<div>Attach receipts, signed copies, or supporting scans.</div>
-				</div>
-				<div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-					<div
-						v-for="att in attachmentsStore.attachments"
-						:key="att.id"
-						class="group relative rounded-lg border border-(--ui-border) overflow-hidden bg-(--ui-bg-muted)"
-					>
-						<button
-							type="button"
-							class="block w-full aspect-square"
-							:title="`Open ${att.filename}`"
-							@click="openAttachment(att.file_path)"
-						>
-							<img
-								:src="thumbSrc(att.file_path)"
-								:alt="att.filename"
-								class="w-full h-full object-cover"
-							>
-						</button>
-						<div class="px-2 py-1.5 text-xs">
-							<div class="truncate text-(--ui-text)" :title="att.filename">
-								{{ att.filename }}
-							</div>
-							<div class="text-(--ui-text-muted) flex items-center gap-1">
-								<UIcon
-									:name="att.source === 'phone' ? 'i-lucide-smartphone' : 'i-lucide-monitor'"
-									class="size-3"
-								/>
-								{{ formatBytes(att.size_bytes) }}
-							</div>
-						</div>
-						<UButton
-							color="error"
-							variant="solid"
-							size="xs"
-							icon="i-lucide-trash-2"
-							class="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition"
-							:title="`Delete ${att.filename}`"
-							@click="onDeleteAttachment(att.id)"
-						/>
-					</div>
-				</div>
-			</UCard>
+			<!-- Attachments — scans / photos of the invoice. Local file
+				picker + phone-upload flow, shared with the other document
+				detail pages via AttachmentsCard. -->
+			<AttachmentsCard document-type="invoice" :document-id="invoiceId" />
 
 			<!-- Sticky save bar — same accented variant the quote / client /
 				employee pages use. Only visible while the invoice is still
@@ -501,13 +421,6 @@
 			@save="pdf.onSave"
 			@cancel="pdf.onCancel"
 		/>
-
-		<PhoneUploadModal
-			v-if="showPhoneModal"
-			:invoice-id="invoiceId"
-			@uploaded="onPhonePhoto"
-			@close="showPhoneModal = false"
-		/>
 	</div>
 </template>
 
@@ -524,15 +437,12 @@
 
 	import type { LineDraft } from "~/components/DocumentLineEditor.vue";
 	import type { ClientRow } from "~/stores/clients";
-	import type { AttachmentFile } from "~/stores/invoice_attachments";
 	import type { InvoiceLineRow, InvoicePersistedStatus, InvoiceRow, InvoiceStatus } from "~/stores/invoices";
 	import type { ClientSnapshot, PricingMode } from "~/stores/quotes";
-	import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { buildInvoicePdfPayload } from "~/lib/invoice-pdf";
 	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
 	import { useClientsStore } from "~/stores/clients";
-	import { useInvoiceAttachmentsStore } from "~/stores/invoice_attachments";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
@@ -547,7 +457,6 @@
 	const clientsStore = useClientsStore();
 	const invoicesStore = useInvoicesStore();
 	const vouchersStore = useVouchersStore();
-	const attachmentsStore = useInvoiceAttachmentsStore();
 	const currency = useActiveCurrency();
 
 	const invoiceId = Number(route.params.id);
@@ -632,8 +541,7 @@
 	await Promise.all([
 		settingsStore.ensureLoaded(),
 		clientsStore.load(),
-		vouchersStore.load(),
-		attachmentsStore.load(invoiceId)
+		vouchersStore.load()
 	]);
 
 	const hydrate = async () => {
@@ -936,81 +844,5 @@
 	const onPdfClick = () => {
 		if (!invoice.value || dirty.value) return;
 		pdf.open();
-	};
-
-	// ---- Attachments ---------------------------------------------------------
-	// Files are stored on disk by Rust (local file-import command or the
-	// phone-upload server); this page only adds / lists / removes the
-	// metadata rows. Both upload paths converge on attachmentsStore.add.
-	const showPhoneModal = ref(false);
-	const uploadingLocal = ref(false);
-
-	const formatBytes = (n: number): string => {
-		if (n < 1024) return `${n} B`;
-		if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
-		return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-	};
-
-	const thumbSrc = (path: string): string => convertFileSrc(path);
-
-	const openAttachment = async (path: string) => {
-		try {
-			await invoke("open_path", { path });
-		} catch (err) {
-			toast.add({
-				title: "Couldn't open file",
-				description: err instanceof Error ? err.message : String(err),
-				color: "error",
-				icon: "i-lucide-circle-alert"
-			});
-		}
-	};
-
-	const onUploadLocal = async () => {
-		uploadingLocal.value = true;
-		try {
-			const added = await attachmentsStore.addLocal(invoiceId);
-			if (added) {
-				toast.add({ title: "Attachment added", color: "success", icon: "i-lucide-check" });
-			}
-		} catch (err) {
-			toast.add({
-				title: "Upload failed",
-				description: err instanceof Error ? err.message : String(err),
-				color: "error",
-				icon: "i-lucide-circle-alert"
-			});
-		} finally {
-			uploadingLocal.value = false;
-		}
-	};
-
-	// Fired by PhoneUploadModal for each photo the phone pushes over the LAN.
-	const onPhonePhoto = async (file: AttachmentFile) => {
-		try {
-			await attachmentsStore.add(invoiceId, file, "phone");
-			toast.add({ title: "Photo attached from phone", color: "success", icon: "i-lucide-smartphone" });
-		} catch (err) {
-			toast.add({
-				title: "Couldn't attach photo",
-				description: err instanceof Error ? err.message : String(err),
-				color: "error",
-				icon: "i-lucide-circle-alert"
-			});
-		}
-	};
-
-	const onDeleteAttachment = async (id: number) => {
-		try {
-			await attachmentsStore.remove(id);
-			toast.add({ title: "Attachment removed", color: "info", icon: "i-lucide-trash-2" });
-		} catch (err) {
-			toast.add({
-				title: "Delete failed",
-				description: err instanceof Error ? err.message : String(err),
-				color: "error",
-				icon: "i-lucide-circle-alert"
-			});
-		}
 	};
 </script>

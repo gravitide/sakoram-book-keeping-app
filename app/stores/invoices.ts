@@ -26,6 +26,7 @@ import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { computeLineTotals, sumCents } from "~/lib/money";
 import { allocateDocumentNumber } from "~/lib/numbering";
+import { purgeDocumentAttachments } from "~/stores/document_attachments";
 import { useSettingsStore } from "~/stores/settings";
 import { useVouchersStore } from "~/stores/vouchers";
 
@@ -590,6 +591,7 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		}
 		// invoice_lines cascade via FK ON DELETE CASCADE.
 		await execute("DELETE FROM invoices WHERE id = ?", [id]);
+		await purgeDocumentAttachments("invoice", id);
 		await load();
 	};
 
@@ -612,6 +614,7 @@ export const useInvoicesStore = defineStore("invoices", () => {
 			[id]
 		);
 		await execute("DELETE FROM invoices WHERE id = ?", [id]);
+		await purgeDocumentAttachments("invoice", id);
 		await load();
 		// Refresh vouchers too so the un-linked rows reflect immediately
 		// in the vouchers list.

@@ -122,12 +122,13 @@
 // fires `cancel_phone_upload`.
 
 	import type { UnlistenFn } from "@tauri-apps/api/event";
-	import type { AttachmentFile } from "~/stores/invoice_attachments";
+	import type { AttachmentFile, DocumentType } from "~/stores/document_attachments";
 	import { invoke } from "@tauri-apps/api/core";
 	import { listen } from "@tauri-apps/api/event";
 
 	interface Props {
-		invoiceId: number
+		documentType: DocumentType
+		documentId: number
 	}
 	const props = defineProps<Props>();
 
@@ -198,7 +199,7 @@
 		try {
 			const session = await invoke<{ url: string, token: string, expires_at: number }>(
 				"start_phone_upload",
-				{ invoiceId: String(props.invoiceId) }
+				{ documentType: props.documentType, documentId: String(props.documentId) }
 			);
 			url.value = session.url;
 			token.value = session.token;
@@ -207,15 +208,16 @@
 			state.value = "waiting";
 
 			unlisten = await listen<{
-				invoice_id: string
+				document_type: string
+				document_id: string
 				file_path: string
 				filename: string
 				size: number
 				mime: string
 			}>("phone-upload-received", (event) => {
 				const p = event.payload;
-				// Filter: only photos for this invoice's session.
-				if (p.invoice_id !== String(props.invoiceId)) return;
+				// Filter: only photos for this document's session.
+				if (p.document_type !== props.documentType || p.document_id !== String(props.documentId)) return;
 				const file: AttachmentFile = {
 					file_path: p.file_path,
 					filename: p.filename,
