@@ -13,6 +13,7 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { allocateDocumentNumber } from "~/lib/numbering";
+import { purgeDocumentAttachments } from "~/stores/document_attachments";
 
 export type VoucherType = "payment" | "receipt";
 export type VoucherMethod = "cash" | "bank_transfer" | "cheque" | "card" | "other";
@@ -180,6 +181,7 @@ export const useVouchersStore = defineStore("vouchers", () => {
 
 	const remove = async (id: number): Promise<void> => {
 		await execute("DELETE FROM vouchers WHERE id = ?", [id]);
+		await purgeDocumentAttachments("voucher", id);
 		await load();
 	};
 

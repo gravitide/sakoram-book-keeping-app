@@ -15,6 +15,7 @@ import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { computeLineTotals, sumCents } from "~/lib/money";
 import { allocateDocumentNumber } from "~/lib/numbering";
+import { purgeDocumentAttachments } from "~/stores/document_attachments";
 import { useSettingsStore } from "~/stores/settings";
 
 export type QuoteStatus = "draft" | "sent" | "accepted" | "rejected" | "expired" | "converted";
@@ -482,6 +483,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 		// quote_lines.quote_id has ON DELETE CASCADE, so a single DELETE
 		// removes both. (sqlx enables foreign_keys by default.)
 		await execute("DELETE FROM quotes WHERE id = ?", [id]);
+		await purgeDocumentAttachments("quote", id);
 		await load();
 	};
 
@@ -501,6 +503,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 			[id]
 		);
 		await execute("DELETE FROM quotes WHERE id = ?", [id]);
+		await purgeDocumentAttachments("quote", id);
 		await load();
 	};
 

@@ -136,6 +136,17 @@
 			</div>
 		</UCard>
 
+		<!-- Attachments — scans / photos of the voucher. Read-only until
+			the user enters edit mode, matching the rest of the page
+			(vouchers are real cash records, not freely editable). -->
+		<AttachmentsCard
+			class="mt-6"
+			document-type="voucher"
+			:document-id="voucherId"
+			:disabled="!editing"
+			disabled-hint="Click Edit to add or remove attachments."
+		/>
+
 		<!-- Sticky save bar — visible the whole time edit mode is on
 			(not gated on dirty), since entering edit mode is an explicit
 			decision and the user needs Cancel/Save controls in reach.

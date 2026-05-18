@@ -237,6 +237,7 @@ sakoram_app/
 │  │  ├─ MoneyInput.vue               ← integer-cents v-model
 │  │  ├─ PdfPreviewModal.vue          ← embeds rendered PDF in <iframe>
 │  │  ├─ PhoneUploadModal.vue         ← QR + LAN-server flow to attach a photo from a phone
+│  │  ├─ AttachmentsCard.vue          ← shared attachments card (local + phone upload) for all document detail pages
 │  │  ├─ StatusBadge.vue              ← color-coded status badges (no `primary` — theme-stable semantic colours only)
 │  │  ├─ MonthlyCashFlowChart.vue     ← dashboard: 12-month receipts vs payments
 │  │  ├─ MonthlySalaryPaidChart.vue   ← payroll dashboard: 12-month salary-paid bars
@@ -275,7 +276,7 @@ sakoram_app/
 │     ├─ bill_categories.ts           ← managed lookup powering CategoryPicker
 │     ├─ quotes.ts                    ← quotes + quote_lines, status FSM, pricing modes, date filters
 │     ├─ invoices.ts                  ← invoices + invoice_lines. Payments live on vouchers; derivedStatus/paidCentsFor sum vouchers.related_invoice_id.
-│     ├─ invoice_attachments.ts       ← scans / photos attached to an invoice (local file + phone upload)
+│     ├─ document_attachments.ts      ← scans / photos attached to any document (local file + phone upload)
 │     ├─ bills.ts                     ← vendor_id FK + vendor_snapshot + category_snapshot. Payments via vouchers.related_bill_id.
 │     ├─ payslips.ts                  ← payslips + payslip_lines, status FSM, derivedStatus/paidCentsFor sum vouchers.related_payslip_id.
 │     ├─ vouchers.ts                  ← receipts/payments; carries related_invoice_id, related_bill_id, related_payslip_id
@@ -688,12 +689,16 @@ See `src-tauri/migrations/` for the source of truth. High-level:
   detail page is **read-only by default**; the user clicks Edit to
   enter mutate-mode (Cancel re-hydrates from DB, Save persists +
   exits edit mode).
-- `invoice_attachments` — scans / photos attached to an invoice.
-  `invoice_id` FK (ON DELETE CASCADE). The file bytes live on disk under
-  `app_data_dir/invoice_attachments/<tenant_id>/<invoice_id>/`; the row
-  stores `file_path` + `filename` + `size_bytes` + `mime` + `source`
-  (`local` = desktop file dialog, `phone` = LAN phone upload). Managed by
-  `app/stores/invoice_attachments.ts`.
+- `document_attachments` — scans / photos attached to any document
+  (quote / invoice / bill / voucher). Polymorphic: keyed by
+  `(document_type, document_id)`, **no FK** — so each document store's
+  delete path calls `purgeDocumentAttachments()` to clear the rows +
+  files. The file bytes live on disk under
+  `app_data_dir/attachments/<tenant_id>/<document_type>/<document_id>/`;
+  the row stores `file_path` + `filename` + `size_bytes` + `mime` +
+  `source` (`local` = desktop file dialog, `phone` = LAN phone upload).
+  Managed by `app/stores/document_attachments.ts`; the shared
+  `AttachmentsCard.vue` renders it on every document detail page.
 
 `PRAGMA table_info(...)` is used in `data_io.rs` to discover columns
 dynamically — adding a column to a migration auto-flows into export.
@@ -724,6 +729,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0019_payroll_cycle.sql                  ← payroll_period_start_day / payroll_period_end_day / payroll_pay_day on company_settings
 0020_pdf_protection.sql                 ← pdf_protect_password + 5 per-type pdf_protect_* flags on company_settings
 0021_invoice_attachments.sql            ← invoice_attachments table (scans / photos per invoice)
+0022_document_attachments.sql           ← drop invoice_attachments; polymorphic document_attachments table
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,
@@ -953,7 +959,7 @@ persisted to localStorage).
 
 ### Done
 
-- ✅ DB schema + migrations 0001..0021 (`SCHEMA_VERSION` 21)
+- ✅ DB schema + migrations 0001..0022 (`SCHEMA_VERSION` 22)
 - ✅ Clients / Vendors / Employees CRUD (hero + SectionCard layout)
 - ✅ Quotes (full lifecycle, PDF, convert-to-invoice; default VAT seeded
   from settings on draft creation)
@@ -994,14 +1000,17 @@ persisted to localStorage).
   color from settings, user-chosen `pdf_font`, business-name
   wordmark fallback when no PDF logo uploaded)
 - ✅ PDF preview modal (iframe-embedded, save-as via temp file copy)
-- ✅ **Invoice attachments** — scans / photos attached to an invoice
-  (`invoice_attachments` table, migration 0021). Two upload paths on the
-  invoice detail page: a local file picker (`import_invoice_attachment`
-  Rust command) and **phone upload** — `phone_upload.rs` runs a
-  token-gated LAN HTTP server (axum) and shows a QR; the user captures
-  photos in their phone's browser and they attach over the network
-  (`PhoneUploadModal.vue` + `phone-upload-received` event). Multi-photo
-  per session; the LAN IP is resolved from the routing table.
+- ✅ **Document attachments** — scans / photos attached to any document
+  (quote / invoice / bill / voucher). Polymorphic `document_attachments`
+  table (migration 0022, supersedes the invoice-only 0021). The shared
+  `AttachmentsCard.vue` is on every document detail page (voucher card
+  gated to edit mode). Two upload paths: a local file picker
+  (`import_document_attachment` Rust command) and **phone upload** —
+  `phone_upload.rs` runs a token-gated LAN HTTP server (axum) and shows
+  a QR; the user captures photos in their phone's browser and they
+  attach over the network (`PhoneUploadModal.vue` + `phone-upload-received`
+  event). Multi-photo per session; the LAN IP is resolved from the
+  routing table.
 - ✅ **Password-protected PDFs** — optional owner-password encryption
   (AES-256 / R6) applied by the `qpdf` crate as a post-process after
   Typst renders. Owner-password only: the PDF opens with no prompt but
@@ -1104,10 +1113,11 @@ persisted to localStorage).
   row-context-menu pattern is on quotes / invoices / payslips /
   employees / clients / bill categories today; the bills, vouchers,
   and vendors list pages are still dropdown-less.
-- **Bill/voucher attachment upload UI** — `attachment_path` columns
-  exist on the bills/vouchers schema; no UI yet. (Invoices got a full
-  attachments system — `invoice_attachments` table + local / phone
-  upload — so bills/vouchers can follow the same pattern when needed.)
+- **Legacy `attachment_path` columns** — bills / vouchers still carry an
+  unused single `attachment_path` column from the original 0003 schema.
+  The real attachments system is the polymorphic `document_attachments`
+  table (migration 0022) — the dead columns can be dropped in a future
+  migration.
 - **Firewall rule for the phone-upload server** — the phone-upload
   feature runs a LAN HTTP server, so the OS firewall must allow inbound
   connections to the app. It works on machines where the user has
