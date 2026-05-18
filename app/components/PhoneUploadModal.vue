@@ -56,13 +56,23 @@
 						</div>
 					</div>
 
-					<div class="text-center">
-						<div class="text-xs text-(--ui-text-muted) mb-1">
+					<div>
+						<div class="text-xs text-(--ui-text-muted) mb-1 text-center">
 							Or open this address on your phone:
 						</div>
-						<code class="text-xs break-all text-(--ui-text) bg-(--ui-bg-muted) rounded px-2 py-1 inline-block">
-							{{ url }}
-						</code>
+						<div class="flex items-stretch gap-1.5">
+							<code class="select-text flex-1 text-xs break-all text-(--ui-text) bg-(--ui-bg-muted) rounded px-2 py-1.5">
+								{{ url }}
+							</code>
+							<UButton
+								size="xs"
+								variant="soft"
+								color="neutral"
+								:icon="copied ? 'i-lucide-check' : 'i-lucide-copy'"
+								:title="copied ? 'Copied' : 'Copy address'"
+								@click="copyUrl"
+							/>
+						</div>
 					</div>
 
 					<div class="flex items-center justify-center gap-2 text-xs text-(--ui-text-muted)">
@@ -136,6 +146,7 @@
 	const now = ref(Date.now());
 	const received = ref<AttachmentFile[]>([]);
 	const qrCanvas = ref<HTMLCanvasElement | null>(null);
+	const copied = ref(false);
 
 	let unlisten: UnlistenFn | null = null;
 	let ticker: ReturnType<typeof setInterval> | null = null;
@@ -230,6 +241,16 @@
 			errorMessage.value = err instanceof Error ? err.message : String(err);
 			state.value = "error";
 		}
+	};
+
+	const copyUrl = async () => {
+		try {
+			await navigator.clipboard.writeText(url.value);
+			copied.value = true;
+			setTimeout(() => {
+				copied.value = false;
+			}, 1500);
+		} catch { /* clipboard blocked — the code is select-text as a fallback */ }
 	};
 
 	const finish = () => {

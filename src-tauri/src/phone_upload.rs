@@ -21,6 +21,7 @@
 // with our own UUID filename — the phone's filename is never trusted.
 
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -105,6 +106,76 @@ fn epoch_ms(t: SystemTime) -> i64 {
 	t.duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
 }
 
+/// Best-effort pick of this machine's real LAN IPv4 address.
+///
+/// `local_ip_address::local_ip()` frequently returns a virtual-adapter
+/// address on Windows dev machines — WSL, the Hyper-V "Default Switch",
+/// VirtualBox, Docker — and a phone on the real Wi-Fi can't route to
+/// those.
+///
+/// Primary method: ask the OS which source address it would use to reach
+/// an off-link destination. "Connecting" a UDP socket sends no packets —
+/// it just makes the kernel resolve the route — so this returns the
+/// *live* address of whichever interface holds the default route (the
+/// real Wi-Fi / Ethernet adapter), immune to stale enumeration entries
+/// and to virtual adapters (which have no default gateway).
+///
+/// Fallback (no default route — machine fully offline): enumerate every
+/// interface, drop loopback / link-local / non-private / known-virtual
+/// adapters, and prefer the range a home router hands out.
+fn route_source_ip() -> Option<IpAddr> {
+	// 8.8.8.8 is just a routing target — no packet is actually sent.
+	let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+	socket.connect("8.8.8.8:80").ok()?;
+	match socket.local_addr().ok()?.ip() {
+		IpAddr::V4(v4) if !v4.is_loopback() && !v4.is_unspecified() => Some(IpAddr::V4(v4)),
+		_ => None,
+	}
+}
+
+fn pick_lan_ip() -> Result<IpAddr, String> {
+	if let Some(ip) = route_source_ip() {
+		return Ok(ip);
+	}
+
+	let ifaces = local_ip_address::list_afinet_netifas()
+		.map_err(|e| format!("could not enumerate network interfaces: {e}"))?;
+
+	const VIRTUAL_KEYWORDS: &[&str] = &[
+		"vethernet", "virtualbox", "vmware", "wsl", "hyper-v", "hyperv",
+		"docker", "loopback", "bluetooth", "tailscale", "zerotier", "default switch",
+	];
+
+	let mut candidates: Vec<(u8, std::net::Ipv4Addr)> = Vec::new();
+	for (name, ip) in ifaces {
+		let IpAddr::V4(v4) = ip else { continue };
+		if v4.is_loopback() || v4.is_link_local() || v4.is_unspecified() || !v4.is_private() {
+			continue;
+		}
+		let lname = name.to_lowercase();
+		if VIRTUAL_KEYWORDS.iter().any(|kw| lname.contains(kw)) {
+			continue;
+		}
+		let o = v4.octets();
+		let rank = if o[0] == 192 && o[1] == 168 {
+			0
+		} else if o[0] == 10 {
+			1
+		} else {
+			2
+		};
+		candidates.push((rank, v4));
+	}
+	candidates.sort_by_key(|(rank, _)| *rank);
+	if let Some((_, v4)) = candidates.first() {
+		return Ok(IpAddr::V4(*v4));
+	}
+	// Nothing survived the filter — fall back to the crate's guess rather
+	// than failing outright.
+	local_ip_address::local_ip()
+		.map_err(|e| format!("could not determine this machine's LAN address: {e}"))
+}
+
 /// Resolve (and create) the attachment directory for an invoice in the
 /// active tenant.
 fn attachment_dir(app: &AppHandle, invoice_id: &str) -> Result<PathBuf, String> {
@@ -183,8 +254,7 @@ pub async fn start_phone_upload(
 	};
 
 	// LAN address so the phone can reach this machine.
-	let ip = local_ip_address::local_ip()
-		.map_err(|e| format!("could not determine this machine's LAN address: {e}"))?;
+	let ip = pick_lan_ip()?;
 
 	let token = uuid::Uuid::new_v4().to_string();
 	let save_dir = attachment_dir(&app, &invoice_id)?;
