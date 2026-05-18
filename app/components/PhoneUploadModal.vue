@@ -57,19 +57,20 @@
 					</div>
 
 					<div>
-						<div class="text-xs text-(--ui-text-muted) mb-1 text-center">
+						<div class="text-xs text-(--ui-text-muted) mb-1.5 text-center">
 							Or open this address on your phone:
 						</div>
-						<div class="flex items-stretch gap-1.5">
-							<code class="select-text flex-1 text-xs break-all text-(--ui-text) bg-(--ui-bg-muted) rounded px-2 py-1.5">
+						<div class="relative rounded-lg border border-(--ui-border) bg-(--ui-bg-muted)">
+							<code class="select-text block text-xs break-all text-(--ui-text) px-3 py-2.5 pr-10 leading-relaxed">
 								{{ url }}
 							</code>
 							<UButton
 								size="xs"
-								variant="soft"
+								variant="ghost"
 								color="neutral"
 								:icon="copied ? 'i-lucide-check' : 'i-lucide-copy'"
 								:title="copied ? 'Copied' : 'Copy address'"
+								class="absolute top-1.5 right-1.5"
 								@click="copyUrl"
 							/>
 						</div>

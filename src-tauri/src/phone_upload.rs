@@ -106,23 +106,18 @@ fn epoch_ms(t: SystemTime) -> i64 {
 	t.duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
 }
 
-/// Best-effort pick of this machine's real LAN IPv4 address.
-///
-/// `local_ip_address::local_ip()` frequently returns a virtual-adapter
-/// address on Windows dev machines — WSL, the Hyper-V "Default Switch",
-/// VirtualBox, Docker — and a phone on the real Wi-Fi can't route to
-/// those.
-///
-/// Primary method: ask the OS which source address it would use to reach
-/// an off-link destination. "Connecting" a UDP socket sends no packets —
-/// it just makes the kernel resolve the route — so this returns the
-/// *live* address of whichever interface holds the default route (the
-/// real Wi-Fi / Ethernet adapter), immune to stale enumeration entries
-/// and to virtual adapters (which have no default gateway).
-///
-/// Fallback (no default route — machine fully offline): enumerate every
-/// interface, drop loopback / link-local / non-private / known-virtual
-/// adapters, and prefer the range a home router hands out.
+/// Adapter-name fragments that mark an interface as virtual / VPN — a
+/// phone on the real Wi-Fi can't route to any of these.
+const VIRTUAL_KEYWORDS: &[&str] = &[
+	"vethernet", "virtualbox", "vmware", "wsl", "hyper-v", "hyperv",
+	"docker", "loopback", "bluetooth", "tailscale", "zerotier", "hamachi",
+	"openvpn", "wireguard", "vpn", "tunnel", "tap-windows", "default switch",
+];
+
+/// The OS's chosen source address for reaching an off-link destination.
+/// "Connecting" a UDP socket sends no packets — it just makes the kernel
+/// resolve the route — so this returns the *live* address of whichever
+/// interface holds the default route, immune to stale enumeration.
 fn route_source_ip() -> Option<IpAddr> {
 	// 8.8.8.8 is just a routing target — no packet is actually sent.
 	let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
@@ -133,19 +128,23 @@ fn route_source_ip() -> Option<IpAddr> {
 	}
 }
 
+/// Best-effort pick of this machine's real LAN IPv4 address.
+///
+/// The routing table is the source of truth: `route_source_ip()` reports
+/// the address actually used to reach other hosts and stays correct
+/// across network changes (old Wi-Fi → phone hotspot, etc.). Windows'
+/// interface *enumeration*, by contrast, can keep serving a stale address
+/// from a previous network — so it's only a fallback for when there's no
+/// default route at all (machine fully offline).
 fn pick_lan_ip() -> Result<IpAddr, String> {
 	if let Some(ip) = route_source_ip() {
 		return Ok(ip);
 	}
 
+	// No default route — enumerate real interfaces and pick the most
+	// router-typical private address.
 	let ifaces = local_ip_address::list_afinet_netifas()
 		.map_err(|e| format!("could not enumerate network interfaces: {e}"))?;
-
-	const VIRTUAL_KEYWORDS: &[&str] = &[
-		"vethernet", "virtualbox", "vmware", "wsl", "hyper-v", "hyperv",
-		"docker", "loopback", "bluetooth", "tailscale", "zerotier", "default switch",
-	];
-
 	let mut candidates: Vec<(u8, std::net::Ipv4Addr)> = Vec::new();
 	for (name, ip) in ifaces {
 		let IpAddr::V4(v4) = ip else { continue };
@@ -170,8 +169,7 @@ fn pick_lan_ip() -> Result<IpAddr, String> {
 	if let Some((_, v4)) = candidates.first() {
 		return Ok(IpAddr::V4(*v4));
 	}
-	// Nothing survived the filter — fall back to the crate's guess rather
-	// than failing outright.
+
 	local_ip_address::local_ip()
 		.map_err(|e| format!("could not determine this machine's LAN address: {e}"))
 }
