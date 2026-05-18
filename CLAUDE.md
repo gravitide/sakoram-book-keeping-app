@@ -236,6 +236,7 @@ sakoram_app/
 │  │  ├─ SortableTh.vue               ← clickable header cell w/ 3-state arrow icon
 │  │  ├─ MoneyInput.vue               ← integer-cents v-model
 │  │  ├─ PdfPreviewModal.vue          ← embeds rendered PDF in <iframe>
+│  │  ├─ PhoneUploadModal.vue         ← QR + LAN-server flow to attach a photo from a phone
 │  │  ├─ StatusBadge.vue              ← color-coded status badges (no `primary` — theme-stable semantic colours only)
 │  │  ├─ MonthlyCashFlowChart.vue     ← dashboard: 12-month receipts vs payments
 │  │  ├─ MonthlySalaryPaidChart.vue   ← payroll dashboard: 12-month salary-paid bars
@@ -274,6 +275,7 @@ sakoram_app/
 │     ├─ bill_categories.ts           ← managed lookup powering CategoryPicker
 │     ├─ quotes.ts                    ← quotes + quote_lines, status FSM, pricing modes, date filters
 │     ├─ invoices.ts                  ← invoices + invoice_lines. Payments live on vouchers; derivedStatus/paidCentsFor sum vouchers.related_invoice_id.
+│     ├─ invoice_attachments.ts       ← scans / photos attached to an invoice (local file + phone upload)
 │     ├─ bills.ts                     ← vendor_id FK + vendor_snapshot + category_snapshot. Payments via vouchers.related_bill_id.
 │     ├─ payslips.ts                  ← payslips + payslip_lines, status FSM, derivedStatus/paidCentsFor sum vouchers.related_payslip_id.
 │     ├─ vouchers.ts                  ← receipts/payments; carries related_invoice_id, related_bill_id, related_payslip_id
@@ -300,6 +302,7 @@ sakoram_app/
       ├─ lib.rs                       ← entry point, plugin registration, command handler list
       ├─ tenants.rs                   ← tenant registry, per-DB migration runner, legacy migration
       ├─ pdf.rs                       ← export_*_pdf commands (quote/invoice/bill/voucher/payslip), copy_file, open_path
+      ├─ phone_upload.rs              ← LAN HTTP server (axum) for phone→invoice photo uploads + import_invoice_attachment
       └─ data_io.rs                   ← export_tenant_data / import_tenant_data (.zip bundles)
 ```
 
@@ -685,6 +688,12 @@ See `src-tauri/migrations/` for the source of truth. High-level:
   detail page is **read-only by default**; the user clicks Edit to
   enter mutate-mode (Cancel re-hydrates from DB, Save persists +
   exits edit mode).
+- `invoice_attachments` — scans / photos attached to an invoice.
+  `invoice_id` FK (ON DELETE CASCADE). The file bytes live on disk under
+  `app_data_dir/invoice_attachments/<tenant_id>/<invoice_id>/`; the row
+  stores `file_path` + `filename` + `size_bytes` + `mime` + `source`
+  (`local` = desktop file dialog, `phone` = LAN phone upload). Managed by
+  `app/stores/invoice_attachments.ts`.
 
 `PRAGMA table_info(...)` is used in `data_io.rs` to discover columns
 dynamically — adding a column to a migration auto-flows into export.
@@ -714,6 +723,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0018_employee_number.sql                ← nullable text column on employees, indexed
 0019_payroll_cycle.sql                  ← payroll_period_start_day / payroll_period_end_day / payroll_pay_day on company_settings
 0020_pdf_protection.sql                 ← pdf_protect_password + 5 per-type pdf_protect_* flags on company_settings
+0021_invoice_attachments.sql            ← invoice_attachments table (scans / photos per invoice)
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,
@@ -943,7 +953,7 @@ persisted to localStorage).
 
 ### Done
 
-- ✅ DB schema + migrations 0001..0020 (`SCHEMA_VERSION` 20)
+- ✅ DB schema + migrations 0001..0021 (`SCHEMA_VERSION` 21)
 - ✅ Clients / Vendors / Employees CRUD (hero + SectionCard layout)
 - ✅ Quotes (full lifecycle, PDF, convert-to-invoice; default VAT seeded
   from settings on draft creation)
@@ -984,6 +994,14 @@ persisted to localStorage).
   color from settings, user-chosen `pdf_font`, business-name
   wordmark fallback when no PDF logo uploaded)
 - ✅ PDF preview modal (iframe-embedded, save-as via temp file copy)
+- ✅ **Invoice attachments** — scans / photos attached to an invoice
+  (`invoice_attachments` table, migration 0021). Two upload paths on the
+  invoice detail page: a local file picker (`import_invoice_attachment`
+  Rust command) and **phone upload** — `phone_upload.rs` runs a
+  token-gated LAN HTTP server (axum) and shows a QR; the user captures
+  photos in their phone's browser and they attach over the network
+  (`PhoneUploadModal.vue` + `phone-upload-received` event). Multi-photo
+  per session; the LAN IP is resolved from the routing table.
 - ✅ **Password-protected PDFs** — optional owner-password encryption
   (AES-256 / R6) applied by the `qpdf` crate as a post-process after
   Typst renders. Owner-password only: the PDF opens with no prompt but
@@ -1087,7 +1105,14 @@ persisted to localStorage).
   employees / clients / bill categories today; the bills, vouchers,
   and vendors list pages are still dropdown-less.
 - **Bill/voucher attachment upload UI** — `attachment_path` columns
-  exist on the schema; no UI yet.
+  exist on the bills/vouchers schema; no UI yet. (Invoices got a full
+  attachments system — `invoice_attachments` table + local / phone
+  upload — so bills/vouchers can follow the same pattern when needed.)
+- **Firewall rule for the phone-upload server** — the phone-upload
+  feature runs a LAN HTTP server, so the OS firewall must allow inbound
+  connections to the app. It works on machines where the user has
+  already allowed the app; the production installer should add a
+  program-scoped inbound rule so end users don't hit a silent block.
 - **DB-side pagination** — see "List view conventions". Today every
   list loads all rows; sort/filter/page is in-memory. Acceptable up
   to a few thousand rows per table; revisit if a real tenant feels
