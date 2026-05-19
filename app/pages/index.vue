@@ -12,8 +12,21 @@
 					Where the money is — what you're owed, what you owe, what's in motion.
 				</p>
 			</div>
-			<div class="text-xs text-(--ui-text-muted) tabular-nums">
-				{{ todayLabel }}
+			<div class="flex items-center gap-3">
+				<span class="text-xs text-(--ui-text-muted) tabular-nums">
+					{{ todayLabel }}
+				</span>
+				<!-- Create-new actions live here, in the header, rather than
+					as a card mid-dashboard — consistent, always in reach. -->
+				<UDropdownMenu :items="newItems">
+					<UButton
+						color="primary"
+						icon="i-lucide-plus"
+						trailing-icon="i-lucide-chevron-down"
+					>
+						New
+					</UButton>
+				</UDropdownMenu>
 			</div>
 		</header>
 
@@ -176,27 +189,10 @@
 			</UCard>
 		</div>
 
-		<!-- Insights row 2: top clients (full-width — list with bars
-			reads better with horizontal room). -->
-		<UCard class="mb-4">
-			<template #header>
-				<div class="flex items-center justify-between gap-2">
-					<div>
-						<div class="font-medium">
-							Top clients
-						</div>
-						<div class="text-xs text-(--ui-text-muted) mt-0.5">
-							Invoiced revenue over the last 12 months — concentration check.
-						</div>
-					</div>
-					<UIcon name="i-lucide-users" class="size-4 text-(--ui-text-muted)" />
-				</div>
-			</template>
-			<TopClientsChart />
-		</UCard>
-
-		<!-- Two-column area: recent activity + at-a-glance lists -->
-		<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+		<!-- Recent activity + at-a-glance lists. Placed above Top clients
+			so the things that need attention (activity, overdue) come
+			first. -->
+		<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
 			<UCard class="lg:col-span-2">
 				<template #header>
 					<div class="flex items-center justify-between">
@@ -245,67 +241,60 @@
 				</ul>
 			</UCard>
 
-			<div class="space-y-4">
-				<UCard>
-					<template #header>
-						<div class="flex items-center justify-between">
-							<div class="font-medium">
-								Overdue
-							</div>
-							<UIcon name="i-lucide-alarm-clock" class="size-4 text-(--ui-error)" />
+			<UCard>
+				<template #header>
+					<div class="flex items-center justify-between">
+						<div class="font-medium">
+							Overdue
 						</div>
-					</template>
-
-					<div v-if="overdueItems.length === 0" class="text-sm text-(--ui-text-muted) py-3">
-						Nothing overdue. Nice.
+						<UIcon name="i-lucide-alarm-clock" class="size-4 text-(--ui-error)" />
 					</div>
-					<ul v-else class="space-y-2">
-						<li v-for="item in overdueItems" :key="`${item.kind}-${item.id}`">
-							<NuxtLink
-								:to="item.to"
-								class="flex items-center justify-between gap-2 hover:text-(--ui-primary) text-sm"
-							>
-								<div class="min-w-0">
-									<div class="font-medium tabular-nums truncate">
-										{{ item.number }}
-									</div>
-									<div class="text-xs text-(--ui-text-muted) truncate">
-										{{ item.subtitle }} · due {{ item.dueDate }}
-									</div>
-								</div>
-								<div class="text-sm font-medium tabular-nums shrink-0" :class="item.amountClass">
-									{{ formatLKR(item.amountCents) }}
-								</div>
-							</NuxtLink>
-						</li>
-					</ul>
-				</UCard>
+				</template>
 
-				<UCard>
-					<template #header>
-						<div class="flex items-center justify-between">
-							<div class="font-medium">
-								Quick actions
+				<div v-if="overdueItems.length === 0" class="text-sm text-(--ui-text-muted) py-3">
+					Nothing overdue. Nice.
+				</div>
+				<ul v-else class="space-y-2">
+					<li v-for="item in overdueItems" :key="`${item.kind}-${item.id}`">
+						<NuxtLink
+							:to="item.to"
+							class="flex items-center justify-between gap-2 hover:text-(--ui-primary) text-sm"
+						>
+							<div class="min-w-0">
+								<div class="font-medium tabular-nums truncate">
+									{{ item.number }}
+								</div>
+								<div class="text-xs text-(--ui-text-muted) truncate">
+									{{ item.subtitle }} · due {{ item.dueDate }}
+								</div>
 							</div>
-						</div>
-					</template>
-					<div class="grid grid-cols-2 gap-2">
-						<UButton block variant="soft" icon="i-lucide-plus" to="/quotes/new">
-							Quote
-						</UButton>
-						<UButton block variant="soft" icon="i-lucide-plus" to="/invoices/new">
-							Invoice
-						</UButton>
-						<UButton block variant="soft" icon="i-lucide-plus" to="/bills/new">
-							Bill
-						</UButton>
-						<UButton block variant="soft" icon="i-lucide-plus" to="/vouchers/new">
-							Voucher
-						</UButton>
-					</div>
-				</UCard>
-			</div>
+							<div class="text-sm font-medium tabular-nums shrink-0" :class="item.amountClass">
+								{{ formatLKR(item.amountCents) }}
+							</div>
+						</NuxtLink>
+					</li>
+				</ul>
+			</UCard>
 		</div>
+
+		<!-- Top clients — full-width (the list-with-bars reads better
+			with horizontal room). Sits below activity / overdue. -->
+		<UCard>
+			<template #header>
+				<div class="flex items-center justify-between gap-2">
+					<div>
+						<div class="font-medium">
+							Top clients
+						</div>
+						<div class="text-xs text-(--ui-text-muted) mt-0.5">
+							Invoiced revenue over the last 12 months — concentration check.
+						</div>
+					</div>
+					<UIcon name="i-lucide-users" class="size-4 text-(--ui-text-muted)" />
+				</div>
+			</template>
+			<TopClientsChart />
+		</UCard>
 	</div>
 </template>
 
@@ -355,6 +344,16 @@
 		const d = new Date();
 		return d.toLocaleDateString(undefined, { month: "short", year: "numeric" });
 	});
+
+	// Header "New" dropdown — the create actions, moved out of the
+	// mid-dashboard "Quick actions" card into a single always-in-reach
+	// menu next to the date.
+	const newItems = [
+		{ label: "Quote", icon: "i-lucide-file-text", to: "/quotes/new" },
+		{ label: "Invoice", icon: "i-lucide-receipt", to: "/invoices/new" },
+		{ label: "Bill", icon: "i-lucide-file-input", to: "/bills/new" },
+		{ label: "Voucher", icon: "i-lucide-ticket", to: "/vouchers/new" }
+	];
 
 	// --- Counts that don't already exist on the stores ---
 
