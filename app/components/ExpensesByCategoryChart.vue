@@ -25,7 +25,7 @@
 				lib. Each slice's arc length is its share of the total
 				expressed as a fraction of the circumference. -->
 			<div class="flex items-center gap-5 flex-wrap">
-				<svg viewBox="0 0 100 100" class="size-32 shrink-0 -rotate-90">
+				<svg viewBox="0 0 100 100" class="size-40 shrink-0 -rotate-90">
 					<circle cx="50" cy="50" r="40" class="fill-none stroke-(--ui-bg-muted)" stroke-width="14" />
 					<circle
 						v-for="(slice, i) in slices"
@@ -50,7 +50,7 @@
 						<text
 							x="50" y="48"
 							text-anchor="middle"
-							class="fill-(--ui-text) text-[10px] font-semibold tabular-nums"
+							class="fill-(--ui-text) text-[11px] font-semibold tabular-nums"
 						>
 							{{ centreTop }}
 						</text>
@@ -83,7 +83,7 @@
 						<span class="text-xs text-(--ui-text-muted) tabular-nums w-10 text-right">
 							{{ Math.round((row.amount / total) * 100) }}%
 						</span>
-						<span class="tabular-nums w-24 text-right shrink-0">
+						<span class="tabular-nums w-32 text-right shrink-0 whitespace-nowrap">
 							{{ formatLKR(row.amount) }}
 						</span>
 					</li>
@@ -209,13 +209,28 @@
 		return out;
 	});
 
-	// Donut centre: hovered share if any, otherwise the headline number.
+	// Compact money for the donut hole — the headline above already
+	// shows the full, precise figure, so the centre just needs a
+	// short, always-fits summary (e.g. "123.5M"). A full 9-digit
+	// number can't fit a circular hole at any donut size.
+	const compactAmount = (cents: number): string => {
+		const v = cents / 100;
+		const abs = Math.abs(v);
+		const trim = (n: number, suffix: string): string =>
+			`${n.toFixed(1).replace(/\.0$/, "")}${suffix}`;
+		if (abs >= 1e9) return trim(v / 1e9, "B");
+		if (abs >= 1e6) return trim(v / 1e6, "M");
+		if (abs >= 1e3) return trim(v / 1e3, "K");
+		return v.toFixed(0);
+	};
+
+	// Donut centre: hovered share if any, otherwise a compact total.
 	const centreTop = computed(() => {
 		if (hover.value !== null && categoryRows.value[hover.value]) {
 			const row = categoryRows.value[hover.value]!;
 			return `${Math.round((row.amount / total.value) * 100)}%`;
 		}
-		return formatLKR(total.value, { withSymbol: false });
+		return compactAmount(total.value);
 	});
 	const centreSub = computed(() => {
 		if (hover.value !== null && categoryRows.value[hover.value]) {
