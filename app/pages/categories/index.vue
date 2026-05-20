@@ -25,18 +25,28 @@
 						icon="i-lucide-search"
 						class="md:w-96"
 					/>
-					<UCheckbox v-model="store.showArchived" label="Show archived" />
+					<div class="flex items-center gap-3">
+						<UCheckbox v-model="store.showArchived" label="Show archived" />
+						<UButton
+							size="md"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-table-columns-split"
+							title="Auto-size columns to their content"
+							@click="autoFitColumns"
+						>
+							Auto-fit columns
+						</UButton>
+					</div>
 				</div>
 			</template>
 
 			<div v-if="store.loading" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				Loading categories…
 			</div>
-
 			<div v-else-if="store.error" class="py-12 text-center text-sm text-(--ui-error)">
 				{{ store.error }}
 			</div>
-
 			<div v-else-if="store.filtered.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				<UIcon name="i-lucide-tags" class="size-10 mx-auto mb-2 opacity-50" />
 				<div v-if="store.categories.length === 0">
@@ -47,106 +57,57 @@
 				</div>
 			</div>
 
-			<table v-else class="w-full text-sm">
-				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-					<tr>
-						<SortableTh
-							th-class="py-2 pl-3 pr-2 font-medium"
-							:active="list.sortKey === 'name'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('name')"
+			<ResizableDataTable
+				v-else
+				ref="tableRef"
+				:rows="rows"
+				state-key="categories-table"
+				:row-actions="itemsFor"
+				default-sort-field="name"
+				:default-sort-order="1"
+				@row-click="openEdit"
+			>
+				<Column field="name" header="Name" sortable>
+					<template #body="{ data }">
+						<div class="truncate font-medium inline-flex items-center gap-2">
+							<span
+								class="inline-flex size-6 rounded items-center justify-center text-white shrink-0"
+								:style="{ backgroundColor: themeHex(data.color) }"
+							>
+								<UIcon :name="data.icon" class="size-3.5" />
+							</span>
+							{{ data.name }}
+							<UBadge v-if="data.is_archived === 1" color="neutral" variant="subtle" size="sm">
+								Archived
+							</UBadge>
+						</div>
+					</template>
+				</Column>
+				<Column field="color" header="Color" sortable>
+					<template #body="{ data }">
+						<span
+							class="inline-block size-5 rounded border border-(--ui-border) align-middle"
+							:style="{ backgroundColor: themeHex(data.color) }"
+							:title="data.color"
+						/>
+					</template>
+				</Column>
+				<Column field="icon" header="Icon" sortable>
+					<template #body="{ data }">
+						<UIcon :name="data.icon" class="size-5 align-middle text-(--ui-text-muted)" :title="data.icon" />
+					</template>
+				</Column>
+				<Column field="_billCount" header="Bills" sortable :style="{ textAlign: 'right' }">
+					<template #body="{ data }">
+						<div
+							class="truncate text-right tabular-nums"
+							:class="data._billCount === 0 ? 'text-(--ui-text-muted)' : ''"
 						>
-							Name
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'color'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('color')"
-						>
-							Color
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'icon'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('icon')"
-						>
-							Icon
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium text-right"
-							:active="list.sortKey === 'bills'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('bills')"
-						>
-							Bills
-						</SortableTh>
-						<th class="py-2 pl-2 pr-3 w-10" />
-					</tr>
-				</thead>
-				<tbody>
-					<!-- Each row is wrapped in a UContextMenu so right-click
-						surfaces the same actions as the overflow ⋯ button.
-						UContextMenu uses Reka UI's as-child trigger, so the
-						<tr> stays the actual rendered element — no wrapper
-						div between tbody and tr. -->
-					<UContextMenu
-						v-for="c in list.paged"
-						:key="c.id"
-						:items="itemsFor(c)"
-					>
-						<tr
-							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-							@click="openEdit(c)"
-						>
-							<td class="py-2 pl-3 pr-2 font-medium">
-								<span class="inline-flex items-center gap-2">
-									<span
-										class="inline-flex size-6 rounded items-center justify-center text-white shrink-0"
-										:style="{ backgroundColor: themeHex(c.color) }"
-									>
-										<UIcon :name="c.icon" class="size-3.5" />
-									</span>
-									{{ c.name }}
-									<UBadge v-if="c.is_archived === 1" color="neutral" variant="subtle" size="sm">
-										Archived
-									</UBadge>
-								</span>
-							</td>
-							<td class="py-2 px-2">
-								<span
-									class="inline-block size-5 rounded border border-(--ui-border) align-middle"
-									:style="{ backgroundColor: themeHex(c.color) }"
-									:title="c.color"
-								/>
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted)">
-								<UIcon :name="c.icon" class="size-5 align-middle" :title="c.icon" />
-							</td>
-							<td class="py-2 px-2 text-right tabular-nums">
-								<span :class="billCountFor(c.id) === 0 ? 'text-(--ui-text-muted)' : ''">
-									{{ billCountFor(c.id) }}
-								</span>
-							</td>
-							<td class="py-2 pl-2 pr-3 text-right" @click.stop>
-								<UDropdownMenu :items="itemsFor(c)">
-									<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
-								</UDropdownMenu>
-							</td>
-						</tr>
-					</UContextMenu>
-				</tbody>
-			</table>
-
-			<ListPagination
-				v-model:page="list.page"
-				v-model:page-size="list.pageSize"
-				:total="list.total"
-				:total-pages="list.totalPages"
-				:range-start="list.rangeStart"
-				:range-end="list.rangeEnd"
-			/>
+							{{ data._billCount }}
+						</div>
+					</template>
+				</Column>
+			</ResizableDataTable>
 		</UCard>
 
 		<CategoryFormModal
@@ -158,7 +119,6 @@
 
 <script setup lang="ts">
 	import type { BillCategoryRow } from "~/stores/bill_categories";
-	import { useListView } from "~/composables/useListView";
 	import { themeHex } from "~/lib/theme";
 	import { useBillCategoriesStore } from "~/stores/bill_categories";
 	import { useBillsStore } from "~/stores/bills";
@@ -174,22 +134,24 @@
 
 	await Promise.all([store.load(), billsStore.load()]);
 
-	// Declared as a hoisted `function` (not a const arrow) so the
-	// useListView column descriptor below can close over it without
-	// hitting the temporal dead zone — see CLAUDE.md list-view notes.
+	const tableRef = ref<{ autoFit: () => void } | null>(null);
+	const autoFitColumns = () => tableRef.value?.autoFit();
+
+	// Helper hoisted via `function` so the row computed below can close
+	// over it without hitting the temporal-dead-zone — see CLAUDE.md
+	// list-view notes.
 	function billCountFor(categoryId: number): number {
 		return billsStore.bills.filter((b) => b.category_id === categoryId).length;
 	}
 
-	const list = useListView<BillCategoryRow>(
-		() => store.filtered,
-		[
-			{ key: "name", getValue: (c) => c.name },
-			{ key: "color", getValue: (c) => c.color },
-			{ key: "icon", getValue: (c) => c.icon },
-			{ key: "bills", getValue: (c) => billCountFor(c.id) }
-		],
-		{ defaultSortKey: "name", defaultDir: "asc" }
+	// View-model: every sortable PrimeVue column needs the value on a
+	// top-level field, so we attach the derived bill count as `_billCount`.
+	// Underscored to keep it out of the way of any future schema fields.
+	interface CategoryRowVM extends BillCategoryRow {
+		_billCount: number
+	}
+	const rows = computed<CategoryRowVM[]>(() =>
+		store.filtered.map((c) => ({ ...c, _billCount: billCountFor(c.id) }))
 	);
 
 	const modalOpen = ref(false);
@@ -226,8 +188,7 @@
 
 	// Jump to the Bills list pre-filtered to this category. Bill filters
 	// live on the bills store (Pinia state survives navigation), so we
-	// clear the others and set the category before routing — the bills
-	// page binds straight to these refs.
+	// clear the others and set the category before routing.
 	const showBills = (c: BillCategoryRow) => {
 		billsStore.search = "";
 		billsStore.clearStatusFilters();
@@ -237,25 +198,29 @@
 		router.push("/bills");
 	};
 
-	const itemsFor = (c: BillCategoryRow) => [
-		[
-			{
-				label: "Show bills",
-				icon: "i-lucide-file-input",
-				onSelect: () => showBills(c)
-			}
-		],
-		[
-			{
-				label: "Edit",
-				icon: "i-lucide-pencil",
-				onSelect: () => openEdit(c)
-			},
-			{
-				label: c.is_archived === 0 ? "Archive" : "Restore",
-				icon: c.is_archived === 0 ? "i-lucide-archive" : "i-lucide-archive-restore",
-				onSelect: () => toggleArchive(c)
-			}
-		]
-	];
+	function itemsFor(c: CategoryRowVM) {
+		return [
+			[
+				{
+					label: "Show bills",
+					icon: "i-lucide-file-input",
+					onSelect: () => showBills(c)
+				}
+			],
+			[
+				{
+					label: "Edit",
+					icon: "i-lucide-pencil",
+					onSelect: () => openEdit(c)
+				},
+				{
+					label: c.is_archived === 0 ? "Archive" : "Restore",
+					icon: c.is_archived === 0 ? "i-lucide-archive" : "i-lucide-archive-restore",
+					onSelect: () => {
+						void toggleArchive(c);
+					}
+				}
+			]
+		];
+	}
 </script>

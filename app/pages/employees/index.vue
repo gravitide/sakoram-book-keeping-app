@@ -25,18 +25,28 @@
 						icon="i-lucide-search"
 						class="md:w-96"
 					/>
-					<UCheckbox v-model="store.showArchived" label="Show archived" />
+					<div class="flex items-center gap-3">
+						<UCheckbox v-model="store.showArchived" label="Show archived" />
+						<UButton
+							size="md"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-table-columns-split"
+							title="Auto-size columns to their content"
+							@click="autoFitColumns"
+						>
+							Auto-fit columns
+						</UButton>
+					</div>
 				</div>
 			</template>
 
 			<div v-if="store.loading" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				Loading employees…
 			</div>
-
 			<div v-else-if="store.error" class="py-12 text-center text-sm text-(--ui-error)">
 				{{ store.error }}
 			</div>
-
 			<div v-else-if="store.filtered.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				<UIcon name="i-lucide-users-round" class="size-10 mx-auto mb-2 opacity-50" />
 				<div v-if="store.employees.length === 0">
@@ -47,123 +57,73 @@
 				</div>
 			</div>
 
-			<table v-else class="w-full text-sm">
-				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-					<tr>
-						<SortableTh
-							th-class="py-2 pl-3 pr-2 font-medium"
-							:active="list.sortKey === 'employee_number'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('employee_number')"
-						>
-							Employee #
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'full_name'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('full_name')"
-						>
-							Name
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'designation'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('designation')"
-						>
-							Designation
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'nic'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('nic')"
-						>
-							NIC
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'phone'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('phone')"
-						>
-							Phone
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium text-right"
-							:active="list.sortKey === 'basic_salary_cents'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('basic_salary_cents')"
-						>
-							Basic salary
-						</SortableTh>
-						<th class="py-2 pl-2 pr-3 w-10" />
-					</tr>
-				</thead>
-				<tbody>
-					<!-- Right-click any row → same actions menu as the
-						overflow ⋯ button. Reka UI's as-child trigger keeps
-						the <tr> as the actual DOM element so the table
-						layout stays valid. Same pattern the payslips list
-						uses. -->
-					<UContextMenu
-						v-for="e in list.paged"
-						:key="e.id"
-						:items="itemsFor(e)"
-					>
-						<tr
-							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-							@click="openEmployee(e)"
-						>
-							<td class="py-2 pl-3 pr-2 font-medium tabular-nums text-(--ui-text-muted)">
-								{{ e.employee_number || "—" }}
-							</td>
-							<td class="py-2 px-2 font-medium">
-								<span class="flex items-center gap-2">
-									{{ e.full_name }}
-									<UBadge v-if="e.is_archived === 1" color="neutral" variant="subtle" size="sm">
-										Archived
-									</UBadge>
-								</span>
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted)">
-								{{ e.designation || "—" }}
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted)">
-								{{ e.nic || "—" }}
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted)">
-								{{ e.phone || "—" }}
-							</td>
-							<td class="py-2 px-2 text-right tabular-nums">
-								{{ formatMoney(e.basic_salary_cents) }}
-							</td>
-							<td class="py-2 pl-2 pr-3 text-right" @click.stop>
-								<UDropdownMenu :items="itemsFor(e)">
-									<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
-								</UDropdownMenu>
-							</td>
-						</tr>
-					</UContextMenu>
-				</tbody>
-			</table>
-
-			<ListPagination
-				v-model:page="list.page"
-				v-model:page-size="list.pageSize"
-				:total="list.total"
-				:total-pages="list.totalPages"
-				:range-start="list.rangeStart"
-				:range-end="list.rangeEnd"
-			/>
+			<ResizableDataTable
+				v-else
+				ref="tableRef"
+				:rows="store.filtered"
+				state-key="employees-table"
+				:row-actions="itemsFor"
+				default-sort-field="full_name"
+				:default-sort-order="1"
+				@row-click="(row) => router.push(`/employees/${row.id}`)"
+			>
+				<Column field="employee_number" header="Employee #" sortable>
+					<template #body="{ data }">
+						<div class="truncate font-medium tabular-nums text-(--ui-text-muted)">
+							{{ data.employee_number || "—" }}
+						</div>
+					</template>
+				</Column>
+				<Column field="full_name" header="Name" sortable>
+					<template #body="{ data }">
+						<div class="truncate font-medium flex items-center gap-2">
+							{{ data.full_name }}
+							<UBadge v-if="data.is_archived === 1" color="neutral" variant="subtle" size="sm">
+								Archived
+							</UBadge>
+						</div>
+					</template>
+				</Column>
+				<Column field="designation" header="Designation" sortable>
+					<template #body="{ data }">
+						<div class="truncate text-(--ui-text-muted)">
+							{{ data.designation || "—" }}
+						</div>
+					</template>
+				</Column>
+				<Column field="nic" header="NIC" sortable>
+					<template #body="{ data }">
+						<div class="truncate text-(--ui-text-muted)">
+							{{ data.nic || "—" }}
+						</div>
+					</template>
+				</Column>
+				<Column field="phone" header="Phone" sortable>
+					<template #body="{ data }">
+						<div class="truncate text-(--ui-text-muted)">
+							{{ data.phone || "—" }}
+						</div>
+					</template>
+				</Column>
+				<Column
+					field="basic_salary_cents"
+					header="Basic salary"
+					sortable
+					:style="{ textAlign: 'right' }"
+				>
+					<template #body="{ data }">
+						<div class="truncate text-right tabular-nums">
+							{{ formatMoney(data.basic_salary_cents) }}
+						</div>
+					</template>
+				</Column>
+			</ResizableDataTable>
 		</UCard>
 	</div>
 </template>
 
 <script setup lang="ts">
 	import type { EmployeeRow } from "~/stores/employees";
-	import { useListView } from "~/composables/useListView";
 	import { formatMoney } from "~/lib/money";
 	import { useEmployeesStore } from "~/stores/employees";
 
@@ -175,23 +135,10 @@
 
 	await store.load();
 
-	const list = useListView<EmployeeRow>(
-		() => store.filtered,
-		[
-			{ key: "employee_number", getValue: (e) => e.employee_number },
-			{ key: "full_name", getValue: (e) => e.full_name },
-			{ key: "designation", getValue: (e) => e.designation },
-			{ key: "nic", getValue: (e) => e.nic },
-			{ key: "phone", getValue: (e) => e.phone },
-			{ key: "basic_salary_cents", getValue: (e) => e.basic_salary_cents }
-		],
-		{ defaultSortKey: "full_name", defaultDir: "asc" }
-	);
+	const tableRef = ref<{ autoFit: () => void } | null>(null);
+	const autoFitColumns = () => tableRef.value?.autoFit();
 
 	const newEmployee = () => router.push("/employees/new");
-	const openEmployee = (e: EmployeeRow) => router.push(`/employees/${e.id}`);
-	const createPayslip = (e: EmployeeRow) => router.push(`/payslips/new?employee=${e.id}`);
-	const viewPayslips = (e: EmployeeRow) => router.push(`/payslips?employee=${e.id}`);
 
 	const toggleArchive = async (e: EmployeeRow) => {
 		const goingToArchive = e.is_archived === 0;
@@ -212,32 +159,38 @@
 		}
 	};
 
-	const itemsFor = (e: EmployeeRow) => {
+	// Two-group menu: lifecycle (Edit / Archive) + payroll actions.
+	// Archived employees can still have payslips viewed but no new ones
+	// created — hence the conditional on "Create payslip".
+	function itemsFor(e: EmployeeRow) {
 		const lifecycle = [
 			{
 				label: "Edit",
 				icon: "i-lucide-pencil",
-				onSelect: () => openEmployee(e)
+				onSelect: () => router.push(`/employees/${e.id}`)
 			},
 			{
 				label: e.is_archived === 0 ? "Archive" : "Restore",
 				icon: e.is_archived === 0 ? "i-lucide-archive" : "i-lucide-archive-restore",
-				onSelect: () => toggleArchive(e)
+				onSelect: () => {
+					void toggleArchive(e);
+				}
 			}
 		];
-		const payroll = [
+		const payroll: { label: string, icon: string, onSelect: () => void }[] = [
 			{
 				label: "View payslips",
 				icon: "i-lucide-list",
-				onSelect: () => viewPayslips(e)
+				onSelect: () => router.push(`/payslips?employee=${e.id}`)
 			}
 		];
-		if (e.is_archived === 1) return [lifecycle, payroll];
-		payroll.unshift({
-			label: "Create payslip",
-			icon: "i-lucide-receipt",
-			onSelect: () => createPayslip(e)
-		});
+		if (e.is_archived === 0) {
+			payroll.unshift({
+				label: "Create payslip",
+				icon: "i-lucide-receipt",
+				onSelect: () => router.push(`/payslips/new?employee=${e.id}`)
+			});
+		}
 		return [lifecycle, payroll];
-	};
+	}
 </script>
