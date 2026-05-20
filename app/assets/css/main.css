@@ -382,18 +382,24 @@ textarea,
 /* Row-click navigation is intentionally scoped to the leading cell
  * (see ResizableDataTable.vue) — cursor + colour cues here mirror
  * that, so the visual affordance matches the click target:
- *  - First cell: pointer cursor, primary tint on hover (reads as a
- *    link the way GitHub / GitLab list tables do).
+ *  - First "data" cell (skipping any checkbox-selection column):
+ *    pointer cursor, primary tint on hover — reads as a link the way
+ *    GitHub / GitLab list tables do.
  *  - Every other cell: default cursor — these are drag surfaces for
  *    horizontal panning, not click targets. */
 .p-datatable .p-datatable-tbody > tr > td {
 	cursor: default;
 }
-.p-datatable .p-datatable-tbody > tr > td:first-child {
+.p-datatable .p-datatable-tbody > tr > td:first-child:not([data-p-selection-column='true']) {
 	cursor: pointer;
 	transition: color 0.1s;
 }
-.p-datatable .p-datatable-tbody > tr:hover > td:first-child {
+.p-datatable .p-datatable-tbody > tr > td[data-p-selection-column='true'] + td {
+	cursor: pointer;
+	transition: color 0.1s;
+}
+.p-datatable .p-datatable-tbody > tr:hover > td:first-child:not([data-p-selection-column='true']),
+.p-datatable .p-datatable-tbody > tr:hover > td[data-p-selection-column='true'] + td {
 	color: var(--ui-primary);
 }
 
