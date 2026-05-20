@@ -566,7 +566,7 @@ a font in CSS that isn't installed locally silently falls back to
 system-ui — defeats the point of having a chosen font. Same hazard
 for Typst's font-path lookup.
 
-Five fonts ship in two places:
+Six fonts ship in two places:
 
 | Font | License | Notes |
 |---|---|---|
@@ -575,6 +575,7 @@ Five fonts ship in two places:
 | Stack Sans Text | OFL | Variable, ~125 KB. Extra bundled choice. |
 | Miriam Libre | OFL | Variable, ~125 KB. (Earlier static Regular/Bold pair was a corrupted HTML download — replaced with the upstream variable file.) |
 | Amarna | OFL | Variable, ~62 KB. Decorative-leaning sans. |
+| Akt | OFL | Variable, ~354 KB. Geometric sans from Google Fonts. |
 
 `app/assets/fonts/*.ttf` — referenced from `app/assets/css/main.css`
 via `@font-face` (variable: `format("truetype-variations")`,

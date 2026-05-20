@@ -240,7 +240,8 @@
 		"Inter Tight",
 		"Stack Sans Text",
 		"Miriam Libre",
-		"Amarna"
+		"Amarna",
+		"Akt"
 	];
 	const systemFonts = [
 		"system-ui",

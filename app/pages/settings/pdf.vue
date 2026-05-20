@@ -306,7 +306,7 @@
 	// through these for any missing glyph; free-text input lets the user pick
 	// any face installed on their machine, but only the bundled five are
 	// guaranteed to render identically across machines.
-	const bundledFonts = ["Inter", "Inter Tight", "Stack Sans Text", "Miriam Libre", "Amarna"];
+	const bundledFonts = ["Inter", "Inter Tight", "Stack Sans Text", "Miriam Libre", "Amarna", "Akt"];
 
 	const pdfPreviewFontStack = computed(() =>
 		`'${form.pdf_font || "Inter"}', 'Inter', serif`
