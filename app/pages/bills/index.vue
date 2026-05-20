@@ -100,6 +100,17 @@
 						>
 							Reset
 						</UButton>
+						<UButton
+							size="md"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-table-columns-split"
+							:class="hasAnyFilter ? '' : 'ml-auto'"
+							title="Auto-size columns to their content"
+							@click="autoFitColumns"
+						>
+							Auto-fit columns
+						</UButton>
 					</div>
 
 					<div class="flex items-center gap-1.5 flex-wrap">
@@ -148,146 +159,115 @@
 					No bills match your filters.
 				</div>
 			</div>
-			<table v-else class="w-full text-sm">
-				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-					<tr>
-						<SortableTh
-							th-class="py-2 pl-3 pr-2 font-medium"
-							:active="list.sortKey === 'number'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('number')"
-						>
-							Number
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'vendor'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('vendor')"
-						>
-							Vendor
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'their_number'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('their_number')"
-						>
-							Their #
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'category'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('category')"
-						>
-							Category
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'issue_date'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('issue_date')"
-						>
-							Issued
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'due_date'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('due_date')"
-						>
-							Due
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium text-right"
-							:active="list.sortKey === 'total'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('total')"
-						>
-							Total
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium text-right"
-							:active="list.sortKey === 'balance'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('balance')"
-						>
-							Balance
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 pl-2 pr-3 font-medium"
-							:active="list.sortKey === 'status'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('status')"
-						>
-							Status
-						</SortableTh>
-					</tr>
-				</thead>
-				<tbody>
-					<tr
-						v-for="b in list.paged"
-						:key="b.id"
-						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-						@click="open(b)"
-					>
-						<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
-							{{ b.number }}
-						</td>
-						<td class="py-2 px-2">
-							{{ vendorNameOf(b) }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-							{{ b.vendor_invoice_number || "—" }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted)">
-							<span v-if="categoryOf(b)" class="inline-flex items-center gap-1.5">
+
+			<!-- No `:row-actions` here — the original bills list page had
+				no overflow / right-click menu, so the migration preserves
+				that. First-cell click still opens the bill detail.
+				A follow-up could add common actions (record payment,
+				generate PDF) once buildBillPdfPayload moves into a shared
+				lib file. -->
+			<ResizableDataTable
+				v-else
+				ref="tableRef"
+				:rows="rows"
+				state-key="bills-table"
+				default-sort-field="issue_date"
+				:default-sort-order="-1"
+				@row-click="(row) => router.push(`/bills/${row.id}`)"
+			>
+				<Column field="number" header="Number" sortable>
+					<template #body="{ data }">
+						<div class="truncate font-medium tabular-nums">
+							{{ data.number }}
+						</div>
+					</template>
+				</Column>
+				<Column field="_vendor" header="Vendor" sortable>
+					<template #body="{ data }">
+						<div class="truncate">
+							{{ data._vendor }}
+						</div>
+					</template>
+				</Column>
+				<Column field="vendor_invoice_number" header="Their #" sortable>
+					<template #body="{ data }">
+						<div class="truncate text-(--ui-text-muted) tabular-nums">
+							{{ data.vendor_invoice_number || "—" }}
+						</div>
+					</template>
+				</Column>
+				<Column field="_category" header="Category" sortable>
+					<template #body="{ data }">
+						<div class="truncate">
+							<span v-if="data._categoryMeta" class="inline-flex items-center gap-1.5">
 								<span
 									class="inline-flex size-5 rounded items-center justify-center text-white shrink-0"
-									:style="{ backgroundColor: themeHex(categoryOf(b)!.color) }"
+									:style="{ backgroundColor: themeHex(data._categoryMeta.color) }"
 								>
-									<UIcon :name="categoryOf(b)!.icon" class="size-3" />
+									<UIcon :name="data._categoryMeta.icon" class="size-3" />
 								</span>
-								<span class="text-(--ui-text)">{{ categoryOf(b)!.name }}</span>
+								<span>{{ data._categoryMeta.name }}</span>
 							</span>
-							<span v-else>—</span>
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-							{{ b.issue_date }}
-						</td>
-						<td class="py-2 px-2 tabular-nums" :class="statusOf(b) === 'overdue' ? 'text-(--ui-error) font-medium' : 'text-(--ui-text-muted)'">
-							{{ b.due_date }}
-						</td>
-						<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap">
-							{{ formatLKR(b.total_cents) }}
-						</td>
-						<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap">
-							<span v-if="balanceOf(b) === 0" class="text-(--ui-text-muted)">—</span>
-							<span v-else>{{ formatLKR(balanceOf(b)) }}</span>
-						</td>
-						<td class="py-2 pl-2 pr-3">
-							<StatusBadge :status="statusOf(b)" />
-						</td>
-					</tr>
-				</tbody>
-			</table>
-
-			<ListPagination
-				v-model:page="list.page"
-				v-model:page-size="list.pageSize"
-				:total="list.total"
-				:total-pages="list.totalPages"
-				:range-start="list.rangeStart"
-				:range-end="list.rangeEnd"
-			/>
+							<span v-else class="text-(--ui-text-muted)">—</span>
+						</div>
+					</template>
+				</Column>
+				<Column field="issue_date" header="Issued" sortable>
+					<template #body="{ data }">
+						<div class="truncate text-(--ui-text-muted) tabular-nums">
+							{{ data.issue_date }}
+						</div>
+					</template>
+				</Column>
+				<Column field="due_date" header="Due" sortable>
+					<template #body="{ data }">
+						<div
+							class="truncate tabular-nums"
+							:class="data._status === 'overdue'
+								? 'text-(--ui-error) font-medium'
+								: 'text-(--ui-text-muted)'"
+						>
+							{{ data.due_date }}
+						</div>
+					</template>
+				</Column>
+				<Column
+					field="total_cents"
+					header="Total"
+					sortable
+					:style="{ textAlign: 'right' }"
+				>
+					<template #body="{ data }">
+						<div class="truncate text-right tabular-nums">
+							{{ formatLKR(data.total_cents) }}
+						</div>
+					</template>
+				</Column>
+				<Column
+					field="_balance"
+					header="Balance"
+					sortable
+					:style="{ textAlign: 'right' }"
+				>
+					<template #body="{ data }">
+						<div class="truncate text-right tabular-nums">
+							<span v-if="data._balance === 0" class="text-(--ui-text-muted)">—</span>
+							<span v-else>{{ formatLKR(data._balance) }}</span>
+						</div>
+					</template>
+				</Column>
+				<Column field="_status" header="Status" sortable>
+					<template #body="{ data }">
+						<StatusBadge :status="data._status" />
+					</template>
+				</Column>
+			</ResizableDataTable>
 		</UCard>
 	</div>
 </template>
 
 <script setup lang="ts">
 	import type { BillRow, BillStatus, VendorSnapshot } from "~/stores/bills";
-	import { useListView } from "~/composables/useListView";
 	import { formatLKR } from "~/lib/money";
 	import { themeHex } from "~/lib/theme";
 	import { useBillCategoriesStore } from "~/stores/bill_categories";
@@ -313,24 +293,52 @@
 		vouchersStore.load()
 	]);
 
-	const list = useListView<BillRow>(
-		() => store.filtered,
-		[
-			{ key: "number", getValue: (b) => b.number },
-			{ key: "vendor", getValue: (b) => vendorNameOf(b) },
-			{ key: "their_number", getValue: (b) => b.vendor_invoice_number },
-			{ key: "category", getValue: (b) => categoryOf(b)?.name ?? null },
-			{ key: "issue_date", getValue: (b) => b.issue_date },
-			{ key: "due_date", getValue: (b) => b.due_date },
-			{ key: "total", getValue: (b) => b.total_cents },
-			{ key: "balance", getValue: (b) => store.balanceCentsFor(b) },
-			{ key: "status", getValue: (b) => store.derivedStatus(b) }
-		],
-		{ defaultSortKey: "issue_date", defaultDir: "desc" }
+	const tableRef = ref<{ autoFit: () => void } | null>(null);
+	const autoFitColumns = () => tableRef.value?.autoFit();
+
+	// Hoisted helpers — referenced from the row view-model below.
+	function vendorNameOf(b: BillRow): string {
+		try {
+			return (JSON.parse(b.vendor_snapshot) as VendorSnapshot).name || "(no vendor)";
+		} catch {
+			return "(no vendor)";
+		}
+	}
+	function categoryMetaOf(b: BillRow): { name: string, color: string, icon: string } | null {
+		if (!b.category_snapshot) return null;
+		try {
+			return JSON.parse(b.category_snapshot) as { name: string, color: string, icon: string };
+		} catch {
+			return null;
+		}
+	}
+
+	// View-model: PrimeVue sorts by top-level fields, so snapshot-derived
+	// values (vendor name, category, balance, status) all get attached as
+	// `_…` fields. The full category meta is preserved on `_categoryMeta`
+	// so the Category cell can render its swatch + icon without re-parsing.
+	interface BillRowVM extends BillRow {
+		_vendor: string
+		_category: string | null
+		_categoryMeta: { name: string, color: string, icon: string } | null
+		_balance: number
+		_status: BillStatus
+	}
+	const rows = computed<BillRowVM[]>(() =>
+		store.filtered.map((b) => {
+			const meta = categoryMetaOf(b);
+			return {
+				...b,
+				_vendor: vendorNameOf(b),
+				_category: meta?.name ?? null,
+				_categoryMeta: meta,
+				_balance: store.balanceCentsFor(b),
+				_status: store.derivedStatus(b)
+			};
+		})
 	);
 
 	const newBill = () => router.push("/bills/new");
-	const open = (b: BillRow) => router.push(`/bills/${b.id}`);
 
 	const vendorOptions = computed<{ label: string, value: number | "all" }[]>(() => [
 		{ label: "All vendors", value: "all" },
@@ -445,34 +453,4 @@
 		isDatePresetActive(key)
 			? "bg-(--ui-info)/15 border-(--ui-info)/40 text-(--ui-info)"
 			: inactiveChip;
-
-	// Balance + status are derived from the linked payment vouchers
-	// (and due date) — see bills store. The list table just delegates.
-	const balanceOf = (b: BillRow) => store.balanceCentsFor(b);
-	const statusOf = (b: BillRow) => store.derivedStatus(b);
-
-	// Function declarations (not const arrows) so they hoist above the
-	// useListView() call site, which references them in column getValues.
-
-	// Vendor name lives in the JSON snapshot frozen at creation time.
-	// Falls back gracefully if the snapshot is missing or malformed.
-	function vendorNameOf(b: BillRow): string {
-		try {
-			return (JSON.parse(b.vendor_snapshot) as VendorSnapshot).name || "(no vendor)";
-		} catch {
-			return "(no vendor)";
-		}
-	}
-
-	// Category name/color/icon also live in a frozen snapshot, so renames or
-	// recolors don't rewrite older bill rows. Returns null when the bill has
-	// no category (or the snapshot is malformed).
-	function categoryOf(b: BillRow): { name: string, color: string, icon: string } | null {
-		if (!b.category_snapshot) return null;
-		try {
-			return JSON.parse(b.category_snapshot) as { name: string, color: string, icon: string };
-		} catch {
-			return null;
-		}
-	}
 </script>
