@@ -17,7 +17,7 @@
 //       Number
 //     </ResizableTh>
 
-import { ref, watch } from "vue";
+import { reactive, ref, watch } from "vue";
 
 export interface ResizableColumn {
 	key: string
@@ -109,5 +109,10 @@ export function useResizableColumns(pageKey: string, columns: ResizableColumn[])
 		widths.value = next;
 	};
 
-	return { widths, startResize, reset };
+	// Wrap in reactive() so templates can do `cols.widths.foo` without
+	// the .value dance — same convenience pattern useListView uses.
+	// A plain { widths, ... } would expose `widths` as the raw ref in
+	// templates (Vue only auto-unwraps refs inside reactive proxies or
+	// at the top level of setup state).
+	return reactive({ widths, startResize, reset });
 }

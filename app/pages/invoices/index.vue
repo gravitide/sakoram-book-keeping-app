@@ -151,146 +151,163 @@
 					No invoices match your filters.
 				</div>
 			</div>
-			<table v-else class="w-full text-sm table-fixed">
-				<!-- table-fixed lets the colgroup widths actually take
+			<!-- overflow-x-auto wrapper kicks in when the user has resized
+				columns past the card's available width — the table scrolls
+				horizontally instead of cells getting hidden off-screen.
+				The inner `relative` is the positioning ancestor for the
+				ResizeHandleOverlay strips. -->
+			<div v-else class="overflow-x-auto">
+				<div class="relative w-max min-w-full">
+					<table class="w-full text-sm table-fixed">
+						<!-- table-fixed lets the colgroup widths actually take
 					effect — without it browsers ignore <col> widths and
 					auto-size from content. Per-column widths come from
-					useResizableColumns, persisted to localStorage. -->
-				<colgroup>
-					<col :style="{ width: `${cols.widths.number}px` }">
-					<col :style="{ width: `${cols.widths.client}px` }">
-					<col :style="{ width: `${cols.widths.project}px` }">
-					<col :style="{ width: `${cols.widths.issue_date}px` }">
-					<col :style="{ width: `${cols.widths.due_date}px` }">
-					<col :style="{ width: `${cols.widths.total}px` }">
-					<col :style="{ width: `${cols.widths.balance}px` }">
-					<col :style="{ width: `${cols.widths.status}px` }">
-					<col style="width: 56px;">
-				</colgroup>
-				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-					<tr>
-						<ResizableTh
-							th-class="py-2 pl-3 pr-2 font-medium"
-							:active="list.sortKey === 'number'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('number')"
-							@resize-start="cols.startResize('number', $event)"
-						>
-							Number
-						</ResizableTh>
-						<ResizableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'client'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('client')"
-							@resize-start="cols.startResize('client', $event)"
-						>
-							Client
-						</ResizableTh>
-						<ResizableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'project'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('project')"
-							@resize-start="cols.startResize('project', $event)"
-						>
-							Project
-						</ResizableTh>
-						<ResizableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'issue_date'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('issue_date')"
-							@resize-start="cols.startResize('issue_date', $event)"
-						>
-							Issued
-						</ResizableTh>
-						<ResizableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'due_date'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('due_date')"
-							@resize-start="cols.startResize('due_date', $event)"
-						>
-							Due
-						</ResizableTh>
-						<ResizableTh
-							th-class="py-2 px-2 font-medium text-right"
-							:active="list.sortKey === 'total'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('total')"
-							@resize-start="cols.startResize('total', $event)"
-						>
-							Total
-						</ResizableTh>
-						<ResizableTh
-							th-class="py-2 px-2 font-medium text-right"
-							:active="list.sortKey === 'balance'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('balance')"
-							@resize-start="cols.startResize('balance', $event)"
-						>
-							Balance
-						</ResizableTh>
-						<ResizableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'status'"
-							:dir="list.sortDir"
-							:resizable="false"
-							@sort="list.toggleSort('status')"
-						>
-							Status
-						</ResizableTh>
-						<th class="py-2 pl-2 pr-3" />
-					</tr>
-				</thead>
-				<tbody>
-					<!-- Right-click any row → same actions menu as the
+					useResizableColumns, persisted to localStorage. Every
+					body cell uses truncate / overflow-hidden so content
+					never bleeds into the next column.
+
+					w-max makes the table's width the *sum* of the
+					col widths so a resize is exact (no leftover-space
+					distribution); min-w-full keeps it stretched to the
+					container when the user has sized columns smaller
+					than the available width. The overflow-x-auto
+					wrapper lets the user scroll horizontally when the
+					total exceeds the card. -->
+
+						<colgroup>
+							<col :style="{ width: `${cols.widths.number}px` }">
+							<col :style="{ width: `${cols.widths.client}px` }">
+							<col :style="{ width: `${cols.widths.project}px` }">
+							<col :style="{ width: `${cols.widths.issue_date}px` }">
+							<col :style="{ width: `${cols.widths.due_date}px` }">
+							<col :style="{ width: `${cols.widths.total}px` }">
+							<col :style="{ width: `${cols.widths.balance}px` }">
+							<col :style="{ width: `${cols.widths.status}px` }">
+							<col style="width: 56px;">
+						</colgroup>
+						<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
+							<tr>
+								<ResizableTh
+									th-class="py-2 pl-3 pr-2 font-medium"
+									:active="list.sortKey === 'number'"
+									:dir="list.sortDir"
+									@sort="list.toggleSort('number')"
+								>
+									Number
+								</ResizableTh>
+								<ResizableTh
+									th-class="py-2 px-2 font-medium"
+									:active="list.sortKey === 'client'"
+									:dir="list.sortDir"
+									@sort="list.toggleSort('client')"
+								>
+									Client
+								</ResizableTh>
+								<ResizableTh
+									th-class="py-2 px-2 font-medium"
+									:active="list.sortKey === 'project'"
+									:dir="list.sortDir"
+									@sort="list.toggleSort('project')"
+								>
+									Project
+								</ResizableTh>
+								<ResizableTh
+									th-class="py-2 px-2 font-medium"
+									:active="list.sortKey === 'issue_date'"
+									:dir="list.sortDir"
+									@sort="list.toggleSort('issue_date')"
+								>
+									Issued
+								</ResizableTh>
+								<ResizableTh
+									th-class="py-2 px-2 font-medium"
+									:active="list.sortKey === 'due_date'"
+									:dir="list.sortDir"
+									@sort="list.toggleSort('due_date')"
+								>
+									Due
+								</ResizableTh>
+								<ResizableTh
+									th-class="py-2 px-2 font-medium text-right"
+									:active="list.sortKey === 'total'"
+									:dir="list.sortDir"
+									@sort="list.toggleSort('total')"
+								>
+									Total
+								</ResizableTh>
+								<ResizableTh
+									th-class="py-2 px-2 font-medium text-right"
+									:active="list.sortKey === 'balance'"
+									:dir="list.sortDir"
+									@sort="list.toggleSort('balance')"
+									@resize-start="cols.startResize('balance', $event)"
+								>
+									Balance
+								</ResizableTh>
+								<ResizableTh
+									th-class="py-2 px-2 font-medium"
+									:active="list.sortKey === 'status'"
+									:dir="list.sortDir"
+									@sort="list.toggleSort('status')"
+								>
+									Status
+								</ResizableTh>
+								<th class="py-2 pl-2 pr-3" />
+							</tr>
+						</thead>
+						<tbody>
+							<!-- Right-click any row → same actions menu as the
 						overflow ⋯ button. Reka UI's as-child trigger
 						keeps the <tr> as the actual DOM element. -->
-					<UContextMenu
-						v-for="i in list.paged"
-						:key="i.id"
-						:items="itemsFor(i)"
-					>
-						<tr
-							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-							@click="open(i)"
-						>
-							<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
-								{{ i.number }}
-							</td>
-							<td class="py-2 px-2">
-								{{ clientName(i.client_snapshot) }}
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted) max-w-xs truncate">
-								{{ i.project_title || "—" }}
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-								{{ i.issue_date }}
-							</td>
-							<td class="py-2 px-2 tabular-nums" :class="statusOf(i) === 'overdue' ? 'text-(--ui-error) font-medium' : 'text-(--ui-text-muted)'">
-								{{ i.due_date }}
-							</td>
-							<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap">
-								{{ formatLKR(i.total_cents) }}
-							</td>
-							<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap">
-								<span v-if="balanceOf(i) === 0" class="text-(--ui-text-muted)">—</span>
-								<span v-else>{{ formatLKR(balanceOf(i)) }}</span>
-							</td>
-							<td class="py-2 px-2">
-								<StatusBadge :status="statusOf(i)" />
-							</td>
-							<td class="py-2 pl-2 pr-3 text-right" @click.stop>
-								<UDropdownMenu :items="itemsFor(i)">
-									<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
-								</UDropdownMenu>
-							</td>
-						</tr>
-					</UContextMenu>
-				</tbody>
-			</table>
+							<UContextMenu
+								v-for="i in list.paged"
+								:key="i.id"
+								:items="itemsFor(i)"
+							>
+								<tr
+									class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+									@click="open(i)"
+								>
+									<td class="py-2 pl-3 pr-2 font-medium tabular-nums truncate">
+										{{ i.number }}
+									</td>
+									<td class="py-2 px-2 truncate">
+										{{ clientName(i.client_snapshot) }}
+									</td>
+									<td class="py-2 px-2 text-(--ui-text-muted) truncate">
+										{{ i.project_title || "—" }}
+									</td>
+									<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums truncate">
+										{{ i.issue_date }}
+									</td>
+									<td class="py-2 px-2 tabular-nums truncate" :class="statusOf(i) === 'overdue' ? 'text-(--ui-error) font-medium' : 'text-(--ui-text-muted)'">
+										{{ i.due_date }}
+									</td>
+									<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap overflow-hidden">
+										{{ formatLKR(i.total_cents) }}
+									</td>
+									<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap overflow-hidden">
+										<span v-if="balanceOf(i) === 0" class="text-(--ui-text-muted)">—</span>
+										<span v-else>{{ formatLKR(balanceOf(i)) }}</span>
+									</td>
+									<td class="py-2 px-2">
+										<StatusBadge :status="statusOf(i)" />
+									</td>
+									<td class="py-2 pl-2 pr-3 text-right" @click.stop>
+										<UDropdownMenu :items="itemsFor(i)">
+											<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
+										</UDropdownMenu>
+									</td>
+								</tr>
+							</UContextMenu>
+						</tbody>
+					</table>
+					<ResizeHandleOverlay
+						:boundaries="resizeBoundaries"
+						@resize-start="cols.startResize"
+					/>
+				</div>
+			</div>
 
 			<ListPagination
 				v-model:page="list.page"
@@ -371,6 +388,20 @@
 		{ key: "balance", default: 130 },
 		{ key: "status", default: 110 }
 	]);
+
+	// Resize boundaries for ResizeHandleOverlay — one strip after each
+	// resizable column, positioned at the cumulative width of all
+	// preceding columns. Status (the last resizable in the list) gets a
+	// boundary after it but inside the table, so it can be widened /
+	// narrowed too. The trailing actions column is fixed.
+	const RESIZABLE_ORDER = ["number", "client", "project", "issue_date", "due_date", "total", "balance"] as const;
+	const resizeBoundaries = computed(() => {
+		let left = 0;
+		return RESIZABLE_ORDER.map((key) => {
+			left += cols.widths[key];
+			return { key, left };
+		});
+	});
 
 	const newInvoice = () => router.push("/invoices/new");
 	const open = (i: InvoiceRow) => router.push(`/invoices/${i.id}`);
