@@ -151,117 +151,131 @@
 					No invoices match your filters.
 				</div>
 			</div>
-			<!-- NuxtUI UTable (built on @tanstack/vue-table). Handles sort,
-				pagination, and column resizing internally; we just bind
-				state. Custom headers render via the `<id>-header` slots
-				(TableSortHeader = label + arrow-only sort button + the
-				resize-handle the user grabs to widen the column). Custom
-				cells render via `<id>-cell` slots, each wrapping content
-				in a block-level `div.truncate` so content stays inside
-				its column rather than bleeding into the next. -->
-			<UTable
+			<!-- PrimeVue DataTable. Resizing, sorting, pagination, and
+				layout persistence are all built in — `resizableColumns`
+				+ `columnResizeMode="expand"` gives us draggable column
+				boundaries that don't shift sibling columns; `stateStorage`
+				+ `stateKey` persist the current widths / sort / page to
+				localStorage so the user's layout sticks across launches.
+				Sort is per-column via `sortable`; click anywhere in a
+				header to toggle sort direction (PrimeVue's default). -->
+			<DataTable
 				v-else
-				v-model:sorting="sorting"
-				v-model:pagination="pagination"
-				v-model:column-sizing="columnSizing"
-				:data="store.filtered"
-				:columns="columns"
-				:column-sizing-options="{ enableColumnResizing: true, columnResizeMode: 'onChange' }"
-				:get-row-id="(row) => String(row.id)"
-				:ui="{
-					base: 'w-full table-fixed',
-					thead: 'text-xs uppercase tracking-wide text-(--ui-text-muted)',
-					tr: 'border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer'
-				}"
-				@select="(_, row) => open(row.original)"
+				:value="rows"
+				data-key="id"
+				striped-rows
+				show-gridlines
+				removable-sort
+				resizable-columns
+				column-resize-mode="expand"
+				state-storage="local"
+				state-key="invoices-table"
+				paginator
+				:rows="15"
+				:rows-per-page-options="[10, 15, 25, 50, 100]"
+				current-page-report-template="Showing {first} to {last} of {totalRecords}"
+				paginator-template="CurrentPageReport FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink RowsPerPageDropdown"
+				sort-field="issue_date"
+				:sort-order="-1"
+				class="text-sm"
+				@row-click="onRowClick"
 			>
-				<template #number-header="{ header }">
-					<TableSortHeader :header="header" label="Number" />
-				</template>
-				<template #client-header="{ header }">
-					<TableSortHeader :header="header" label="Client" />
-				</template>
-				<template #project-header="{ header }">
-					<TableSortHeader :header="header" label="Project" />
-				</template>
-				<template #issue_date-header="{ header }">
-					<TableSortHeader :header="header" label="Issued" />
-				</template>
-				<template #due_date-header="{ header }">
-					<TableSortHeader :header="header" label="Due" />
-				</template>
-				<template #total-header="{ header }">
-					<TableSortHeader :header="header" label="Total" />
-				</template>
-				<template #balance-header="{ header }">
-					<TableSortHeader :header="header" label="Balance" />
-				</template>
-				<template #status-header="{ header }">
-					<TableSortHeader :header="header" label="Status" />
-				</template>
-
-				<template #number-cell="{ row }">
-					<div class="truncate">
-						{{ row.original.number }}
-					</div>
-				</template>
-				<template #client-cell="{ row }">
-					<div class="truncate">
-						{{ clientName(row.original.client_snapshot) }}
-					</div>
-				</template>
-				<template #project-cell="{ row }">
-					<div class="truncate">
-						{{ row.original.project_title || "—" }}
-					</div>
-				</template>
-				<template #issue_date-cell="{ row }">
-					<div class="truncate">
-						{{ row.original.issue_date }}
-					</div>
-				</template>
-				<template #due_date-cell="{ row }">
-					<div
-						class="truncate"
-						:class="statusOf(row.original) === 'overdue'
-							? 'text-(--ui-error) font-medium'
-							: 'text-(--ui-text-muted)'"
-					>
-						{{ row.original.due_date }}
-					</div>
-				</template>
-				<template #total-cell="{ row }">
-					<div class="truncate">
-						{{ formatLKR(row.original.total_cents) }}
-					</div>
-				</template>
-				<template #balance-cell="{ row }">
-					<div class="truncate">
-						<span v-if="balanceOf(row.original) === 0" class="text-(--ui-text-muted)">—</span>
-						<span v-else>{{ formatLKR(balanceOf(row.original)) }}</span>
-					</div>
-				</template>
-				<template #status-cell="{ row }">
-					<StatusBadge :status="statusOf(row.original)" />
-				</template>
-				<template #actions-cell="{ row }">
-					<div class="text-right" @click.stop>
-						<UDropdownMenu :items="itemsFor(row.original)">
-							<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
-						</UDropdownMenu>
-					</div>
-				</template>
-			</UTable>
-
-			<ListPagination
-				v-if="store.filtered.length > 0"
-				v-model:page="page"
-				v-model:page-size="pageSize"
-				:total="totalRows"
-				:total-pages="totalPages"
-				:range-start="rangeStart"
-				:range-end="rangeEnd"
-			/>
+				<Column
+					field="number"
+					header="Number"
+					sortable
+					:style="{ minWidth: '130px' }"
+				>
+					<template #body="{ data }">
+						<span class="font-medium tabular-nums">{{ data.number }}</span>
+					</template>
+				</Column>
+				<Column
+					field="_client"
+					header="Client"
+					sortable
+					:style="{ minWidth: '180px' }"
+				/>
+				<Column
+					field="project_title"
+					header="Project"
+					sortable
+					:style="{ minWidth: '200px' }"
+				>
+					<template #body="{ data }">
+						<span class="text-(--ui-text-muted)">{{ data.project_title || "—" }}</span>
+					</template>
+				</Column>
+				<Column
+					field="issue_date"
+					header="Issued"
+					sortable
+					:style="{ minWidth: '110px' }"
+				>
+					<template #body="{ data }">
+						<span class="text-(--ui-text-muted) tabular-nums">{{ data.issue_date }}</span>
+					</template>
+				</Column>
+				<Column
+					field="due_date"
+					header="Due"
+					sortable
+					:style="{ minWidth: '110px' }"
+				>
+					<template #body="{ data }">
+						<span
+							class="tabular-nums"
+							:class="data._status === 'overdue'
+								? 'text-(--ui-error) font-medium'
+								: 'text-(--ui-text-muted)'"
+						>{{ data.due_date }}</span>
+					</template>
+				</Column>
+				<Column
+					field="total_cents"
+					header="Total"
+					sortable
+					:style="{ minWidth: '120px', textAlign: 'right' }"
+				>
+					<template #body="{ data }">
+						<span class="tabular-nums">{{ formatLKR(data.total_cents) }}</span>
+					</template>
+				</Column>
+				<Column
+					field="_balance"
+					header="Balance"
+					sortable
+					:style="{ minWidth: '120px', textAlign: 'right' }"
+				>
+					<template #body="{ data }">
+						<span v-if="data._balance === 0" class="text-(--ui-text-muted)">—</span>
+						<span v-else class="tabular-nums">{{ formatLKR(data._balance) }}</span>
+					</template>
+				</Column>
+				<Column
+					field="_status"
+					header="Status"
+					sortable
+					:style="{ minWidth: '110px' }"
+				>
+					<template #body="{ data }">
+						<StatusBadge :status="data._status" />
+					</template>
+				</Column>
+				<Column
+					header=""
+					:style="{ width: '56px', textAlign: 'right' }"
+					:resizable="false"
+				>
+					<template #body="{ data }">
+						<div @click.stop>
+							<UDropdownMenu :items="itemsFor(data)">
+								<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
+							</UDropdownMenu>
+						</div>
+					</template>
+				</Column>
+			</DataTable>
 		</UCard>
 
 		<PdfPreviewModal
@@ -277,12 +291,11 @@
 </template>
 
 <script setup lang="ts">
-	import type { TableColumn } from "@nuxt/ui";
+	import type { DataTableRowClickEvent } from "primevue/datatable";
 	import type { InvoiceLineRow, InvoiceRow, InvoiceStatus } from "~/stores/invoices";
 	import type { ClientSnapshot } from "~/stores/quotes";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
-	import { usePersistedColumnSizing } from "~/composables/usePersistedColumnSizing";
 	import { buildInvoicePdfPayload } from "~/lib/invoice-pdf";
 	import { formatLKR } from "~/lib/money";
 	import { useClientsStore } from "~/stores/clients";
@@ -315,135 +328,32 @@
 		}
 	}
 	const balanceOf = (i: InvoiceRow) => store.balanceCentsFor(i);
-	const statusOf = (i: InvoiceRow) => store.derivedStatus(i);
 
-	// --- UTable state ---------------------------------------------------
-	// Sort + pagination state live here (UTable handles both internally
-	// via v-model). Column widths persist to localStorage via
-	// usePersistedColumnSizing so the user's layout survives reloads.
-
-	const sorting = ref<{ id: string, desc: boolean }[]>([
-		{ id: "issue_date", desc: true }
-	]);
-	const pagination = ref({ pageIndex: 0, pageSize: 15 });
-	const columnSizing = usePersistedColumnSizing("invoices", {
-		number: 130,
-		client: 200,
-		project: 240,
-		issue_date: 110,
-		due_date: 110,
-		total: 130,
-		balance: 130,
-		status: 110,
-		actions: 56
-	});
-
-	// Bridges between UTable's {pageIndex, pageSize} state and the
-	// ListPagination component's {page, pageSize, total, ...} props.
-	const totalRows = computed(() => store.filtered.length);
-	const page = computed({
-		get: () => pagination.value.pageIndex + 1,
-		set: (v: number) => {
-			pagination.value = { ...pagination.value, pageIndex: Math.max(0, v - 1) };
-		}
-	});
-	const pageSize = computed({
-		get: () => pagination.value.pageSize,
-		set: (v: number) => {
-			pagination.value = { pageIndex: 0, pageSize: v };
-		}
-	});
-	const totalPages = computed(() =>
-		Math.max(1, Math.ceil(totalRows.value / pagination.value.pageSize))
-	);
-	const rangeStart = computed(() =>
-		totalRows.value === 0 ? 0 : pagination.value.pageIndex * pagination.value.pageSize + 1
-	);
-	const rangeEnd = computed(() =>
-		Math.min(totalRows.value, (pagination.value.pageIndex + 1) * pagination.value.pageSize)
+	// PrimeVue DataTable expects each row to expose every sortable
+	// field as a plain top-level property. The InvoiceRow type doesn't
+	// have client name / balance / status directly — they're derived —
+	// so we map to a view-model with those baked in. Underscored names
+	// keep them out of the way of any future schema additions.
+	interface InvoiceRowVM extends InvoiceRow {
+		_client: string
+		_balance: number
+		_status: InvoiceStatus
+	}
+	const rows = computed<InvoiceRowVM[]>(() =>
+		store.filtered.map((i) => ({
+			...i,
+			_client: clientName(i.client_snapshot),
+			_balance: store.balanceCentsFor(i),
+			_status: store.derivedStatus(i)
+		}))
 	);
 
-	// TanStack column definitions. NuxtUI's UTable tracks columnSizing
-	// state but doesn't translate it into actual th/td widths — we have
-	// to do that via `meta.style` functions calling `getSize()`. The
-	// `sized()` helper wraps that up so each column declaration stays
-	// readable. `meta.class.th: "relative"` lets TableSortHeader
-	// absolute-position its resize handle at the cell's right edge.
-	const sized = (cls: { th: string, td: string }) => ({
-		class: cls,
-		style: {
-			th: (header: { getSize: () => number }) => ({ width: `${header.getSize()}px` }),
-			td: (cell: { column: { getSize: () => number } }) => ({ width: `${cell.column.getSize()}px` })
-		}
-	});
-	const HEADER_BASE = "relative font-medium";
-	const columns = computed<TableColumn<InvoiceRow>[]>(() => [
-		{
-			accessorKey: "number",
-			id: "number",
-			header: "Number",
-			size: columnSizing.value.number,
-			meta: sized({ th: `${HEADER_BASE} py-2 pl-3 pr-2`, td: "py-2 pl-3 pr-2 font-medium tabular-nums" })
-		},
-		{
-			id: "client",
-			accessorFn: (row) => clientName(row.client_snapshot),
-			header: "Client",
-			size: columnSizing.value.client,
-			meta: sized({ th: `${HEADER_BASE} py-2 px-2`, td: "py-2 px-2" })
-		},
-		{
-			id: "project",
-			accessorFn: (row) => row.project_title || "—",
-			header: "Project",
-			size: columnSizing.value.project,
-			meta: sized({ th: `${HEADER_BASE} py-2 px-2`, td: "py-2 px-2 text-(--ui-text-muted)" })
-		},
-		{
-			accessorKey: "issue_date",
-			id: "issue_date",
-			header: "Issued",
-			size: columnSizing.value.issue_date,
-			meta: sized({ th: `${HEADER_BASE} py-2 px-2`, td: "py-2 px-2 text-(--ui-text-muted) tabular-nums" })
-		},
-		{
-			accessorKey: "due_date",
-			id: "due_date",
-			header: "Due",
-			size: columnSizing.value.due_date,
-			meta: sized({ th: `${HEADER_BASE} py-2 px-2`, td: "py-2 px-2 tabular-nums" })
-		},
-		{
-			accessorKey: "total_cents",
-			id: "total",
-			header: "Total",
-			size: columnSizing.value.total,
-			meta: sized({ th: `${HEADER_BASE} py-2 px-2 text-right`, td: "py-2 px-2 text-right tabular-nums" })
-		},
-		{
-			id: "balance",
-			accessorFn: (row) => store.balanceCentsFor(row),
-			header: "Balance",
-			size: columnSizing.value.balance,
-			meta: sized({ th: `${HEADER_BASE} py-2 px-2 text-right`, td: "py-2 px-2 text-right tabular-nums" })
-		},
-		{
-			id: "status",
-			accessorFn: (row) => store.derivedStatus(row),
-			header: "Status",
-			size: columnSizing.value.status,
-			enableResizing: false,
-			meta: sized({ th: "font-medium py-2 px-2", td: "py-2 px-2" })
-		},
-		{
-			id: "actions",
-			header: "",
-			size: columnSizing.value.actions,
-			enableSorting: false,
-			enableResizing: false,
-			meta: sized({ th: "py-2 pl-2 pr-3", td: "py-2 pl-2 pr-3 text-right" })
-		}
-	]);
+	// Row navigation. DataTable's @row-click fires with
+	// { originalEvent, data, index } — `data` is our InvoiceRowVM.
+	const onRowClick = (e: DataTableRowClickEvent) => {
+		const row = e.data as InvoiceRowVM | undefined;
+		if (row) router.push(`/invoices/${row.id}`);
+	};
 
 	const newInvoice = () => router.push("/invoices/new");
 	const open = (i: InvoiceRow) => router.push(`/invoices/${i.id}`);
