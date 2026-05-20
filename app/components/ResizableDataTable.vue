@@ -6,7 +6,6 @@
 			:selection="selectable ? selection : undefined"
 			:value="rows"
 			:data-key="dataKey"
-			:selection-mode="selectable ? 'multiple' : undefined"
 			striped-rows
 			show-gridlines
 			removable-sort
@@ -31,7 +30,16 @@
 			<!-- Prepend a checkbox selection column when `selectable` is on.
 				PrimeVue stamps each cell with `data-p-selection-column='true'`
 				so the row-click handler + CSS can identify and skip it
-				when picking the "first clickable cell". -->
+				when picking the "first clickable cell".
+
+				`selectionMode="multiple"` is set on the column only, NOT
+				on the parent DataTable — setting it on the DataTable
+				would also enable click-anywhere-on-a-row to toggle
+				selection, which fights our `@row-click → open detail`
+				flow (a click on the first cell would both open AND
+				tick). Column-only keeps selection scoped to the
+				checkbox itself; `v-model:selection` still works the
+				same way. -->
 			<Column
 				v-if="selectable"
 				selection-mode="multiple"
