@@ -163,7 +163,24 @@
 	}
 	defineExpose({ autoFit });
 
+	// Row-click navigation is intentionally scoped to the **first body
+	// cell** of each row, not the whole row. Two reasons:
+	//   1. Drag-to-scroll: with the whole row clickable, even a short
+	//      pan would tug on the 5px threshold and risk an accidental
+	//      navigation. Limiting clicks to the first cell leaves every
+	//      other cell as a clean drag surface.
+	//   2. Cleaner mental model: the leading column (number, name, id)
+	//      reads as the "link" the way it does on GitHub / GitLab
+	//      tables — supported visually by the cursor + hover-color
+	//      treatment in `main.css`.
+	// Right-click still opens the context menu on the entire row via
+	// `@row-contextmenu` — that handler doesn't care about cell scope.
 	const onRowClickInternal = (e: DataTableRowClickEvent) => {
+		const target = e.originalEvent.target as HTMLElement | null;
+		const cell = target?.closest("td");
+		const cellRow = cell?.parentElement;
+		if (!cell || !cellRow) return;
+		if (cell !== cellRow.querySelector(":scope > td:first-child")) return;
 		const row = e.data as T | undefined;
 		if (row) emit("rowClick", row);
 	};
