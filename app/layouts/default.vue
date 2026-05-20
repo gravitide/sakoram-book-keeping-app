@@ -165,7 +165,7 @@
 				</UModal>
 			</aside>
 
-			<main class="flex-1 min-w-0 overflow-auto">
+			<main ref="mainEl" class="flex-1 min-w-0 overflow-auto">
 				<!-- Content cap: 96rem (1536px) — matches Tailwind's `2xl`
 				breakpoint. Wider than the default `max-w-7xl` (1280px) so
 				multi-column list pages have more room on a wide desktop
@@ -297,6 +297,18 @@
 		const el = document.getElementById(hash.replace(/^#/, ""));
 		el?.scrollIntoView({ behavior: "smooth", block: "start" });
 	};
+
+	// Snap the main scroll container back to the top whenever the user
+	// navigates between pages. Vue Router's default scroll-to-top only
+	// touches the window, but our content scrolls inside <main> (the
+	// floating-sidebar layout), so we have to reset it ourselves.
+	// Watching `route.path` rather than the full route keeps in-page
+	// hash links — the third-level section anchors on /settings/pdf and
+	// /settings/appearance — from triggering an unwanted top-snap.
+	const mainEl = ref<HTMLElement | null>(null);
+	watch(() => route.path, () => {
+		mainEl.value?.scrollTo({ top: 0 });
+	});
 
 	// Sidebar nav — Settings is a parent with two children. Sub-items are
 	// always visible (no click-to-expand) since the tree is small.
