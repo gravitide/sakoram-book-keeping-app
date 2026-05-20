@@ -113,7 +113,13 @@
 		rowActions: undefined,
 		defaultSortField: undefined,
 		defaultSortOrder: -1,
-		tableStyle: "width: 100%; min-width: 60rem",
+		// `width: 100%` so the table always fills its container on first
+		// paint; no `min-width` floor — content drives the natural
+		// width, and resize-mode="expand" still grows the table past the
+		// container when the user widens a column. Pages with very wide
+		// content (and that want a guaranteed scroll-region) can still
+		// pass their own `:table-style="'width: 100%; min-width: 60rem'"`.
+		tableStyle: "width: 100%",
 		rowsPerPage: 15,
 		rowsPerPageOptions: () => [10, 15, 25, 50, 100]
 	});
