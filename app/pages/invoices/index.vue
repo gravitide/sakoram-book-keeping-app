@@ -151,171 +151,116 @@
 					No invoices match your filters.
 				</div>
 			</div>
-			<!-- overflow-x-auto wrapper kicks in when the user has resized
-				columns past the card's available width — the table scrolls
-				horizontally instead of cells getting hidden off-screen.
-				The inner `relative` is the positioning ancestor for the
-				ResizeHandleOverlay strips. -->
-			<div v-else class="overflow-x-auto">
-				<div class="relative w-max min-w-full">
-					<table class="w-full text-sm table-fixed">
-						<!-- table-fixed lets the colgroup widths actually take
-					effect — without it browsers ignore <col> widths and
-					auto-size from content. Per-column widths come from
-					useResizableColumns, persisted to localStorage. Every
-					body cell uses truncate / overflow-hidden so content
-					never bleeds into the next column.
+			<!-- NuxtUI UTable (built on @tanstack/vue-table). Handles sort,
+				pagination, and column resizing internally; we just bind
+				state. Custom headers render via the `<id>-header` slots
+				(TableSortHeader = label + arrow-only sort button + the
+				resize-handle the user grabs to widen the column). Custom
+				cells render via `<id>-cell` slots, each wrapping content
+				in a block-level `div.truncate` so content stays inside
+				its column rather than bleeding into the next. -->
+			<UTable
+				v-else
+				v-model:sorting="sorting"
+				v-model:pagination="pagination"
+				v-model:column-sizing="columnSizing"
+				:data="store.filtered"
+				:columns="columns"
+				:column-sizing-options="{ columnResizeMode: 'onChange' }"
+				:get-row-id="(row) => String(row.id)"
+				:ui="{
+					base: 'w-full',
+					thead: 'text-xs uppercase tracking-wide text-(--ui-text-muted)',
+					tr: 'border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer'
+				}"
+				@select="(_, row) => open(row.original)"
+			>
+				<template #number-header="{ header }">
+					<TableSortHeader :header="header" label="Number" />
+				</template>
+				<template #client-header="{ header }">
+					<TableSortHeader :header="header" label="Client" />
+				</template>
+				<template #project-header="{ header }">
+					<TableSortHeader :header="header" label="Project" />
+				</template>
+				<template #issue_date-header="{ header }">
+					<TableSortHeader :header="header" label="Issued" />
+				</template>
+				<template #due_date-header="{ header }">
+					<TableSortHeader :header="header" label="Due" />
+				</template>
+				<template #total-header="{ header }">
+					<TableSortHeader :header="header" label="Total" />
+				</template>
+				<template #balance-header="{ header }">
+					<TableSortHeader :header="header" label="Balance" />
+				</template>
+				<template #status-header="{ header }">
+					<TableSortHeader :header="header" label="Status" />
+				</template>
 
-					w-max makes the table's width the *sum* of the
-					col widths so a resize is exact (no leftover-space
-					distribution); min-w-full keeps it stretched to the
-					container when the user has sized columns smaller
-					than the available width. The overflow-x-auto
-					wrapper lets the user scroll horizontally when the
-					total exceeds the card. -->
-
-						<colgroup>
-							<col :style="{ width: `${cols.widths.number}px` }">
-							<col :style="{ width: `${cols.widths.client}px` }">
-							<col :style="{ width: `${cols.widths.project}px` }">
-							<col :style="{ width: `${cols.widths.issue_date}px` }">
-							<col :style="{ width: `${cols.widths.due_date}px` }">
-							<col :style="{ width: `${cols.widths.total}px` }">
-							<col :style="{ width: `${cols.widths.balance}px` }">
-							<col :style="{ width: `${cols.widths.status}px` }">
-							<col style="width: 56px;">
-						</colgroup>
-						<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-							<tr>
-								<ResizableTh
-									th-class="py-2 pl-3 pr-2 font-medium"
-									:active="list.sortKey === 'number'"
-									:dir="list.sortDir"
-									@sort="list.toggleSort('number')"
-								>
-									Number
-								</ResizableTh>
-								<ResizableTh
-									th-class="py-2 px-2 font-medium"
-									:active="list.sortKey === 'client'"
-									:dir="list.sortDir"
-									@sort="list.toggleSort('client')"
-								>
-									Client
-								</ResizableTh>
-								<ResizableTh
-									th-class="py-2 px-2 font-medium"
-									:active="list.sortKey === 'project'"
-									:dir="list.sortDir"
-									@sort="list.toggleSort('project')"
-								>
-									Project
-								</ResizableTh>
-								<ResizableTh
-									th-class="py-2 px-2 font-medium"
-									:active="list.sortKey === 'issue_date'"
-									:dir="list.sortDir"
-									@sort="list.toggleSort('issue_date')"
-								>
-									Issued
-								</ResizableTh>
-								<ResizableTh
-									th-class="py-2 px-2 font-medium"
-									:active="list.sortKey === 'due_date'"
-									:dir="list.sortDir"
-									@sort="list.toggleSort('due_date')"
-								>
-									Due
-								</ResizableTh>
-								<ResizableTh
-									th-class="py-2 px-2 font-medium text-right"
-									:active="list.sortKey === 'total'"
-									:dir="list.sortDir"
-									@sort="list.toggleSort('total')"
-								>
-									Total
-								</ResizableTh>
-								<ResizableTh
-									th-class="py-2 px-2 font-medium text-right"
-									:active="list.sortKey === 'balance'"
-									:dir="list.sortDir"
-									@sort="list.toggleSort('balance')"
-									@resize-start="cols.startResize('balance', $event)"
-								>
-									Balance
-								</ResizableTh>
-								<ResizableTh
-									th-class="py-2 px-2 font-medium"
-									:active="list.sortKey === 'status'"
-									:dir="list.sortDir"
-									@sort="list.toggleSort('status')"
-								>
-									Status
-								</ResizableTh>
-								<th class="py-2 pl-2 pr-3" />
-							</tr>
-						</thead>
-						<tbody>
-							<!-- Right-click any row → same actions menu as the
-						overflow ⋯ button. Reka UI's as-child trigger
-						keeps the <tr> as the actual DOM element. -->
-							<UContextMenu
-								v-for="i in list.paged"
-								:key="i.id"
-								:items="itemsFor(i)"
-							>
-								<tr
-									class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-									@click="open(i)"
-								>
-									<td class="py-2 pl-3 pr-2 font-medium tabular-nums truncate">
-										{{ i.number }}
-									</td>
-									<td class="py-2 px-2 truncate">
-										{{ clientName(i.client_snapshot) }}
-									</td>
-									<td class="py-2 px-2 text-(--ui-text-muted) truncate">
-										{{ i.project_title || "—" }}
-									</td>
-									<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums truncate">
-										{{ i.issue_date }}
-									</td>
-									<td class="py-2 px-2 tabular-nums truncate" :class="statusOf(i) === 'overdue' ? 'text-(--ui-error) font-medium' : 'text-(--ui-text-muted)'">
-										{{ i.due_date }}
-									</td>
-									<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap overflow-hidden">
-										{{ formatLKR(i.total_cents) }}
-									</td>
-									<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap overflow-hidden">
-										<span v-if="balanceOf(i) === 0" class="text-(--ui-text-muted)">—</span>
-										<span v-else>{{ formatLKR(balanceOf(i)) }}</span>
-									</td>
-									<td class="py-2 px-2">
-										<StatusBadge :status="statusOf(i)" />
-									</td>
-									<td class="py-2 pl-2 pr-3 text-right" @click.stop>
-										<UDropdownMenu :items="itemsFor(i)">
-											<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
-										</UDropdownMenu>
-									</td>
-								</tr>
-							</UContextMenu>
-						</tbody>
-					</table>
-					<ResizeHandleOverlay
-						:boundaries="resizeBoundaries"
-						@resize-start="cols.startResize"
-					/>
-				</div>
-			</div>
+				<template #number-cell="{ row }">
+					<div class="truncate">
+						{{ row.original.number }}
+					</div>
+				</template>
+				<template #client-cell="{ row }">
+					<div class="truncate">
+						{{ clientName(row.original.client_snapshot) }}
+					</div>
+				</template>
+				<template #project-cell="{ row }">
+					<div class="truncate">
+						{{ row.original.project_title || "—" }}
+					</div>
+				</template>
+				<template #issue_date-cell="{ row }">
+					<div class="truncate">
+						{{ row.original.issue_date }}
+					</div>
+				</template>
+				<template #due_date-cell="{ row }">
+					<div
+						class="truncate"
+						:class="statusOf(row.original) === 'overdue'
+							? 'text-(--ui-error) font-medium'
+							: 'text-(--ui-text-muted)'"
+					>
+						{{ row.original.due_date }}
+					</div>
+				</template>
+				<template #total-cell="{ row }">
+					<div class="truncate">
+						{{ formatLKR(row.original.total_cents) }}
+					</div>
+				</template>
+				<template #balance-cell="{ row }">
+					<div class="truncate">
+						<span v-if="balanceOf(row.original) === 0" class="text-(--ui-text-muted)">—</span>
+						<span v-else>{{ formatLKR(balanceOf(row.original)) }}</span>
+					</div>
+				</template>
+				<template #status-cell="{ row }">
+					<StatusBadge :status="statusOf(row.original)" />
+				</template>
+				<template #actions-cell="{ row }">
+					<div class="text-right" @click.stop>
+						<UDropdownMenu :items="itemsFor(row.original)">
+							<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
+						</UDropdownMenu>
+					</div>
+				</template>
+			</UTable>
 
 			<ListPagination
-				v-model:page="list.page"
-				v-model:page-size="list.pageSize"
-				:total="list.total"
-				:total-pages="list.totalPages"
-				:range-start="list.rangeStart"
-				:range-end="list.rangeEnd"
+				v-if="store.filtered.length > 0"
+				v-model:page="page"
+				v-model:page-size="pageSize"
+				:total="totalRows"
+				:total-pages="totalPages"
+				:range-start="rangeStart"
+				:range-end="rangeEnd"
 			/>
 		</UCard>
 
@@ -332,12 +277,12 @@
 </template>
 
 <script setup lang="ts">
+	import type { TableColumn } from "@nuxt/ui";
 	import type { InvoiceLineRow, InvoiceRow, InvoiceStatus } from "~/stores/invoices";
 	import type { ClientSnapshot } from "~/stores/quotes";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
-	import { useListView } from "~/composables/useListView";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
-	import { useResizableColumns } from "~/composables/useResizableColumns";
+	import { usePersistedColumnSizing } from "~/composables/usePersistedColumnSizing";
 	import { buildInvoicePdfPayload } from "~/lib/invoice-pdf";
 	import { formatLKR } from "~/lib/money";
 	import { useClientsStore } from "~/stores/clients";
@@ -360,48 +305,137 @@
 	// status and balance are derived from linked receipt vouchers.
 	await Promise.all([store.load(), clientsStore.load(), vouchersStore.load(), settingsStore.ensureLoaded()]);
 
-	const list = useListView<InvoiceRow>(
-		() => store.filtered,
-		[
-			{ key: "number", getValue: (i) => i.number },
-			{ key: "client", getValue: (i) => clientName(i.client_snapshot) },
-			{ key: "project", getValue: (i) => i.project_title },
-			{ key: "issue_date", getValue: (i) => i.issue_date },
-			{ key: "due_date", getValue: (i) => i.due_date },
-			{ key: "total", getValue: (i) => i.total_cents },
-			{ key: "balance", getValue: (i) => store.balanceCentsFor(i) },
-			{ key: "status", getValue: (i) => store.derivedStatus(i) }
-		],
-		{ defaultSortKey: "issue_date", defaultDir: "desc" }
+	// Pre-declare helpers that the column definitions below reference.
+	// (Plain `function` declarations hoist; `const` arrows don't.)
+	function clientName(snap: string): string {
+		try {
+			return (JSON.parse(snap) as ClientSnapshot).name ?? "—";
+		} catch {
+			return "—";
+		}
+	}
+	const balanceOf = (i: InvoiceRow) => store.balanceCentsFor(i);
+	const statusOf = (i: InvoiceRow) => store.derivedStatus(i);
+
+	// --- UTable state ---------------------------------------------------
+	// Sort + pagination state live here (UTable handles both internally
+	// via v-model). Column widths persist to localStorage via
+	// usePersistedColumnSizing so the user's layout survives reloads.
+
+	const sorting = ref<{ id: string, desc: boolean }[]>([
+		{ id: "issue_date", desc: true }
+	]);
+	const pagination = ref({ pageIndex: 0, pageSize: 15 });
+	const columnSizing = usePersistedColumnSizing("invoices", {
+		number: 130,
+		client: 200,
+		project: 240,
+		issue_date: 110,
+		due_date: 110,
+		total: 130,
+		balance: 130,
+		status: 110,
+		actions: 56
+	});
+
+	// Bridges between UTable's {pageIndex, pageSize} state and the
+	// ListPagination component's {page, pageSize, total, ...} props.
+	const totalRows = computed(() => store.filtered.length);
+	const page = computed({
+		get: () => pagination.value.pageIndex + 1,
+		set: (v: number) => {
+			pagination.value = { ...pagination.value, pageIndex: Math.max(0, v - 1) };
+		}
+	});
+	const pageSize = computed({
+		get: () => pagination.value.pageSize,
+		set: (v: number) => {
+			pagination.value = { pageIndex: 0, pageSize: v };
+		}
+	});
+	const totalPages = computed(() =>
+		Math.max(1, Math.ceil(totalRows.value / pagination.value.pageSize))
+	);
+	const rangeStart = computed(() =>
+		totalRows.value === 0 ? 0 : pagination.value.pageIndex * pagination.value.pageSize + 1
+	);
+	const rangeEnd = computed(() =>
+		Math.min(totalRows.value, (pagination.value.pageIndex + 1) * pagination.value.pageSize)
 	);
 
-	// Column widths persist to localStorage so the user's layout sticks
-	// across launches. Per-machine, not per-tenant. The trailing actions
-	// column stays fixed (no resize handle).
-	const cols = useResizableColumns("invoices", [
-		{ key: "number", default: 130 },
-		{ key: "client", default: 220 },
-		{ key: "project", default: 240 },
-		{ key: "issue_date", default: 110 },
-		{ key: "due_date", default: 110 },
-		{ key: "total", default: 130 },
-		{ key: "balance", default: 130 },
-		{ key: "status", default: 110 }
+	// TanStack column definitions. Header / cell content is rendered via
+	// the named slots in the template — these objects just declare the
+	// column ids, accessors, default sizes, and per-th/td classes.
+	// `meta.class.th: "relative"` lets TableSortHeader absolute-position
+	// its resize handle at the cell's right edge.
+	const HEADER_BASE = "relative font-medium";
+	const columns = computed<TableColumn<InvoiceRow>[]>(() => [
+		{
+			accessorKey: "number",
+			id: "number",
+			header: "Number",
+			size: columnSizing.value.number,
+			meta: { class: { th: `${HEADER_BASE} py-2 pl-3 pr-2`, td: "py-2 pl-3 pr-2 font-medium tabular-nums" } }
+		},
+		{
+			id: "client",
+			accessorFn: (row) => clientName(row.client_snapshot),
+			header: "Client",
+			size: columnSizing.value.client,
+			meta: { class: { th: `${HEADER_BASE} py-2 px-2`, td: "py-2 px-2" } }
+		},
+		{
+			id: "project",
+			accessorFn: (row) => row.project_title || "—",
+			header: "Project",
+			size: columnSizing.value.project,
+			meta: { class: { th: `${HEADER_BASE} py-2 px-2`, td: "py-2 px-2 text-(--ui-text-muted)" } }
+		},
+		{
+			accessorKey: "issue_date",
+			id: "issue_date",
+			header: "Issued",
+			size: columnSizing.value.issue_date,
+			meta: { class: { th: `${HEADER_BASE} py-2 px-2`, td: "py-2 px-2 text-(--ui-text-muted) tabular-nums" } }
+		},
+		{
+			accessorKey: "due_date",
+			id: "due_date",
+			header: "Due",
+			size: columnSizing.value.due_date,
+			meta: { class: { th: `${HEADER_BASE} py-2 px-2`, td: "py-2 px-2 tabular-nums" } }
+		},
+		{
+			accessorKey: "total_cents",
+			id: "total",
+			header: "Total",
+			size: columnSizing.value.total,
+			meta: { class: { th: `${HEADER_BASE} py-2 px-2 text-right`, td: "py-2 px-2 text-right tabular-nums" } }
+		},
+		{
+			id: "balance",
+			accessorFn: (row) => store.balanceCentsFor(row),
+			header: "Balance",
+			size: columnSizing.value.balance,
+			meta: { class: { th: `${HEADER_BASE} py-2 px-2 text-right`, td: "py-2 px-2 text-right tabular-nums" } }
+		},
+		{
+			id: "status",
+			accessorFn: (row) => store.derivedStatus(row),
+			header: "Status",
+			size: columnSizing.value.status,
+			enableResizing: false,
+			meta: { class: { th: "font-medium py-2 px-2", td: "py-2 px-2" } }
+		},
+		{
+			id: "actions",
+			header: "",
+			size: columnSizing.value.actions,
+			enableSorting: false,
+			enableResizing: false,
+			meta: { class: { th: "py-2 pl-2 pr-3", td: "py-2 pl-2 pr-3 text-right" } }
+		}
 	]);
-
-	// Resize boundaries for ResizeHandleOverlay — one strip after each
-	// resizable column, positioned at the cumulative width of all
-	// preceding columns. Status (the last resizable in the list) gets a
-	// boundary after it but inside the table, so it can be widened /
-	// narrowed too. The trailing actions column is fixed.
-	const RESIZABLE_ORDER = ["number", "client", "project", "issue_date", "due_date", "total", "balance"] as const;
-	const resizeBoundaries = computed(() => {
-		let left = 0;
-		return RESIZABLE_ORDER.map((key) => {
-			left += cols.widths[key];
-			return { key, left };
-		});
-	});
 
 	const newInvoice = () => router.push("/invoices/new");
 	const open = (i: InvoiceRow) => router.push(`/invoices/${i.id}`);
@@ -513,21 +547,6 @@
 		isDatePresetActive(key)
 			? "bg-(--ui-info)/15 border-(--ui-info)/40 text-(--ui-info)"
 			: inactiveChip;
-
-	// Function declarations (not const arrows) so they hoist above the
-	// useListView() call site, which references them in column getValues.
-	function clientName(snap: string): string {
-		try {
-			return (JSON.parse(snap) as ClientSnapshot).name ?? "—";
-		} catch {
-			return "—";
-		}
-	}
-
-	// Balance + status are derived from linked receipt vouchers (and
-	// due date) — see invoices store. The list table just delegates.
-	const balanceOf = (i: InvoiceRow) => store.balanceCentsFor(i);
-	const statusOf = (i: InvoiceRow) => store.derivedStatus(i);
 
 	// --- Row actions: PDF preview + transitions + record payment ----
 
