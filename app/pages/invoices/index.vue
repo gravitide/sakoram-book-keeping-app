@@ -166,10 +166,10 @@
 				v-model:column-sizing="columnSizing"
 				:data="store.filtered"
 				:columns="columns"
-				:column-sizing-options="{ columnResizeMode: 'onChange' }"
+				:column-sizing-options="{ enableColumnResizing: true, columnResizeMode: 'onChange' }"
 				:get-row-id="(row) => String(row.id)"
 				:ui="{
-					base: 'w-full',
+					base: 'w-full table-fixed',
 					thead: 'text-xs uppercase tracking-wide text-(--ui-text-muted)',
 					tr: 'border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer'
 				}"
@@ -363,11 +363,19 @@
 		Math.min(totalRows.value, (pagination.value.pageIndex + 1) * pagination.value.pageSize)
 	);
 
-	// TanStack column definitions. Header / cell content is rendered via
-	// the named slots in the template — these objects just declare the
-	// column ids, accessors, default sizes, and per-th/td classes.
-	// `meta.class.th: "relative"` lets TableSortHeader absolute-position
-	// its resize handle at the cell's right edge.
+	// TanStack column definitions. NuxtUI's UTable tracks columnSizing
+	// state but doesn't translate it into actual th/td widths — we have
+	// to do that via `meta.style` functions calling `getSize()`. The
+	// `sized()` helper wraps that up so each column declaration stays
+	// readable. `meta.class.th: "relative"` lets TableSortHeader
+	// absolute-position its resize handle at the cell's right edge.
+	const sized = (cls: { th: string, td: string }) => ({
+		class: cls,
+		style: {
+			th: (header: { getSize: () => number }) => ({ width: `${header.getSize()}px` }),
+			td: (cell: { column: { getSize: () => number } }) => ({ width: `${cell.column.getSize()}px` })
+		}
+	});
 	const HEADER_BASE = "relative font-medium";
 	const columns = computed<TableColumn<InvoiceRow>[]>(() => [
 		{
@@ -375,49 +383,49 @@
 			id: "number",
 			header: "Number",
 			size: columnSizing.value.number,
-			meta: { class: { th: `${HEADER_BASE} py-2 pl-3 pr-2`, td: "py-2 pl-3 pr-2 font-medium tabular-nums" } }
+			meta: sized({ th: `${HEADER_BASE} py-2 pl-3 pr-2`, td: "py-2 pl-3 pr-2 font-medium tabular-nums" })
 		},
 		{
 			id: "client",
 			accessorFn: (row) => clientName(row.client_snapshot),
 			header: "Client",
 			size: columnSizing.value.client,
-			meta: { class: { th: `${HEADER_BASE} py-2 px-2`, td: "py-2 px-2" } }
+			meta: sized({ th: `${HEADER_BASE} py-2 px-2`, td: "py-2 px-2" })
 		},
 		{
 			id: "project",
 			accessorFn: (row) => row.project_title || "—",
 			header: "Project",
 			size: columnSizing.value.project,
-			meta: { class: { th: `${HEADER_BASE} py-2 px-2`, td: "py-2 px-2 text-(--ui-text-muted)" } }
+			meta: sized({ th: `${HEADER_BASE} py-2 px-2`, td: "py-2 px-2 text-(--ui-text-muted)" })
 		},
 		{
 			accessorKey: "issue_date",
 			id: "issue_date",
 			header: "Issued",
 			size: columnSizing.value.issue_date,
-			meta: { class: { th: `${HEADER_BASE} py-2 px-2`, td: "py-2 px-2 text-(--ui-text-muted) tabular-nums" } }
+			meta: sized({ th: `${HEADER_BASE} py-2 px-2`, td: "py-2 px-2 text-(--ui-text-muted) tabular-nums" })
 		},
 		{
 			accessorKey: "due_date",
 			id: "due_date",
 			header: "Due",
 			size: columnSizing.value.due_date,
-			meta: { class: { th: `${HEADER_BASE} py-2 px-2`, td: "py-2 px-2 tabular-nums" } }
+			meta: sized({ th: `${HEADER_BASE} py-2 px-2`, td: "py-2 px-2 tabular-nums" })
 		},
 		{
 			accessorKey: "total_cents",
 			id: "total",
 			header: "Total",
 			size: columnSizing.value.total,
-			meta: { class: { th: `${HEADER_BASE} py-2 px-2 text-right`, td: "py-2 px-2 text-right tabular-nums" } }
+			meta: sized({ th: `${HEADER_BASE} py-2 px-2 text-right`, td: "py-2 px-2 text-right tabular-nums" })
 		},
 		{
 			id: "balance",
 			accessorFn: (row) => store.balanceCentsFor(row),
 			header: "Balance",
 			size: columnSizing.value.balance,
-			meta: { class: { th: `${HEADER_BASE} py-2 px-2 text-right`, td: "py-2 px-2 text-right tabular-nums" } }
+			meta: sized({ th: `${HEADER_BASE} py-2 px-2 text-right`, td: "py-2 px-2 text-right tabular-nums" })
 		},
 		{
 			id: "status",
@@ -425,7 +433,7 @@
 			header: "Status",
 			size: columnSizing.value.status,
 			enableResizing: false,
-			meta: { class: { th: "font-medium py-2 px-2", td: "py-2 px-2" } }
+			meta: sized({ th: "font-medium py-2 px-2", td: "py-2 px-2" })
 		},
 		{
 			id: "actions",
@@ -433,7 +441,7 @@
 			size: columnSizing.value.actions,
 			enableSorting: false,
 			enableResizing: false,
-			meta: { class: { th: "py-2 pl-2 pr-3", td: "py-2 pl-2 pr-3 text-right" } }
+			meta: sized({ th: "py-2 pl-2 pr-3", td: "py-2 pl-2 pr-3 text-right" })
 		}
 	]);
 
