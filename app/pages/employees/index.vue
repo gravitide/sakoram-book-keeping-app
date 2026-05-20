@@ -67,13 +67,9 @@
 				:default-sort-order="1"
 				@row-click="(row) => router.push(`/employees/${row.id}`)"
 			>
-				<Column field="employee_number" header="Employee #" sortable>
-					<template #body="{ data }">
-						<div class="truncate font-medium tabular-nums text-(--ui-text-muted)">
-							{{ data.employee_number || "—" }}
-						</div>
-					</template>
-				</Column>
+				<!-- Name first so it's the leading (clickable) column on
+					the row — Employee # is nullable and several employees
+					may not have one assigned. -->
 				<Column field="full_name" header="Name" sortable>
 					<template #body="{ data }">
 						<div class="truncate font-medium flex items-center gap-2">
@@ -81,6 +77,13 @@
 							<UBadge v-if="data.is_archived === 1" color="neutral" variant="subtle" size="sm">
 								Archived
 							</UBadge>
+						</div>
+					</template>
+				</Column>
+				<Column field="employee_number" header="Employee #" sortable>
+					<template #body="{ data }">
+						<div class="truncate tabular-nums text-(--ui-text-muted)">
+							{{ data.employee_number || "—" }}
 						</div>
 					</template>
 				</Column>

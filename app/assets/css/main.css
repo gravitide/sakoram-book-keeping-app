@@ -379,6 +379,24 @@ textarea,
 	font-family: inherit;
 }
 
+/* Row-click navigation is intentionally scoped to the leading cell
+ * (see ResizableDataTable.vue) — cursor + colour cues here mirror
+ * that, so the visual affordance matches the click target:
+ *  - First cell: pointer cursor, primary tint on hover (reads as a
+ *    link the way GitHub / GitLab list tables do).
+ *  - Every other cell: default cursor — these are drag surfaces for
+ *    horizontal panning, not click targets. */
+.p-datatable .p-datatable-tbody > tr > td {
+	cursor: default;
+}
+.p-datatable .p-datatable-tbody > tr > td:first-child {
+	cursor: pointer;
+	transition: color 0.1s;
+}
+.p-datatable .p-datatable-tbody > tr:hover > td:first-child {
+	color: var(--ui-primary);
+}
+
 /* Paginator's rows-per-page Select renders at PrimeVue's default
  * "md" size, which sits ~40px tall and dwarfs the surrounding text
  * + nav-arrow buttons. Trim its padding/min-height down to match the
