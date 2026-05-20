@@ -1,4 +1,5 @@
 import process from "node:process";
+import Aura from "@primevue/themes/aura";
 
 const host = process.env.TAURI_DEV_HOST;
 
@@ -9,8 +10,37 @@ export default defineNuxtConfig({
 		"nuxt-svgo",
 		"reka-ui/nuxt",
 		"@nuxt/eslint",
-		"@pinia/nuxt"
+		"@pinia/nuxt",
+		"@primevue/nuxt-module"
 	],
+	// PrimeVue is used for DataTable (resizable columns out of the box) and
+	// ContextMenu (row right-click on the list pages). Everything else in
+	// the app is NuxtUI. Restrict auto-imports to those three components
+	// so PrimeVue's composables (especially `useToast`) don't shadow
+	// NuxtUI's, and the bundle doesn't pull in the rest of PrimeVue.
+	// The Aura theme respects our existing `.dark` class so PrimeVue
+	// inherits the app's light/dark mode without a separate toggle.
+	primevue: {
+		autoImport: true,
+		components: {
+			include: ["DataTable", "Column", "ContextMenu"]
+		},
+		composables: {
+			include: []
+		},
+		directives: {
+			include: []
+		},
+		options: {
+			theme: {
+				preset: Aura,
+				options: {
+					darkModeSelector: ".dark",
+					cssLayer: false
+				}
+			}
+		}
+	},
 	app: {
 		head: {
 			title: "Sakoram Bookkeeping",

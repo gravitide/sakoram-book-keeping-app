@@ -297,3 +297,248 @@ textarea,
 		0 25px 50px -12px rgb(0 0 0 / 0.5),
 		0 12px 24px -8px rgb(0 0 0 / 0.35);
 }
+
+/* ─── PrimeVue DataTable theming ───────────────────────────────────
+ * The DataTable component ships with the Aura preset (emerald/green
+ * accent). The rest of the app is themed via NuxtUI's `--ui-*` tokens,
+ * which the user picks at /settings/appearance. These overrides
+ * forward Aura's `--p-*` design tokens onto our `--ui-*` palette so
+ * the table inherits the active theme colour, surface palette, border
+ * tone, and font automatically. Anything we don't override stays at
+ * Aura's defaults (spacing, radii, focus rings) — those are fine.
+ *
+ * `:where()` keeps specificity at 0,0,0 so a component-level class
+ * still wins. Scoping to `.p-datatable` (and the paginator wrapper)
+ * keeps these tokens off any other PrimeVue surface we might add.
+ */
+:where(.p-datatable, .p-datatable-paginator-bottom, .p-datatable-paginator-top, .p-contextmenu) {
+	/* Surface tokens — keep cards/striped rows in our paper palette */
+	--p-datatable-header-cell-background: var(--ui-bg-muted);
+	--p-datatable-header-cell-hover-background: var(--ui-bg-accented);
+	--p-datatable-header-cell-selected-background: color-mix(in oklab, var(--ui-primary) 14%, var(--ui-bg-muted));
+	--p-datatable-header-cell-color: var(--ui-text);
+	--p-datatable-header-cell-hover-color: var(--ui-text);
+	--p-datatable-header-cell-selected-color: var(--ui-primary);
+	--p-datatable-header-cell-sort-color: var(--ui-text);
+	--p-datatable-header-cell-sort-hover-color: var(--ui-primary);
+	--p-datatable-header-cell-sort-selected-color: var(--ui-primary);
+	--p-datatable-header-cell-border-color: var(--ui-border);
+	--p-datatable-sort-icon-color: var(--ui-text-muted);
+	--p-datatable-sort-icon-hover-color: var(--ui-primary);
+
+	--p-datatable-row-background: var(--ui-bg);
+	--p-datatable-row-hover-background: var(--ui-bg-accented);
+	--p-datatable-row-color: var(--ui-text);
+	--p-datatable-row-hover-color: var(--ui-text);
+	--p-datatable-row-selected-background: color-mix(in oklab, var(--ui-primary) 14%, var(--ui-bg));
+	--p-datatable-row-selected-color: var(--ui-text);
+	/* Zebra stripes vs. column dividers — NuxtUI's `--ui-bg-muted` and
+	 * `--ui-border` resolve to nearly the same dark-mode tone, so the
+	 * alt rows visually merge with the vertical gridlines. Use explicit
+	 * text-tinted layers with a clear gap between them (4% vs 14%) so
+	 * the stripes read as alternating bands and the borders read as
+	 * thin separators on top of them. */
+	--p-datatable-row-striped-background: color-mix(in oklab, var(--ui-text) 4%, transparent);
+	--p-datatable-border-color: color-mix(in oklab, var(--ui-text) 14%, transparent);
+	--p-datatable-body-cell-border-color: color-mix(in oklab, var(--ui-text) 14%, transparent);
+
+	/* Cell padding — Aura defaults to roomy bookkeeping-table density.
+	 * Trim both header + body cells to ~half height so we can fit more
+	 * rows on screen without horizontal scroll. Horizontal padding
+	 * stays comfortable so columns still feel separated. */
+	--p-datatable-header-cell-padding: 0.5rem 0.75rem;
+	--p-datatable-body-cell-padding: 0.5rem 0.75rem;
+
+	--p-datatable-paginator-background: var(--ui-bg-muted);
+	--p-datatable-paginator-color: var(--ui-text);
+	--p-datatable-paginator-border-color: var(--ui-border);
+
+	/* Resize handle that PrimeVue draws on hover. Tint it with the
+	 * active primary so it reads as an app-level cue. */
+	--p-datatable-resize-indicator-color: var(--ui-primary);
+
+	/* Row focus / context-menu selection outline — Aura defaults to its
+	 * emerald preset for the `outline` that wraps a row on right-click.
+	 * Forward both the outline colour and the surrounding box-shadow
+	 * ring onto our `--ui-primary`. */
+	--p-datatable-row-focus-ring-color: var(--ui-primary);
+	--p-datatable-row-focus-ring-shadow: 0 0 0 2px color-mix(in oklab, var(--ui-primary) 25%, transparent);
+
+	/* ContextMenu (row right-click) — match dropdowns. NuxtUI panels
+	 * use `bg-default` (= --ui-bg), not bg-elevated, so the dark-mode
+	 * backdrop reads deep black instead of washed-out gray. */
+	--p-contextmenu-background: var(--ui-bg);
+	--p-contextmenu-color: var(--ui-text);
+	--p-contextmenu-border-color: var(--ui-border);
+	--p-contextmenu-item-color: var(--ui-text);
+	--p-contextmenu-item-icon-color: var(--ui-text-muted);
+	--p-contextmenu-item-focus-background: var(--ui-bg-accented);
+	--p-contextmenu-item-focus-color: var(--ui-text);
+	--p-contextmenu-item-focus-icon-color: var(--ui-primary);
+
+	font-family: inherit;
+}
+
+/* Paginator's rows-per-page Select renders at PrimeVue's default
+ * "md" size, which sits ~40px tall and dwarfs the surrounding text
+ * + nav-arrow buttons. Trim its padding/min-height down to match the
+ * navigation control height + the visual weight of NuxtUI's own
+ * USelect at size="sm". The dropdown panel that opens on click keeps
+ * Aura's defaults — only the trigger surface gets shrunk. */
+.p-datatable .p-paginator .p-select {
+	min-height: 2rem !important;
+	border-radius: 0.375rem !important;
+	font-size: 0.8125rem !important;
+	background: var(--ui-bg) !important;
+	border-color: var(--ui-border-accented) !important;
+	/* Aura's stock focus ring is its preset accent (emerald), which
+	 * looks alien next to the user-picked theme colour. Forward both
+	 * the focus border and ring tokens onto `--ui-primary`. */
+	--p-select-focus-border-color: var(--ui-primary);
+	--p-select-focus-ring-color: var(--ui-primary);
+	--p-select-focus-ring-shadow: 0 0 0 2px color-mix(in oklab, var(--ui-primary) 25%, transparent);
+}
+.p-datatable .p-paginator .p-select-label {
+	padding: 0.25rem 0.625rem !important;
+	font-size: 0.8125rem !important;
+	line-height: 1.25rem !important;
+}
+.p-datatable .p-paginator .p-select-dropdown {
+	width: 1.75rem !important;
+}
+.p-datatable .p-paginator .p-select-dropdown-icon {
+	width: 0.875rem !important;
+	height: 0.875rem !important;
+}
+
+/* The Select panel teleports out of the paginator into the DOM root,
+ * so we can't scope it by `.p-datatable .p-paginator`. Match the look
+ * of NuxtUI's USelectMenu dropdown:
+ *   - background = `--ui-bg` (NuxtUI uses `bg-default`, not elevated;
+ *     `--ui-bg-elevated` reads as washed-out gray in dark mode)
+ *   - 2px primary-50% border matching `[data-reka-popper-content-wrapper]`
+ *     above so all floating panels share a visual language
+ *   - selected option = a near-neutral fill (the same as hover) so the
+ *     primary tint doesn't wash the row; the check icon + text colour
+ *     carry the active state instead. */
+.p-select-overlay {
+	background: var(--ui-bg) !important;
+	color: var(--ui-text) !important;
+	border: 2px solid color-mix(in oklab, var(--ui-primary) 50%, transparent) !important;
+	border-radius: 0.5rem !important;
+	font-size: 0.875rem !important;
+	box-shadow:
+		0 25px 50px -12px rgb(0 0 0 / 0.5),
+		0 12px 24px -8px rgb(0 0 0 / 0.35) !important;
+}
+.p-select-overlay .p-select-list {
+	padding: 0.25rem !important;
+	display: flex !important;
+	flex-direction: column !important;
+	gap: 0.125rem !important;
+}
+.p-select-overlay .p-select-option {
+	padding: 0.5rem 0.75rem !important;
+	font-size: 0.875rem !important;
+	line-height: 1.25rem !important;
+	border-radius: 0.375rem !important;
+	gap: 0.5rem !important;
+}
+.p-select-overlay .p-select-option:hover {
+	background: var(--ui-bg-accented) !important;
+	color: var(--ui-text) !important;
+}
+/* Selected option follows NuxtUI's dropdown convention — no row fill,
+ * just the check icon + a font-weight bump carry the "active" state.
+ * Keeps the panel calm and lets primary still pop on the indicator. */
+.p-select-overlay .p-select-option.p-select-option-selected {
+	background: transparent !important;
+	color: var(--ui-text) !important;
+	font-weight: 500;
+}
+.p-select-overlay .p-select-option.p-select-option-selected:hover {
+	background: var(--ui-bg-accented) !important;
+}
+.p-select-overlay .p-select-option-check-icon {
+	color: var(--ui-primary) !important;
+}
+
+/* Sort icon: PrimeVue renders both arrows stacked when unsorted and a
+ * single arrow when active. Make the unsorted state look like two
+ * faint chevrons by lowering opacity. */
+.p-datatable .p-sortable-column:not(.p-sortable-column-selected) .p-sortable-column-icon {
+	opacity: 0.55;
+}
+
+/* Selected (sorted) column header — Aura defaults to a pronounced
+ * accent fill; soften it so the rest of the row content is still the
+ * focal point. The colour itself already comes from the override above. */
+.p-datatable .p-sortable-column.p-sortable-column-selected {
+	font-weight: 600;
+}
+
+/* The row right-click ContextMenu — match the same border-and-shadow
+ * treatment Reka UI portaled panels get above so all floating surfaces
+ * share a visual language. Tighten padding too: Aura's defaults are
+ * roomier than NuxtUI's dropdowns, so the menu looks oversized next
+ * to the rest of the app's chrome. */
+.p-contextmenu {
+	border: 2px solid color-mix(in oklab, var(--ui-primary) 50%, transparent) !important;
+	box-shadow:
+		0 25px 50px -12px rgb(0 0 0 / 0.5),
+		0 12px 24px -8px rgb(0 0 0 / 0.35) !important;
+	border-radius: 0.5rem;
+	padding: 0.375rem !important;
+	min-width: 12rem;
+}
+.p-contextmenu ul,
+.p-contextmenu .p-contextmenu-root-list {
+	padding: 0 !important;
+	margin: 0 !important;
+	display: flex !important;
+	flex-direction: column !important;
+	gap: 0.25rem !important;
+}
+.p-contextmenu .p-contextmenu-item-content {
+	padding: 0 !important;
+}
+.p-contextmenu .p-contextmenu-item {
+	margin: 0 !important;
+	padding: 0 !important;
+}
+/* PrimeVue auto-stamps `.p-contextmenu-item-link` onto whatever element
+ * we render from the #item slot (via `v-bind="props.action"`). Aura's
+ * defaults for that class set a smaller padding, so we override here
+ * with `!important` rather than fighting with Tailwind utility
+ * specificity. The horizontal/vertical sizes here are what controls how
+ * much breathing room the hover/focus highlight has around the text. */
+.p-contextmenu .p-contextmenu-item-link {
+	padding: 0.375rem 0.75rem !important;
+	gap: 0.625rem !important;
+	border-radius: 0.375rem !important;
+}
+/* Aura ships the separator as a `<li>` with only `border-block-start`
+ * — inside a flex-column `<ul>` it can collapse to nothing if shrink
+ * kicks in, and the border colour resolves to a token that's barely
+ * visible against `--ui-bg-elevated`. We force a 1px painted bar that
+ * spans the full menu width (negative margin matches the container's
+ * 0.375rem inner padding), use the same accent border tone the rest of
+ * the app uses, and pin `flex-shrink: 0` so it always renders. */
+.p-contextmenu .p-contextmenu-separator {
+	margin: 0.25rem -0.375rem !important;
+	padding: 0 !important;
+	height: 1px !important;
+	min-height: 1px !important;
+	flex-shrink: 0 !important;
+	background: color-mix(in oklab, var(--ui-text) 18%, transparent) !important;
+	border: 0 !important;
+	list-style: none;
+}
+
+/* Drop the "row contextmenu selected" highlight PrimeVue draws on the
+ * row that triggered the menu — it lingers after the menu closes and
+ * looks like a stale selection. */
+.p-datatable .p-datatable-tbody > tr.p-datatable-contextmenu-row-selected {
+	background: var(--ui-bg-accented) !important;
+	color: var(--ui-text) !important;
+}
