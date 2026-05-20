@@ -151,74 +151,97 @@
 					No invoices match your filters.
 				</div>
 			</div>
-			<table v-else class="w-full text-sm">
+			<table v-else class="w-full text-sm table-fixed">
+				<!-- table-fixed lets the colgroup widths actually take
+					effect — without it browsers ignore <col> widths and
+					auto-size from content. Per-column widths come from
+					useResizableColumns, persisted to localStorage. -->
+				<colgroup>
+					<col :style="{ width: `${cols.widths.number}px` }">
+					<col :style="{ width: `${cols.widths.client}px` }">
+					<col :style="{ width: `${cols.widths.project}px` }">
+					<col :style="{ width: `${cols.widths.issue_date}px` }">
+					<col :style="{ width: `${cols.widths.due_date}px` }">
+					<col :style="{ width: `${cols.widths.total}px` }">
+					<col :style="{ width: `${cols.widths.balance}px` }">
+					<col :style="{ width: `${cols.widths.status}px` }">
+					<col style="width: 56px;">
+				</colgroup>
 				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
 					<tr>
-						<SortableTh
+						<ResizableTh
 							th-class="py-2 pl-3 pr-2 font-medium"
 							:active="list.sortKey === 'number'"
 							:dir="list.sortDir"
 							@sort="list.toggleSort('number')"
+							@resize-start="cols.startResize('number', $event)"
 						>
 							Number
-						</SortableTh>
-						<SortableTh
+						</ResizableTh>
+						<ResizableTh
 							th-class="py-2 px-2 font-medium"
 							:active="list.sortKey === 'client'"
 							:dir="list.sortDir"
 							@sort="list.toggleSort('client')"
+							@resize-start="cols.startResize('client', $event)"
 						>
 							Client
-						</SortableTh>
-						<SortableTh
+						</ResizableTh>
+						<ResizableTh
 							th-class="py-2 px-2 font-medium"
 							:active="list.sortKey === 'project'"
 							:dir="list.sortDir"
 							@sort="list.toggleSort('project')"
+							@resize-start="cols.startResize('project', $event)"
 						>
 							Project
-						</SortableTh>
-						<SortableTh
+						</ResizableTh>
+						<ResizableTh
 							th-class="py-2 px-2 font-medium"
 							:active="list.sortKey === 'issue_date'"
 							:dir="list.sortDir"
 							@sort="list.toggleSort('issue_date')"
+							@resize-start="cols.startResize('issue_date', $event)"
 						>
 							Issued
-						</SortableTh>
-						<SortableTh
+						</ResizableTh>
+						<ResizableTh
 							th-class="py-2 px-2 font-medium"
 							:active="list.sortKey === 'due_date'"
 							:dir="list.sortDir"
 							@sort="list.toggleSort('due_date')"
+							@resize-start="cols.startResize('due_date', $event)"
 						>
 							Due
-						</SortableTh>
-						<SortableTh
+						</ResizableTh>
+						<ResizableTh
 							th-class="py-2 px-2 font-medium text-right"
 							:active="list.sortKey === 'total'"
 							:dir="list.sortDir"
 							@sort="list.toggleSort('total')"
+							@resize-start="cols.startResize('total', $event)"
 						>
 							Total
-						</SortableTh>
-						<SortableTh
+						</ResizableTh>
+						<ResizableTh
 							th-class="py-2 px-2 font-medium text-right"
 							:active="list.sortKey === 'balance'"
 							:dir="list.sortDir"
 							@sort="list.toggleSort('balance')"
+							@resize-start="cols.startResize('balance', $event)"
 						>
 							Balance
-						</SortableTh>
-						<SortableTh
+						</ResizableTh>
+						<ResizableTh
 							th-class="py-2 px-2 font-medium"
 							:active="list.sortKey === 'status'"
 							:dir="list.sortDir"
+							:resizable="false"
 							@sort="list.toggleSort('status')"
 						>
 							Status
-						</SortableTh>
-						<th class="py-2 pl-2 pr-3 w-10" />
+						</ResizableTh>
+						<th class="py-2 pl-2 pr-3" />
 					</tr>
 				</thead>
 				<tbody>
@@ -297,6 +320,7 @@
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { useListView } from "~/composables/useListView";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
+	import { useResizableColumns } from "~/composables/useResizableColumns";
 	import { buildInvoicePdfPayload } from "~/lib/invoice-pdf";
 	import { formatLKR } from "~/lib/money";
 	import { useClientsStore } from "~/stores/clients";
@@ -333,6 +357,20 @@
 		],
 		{ defaultSortKey: "issue_date", defaultDir: "desc" }
 	);
+
+	// Column widths persist to localStorage so the user's layout sticks
+	// across launches. Per-machine, not per-tenant. The trailing actions
+	// column stays fixed (no resize handle).
+	const cols = useResizableColumns("invoices", [
+		{ key: "number", default: 130 },
+		{ key: "client", default: 220 },
+		{ key: "project", default: 240 },
+		{ key: "issue_date", default: 110 },
+		{ key: "due_date", default: 110 },
+		{ key: "total", default: 130 },
+		{ key: "balance", default: 130 },
+		{ key: "status", default: 110 }
+	]);
 
 	const newInvoice = () => router.push("/invoices/new");
 	const open = (i: InvoiceRow) => router.push(`/invoices/${i.id}`);
