@@ -180,18 +180,37 @@
 				</UCard>
 			</div>
 
-			<div class="flex justify-end gap-2">
-				<UButton
-					color="neutral"
-					variant="outline"
-					:disabled="!dirty || saving"
-					@click="reset"
-				>
-					Reset
-				</UButton>
-				<UButton :loading="saving" :disabled="!dirty" icon="i-lucide-save" @click="onSave">
-					Save changes
-				</UButton>
+			<!-- Sticky save bar — same pattern as the other detail / settings
+				pages. Fades in when the form is dirty; live preview already
+				shows the font/colour change, the bar just persists it. -->
+			<div
+				class="sticky bottom-0 -mx-2 mt-6 transition-all duration-200"
+				:class="dirty
+					? 'opacity-100 translate-y-0 pointer-events-auto'
+					: 'opacity-0 translate-y-3 pointer-events-none'"
+			>
+				<div class="rounded-xl backdrop-blur-md bg-(--ui-bg)/90 border-2 border-(--ui-primary)/50 shadow-2xl px-4 py-3 flex items-center justify-between gap-4">
+					<div class="flex items-center gap-2 text-sm">
+						<span class="relative flex size-2">
+							<span class="absolute inline-flex h-full w-full rounded-full bg-(--ui-warning) opacity-75 animate-ping" />
+							<span class="relative inline-flex size-2 rounded-full bg-(--ui-warning)" />
+						</span>
+						<span class="text-(--ui-text)">Unsaved changes</span>
+					</div>
+					<div class="flex items-center gap-2">
+						<UButton
+							variant="ghost"
+							color="neutral"
+							:disabled="saving"
+							@click="reset"
+						>
+							Discard
+						</UButton>
+						<UButton :loading="saving" :disabled="!dirty" icon="i-lucide-save" @click="onSave">
+							Save changes
+						</UButton>
+					</div>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -240,7 +259,8 @@
 		"Inter Tight",
 		"Stack Sans Text",
 		"Miriam Libre",
-		"Amarna"
+		"Amarna",
+		"Akt"
 	];
 	const systemFonts = [
 		"system-ui",
