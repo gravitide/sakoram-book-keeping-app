@@ -33,10 +33,6 @@
 							size="md"
 							class="flex-1 min-w-64"
 						/>
-						<!-- USelectMenu (searchable) instead of USelect because the
-							client list can grow long; typing into the dropdown
-							narrows it. value-key/label-key bind to the
-							(number | "all") shape we put in the store. -->
 						<USelectMenu
 							v-model="store.clientFilter"
 							:items="clientOptions"
@@ -46,9 +42,6 @@
 							class="w-56"
 							:search-input="{ placeholder: 'Filter clients…' }"
 						/>
-						<!-- Advanced filters popover — date ranges live here so
-							the main row stays glanceable. A small dot on the
-							icon signals whether any date filter is active. -->
 						<UPopover>
 							<UButton
 								color="neutral"
@@ -109,13 +102,20 @@
 						>
 							Reset
 						</UButton>
+						<UButton
+							size="md"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-table-columns-split"
+							:class="hasAnyFilter ? '' : 'ml-auto'"
+							title="Auto-size columns to their content"
+							@click="autoFitColumns"
+						>
+							Auto-fit columns
+						</UButton>
 					</div>
 
-					<!-- Multi-select status filter. Each chip toggles its
-						status in/out of the active set. Empty set = show
-						all. The colour ring matches StatusBadge so the
-						filter chip and the row badge speak the same
-						visual language. -->
+					<!-- Multi-select status filter. -->
 					<div class="flex items-center gap-1.5 flex-wrap">
 						<UIcon name="i-lucide-flag" class="size-3.5 text-(--ui-text-muted) shrink-0 mr-1" />
 						<button
@@ -130,11 +130,7 @@
 						</button>
 					</div>
 
-					<!-- Quick issue-date preset chips. Clicking one sets
-						issuedFrom / issuedTo to the preset's bounds;
-						clicking the active preset clears it. The
-						Advanced popover stays the source of truth for
-						custom ranges and Valid-until filtering. -->
+					<!-- Quick issue-date preset chips. -->
 					<div class="flex items-center gap-1.5 flex-wrap">
 						<UIcon name="i-lucide-calendar" class="size-3.5 text-(--ui-text-muted) shrink-0 mr-1" />
 						<span class="text-xs text-(--ui-text-muted) mr-1">Issued:</span>
@@ -167,123 +163,70 @@
 					No quotes match your filters.
 				</div>
 			</div>
-			<table v-else class="w-full text-sm">
-				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-					<tr>
-						<SortableTh
-							th-class="py-2 pl-3 pr-2 font-medium"
-							:active="list.sortKey === 'number'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('number')"
-						>
-							Number
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'client'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('client')"
-						>
-							Client
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'project'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('project')"
-						>
-							Project
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'issue_date'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('issue_date')"
-						>
-							Issued
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'valid_until'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('valid_until')"
-						>
-							Valid until
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium text-right"
-							:active="list.sortKey === 'total'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('total')"
-						>
-							Total
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'status'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('status')"
-						>
-							Status
-						</SortableTh>
-						<th class="py-2 pl-2 pr-3 w-10" />
-					</tr>
-				</thead>
-				<tbody>
-					<!-- Each row is wrapped in a UContextMenu so right-click
-						surfaces the same actions as the overflow button.
-						Reka UI's as-child trigger keeps the <tr> as the
-						actual DOM element — no wrapper <div> between
-						<tbody> and <tr>. Same pattern as the payslips and
-						employees lists. -->
-					<UContextMenu
-						v-for="q in list.paged"
-						:key="q.id"
-						:items="itemsFor(q)"
-					>
-						<tr
-							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-							@click="open(q)"
-						>
-							<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
-								{{ q.number }}
-							</td>
-							<td class="py-2 px-2">
-								{{ clientName(q.client_snapshot) }}
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted) max-w-xs truncate">
-								{{ q.project_title || "—" }}
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-								{{ q.issue_date }}
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-								{{ q.valid_until }}
-							</td>
-							<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap">
-								{{ formatLKR(q.total_cents) }}
-							</td>
-							<td class="py-2 px-2">
-								<StatusBadge :status="q.status" />
-							</td>
-							<td class="py-2 pl-2 pr-3 text-right" @click.stop>
-								<UDropdownMenu :items="itemsFor(q)">
-									<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
-								</UDropdownMenu>
-							</td>
-						</tr>
-					</UContextMenu>
-				</tbody>
-			</table>
 
-			<ListPagination
-				v-model:page="list.page"
-				v-model:page-size="list.pageSize"
-				:total="list.total"
-				:total-pages="list.totalPages"
-				:range-start="list.rangeStart"
-				:range-end="list.rangeEnd"
-			/>
+			<ResizableDataTable
+				v-else
+				ref="tableRef"
+				:rows="rows"
+				state-key="quotes-table"
+				:row-actions="itemsFor"
+				default-sort-field="issue_date"
+				:default-sort-order="-1"
+				@row-click="(row) => router.push(`/quotes/${row.id}`)"
+			>
+				<Column field="number" header="Number" sortable>
+					<template #body="{ data }">
+						<div class="truncate font-medium tabular-nums">
+							{{ data.number }}
+						</div>
+					</template>
+				</Column>
+				<Column field="_client" header="Client" sortable>
+					<template #body="{ data }">
+						<div class="truncate">
+							{{ data._client }}
+						</div>
+					</template>
+				</Column>
+				<Column field="project_title" header="Project" sortable>
+					<template #body="{ data }">
+						<div class="truncate text-(--ui-text-muted)">
+							{{ data.project_title || "—" }}
+						</div>
+					</template>
+				</Column>
+				<Column field="issue_date" header="Issued" sortable>
+					<template #body="{ data }">
+						<div class="truncate text-(--ui-text-muted) tabular-nums">
+							{{ data.issue_date }}
+						</div>
+					</template>
+				</Column>
+				<Column field="valid_until" header="Valid until" sortable>
+					<template #body="{ data }">
+						<div class="truncate text-(--ui-text-muted) tabular-nums">
+							{{ data.valid_until }}
+						</div>
+					</template>
+				</Column>
+				<Column
+					field="total_cents"
+					header="Total"
+					sortable
+					:style="{ textAlign: 'right' }"
+				>
+					<template #body="{ data }">
+						<div class="truncate text-right tabular-nums">
+							{{ formatLKR(data.total_cents) }}
+						</div>
+					</template>
+				</Column>
+				<Column field="status" header="Status" sortable>
+					<template #body="{ data }">
+						<StatusBadge :status="data.status" />
+					</template>
+				</Column>
+			</ResizableDataTable>
 		</UCard>
 
 		<PdfPreviewModal
@@ -301,7 +244,6 @@
 <script setup lang="ts">
 	import type { ClientSnapshot, QuoteLineRow, QuoteRow, QuoteStatus } from "~/stores/quotes";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
-	import { useListView } from "~/composables/useListView";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { formatLKR } from "~/lib/money";
 	import { buildQuotePdfPayload } from "~/lib/quote-pdf";
@@ -325,19 +267,25 @@
 	// Auto-expire any sent quotes past their valid_until on every list load.
 	await store.expireOverdue().catch(() => { /* non-fatal */ });
 
-	// `client` sorts by the snapshot's name (the visible column value).
-	const list = useListView<QuoteRow>(
-		() => store.filtered,
-		[
-			{ key: "number", getValue: (q) => q.number },
-			{ key: "client", getValue: (q) => clientName(q.client_snapshot) },
-			{ key: "project", getValue: (q) => q.project_title },
-			{ key: "issue_date", getValue: (q) => q.issue_date },
-			{ key: "valid_until", getValue: (q) => q.valid_until },
-			{ key: "total", getValue: (q) => q.total_cents },
-			{ key: "status", getValue: (q) => q.status }
-		],
-		{ defaultSortKey: "issue_date", defaultDir: "desc" }
+	const tableRef = ref<{ autoFit: () => void } | null>(null);
+	const autoFitColumns = () => tableRef.value?.autoFit();
+
+	// Hoisted helper so the row view-model below can close over it.
+	function clientName(snap: string): string {
+		try {
+			return (JSON.parse(snap) as ClientSnapshot).name ?? "—";
+		} catch {
+			return "—";
+		}
+	}
+
+	// View-model: PrimeVue's DataTable sorts by top-level fields, so we
+	// surface the snapshot-derived client name as `_client`.
+	interface QuoteRowVM extends QuoteRow {
+		_client: string
+	}
+	const rows = computed<QuoteRowVM[]>(() =>
+		store.filtered.map((q) => ({ ...q, _client: clientName(q.client_snapshot) }))
 	);
 
 	const newQuote = () => router.push("/quotes/new");
@@ -388,10 +336,6 @@
 		expired: "Expired",
 		converted: "Converted"
 	};
-	// Tailwind class strings for active / inactive chip per status. Each
-	// active state uses the same colour the StatusBadge does for the
-	// corresponding row badge — picked from the static semantic palette
-	// (no primary, so chips stay theme-stable).
 	const STATUS_ACTIVE_CLASSES: Record<QuoteStatus, string> = {
 		draft: "bg-(--ui-bg-muted) border-(--ui-text-muted)/40 text-(--ui-text)",
 		sent: "bg-(--ui-info)/15 border-(--ui-info)/40 text-(--ui-info)",
@@ -415,10 +359,8 @@
 		{ key: "this_month", label: "This month" },
 		{ key: "this_year", label: "This year" }
 	];
-
 	const isoFromDate = (d: Date): string =>
 		`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
 	const datePresetBounds = (key: DatePresetKey): { from: string, to: string } => {
 		const now = new Date();
 		if (key === "today") {
@@ -426,9 +368,7 @@
 			return { from: iso, to: iso };
 		}
 		if (key === "this_week") {
-			// Monday-anchored week. getDay(): 0 Sun..6 Sat → days since Mon.
-			const dow = now.getDay();
-			const daysSinceMon = (dow + 6) % 7;
+			const daysSinceMon = (now.getDay() + 6) % 7;
 			const monday = new Date(now);
 			monday.setDate(now.getDate() - daysSinceMon);
 			const sunday = new Date(monday);
@@ -440,17 +380,14 @@
 			const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 			return { from: isoFromDate(first), to: isoFromDate(last) };
 		}
-		// this_year
 		const first = new Date(now.getFullYear(), 0, 1);
 		const last = new Date(now.getFullYear(), 11, 31);
 		return { from: isoFromDate(first), to: isoFromDate(last) };
 	};
-
 	const isDatePresetActive = (key: DatePresetKey): boolean => {
 		const { from, to } = datePresetBounds(key);
 		return store.issuedFrom === from && store.issuedTo === to;
 	};
-
 	const toggleDatePreset = (key: DatePresetKey) => {
 		if (isDatePresetActive(key)) {
 			store.issuedFrom = null;
@@ -461,21 +398,10 @@
 		store.issuedFrom = from;
 		store.issuedTo = to;
 	};
-
 	const datePresetClasses = (key: DatePresetKey): string =>
 		isDatePresetActive(key)
 			? "bg-(--ui-info)/15 border-(--ui-info)/40 text-(--ui-info)"
 			: inactiveChip;
-
-	// Function declaration (not const arrow) so it hoists above the
-	// useListView() call site, which references it in a column getValue.
-	function clientName(snap: string): string {
-		try {
-			return (JSON.parse(snap) as ClientSnapshot).name ?? "—";
-		} catch {
-			return "—";
-		}
-	}
 
 	const counts = computed(() => {
 		const c: Record<QuoteStatus, number> = {
@@ -490,12 +416,8 @@
 		return c;
 	});
 
-	// --- Row actions: PDF preview + transitions ------------------------------
+	// --- Row actions: PDF preview + transitions + duplicate ------------------
 
-	// Per-row PDF generation. We hand usePdfPreview a callback that reads
-	// from `currentQuote` + a fetched lines list — set by onPdfClick
-	// before opening the modal. The shared payload builder takes it
-	// from there.
 	const currentQuote = ref<QuoteRow | null>(null);
 	const currentLines = ref<QuoteLineRow[]>([]);
 	const pdf = usePdfPreview({
@@ -529,9 +451,9 @@
 		pdf.open();
 	};
 
-	// Quick status transition from the row dropdown — saves a click
-	// into the detail page when the action is unambiguous. Refused at
-	// the store level if the transition is illegal; toast surfaces it.
+	// Quick status transition from the row dropdown — saves a click into
+	// the detail page when the action is unambiguous. Refused at the
+	// store level if the transition is illegal; toast surfaces it.
 	const transitionTo = async (q: QuoteRow, target: QuoteStatus) => {
 		try {
 			await store.setStatus(q.id, target);
@@ -546,10 +468,7 @@
 		}
 	};
 
-	// Clone a quote into a fresh draft and jump straight into it. Same
-	// client / items / totals, a new number, today's issue date, and a
-	// preserved validity window. Refused-state handling lives in the
-	// store; any failure surfaces as a toast.
+	// Clone a quote into a fresh draft and jump straight into it.
 	const onDuplicate = async (q: QuoteRow) => {
 		try {
 			const newId = await store.duplicate(q.id);
@@ -565,17 +484,13 @@
 		}
 	};
 
-	// UDropdownMenu / UContextMenu render a thin divider between each
-	// top-level group. Lifecycle actions (Open, transitions) sit on
-	// top; Duplicate and the export action each get their own group.
-	const itemsFor = (q: QuoteRow) => {
+	// Three-group row-actions menu: lifecycle (Open + transitions),
+	// Duplicate, then Generate PDF. ResizableDataTable inserts a
+	// separator between each group.
+	function itemsFor(q: QuoteRowVM) {
 		const lifecycle: { label: string, icon: string, onSelect: () => void }[] = [
 			{ label: "Open", icon: "i-lucide-pencil", onSelect: () => open(q) }
 		];
-		// Surface the most-common next-state transition in the row menu.
-		// Multi-step transitions (e.g. sent → accepted, then accept-or-
-		// reject) stay on the detail page so the user reads the full
-		// state before committing.
 		if (canTransition(q.status, "sent")) {
 			lifecycle.push({
 				label: "Mark sent",
@@ -609,5 +524,5 @@
 			}
 		}];
 		return [lifecycle, duplicateAction, exports];
-	};
+	}
 </script>

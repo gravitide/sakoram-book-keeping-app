@@ -34,13 +34,21 @@ export function useDragToScroll(targetSelector: string, hostRef: Ref<HTMLElement
 	onMounted(() => {
 		const host = hostRef.value;
 		if (!host) return;
-		const scroller = host.querySelector(targetSelector) as HTMLElement | null;
-		if (!scroller) return;
 
+		// `mousedown` is bound to the wrapper (which is stable across the
+		// lifetime of the page), not to the inner scrollable container.
+		// PrimeVue swaps the `.p-datatable-table-container` element
+		// whenever the DataTable remounts — most commonly when the
+		// "Auto-fit columns" button bumps `tableKey`. Resolving the
+		// scroller on demand inside `onMouseDown` keeps drag-to-pan
+		// working across those remounts; the old approach (caching
+		// `scroller` at setup time + attaching listeners to it) lost the
+		// listeners along with the replaced DOM node.
 		let isDown = false;
 		let startX = 0;
 		let initialScrollLeft = 0;
 		let moved = false;
+		let activeScroller: HTMLElement | null = null;
 
 		const onMouseDown = (e: MouseEvent) => {
 			if (e.button !== 0) return;
@@ -60,6 +68,15 @@ export function useDragToScroll(targetSelector: string, hostRef: Ref<HTMLElement
 				return;
 			}
 
+			// Resolve the scroller fresh on every press — the wrapper
+			// outlives DataTable remounts, but the inner container doesn't.
+			const scroller = host.querySelector(targetSelector) as HTMLElement | null;
+			if (!scroller) return;
+			// Bail if the press didn't actually land inside the scroller
+			// (e.g. on the paginator below the table or a slot above it).
+			if (!scroller.contains(target)) return;
+
+			activeScroller = scroller;
 			isDown = true;
 			moved = false;
 			startX = e.pageX;
@@ -68,19 +85,19 @@ export function useDragToScroll(targetSelector: string, hostRef: Ref<HTMLElement
 		};
 
 		const onMouseMove = (e: MouseEvent) => {
-			if (!isDown) return;
+			if (!isDown || !activeScroller) return;
 			const walk = e.pageX - startX;
 			if (!moved && Math.abs(walk) > 5) moved = true;
 			if (moved) {
 				e.preventDefault();
-				scroller.scrollLeft = initialScrollLeft - walk;
+				activeScroller.scrollLeft = initialScrollLeft - walk;
 			}
 		};
 
 		const onMouseUp = () => {
 			if (!isDown) return;
 			isDown = false;
-			scroller.style.cursor = "";
+			if (activeScroller) activeScroller.style.cursor = "";
 			if (moved) {
 				// Eat the trailing click so an accidental drag-ending-on-a-row
 				// doesn't open whatever row the pointer happened to land on.
@@ -91,14 +108,15 @@ export function useDragToScroll(targetSelector: string, hostRef: Ref<HTMLElement
 				};
 				document.addEventListener("click", swallow, true);
 			}
+			activeScroller = null;
 		};
 
-		scroller.addEventListener("mousedown", onMouseDown);
+		host.addEventListener("mousedown", onMouseDown);
 		document.addEventListener("mousemove", onMouseMove);
 		document.addEventListener("mouseup", onMouseUp);
 
 		cleanup = () => {
-			scroller.removeEventListener("mousedown", onMouseDown);
+			host.removeEventListener("mousedown", onMouseDown);
 			document.removeEventListener("mousemove", onMouseMove);
 			document.removeEventListener("mouseup", onMouseUp);
 		};
