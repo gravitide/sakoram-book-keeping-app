@@ -32,7 +32,7 @@
 		"devUrl": "http://localhost:3000"
 	},
 	"productName": "Sakoram Bookkeeping",
-	"version": "0.65.4",
+	"version": "0.65.5",
 	"identifier": "com.sakoram.billing",
 	"plugins": {},
 	"app": {

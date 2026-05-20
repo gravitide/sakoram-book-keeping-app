@@ -9,52 +9,123 @@
  * The same TTFs are also placed under src-tauri/fonts/ so Typst can
  * pick them up for PDF rendering.
  */
+/* Bundled fonts ship as static-weight TTFs (one file per weight) rather
+ * than a single variable file — Typst 0.14 only renders the default
+ * weight from a variable TTF unless it has STAT-named instances, so
+ * "bold" requests in PDFs would silently fall back. Statics are
+ * generated from the upstream variable files by `scripts/instance-fonts.py`
+ * (run via `uv run`). The CSS @font-face declarations below let the UI
+ * pick the right weight; Typst indexes the same files via --font-path. */
+
 @font-face {
 	font-family: "Inter";
 	font-style: normal;
-	font-weight: 100 900;
+	font-weight: 400;
 	font-display: swap;
-	src: url("@/assets/fonts/InterVariable.ttf") format("truetype-variations");
+	src: url("@/assets/fonts/Inter-Regular.ttf") format("truetype");
+}
+@font-face {
+	font-family: "Inter";
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+	src: url("@/assets/fonts/Inter-Medium.ttf") format("truetype");
+}
+@font-face {
+	font-family: "Inter";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url("@/assets/fonts/Inter-Bold.ttf") format("truetype");
 }
 
 @font-face {
 	font-family: "Inter Tight";
 	font-style: normal;
-	font-weight: 100 900;
+	font-weight: 400;
 	font-display: swap;
-	src: url("@/assets/fonts/InterTight.ttf") format("truetype-variations");
+	src: url("@/assets/fonts/InterTight-Regular.ttf") format("truetype");
+}
+@font-face {
+	font-family: "Inter Tight";
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+	src: url("@/assets/fonts/InterTight-Medium.ttf") format("truetype");
+}
+@font-face {
+	font-family: "Inter Tight";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url("@/assets/fonts/InterTight-Bold.ttf") format("truetype");
 }
 
 @font-face {
 	font-family: "Stack Sans Text";
 	font-style: normal;
-	font-weight: 100 900;
+	font-weight: 400;
 	font-display: swap;
-	src: url("@/assets/fonts/StackSansText.ttf") format("truetype-variations");
+	src: url("@/assets/fonts/StackSansText-Regular.ttf") format("truetype");
+}
+@font-face {
+	font-family: "Stack Sans Text";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url("@/assets/fonts/StackSansText-Bold.ttf") format("truetype");
 }
 
 @font-face {
 	font-family: "Miriam Libre";
 	font-style: normal;
-	font-weight: 100 900;
+	font-weight: 400;
 	font-display: swap;
-	src: url("@/assets/fonts/MiriamLibre.ttf") format("truetype-variations");
+	src: url("@/assets/fonts/MiriamLibre-Regular.ttf") format("truetype");
+}
+@font-face {
+	font-family: "Miriam Libre";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url("@/assets/fonts/MiriamLibre-Bold.ttf") format("truetype");
 }
 
 @font-face {
 	font-family: "Amarna";
 	font-style: normal;
-	font-weight: 100 900;
+	font-weight: 400;
 	font-display: swap;
-	src: url("@/assets/fonts/Amarna.ttf") format("truetype-variations");
+	src: url("@/assets/fonts/Amarna-Regular.ttf") format("truetype");
+}
+@font-face {
+	font-family: "Amarna";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url("@/assets/fonts/Amarna-Bold.ttf") format("truetype");
 }
 
 @font-face {
 	font-family: "Akt";
 	font-style: normal;
-	font-weight: 100 900;
+	font-weight: 400;
 	font-display: swap;
-	src: url("@/assets/fonts/Akt.ttf") format("truetype-variations");
+	src: url("@/assets/fonts/Akt-Regular.ttf") format("truetype");
+}
+@font-face {
+	font-family: "Akt";
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+	src: url("@/assets/fonts/Akt-Medium.ttf") format("truetype");
+}
+@font-face {
+	font-family: "Akt";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url("@/assets/fonts/Akt-Bold.ttf") format("truetype");
 }
 
 @theme {
