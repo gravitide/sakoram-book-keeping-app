@@ -169,122 +169,144 @@
 				+ `stateKey` persist the current widths / sort / page to
 				localStorage so the user's layout sticks across launches.
 				Sort is per-column via `sortable`; click anywhere in a
-				header to toggle sort direction (PrimeVue's default). -->
-			<DataTable
-				v-else
-				:key="tableKey"
-				:value="rows"
-				data-key="id"
-				striped-rows
-				show-gridlines
-				removable-sort
-				resizable-columns
-				column-resize-mode="expand"
-				state-storage="local"
-				state-key="invoices-table"
-				paginator
-				:rows="15"
-				:rows-per-page-options="[10, 15, 25, 50, 100]"
-				current-page-report-template="Showing {first} to {last} of {totalRecords}"
-				paginator-template="CurrentPageReport FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink RowsPerPageDropdown"
-				sort-field="issue_date"
-				:sort-order="-1"
-				class="text-sm"
-				table-style="min-width: 60rem"
-				@row-click="onRowClick"
-			>
-				<!-- No explicit per-column widths: PrimeVue + the browser
+				header to toggle sort direction (PrimeVue's default).
+				The wrapping `<div ref="tableWrap">` scopes the
+				drag-to-scroll composable below — clicking anywhere in
+				the table body and dragging pans the horizontal scroll
+				when columns extend past the viewport. -->
+			<div v-else ref="tableWrap">
+				<DataTable
+					:key="tableKey"
+					v-model:context-menu-selection="ctxRow"
+					:value="rows"
+					data-key="id"
+					striped-rows
+					show-gridlines
+					removable-sort
+					resizable-columns
+					column-resize-mode="expand"
+					state-storage="local"
+					state-key="invoices-table"
+					paginator
+					:rows="15"
+					:rows-per-page-options="[10, 15, 25, 50, 100]"
+					current-page-report-template="Showing {first} to {last} of {totalRecords}"
+					paginator-template="CurrentPageReport FirstPageLink PrevPageLink NextPageLink LastPageLink RowsPerPageDropdown"
+					sort-field="issue_date"
+					:sort-order="-1"
+					class="text-sm"
+					table-style="width: 100%; min-width: 60rem"
+					context-menu
+					@row-click="onRowClick"
+					@row-contextmenu="onRowContextMenu"
+				>
+					<!-- No explicit per-column widths: PrimeVue + the browser
 					compute natural widths from content on first render
 					(numbers stay tight, long project titles get more
 					room). User-dragged widths persist via stateStorage;
 					the "Auto-fit columns" button next to the filters
 					clears that saved state so the layout snaps back to
 					content-sized. -->
-				<Column field="number" header="Number" sortable>
-					<template #body="{ data }">
-						<div class="truncate font-medium tabular-nums">
-							{{ data.number }}
-						</div>
-					</template>
-				</Column>
-				<Column field="_client" header="Client" sortable>
-					<template #body="{ data }">
-						<div class="truncate">
-							{{ data._client }}
-						</div>
-					</template>
-				</Column>
-				<Column field="project_title" header="Project" sortable>
-					<template #body="{ data }">
-						<div class="truncate text-(--ui-text-muted)">
-							{{ data.project_title || "—" }}
-						</div>
-					</template>
-				</Column>
-				<Column field="issue_date" header="Issued" sortable>
-					<template #body="{ data }">
-						<div class="truncate text-(--ui-text-muted) tabular-nums">
-							{{ data.issue_date }}
-						</div>
-					</template>
-				</Column>
-				<Column field="due_date" header="Due" sortable>
-					<template #body="{ data }">
-						<div
-							class="truncate tabular-nums"
-							:class="data._status === 'overdue'
-								? 'text-(--ui-error) font-medium'
-								: 'text-(--ui-text-muted)'"
-						>
-							{{ data.due_date }}
-						</div>
-					</template>
-				</Column>
-				<Column
-					field="total_cents"
-					header="Total"
-					sortable
-					:style="{ textAlign: 'right' }"
-				>
-					<template #body="{ data }">
-						<div class="truncate tabular-nums">
-							{{ formatLKR(data.total_cents) }}
-						</div>
-					</template>
-				</Column>
-				<Column
-					field="_balance"
-					header="Balance"
-					sortable
-					:style="{ textAlign: 'right' }"
-				>
-					<template #body="{ data }">
-						<div class="truncate tabular-nums">
-							<span v-if="data._balance === 0" class="text-(--ui-text-muted)">—</span>
-							<span v-else>{{ formatLKR(data._balance) }}</span>
-						</div>
-					</template>
-				</Column>
-				<Column field="_status" header="Status" sortable>
-					<template #body="{ data }">
-						<StatusBadge :status="data._status" />
-					</template>
-				</Column>
-				<Column
-					header=""
-					:resizable="false"
-					:style="{ width: '56px', textAlign: 'right' }"
-				>
-					<template #body="{ data }">
-						<div @click.stop>
-							<UDropdownMenu :items="itemsFor(data)">
-								<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
-							</UDropdownMenu>
-						</div>
-					</template>
-				</Column>
-			</DataTable>
+					<Column field="number" header="Number" sortable>
+						<template #body="{ data }">
+							<div class="truncate font-medium tabular-nums">
+								{{ data.number }}
+							</div>
+						</template>
+					</Column>
+					<Column field="_client" header="Client" sortable>
+						<template #body="{ data }">
+							<div class="truncate">
+								{{ data._client }}
+							</div>
+						</template>
+					</Column>
+					<Column field="project_title" header="Project" sortable>
+						<template #body="{ data }">
+							<div class="truncate text-(--ui-text-muted)">
+								{{ data.project_title || "—" }}
+							</div>
+						</template>
+					</Column>
+					<Column field="issue_date" header="Issued" sortable>
+						<template #body="{ data }">
+							<div class="truncate text-(--ui-text-muted) tabular-nums">
+								{{ data.issue_date }}
+							</div>
+						</template>
+					</Column>
+					<Column field="due_date" header="Due" sortable>
+						<template #body="{ data }">
+							<div
+								class="truncate tabular-nums"
+								:class="data._status === 'overdue'
+									? 'text-(--ui-error) font-medium'
+									: 'text-(--ui-text-muted)'"
+							>
+								{{ data.due_date }}
+							</div>
+						</template>
+					</Column>
+					<Column
+						field="total_cents"
+						header="Total"
+						sortable
+						:style="{ textAlign: 'right' }"
+					>
+						<template #body="{ data }">
+							<div class="truncate tabular-nums">
+								{{ formatLKR(data.total_cents) }}
+							</div>
+						</template>
+					</Column>
+					<Column
+						field="_balance"
+						header="Balance"
+						sortable
+						:style="{ textAlign: 'right' }"
+					>
+						<template #body="{ data }">
+							<div class="truncate tabular-nums">
+								<span v-if="data._balance === 0" class="text-(--ui-text-muted)">—</span>
+								<span v-else>{{ formatLKR(data._balance) }}</span>
+							</div>
+						</template>
+					</Column>
+					<Column field="_status" header="Status" sortable>
+						<template #body="{ data }">
+							<StatusBadge :status="data._status" />
+						</template>
+					</Column>
+				</DataTable>
+			</div>
 		</UCard>
+
+		<!-- Row right-click menu. Re-uses the same `itemsFor(row)`
+			callback the overflow ⋯ dropdown consumes — new actions
+			land in both menus automatically. The PrimeVue MenuItem
+			shape (command vs onSelect, separator marker between
+			groups) gets adapted in `onRowContextMenu`, and the
+			`#item` slot renders Lucide icons via UIcon. -->
+		<ContextMenu
+			ref="rowCtxMenu"
+			:model="ctxItems"
+			@hide="ctxRow = null"
+		>
+			<template #item="{ item, props }">
+				<a
+					v-if="!item.separator"
+					class="flex items-center cursor-pointer text-sm select-none"
+					v-bind="props.action"
+				>
+					<UIcon
+						v-if="item.icon"
+						:name="item.icon"
+						class="size-5 text-(--ui-text-muted) shrink-0"
+					/>
+					<span>{{ item.label }}</span>
+				</a>
+			</template>
+		</ContextMenu>
 
 		<PdfPreviewModal
 			v-model:open="pdf.state.open"
@@ -299,10 +321,12 @@
 </template>
 
 <script setup lang="ts">
-	import type { DataTableRowClickEvent } from "primevue/datatable";
+	import type { DataTableRowClickEvent, DataTableRowContextMenuEvent } from "primevue/datatable";
+	import type { MenuItem } from "primevue/menuitem";
 	import type { InvoiceLineRow, InvoiceRow, InvoiceStatus } from "~/stores/invoices";
 	import type { ClientSnapshot } from "~/stores/quotes";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
+	import { useDragToScroll } from "~/composables/useDragToScroll";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { buildInvoicePdfPayload } from "~/lib/invoice-pdf";
 	import { formatLKR } from "~/lib/money";
@@ -363,9 +387,69 @@
 		if (row) router.push(`/invoices/${row.id}`);
 	};
 
-	// "Auto-fit columns" — clears DataTable's saved widths/sort/page
-	// and remounts the table (via a key bump) so it re-renders at the
-	// browser's natural content-sized widths. No full page reload.
+	// Row right-click → PrimeVue ContextMenu. The overflow ⋯ column
+	// has been retired now that every row exposes the same menu on
+	// right-click; `itemsFor(row)` still produces the same grouped
+	// `{ label, icon, onSelect }` shape so we can adapt it to PrimeVue's
+	// `{ label, icon, command }` MenuItem here, with `{ separator: true }`
+	// between groups.
+	const rowCtxMenu = ref<{ show: (e: Event) => void } | null>(null);
+	const ctxRow = ref<InvoiceRowVM | null>(null);
+	const ctxItems = ref<MenuItem[]>([]);
+	const onRowContextMenu = (e: DataTableRowContextMenuEvent) => {
+		const row = e.data as InvoiceRowVM | undefined;
+		if (!row) return;
+		ctxItems.value = toContextMenuItems(itemsFor(row));
+		rowCtxMenu.value?.show(e.originalEvent);
+	};
+	function toContextMenuItems(
+		groups: { label: string, icon: string, onSelect: () => void }[][]
+	): MenuItem[] {
+		// One separator between each group. The grouping comes from
+		// `itemsFor` — currently `[[...lifecycle, duplicate], exports]`,
+		// so the only divider lands between Generate PDF and the
+		// lifecycle / duplicate actions above it.
+		const flat: MenuItem[] = [];
+		groups.forEach((group, gi) => {
+			if (gi > 0 && group.length > 0) flat.push({ separator: true });
+			for (const item of group) {
+				flat.push({ label: item.label, icon: item.icon, command: item.onSelect });
+			}
+		});
+		return flat;
+	}
+
+	// Strip persisted column widths on every page entry so the table
+	// always opens fully content-fitted (and the `width: 100%` table
+	// style stretches it across the container). Sort / page / page-size
+	// stay persisted — only the width arrays get evicted. Runs before
+	// DataTable mounts, so PrimeVue never sees the stale widths.
+	if (typeof localStorage !== "undefined") {
+		try {
+			const raw = localStorage.getItem("invoices-table");
+			if (raw) {
+				const state = JSON.parse(raw) as Record<string, unknown>;
+				delete state.columnWidths;
+				delete state.tableWidth;
+				localStorage.setItem("invoices-table", JSON.stringify(state));
+			}
+		} catch {
+			// Malformed state — nuke it; next render writes fresh defaults.
+			localStorage.removeItem("invoices-table");
+		}
+	}
+
+	// Drag-to-scroll on the DataTable. When the user has widened columns
+	// past the container width, clicking anywhere in the body and
+	// dragging pans the horizontal scrollbar — left-click + drag only,
+	// right-click still opens the row context menu.
+	const tableWrap = ref<HTMLElement | null>(null);
+	useDragToScroll(".p-datatable-table-container", tableWrap);
+
+	// "Auto-fit columns" — clears every persisted DataTable knob and
+	// remounts the table via a key bump so it re-renders at content-
+	// sized widths. Used when the user has dragged columns mid-session
+	// and wants to snap back without leaving the page.
 	const tableKey = ref(0);
 	const autoFitColumns = () => {
 		if (typeof localStorage !== "undefined") {
@@ -557,7 +641,9 @@
 		}
 	};
 
-	const itemsFor = (i: InvoiceRow) => {
+	// Function declaration (not arrow) so it hoists — the row
+	// right-click handler defined earlier in the script closes over it.
+	function itemsFor(i: InvoiceRow) {
 		const lifecycle: { label: string, icon: string, onSelect: () => void }[] = [
 			{ label: "Open", icon: "i-lucide-pencil", onSelect: () => open(i) }
 		];
@@ -593,6 +679,9 @@
 				void onPdfClick(i);
 			}
 		}];
-		return [lifecycle, duplicateAction, exports];
-	};
+		// Two groups → exactly one separator in the menu, sitting between
+		// Generate PDF and everything else. Open / Mark sent / Record
+		// payment / Duplicate stay in one continuous block.
+		return [[...lifecycle, ...duplicateAction], exports];
+	}
 </script>

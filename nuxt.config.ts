@@ -13,8 +13,9 @@ export default defineNuxtConfig({
 		"@pinia/nuxt",
 		"@primevue/nuxt-module"
 	],
-	// We only use one PrimeVue component (DataTable) — everything else
-	// in the app is NuxtUI. Restrict auto-imports to DataTable + Column
+	// PrimeVue is used for DataTable (resizable columns out of the box) and
+	// ContextMenu (row right-click on the list pages). Everything else in
+	// the app is NuxtUI. Restrict auto-imports to those three components
 	// so PrimeVue's composables (especially `useToast`) don't shadow
 	// NuxtUI's, and the bundle doesn't pull in the rest of PrimeVue.
 	// The Aura theme respects our existing `.dark` class so PrimeVue
@@ -22,7 +23,7 @@ export default defineNuxtConfig({
 	primevue: {
 		autoImport: true,
 		components: {
-			include: ["DataTable", "Column"]
+			include: ["DataTable", "Column", "ContextMenu"]
 		},
 		composables: {
 			include: []
