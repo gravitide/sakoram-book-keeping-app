@@ -15,13 +15,20 @@ export default defineNuxtConfig({
 	],
 	// We only use one PrimeVue component (DataTable) — everything else
 	// in the app is NuxtUI. Restrict auto-imports to DataTable + Column
-	// so the bundle doesn't pull in PrimeVue's whole component catalogue.
+	// so PrimeVue's composables (especially `useToast`) don't shadow
+	// NuxtUI's, and the bundle doesn't pull in the rest of PrimeVue.
 	// The Aura theme respects our existing `.dark` class so PrimeVue
 	// inherits the app's light/dark mode without a separate toggle.
 	primevue: {
 		autoImport: true,
 		components: {
 			include: ["DataTable", "Column"]
+		},
+		composables: {
+			include: []
+		},
+		directives: {
+			include: []
 		},
 		options: {
 			theme: {

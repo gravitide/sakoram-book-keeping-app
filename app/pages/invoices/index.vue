@@ -101,6 +101,17 @@
 						>
 							Reset
 						</UButton>
+						<UButton
+							size="md"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-table-columns-split"
+							:class="hasAnyFilter ? '' : 'ml-auto'"
+							title="Auto-size columns to their content"
+							@click="autoFitColumns"
+						>
+							Auto-fit columns
+						</UButton>
 					</div>
 
 					<!-- Multi-select status filter. Matches StatusBadge colours. -->
@@ -161,6 +172,7 @@
 				header to toggle sort direction (PrimeVue's default). -->
 			<DataTable
 				v-else
+				:key="tableKey"
 				:value="rows"
 				data-key="id"
 				striped-rows
@@ -178,94 +190,90 @@
 				sort-field="issue_date"
 				:sort-order="-1"
 				class="text-sm"
+				table-style="min-width: 60rem"
 				@row-click="onRowClick"
 			>
-				<Column
-					field="number"
-					header="Number"
-					sortable
-					:style="{ minWidth: '130px' }"
-				>
+				<!-- No explicit per-column widths: PrimeVue + the browser
+					compute natural widths from content on first render
+					(numbers stay tight, long project titles get more
+					room). User-dragged widths persist via stateStorage;
+					the "Auto-fit columns" button next to the filters
+					clears that saved state so the layout snaps back to
+					content-sized. -->
+				<Column field="number" header="Number" sortable>
 					<template #body="{ data }">
-						<span class="font-medium tabular-nums">{{ data.number }}</span>
+						<div class="truncate font-medium tabular-nums">
+							{{ data.number }}
+						</div>
 					</template>
 				</Column>
-				<Column
-					field="_client"
-					header="Client"
-					sortable
-					:style="{ minWidth: '180px' }"
-				/>
-				<Column
-					field="project_title"
-					header="Project"
-					sortable
-					:style="{ minWidth: '200px' }"
-				>
+				<Column field="_client" header="Client" sortable>
 					<template #body="{ data }">
-						<span class="text-(--ui-text-muted)">{{ data.project_title || "—" }}</span>
+						<div class="truncate">
+							{{ data._client }}
+						</div>
 					</template>
 				</Column>
-				<Column
-					field="issue_date"
-					header="Issued"
-					sortable
-					:style="{ minWidth: '110px' }"
-				>
+				<Column field="project_title" header="Project" sortable>
 					<template #body="{ data }">
-						<span class="text-(--ui-text-muted) tabular-nums">{{ data.issue_date }}</span>
+						<div class="truncate text-(--ui-text-muted)">
+							{{ data.project_title || "—" }}
+						</div>
 					</template>
 				</Column>
-				<Column
-					field="due_date"
-					header="Due"
-					sortable
-					:style="{ minWidth: '110px' }"
-				>
+				<Column field="issue_date" header="Issued" sortable>
 					<template #body="{ data }">
-						<span
-							class="tabular-nums"
+						<div class="truncate text-(--ui-text-muted) tabular-nums">
+							{{ data.issue_date }}
+						</div>
+					</template>
+				</Column>
+				<Column field="due_date" header="Due" sortable>
+					<template #body="{ data }">
+						<div
+							class="truncate tabular-nums"
 							:class="data._status === 'overdue'
 								? 'text-(--ui-error) font-medium'
 								: 'text-(--ui-text-muted)'"
-						>{{ data.due_date }}</span>
+						>
+							{{ data.due_date }}
+						</div>
 					</template>
 				</Column>
 				<Column
 					field="total_cents"
 					header="Total"
 					sortable
-					:style="{ minWidth: '120px', textAlign: 'right' }"
+					:style="{ textAlign: 'right' }"
 				>
 					<template #body="{ data }">
-						<span class="tabular-nums">{{ formatLKR(data.total_cents) }}</span>
+						<div class="truncate tabular-nums">
+							{{ formatLKR(data.total_cents) }}
+						</div>
 					</template>
 				</Column>
 				<Column
 					field="_balance"
 					header="Balance"
 					sortable
-					:style="{ minWidth: '120px', textAlign: 'right' }"
+					:style="{ textAlign: 'right' }"
 				>
 					<template #body="{ data }">
-						<span v-if="data._balance === 0" class="text-(--ui-text-muted)">—</span>
-						<span v-else class="tabular-nums">{{ formatLKR(data._balance) }}</span>
+						<div class="truncate tabular-nums">
+							<span v-if="data._balance === 0" class="text-(--ui-text-muted)">—</span>
+							<span v-else>{{ formatLKR(data._balance) }}</span>
+						</div>
 					</template>
 				</Column>
-				<Column
-					field="_status"
-					header="Status"
-					sortable
-					:style="{ minWidth: '110px' }"
-				>
+				<Column field="_status" header="Status" sortable>
 					<template #body="{ data }">
 						<StatusBadge :status="data._status" />
 					</template>
 				</Column>
 				<Column
 					header=""
-					:style="{ width: '56px', textAlign: 'right' }"
 					:resizable="false"
+					:style="{ width: '56px', textAlign: 'right' }"
 				>
 					<template #body="{ data }">
 						<div @click.stop>
@@ -353,6 +361,17 @@
 	const onRowClick = (e: DataTableRowClickEvent) => {
 		const row = e.data as InvoiceRowVM | undefined;
 		if (row) router.push(`/invoices/${row.id}`);
+	};
+
+	// "Auto-fit columns" — clears DataTable's saved widths/sort/page
+	// and remounts the table (via a key bump) so it re-renders at the
+	// browser's natural content-sized widths. No full page reload.
+	const tableKey = ref(0);
+	const autoFitColumns = () => {
+		if (typeof localStorage !== "undefined") {
+			localStorage.removeItem("invoices-table");
+		}
+		tableKey.value++;
 	};
 
 	const newInvoice = () => router.push("/invoices/new");
