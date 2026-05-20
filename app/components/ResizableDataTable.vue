@@ -3,6 +3,7 @@
 		<DataTable
 			:key="tableKey"
 			v-model:context-menu-selection="ctxRow"
+			:selection="selectable ? selection : undefined"
 			:value="rows"
 			:data-key="dataKey"
 			striped-rows
@@ -24,7 +25,28 @@
 			:context-menu="!!rowActions"
 			@row-click="onRowClickInternal"
 			@row-contextmenu="onRowContextMenu"
+			@update:selection="(value: T[] | T | null) => emit('update:selection', Array.isArray(value) ? value : [])"
 		>
+			<!-- Prepend a checkbox selection column when `selectable` is on.
+				PrimeVue stamps each cell with `data-p-selection-column='true'`
+				so the row-click handler + CSS can identify and skip it
+				when picking the "first clickable cell".
+
+				`selectionMode="multiple"` is set on the column only, NOT
+				on the parent DataTable — setting it on the DataTable
+				would also enable click-anywhere-on-a-row to toggle
+				selection, which fights our `@row-click → open detail`
+				flow (a click on the first cell would both open AND
+				tick). Column-only keeps selection scoped to the
+				checkbox itself; `v-model:selection` still works the
+				same way. -->
+			<Column
+				v-if="selectable"
+				selection-mode="multiple"
+				:exportable="false"
+				header-style="width: 3rem"
+				:style="{ width: '3rem' }"
+			/>
 			<!-- Pass-through: PrimeVue's `<DataTable>` discovers `<Column>`
 				children from its default slot, so projecting the parent's
 				default slot here works the same as nesting Columns
@@ -106,6 +128,12 @@
 		tableStyle?: string
 		rowsPerPage?: number
 		rowsPerPageOptions?: number[]
+		// When true, prepends a multi-select checkbox column and binds
+		// PrimeVue's `:selection`/`@update:selection` through the
+		// `selection` v-model. The page receives the selection array and
+		// owns whatever it wants to do with it (e.g. bulk PDF on payslips).
+		selectable?: boolean
+		selection?: T[]
 	}
 
 	const props = withDefaults(defineProps<Props>(), {
@@ -121,11 +149,14 @@
 		// pass their own `:table-style="'width: 100%; min-width: 60rem'"`.
 		tableStyle: "width: 100%",
 		rowsPerPage: 15,
-		rowsPerPageOptions: () => [10, 15, 25, 50, 100]
+		rowsPerPageOptions: () => [10, 15, 25, 50, 100],
+		selectable: false,
+		selection: () => []
 	});
 
 	const emit = defineEmits<{
 		rowClick: [row: T]
+		"update:selection": [rows: T[]]
 	}>();
 
 	// Strip persisted column widths on every page entry so the table
@@ -180,7 +211,13 @@
 		const cell = target?.closest("td");
 		const cellRow = cell?.parentElement;
 		if (!cell || !cellRow) return;
-		if (cell !== cellRow.querySelector(":scope > td:first-child")) return;
+		// "First clickable cell" = the first <td> that isn't the
+		// selection column. PrimeVue stamps selection cells with
+		// `data-p-selection-column="true"`, so we walk past any of those.
+		const firstClickable = cellRow.querySelector(
+			":scope > td:not([data-p-selection-column='true'])"
+		);
+		if (cell !== firstClickable) return;
 		const row = e.data as T | undefined;
 		if (row) emit("rowClick", row);
 	};

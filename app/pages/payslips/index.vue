@@ -100,6 +100,17 @@
 						>
 							Reset
 						</UButton>
+						<UButton
+							size="md"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-table-columns-split"
+							:class="anyFilterActive ? '' : 'ml-auto'"
+							title="Auto-size columns to their content"
+							@click="autoFitColumns"
+						>
+							Auto-fit columns
+						</UButton>
 					</div>
 
 					<div class="flex items-center gap-1.5 flex-wrap">
@@ -121,11 +132,9 @@
 			<div v-if="store.loading" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				Loading payslips…
 			</div>
-
 			<div v-else-if="store.error" class="py-12 text-center text-sm text-(--ui-error)">
 				{{ store.error }}
 			</div>
-
 			<div v-else-if="store.filtered.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				<UIcon name="i-lucide-file-spreadsheet" class="size-10 mx-auto mb-2 opacity-50" />
 				<div v-if="store.payslips.length === 0">
@@ -137,13 +146,14 @@
 			</div>
 
 			<!-- Selection action bar — renders above the table whenever any
-				row is ticked, regardless of pagination/filter state. -->
+				row is ticked. PrimeVue's selection model lives in
+				`selectedRows`; we surface a count + Clear + Generate PDFs. -->
 			<div
-				v-if="selectedIds.size > 0 && !store.loading && !store.error"
+				v-if="selectedRows.length > 0 && !store.loading && !store.error"
 				class="mb-3 flex items-center justify-between gap-3 px-3 py-2 rounded-md border border-(--ui-primary)/30 bg-(--ui-primary)/10 text-sm"
 			>
 				<div>
-					<span class="font-medium">{{ selectedIds.size }} selected</span>
+					<span class="font-medium">{{ selectedRows.length }} selected</span>
 					<span class="text-(--ui-text-muted)"> · across all filters / pages</span>
 				</div>
 				<div class="flex items-center gap-2">
@@ -151,7 +161,7 @@
 						size="xs"
 						color="neutral"
 						variant="ghost"
-						@click="clearSelection"
+						@click="selectedRows = []"
 					>
 						Clear
 					</UButton>
@@ -166,123 +176,64 @@
 				</div>
 			</div>
 
-			<table v-if="!store.loading && !store.error && store.filtered.length > 0" class="w-full text-sm">
-				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-					<tr>
-						<th class="py-2 pl-3 pr-2 w-8">
-							<UCheckbox
-								:model-value="pageSelectionState === 'all'"
-								:indeterminate="pageSelectionState === 'some'"
-								aria-label="Select all on this page"
-								@update:model-value="togglePageSelection"
-							/>
-						</th>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'number'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('number')"
-						>
-							Number
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'employee'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('employee')"
-						>
-							Employee
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'period_start'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('period_start')"
-						>
-							Period
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'pay_date'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('pay_date')"
-						>
-							Pay date
-						</SortableTh>
-						<th class="py-2 px-2 font-medium">
-							Status
-						</th>
-						<SortableTh
-							th-class="py-2 px-2 font-medium text-right"
-							:active="list.sortKey === 'net'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('net')"
-						>
-							Net
-						</SortableTh>
-						<th class="py-2 pl-2 pr-3 w-10" />
-					</tr>
-				</thead>
-				<tbody>
-					<!-- Each row is wrapped in a UContextMenu so right-click
-						surfaces the same actions as the overflow button.
-						UContextMenu uses Reka UI's as-child trigger so the
-						<tr> stays the actual rendered element — no wrapper
-						div between tbody and tr (which would be invalid
-						HTML and break the layout). -->
-					<UContextMenu
-						v-for="r in list.paged"
-						:key="r.id"
-						:items="itemsFor(r)"
-					>
-						<tr
-							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-							:class="selectedIds.has(r.id) ? 'bg-(--ui-primary)/5' : ''"
-							@click="open(r)"
-						>
-							<td class="py-2 pl-3 pr-2 w-8" @click.stop>
-								<UCheckbox
-									:model-value="selectedIds.has(r.id)"
-									:aria-label="`Select ${r.number}`"
-									@update:model-value="(v: boolean) => toggleSelected(r.id, v)"
-								/>
-							</td>
-							<td class="py-2 px-2 font-medium tabular-nums">
-								{{ r.number }}
-							</td>
-							<td class="py-2 px-2">
-								{{ employeeName(r) }}
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-								{{ r.period_start }} → {{ r.period_end }}
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-								{{ r.pay_date }}
-							</td>
-							<td class="py-2 px-2">
-								<StatusBadge :status="store.derivedStatus(r)" />
-							</td>
-							<td class="py-2 px-2 text-right tabular-nums">
-								{{ formatMoney(r.net_cents) }}
-							</td>
-							<td class="py-2 pl-2 pr-3 text-right" @click.stop>
-								<UDropdownMenu :items="itemsFor(r)">
-									<UButton icon="i-lucide-more-horizontal" variant="ghost" color="neutral" size="xs" />
-								</UDropdownMenu>
-							</td>
-						</tr>
-					</UContextMenu>
-				</tbody>
-			</table>
-
-			<ListPagination
-				v-model:page="list.page"
-				v-model:page-size="list.pageSize"
-				:total="list.total"
-				:total-pages="list.totalPages"
-				:range-start="list.rangeStart"
-				:range-end="list.rangeEnd"
-			/>
+			<ResizableDataTable
+				v-if="!store.loading && !store.error && store.filtered.length > 0"
+				ref="tableRef"
+				v-model:selection="selectedRows"
+				:rows="rows"
+				state-key="payslips-table"
+				:row-actions="itemsFor"
+				default-sort-field="period_start"
+				:default-sort-order="-1"
+				selectable
+				@row-click="(row) => router.push(`/payslips/${row.id}`)"
+			>
+				<Column field="number" header="Number" sortable>
+					<template #body="{ data }">
+						<div class="truncate font-medium tabular-nums">
+							{{ data.number }}
+						</div>
+					</template>
+				</Column>
+				<Column field="_employee" header="Employee" sortable>
+					<template #body="{ data }">
+						<div class="truncate">
+							{{ data._employee }}
+						</div>
+					</template>
+				</Column>
+				<Column field="period_start" header="Period" sortable>
+					<template #body="{ data }">
+						<div class="truncate text-(--ui-text-muted) tabular-nums">
+							{{ data.period_start }} → {{ data.period_end }}
+						</div>
+					</template>
+				</Column>
+				<Column field="pay_date" header="Pay date" sortable>
+					<template #body="{ data }">
+						<div class="truncate text-(--ui-text-muted) tabular-nums">
+							{{ data.pay_date }}
+						</div>
+					</template>
+				</Column>
+				<Column field="_status" header="Status" sortable>
+					<template #body="{ data }">
+						<StatusBadge :status="data._status" />
+					</template>
+				</Column>
+				<Column
+					field="net_cents"
+					header="Net"
+					sortable
+					:style="{ textAlign: 'right' }"
+				>
+					<template #body="{ data }">
+						<div class="truncate text-right tabular-nums">
+							{{ formatMoney(data.net_cents) }}
+						</div>
+					</template>
+				</Column>
+			</ResizableDataTable>
 		</UCard>
 
 		<PdfPreviewModal
@@ -366,7 +317,6 @@
 	import { join } from "@tauri-apps/api/path";
 	import { open as openDialog } from "@tauri-apps/plugin-dialog";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
-	import { useListView } from "~/composables/useListView";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { formatMoney } from "~/lib/money";
 	import { buildPayslipPdfPayload } from "~/lib/payslip-pdf";
@@ -403,25 +353,37 @@
 		if (Number.isFinite(n)) store.employeeFilter = n;
 	}
 
-	const employeeName = (r: PayslipRow): string => {
+	const tableRef = ref<{ autoFit: () => void } | null>(null);
+	const autoFitColumns = () => tableRef.value?.autoFit();
+
+	// Hoisted helper so the row view-model below can close over it.
+	function employeeName(r: PayslipRow): string {
 		try {
 			return (JSON.parse(r.employee_snapshot) as EmployeeSnapshot).full_name ?? "(unknown)";
 		} catch {
 			return "(unknown)";
 		}
-	};
+	}
 
-	const list = useListView<PayslipRow>(
-		() => store.filtered,
-		[
-			{ key: "number", getValue: (r) => r.number },
-			{ key: "employee", getValue: (r) => employeeName(r) },
-			{ key: "period_start", getValue: (r) => r.period_start },
-			{ key: "pay_date", getValue: (r) => r.pay_date },
-			{ key: "net", getValue: (r) => r.net_cents }
-		],
-		{ defaultSortKey: "period_start", defaultDir: "desc" }
+	// View-model: PrimeVue sorts by top-level fields, so derived employee
+	// name and status are surfaced as `_employee` and `_status`.
+	interface PayslipRowVM extends PayslipRow {
+		_employee: string
+		_status: PayslipStatus
+	}
+	const rows = computed<PayslipRowVM[]>(() =>
+		store.filtered.map((r) => ({
+			...r,
+			_employee: employeeName(r),
+			_status: store.derivedStatus(r)
+		}))
 	);
+
+	// PrimeVue's selection model holds row references; the bulk-PDF logic
+	// below derives IDs as needed. With `data-key="id"` (set by
+	// ResizableDataTable's default), PrimeVue tracks selection by id so
+	// the same rows stay ticked across sort / page / filter changes.
+	const selectedRows = ref<PayslipRowVM[]>([]);
 
 	const employeeOptions = computed(() => [
 		{ label: "All employees", value: "all" as const },
@@ -505,8 +467,6 @@
 	// only when the user actually has a custom range applied.
 	const customRangeActive = computed(() => {
 		if (!store.hasDateFilters) return false;
-		// If the current range matches the active month-picker selection,
-		// it's a month pick, not a custom range.
 		return monthSelection.value === "all";
 	});
 
@@ -536,12 +496,8 @@
 	const statusChipClasses = (s: PayslipStatus): string =>
 		store.statusFilters.includes(s) ? STATUS_ACTIVE_CLASSES[s] : inactiveChip;
 
-	const open = (r: PayslipRow) => router.push(`/payslips/${r.id}`);
+	// --- Row actions: PDF preview + Mark issued -----------------------------
 
-	// Per-row PDF generation. We hand usePdfPreview a callback that
-	// reads from a 'currentPayslip' ref + a fetched lines list — set
-	// by onPdfClick before opening the modal. The shared payload
-	// builder takes it from there.
 	const currentPayslip = ref<PayslipRow | null>(null);
 	const currentLines = ref<PayslipLineDraft[]>([]);
 	const pdf = usePdfPreview({
@@ -560,6 +516,7 @@
 		fileName: () => `${currentPayslip.value?.number ?? "payslip"}.pdf`,
 		title: "Payslip PDF preview"
 	});
+
 	const onPdfClick = async (r: PayslipRow) => {
 		currentPayslip.value = r;
 		try {
@@ -582,10 +539,10 @@
 		pdf.open();
 	};
 
-	// Quick 'Mark issued' from the row dropdown — saves the user a
+	// Quick 'Mark issued' from the row context menu — saves the user a
 	// click into the detail page when the draft is already complete.
-	// Refused at the store level if anything's off (zero net, etc.)
-	// so worst case is a toast describing the problem.
+	// Refused at the store level if anything's off (zero net, etc.) so
+	// worst case is a toast describing the problem.
 	const markIssued = async (r: PayslipRow) => {
 		try {
 			await store.setStatus(r.id, "issued");
@@ -600,13 +557,11 @@
 		}
 	};
 
-	// UDropdownMenu / UContextMenu render a thin divider between
-	// each top-level group. We split lifecycle actions (Open, Mark
-	// issued) from the export action (Generate PDF) so the menu
-	// reads as two distinct kinds of intent.
-	const itemsFor = (r: PayslipRow) => {
+	// Two-group row-actions menu: lifecycle (Open + Mark issued when
+	// available), then Generate PDF.
+	function itemsFor(r: PayslipRowVM) {
 		const lifecycle: { label: string, icon: string, onSelect: () => void }[] = [
-			{ label: "Open", icon: "i-lucide-pencil", onSelect: () => open(r) }
+			{ label: "Open", icon: "i-lucide-pencil", onSelect: () => router.push(`/payslips/${r.id}`) }
 		];
 		if (r.status === "draft" && r.net_cents > 0) {
 			lifecycle.push({
@@ -625,49 +580,9 @@
 			}
 		}];
 		return [lifecycle, exports];
-	};
+	}
 
 	// --- Bulk PDF generation ----------------------------------------------
-	//
-	// Selection is per-id (not per-row reference) so it survives filter,
-	// sort, pagination, and store reloads. Reactive Set isn't natively
-	// reactive in Vue 3 templates — we wrap mutation in a re-assignment to
-	// trigger updates, but for simplicity we just store a ref<Set> and call
-	// .add()/.delete() then reassign to a new Set so reactivity fires.
-	const selectedIds = ref<Set<number>>(new Set<number>());
-
-	const toggleSelected = (id: number, on: boolean) => {
-		const next = new Set(selectedIds.value);
-		if (on) next.add(id);
-		else next.delete(id);
-		selectedIds.value = next;
-	};
-
-	const clearSelection = () => {
-		selectedIds.value = new Set<number>();
-	};
-
-	// Header checkbox state — "all" / "some" / "none" — tri-state for the
-	// current visible page. Toggling it flips every row on this page.
-	const pageSelectionState = computed<"none" | "some" | "all">(() => {
-		const ids = list.paged.map((r) => r.id);
-		if (ids.length === 0) return "none";
-		const selectedHere = ids.filter((id) => selectedIds.value.has(id)).length;
-		if (selectedHere === 0) return "none";
-		if (selectedHere === ids.length) return "all";
-		return "some";
-	});
-
-	const togglePageSelection = () => {
-		const ids = list.paged.map((r) => r.id);
-		const next = new Set(selectedIds.value);
-		if (pageSelectionState.value === "all") {
-			for (const id of ids) next.delete(id);
-		} else {
-			for (const id of ids) next.add(id);
-		}
-		selectedIds.value = next;
-	};
 
 	// Bulk-render state. modalOpen drives the progress dialog; running
 	// gates the action bar's spinner; cancelled is checked between
@@ -704,7 +619,7 @@
 
 	const generateBulkPdfs = async () => {
 		if (bulkPdf.running) return;
-		if (selectedIds.value.size === 0) return;
+		if (selectedRows.value.length === 0) return;
 
 		// Folder picker — directory mode. Tauri's open() returns null on
 		// cancel (or string array if multiple, but we don't enable that).
@@ -723,11 +638,15 @@
 		}
 		if (!folder) return; // cancelled
 
-		// Snapshot the selection — if the user keeps clicking around
-		// while it runs, we still process exactly what they kicked off.
+		// Snapshot the selection — if the user keeps clicking around while
+		// it runs, we still process exactly what they kicked off. Resolve
+		// from store.payslips by id so we get the canonical row reference
+		// (PrimeVue's selection array can hold stale refs across reloads,
+		// but `data-key="id"` keeps the IDs accurate).
+		const selectedIds = new Set(selectedRows.value.map((r) => r.id));
 		const targets: PayslipRow[] = [];
 		for (const p of store.payslips) {
-			if (selectedIds.value.has(p.id)) targets.push(p);
+			if (selectedIds.has(p.id)) targets.push(p);
 		}
 		// Sort by number for predictable filename order.
 		targets.sort((a, b) => a.number.localeCompare(b.number));
@@ -751,17 +670,14 @@
 			bulkPdf.currentName = row.number;
 
 			try {
-				// 1. Load lines (single SELECT)
-				const rows = await store.getLines(row.id);
-				const lines: PayslipLineDraft[] = rows.map((l) => ({
+				const lineRows = await store.getLines(row.id);
+				const lines: PayslipLineDraft[] = lineRows.map((l) => ({
 					sort_order: l.sort_order,
 					kind: l.kind,
 					label: l.label,
 					amount_cents: l.amount_cents
 				}));
 
-				// 2. Build payload — same shape the detail page and the
-				//    per-row "Generate PDF" action use.
 				const payload = buildPayslipPdfPayload({
 					row,
 					lines,
@@ -771,12 +687,6 @@
 					balanceCents: store.balanceCentsFor(row)
 				});
 
-				// 3. Render direct to the chosen folder. Tauri's join() picks
-				//    the right path separator per platform — landmine in
-				//    CLAUDE.md flags hand-built backslash paths. The Tauri
-				//    scope validator on shell:allow-execute only checks the
-				//    sidecar args (.typ / .pdf extensions) — output path is
-				//    whatever the user picks.
 				const outputPath = await join(folder, `${safeName(row.number)}.pdf`);
 				await invoke("export_payslip_pdf", { data: payload, outputPath, protectPassword });
 			} catch (err) {

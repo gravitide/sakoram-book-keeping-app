@@ -73,6 +73,17 @@
 						>
 							Reset
 						</UButton>
+						<UButton
+							size="md"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-table-columns-split"
+							:class="hasAnyFilter ? '' : 'ml-auto'"
+							title="Auto-size columns to their content"
+							@click="autoFitColumns"
+						>
+							Auto-fit columns
+						</UButton>
 					</div>
 
 					<div class="flex items-center gap-1.5 flex-wrap">
@@ -121,116 +132,83 @@
 					No vouchers match your filters.
 				</div>
 			</div>
-			<table v-else class="w-full text-sm">
-				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-					<tr>
-						<SortableTh
-							th-class="py-2 pl-3 pr-2 font-medium"
-							:active="list.sortKey === 'number'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('number')"
-						>
-							Number
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'type'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('type')"
-						>
-							Type
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'date'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('date')"
-						>
-							Date
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'party'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('party')"
-						>
-							Party
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'method'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('method')"
-						>
-							Method
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 px-2 font-medium"
-							:active="list.sortKey === 'reference'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('reference')"
-						>
-							Reference
-						</SortableTh>
-						<SortableTh
-							th-class="py-2 pl-2 pr-3 font-medium text-right"
-							:active="list.sortKey === 'amount'"
-							:dir="list.sortDir"
-							@sort="list.toggleSort('amount')"
-						>
-							Amount
-						</SortableTh>
-					</tr>
-				</thead>
-				<tbody>
-					<tr
-						v-for="v in list.paged"
-						:key="v.id"
-						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-						@click="open(v)"
-					>
-						<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
-							{{ v.number }}
-						</td>
-						<td class="py-2 px-2">
-							<UBadge :color="v.voucher_type === 'receipt' ? 'success' : 'warning'" variant="subtle" size="sm">
-								{{ v.voucher_type === 'receipt' ? 'Receipt' : 'Payment' }}
-							</UBadge>
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-							{{ v.voucher_date }}
-						</td>
-						<td class="py-2 px-2">
-							{{ v.party_name }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted)">
-							{{ methodLabel(v.payment_method) }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted)">
-							{{ v.reference || "—" }}
-						</td>
-						<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap font-medium" :class="v.voucher_type === 'receipt' ? 'text-(--ui-success)' : 'text-(--ui-error)'">
-							{{ v.voucher_type === 'receipt' ? '+' : '−' }} {{ formatLKR(v.amount_cents) }}
-						</td>
-					</tr>
-				</tbody>
-			</table>
 
-			<ListPagination
-				v-model:page="list.page"
-				v-model:page-size="list.pageSize"
-				:total="list.total"
-				:total-pages="list.totalPages"
-				:range-start="list.rangeStart"
-				:range-end="list.rangeEnd"
-			/>
+			<!-- No `:row-actions` — the original vouchers list page had no
+				overflow / right-click menu, so the migration preserves
+				that. First-cell click opens the voucher detail. -->
+			<ResizableDataTable
+				v-else
+				ref="tableRef"
+				:rows="store.filtered"
+				state-key="vouchers-table"
+				default-sort-field="voucher_date"
+				:default-sort-order="-1"
+				@row-click="(row) => router.push(`/vouchers/${row.id}`)"
+			>
+				<Column field="number" header="Number" sortable>
+					<template #body="{ data }">
+						<div class="truncate font-medium tabular-nums">
+							{{ data.number }}
+						</div>
+					</template>
+				</Column>
+				<Column field="voucher_type" header="Type" sortable>
+					<template #body="{ data }">
+						<UBadge :color="data.voucher_type === 'receipt' ? 'success' : 'warning'" variant="subtle" size="sm">
+							{{ data.voucher_type === 'receipt' ? 'Receipt' : 'Payment' }}
+						</UBadge>
+					</template>
+				</Column>
+				<Column field="voucher_date" header="Date" sortable>
+					<template #body="{ data }">
+						<div class="truncate text-(--ui-text-muted) tabular-nums">
+							{{ data.voucher_date }}
+						</div>
+					</template>
+				</Column>
+				<Column field="party_name" header="Party" sortable>
+					<template #body="{ data }">
+						<div class="truncate">
+							{{ data.party_name }}
+						</div>
+					</template>
+				</Column>
+				<Column field="payment_method" header="Method" sortable>
+					<template #body="{ data }">
+						<div class="truncate text-(--ui-text-muted)">
+							{{ methodLabel(data.payment_method) }}
+						</div>
+					</template>
+				</Column>
+				<Column field="reference" header="Reference" sortable>
+					<template #body="{ data }">
+						<div class="truncate text-(--ui-text-muted)">
+							{{ data.reference || "—" }}
+						</div>
+					</template>
+				</Column>
+				<Column
+					field="amount_cents"
+					header="Amount"
+					sortable
+					:style="{ textAlign: 'right' }"
+				>
+					<template #body="{ data }">
+						<div
+							class="truncate text-right tabular-nums whitespace-nowrap font-medium"
+							:class="data.voucher_type === 'receipt' ? 'text-(--ui-success)' : 'text-(--ui-error)'"
+						>
+							{{ data.voucher_type === 'receipt' ? '+' : '−' }} {{ formatLKR(data.amount_cents) }}
+						</div>
+					</template>
+				</Column>
+			</ResizableDataTable>
 		</UCard>
 	</div>
 </template>
 
 <script setup lang="ts">
-	import type { VoucherRow, VoucherType } from "~/stores/vouchers";
-	import { useListView } from "~/composables/useListView";
+	import type { VoucherType } from "~/stores/vouchers";
 	import { formatLKR } from "~/lib/money";
 	import { useVouchersStore } from "~/stores/vouchers";
 
@@ -241,22 +219,10 @@
 
 	await store.load();
 
-	const list = useListView<VoucherRow>(
-		() => store.filtered,
-		[
-			{ key: "number", getValue: (v) => v.number },
-			{ key: "type", getValue: (v) => v.voucher_type },
-			{ key: "date", getValue: (v) => v.voucher_date },
-			{ key: "party", getValue: (v) => v.party_name },
-			{ key: "method", getValue: (v) => v.payment_method },
-			{ key: "reference", getValue: (v) => v.reference },
-			{ key: "amount", getValue: (v) => v.amount_cents }
-		],
-		{ defaultSortKey: "date", defaultDir: "desc" }
-	);
+	const tableRef = ref<{ autoFit: () => void } | null>(null);
+	const autoFitColumns = () => tableRef.value?.autoFit();
 
 	const newVoucher = () => router.push("/vouchers/new");
-	const open = (v: VoucherRow) => router.push(`/vouchers/${v.id}`);
 
 	const hasAnyFilter = computed(() =>
 		store.search.trim() !== ""
