@@ -312,24 +312,36 @@ textarea,
  * keeps these tokens off any other PrimeVue surface we might add.
  */
 :where(.p-datatable, .p-datatable-paginator-bottom, .p-datatable-paginator-top, .p-contextmenu) {
-	/* Surface tokens — keep cards/striped rows in our paper palette.
-	 * Header uses a 12% text overlay on `--ui-bg` so it sits clearly
-	 * darker than rows (light mode) / lighter than rows (dark mode)
-	 * AND distinct from the gridline tone below (which is 14% text on
-	 * transparent). `--ui-bg-muted` was too close to the border colour
-	 * to read as a header — they bled into each other. */
-	--p-datatable-header-cell-background: color-mix(in oklab, var(--ui-text) 12%, var(--ui-bg));
-	--p-datatable-header-cell-hover-background: color-mix(in oklab, var(--ui-text) 18%, var(--ui-bg));
-	--p-datatable-header-cell-selected-background: color-mix(in oklab, var(--ui-primary) 18%, var(--ui-bg));
+	/* Surface tokens — header gets a light 8% text-on-bg lift so it
+	 * anchors against the body's gridlined cells. Stops short of the
+	 * earlier 12% fill (which was visually noisy alongside the
+	 * uppercase / muted typography). The hierarchy is:
+	 *   - even rows: --ui-bg (0%)
+	 *   - odd rows: 4% (striped)
+	 *   - header: 8% (just above stripes)
+	 *   - gridlines: 10% (the visible separator lines)
+	 *   - header bottom border: 18% (slightly heavier so the header
+	 *     row reads as terminated). */
+	--p-datatable-header-cell-background: color-mix(in oklab, var(--ui-text) 8%, var(--ui-bg));
+	--p-datatable-header-cell-hover-background: color-mix(in oklab, var(--ui-text) 14%, var(--ui-bg));
+	--p-datatable-header-cell-selected-background: color-mix(in oklab, var(--ui-primary) 12%, var(--ui-bg));
 	--p-datatable-header-cell-color: var(--ui-text);
 	--p-datatable-header-cell-hover-color: var(--ui-text);
 	--p-datatable-header-cell-selected-color: var(--ui-primary);
 	--p-datatable-header-cell-sort-color: var(--ui-text);
 	--p-datatable-header-cell-sort-hover-color: var(--ui-primary);
 	--p-datatable-header-cell-sort-selected-color: var(--ui-primary);
-	--p-datatable-header-cell-border-color: var(--ui-border);
+	/* Header border at 18% — clearly above the 8% header background
+	 * so column separators (and the resize handle on that edge) are
+	 * visible, but lifted from the earlier 25% which was too stark. */
+	--p-datatable-header-cell-border-color: color-mix(in oklab, var(--ui-text) 18%, transparent);
 	--p-datatable-sort-icon-color: var(--ui-text-muted);
 	--p-datatable-sort-icon-hover-color: var(--ui-primary);
+	/* Sort icons (the stacked up/down arrows next to each sortable
+	 * header) default to ~14px in Aura, which fights the 12px
+	 * uppercase header label visually. Match the label size so the
+	 * pair reads as one compact unit. */
+	--p-datatable-sort-icon-size: 0.75rem;
 
 	--p-datatable-row-background: var(--ui-bg);
 	--p-datatable-row-hover-background: var(--ui-bg-accented);
@@ -337,15 +349,14 @@ textarea,
 	--p-datatable-row-hover-color: var(--ui-text);
 	--p-datatable-row-selected-background: color-mix(in oklab, var(--ui-primary) 14%, var(--ui-bg));
 	--p-datatable-row-selected-color: var(--ui-text);
-	/* Zebra stripes vs. column dividers — NuxtUI's `--ui-bg-muted` and
-	 * `--ui-border` resolve to nearly the same dark-mode tone, so the
-	 * alt rows visually merge with the vertical gridlines. Use explicit
-	 * text-tinted layers with a clear gap between them (4% vs 14%) so
-	 * the stripes read as alternating bands and the borders read as
-	 * thin separators on top of them. */
+	/* Zebra stripes vs. column dividers — explicit text-tinted layers
+	 * with a clear gap between them (4% vs 7%) so the stripes read
+	 * as alternating bands and the borders read as thin separators on
+	 * top of them. Kept dialing gridlines down from 14% → 10% → 7%;
+	 * 7% delimits columns without making each cell feel framed. */
 	--p-datatable-row-striped-background: color-mix(in oklab, var(--ui-text) 4%, transparent);
-	--p-datatable-border-color: color-mix(in oklab, var(--ui-text) 14%, transparent);
-	--p-datatable-body-cell-border-color: color-mix(in oklab, var(--ui-text) 14%, transparent);
+	--p-datatable-border-color: color-mix(in oklab, var(--ui-text) 7%, transparent);
+	--p-datatable-body-cell-border-color: color-mix(in oklab, var(--ui-text) 7%, transparent);
 
 	/* Cell padding — Aura defaults to roomy bookkeeping-table density.
 	 * Trim both header + body cells to ~half height so we can fit more
@@ -382,6 +393,73 @@ textarea,
 	--p-contextmenu-item-focus-icon-color: var(--ui-primary);
 
 	font-family: inherit;
+}
+
+/* Rounded corners on the DataTable so the table reads as a unified
+ * block (body + paginator) instead of bleeding to the edges of the
+ * surrounding UCard. No outer border — the parent UCard already
+ * provides the visible frame; doubling them up looked busy. The
+ * `overflow: hidden` is the load-bearing piece: it clips the inner
+ * horizontal-scroll container so its scrollbar tucks under the
+ * rounded edge rather than running flush across the page. */
+.p-datatable {
+	border-radius: 0.5rem;
+	overflow: hidden;
+}
+
+/* Header text styling — match the pre-migration hand-rolled tables:
+ *   - uppercase + slight letter-spacing reads as a caption row, not
+ *     just bolder body text
+ *   - 0.75rem (12px) is smaller than body's 0.875rem so the column
+ *     names recede when scanning data
+ *   - font-weight: 500 (medium) instead of Aura's default bold, so
+ *     the body data has the visual weight, not the labels
+ *   - muted text colour lets the body read as the primary content
+ * The header bg + bottom border still mark it as a distinct zone. */
+.p-datatable .p-datatable-thead > tr > th {
+	font-size: 0.75rem;
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--ui-text-muted);
+}
+.p-datatable .p-datatable-column-title {
+	font-weight: 500;
+}
+/* Active-sort column flips the muted tone to primary so the sorted-by
+ * column is glanceable; the rest of the header styling stays. */
+.p-datatable .p-datatable-column-sorted .p-datatable-column-title {
+	color: var(--ui-primary);
+}
+
+/* The paginator sits below the body and Aura paints its own top
+ * border AT the same colour as the body gridlines — which combines
+ * with the body's last-row bottom border to read as a doubled-up
+ * separator under the scrollbar. Drop the paginator's frame entirely:
+ * the body's last-row border already provides separation, and the
+ * paginator's background tint marks it as its own zone. */
+.p-datatable .p-datatable-paginator-bottom {
+	border: 0 !important;
+}
+
+/* PrimeVue with `showGridlines` adds a 1px border around the
+ * outermost table cells, which now doubles up against the `.p-datatable`
+ * frame. Drop the outer-edge borders so the rounded frame is the only
+ * visible boundary, and inner gridlines stay as the column/row
+ * separators. */
+.p-datatable.p-datatable-gridlines .p-datatable-thead > tr > th:first-child,
+.p-datatable.p-datatable-gridlines .p-datatable-tbody > tr > td:first-child {
+	border-inline-start-width: 0;
+}
+.p-datatable.p-datatable-gridlines .p-datatable-thead > tr > th:last-child,
+.p-datatable.p-datatable-gridlines .p-datatable-tbody > tr > td:last-child {
+	border-inline-end-width: 0;
+}
+.p-datatable.p-datatable-gridlines .p-datatable-thead > tr > th {
+	border-top-width: 0;
+}
+.p-datatable.p-datatable-gridlines .p-datatable-tbody > tr:last-child > td {
+	border-bottom-width: 0;
 }
 
 /* Row-click navigation is intentionally scoped to the leading cell
