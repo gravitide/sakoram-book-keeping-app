@@ -133,17 +133,18 @@
 			expenses by category. One grid that reflows per breakpoint.
 			At sm/md everything stacks. At lg cashflow goes full-width
 			(col-span-2) with receivables + expenses paired below. At
-			2xl cashflow takes 2/3 with expenses tucked in at 1/3 next
-			to it (the screen has room for both), and receivables drops
-			to its own full-width row. Achieved with `order-*` +
-			responsive `col-span-*` so the DOM stays declarative and no
-			card markup is duplicated. -->
-		<div class="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 mb-4">
+			2xl the grid splits into 5 cols: cashflow takes 3/5 and
+			expenses 2/5 on row 1 (the cashflow chart looks dense at
+			that width, and expenses gets enough room for full category
+			labels), with receivables dropping to a full-width row 2.
+			Achieved with `order-*` + responsive `col-span-*` so the
+			DOM stays declarative and no card markup is duplicated. -->
+		<div class="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-5 gap-4 mb-4">
 			<!-- Monthly cash flow — receipts vs payments grouped per
 				month over the last 12 months. Sourced off the voucher
 				ledger (single source of truth for cash flow after the
 				bills/invoices payments-via-vouchers refactor). -->
-			<UCard class="lg:col-span-2 2xl:col-span-2">
+			<UCard class="lg:col-span-2 2xl:col-span-3">
 				<template #header>
 					<div class="flex items-center justify-between gap-4 flex-wrap">
 						<div>
@@ -162,8 +163,8 @@
 
 			<!-- Receivables aging — pairs with Expenses at lg (default
 				DOM order), drops to its own full-width row at 2xl via
-				`order-3` + `col-span-3`. -->
-			<UCard class="2xl:order-3 2xl:col-span-3">
+				`order-3` + `col-span-5` (matches the 5-col grid). -->
+			<UCard class="2xl:order-3 2xl:col-span-5">
 				<template #header>
 					<div class="flex items-center justify-between gap-2">
 						<div>
@@ -180,9 +181,11 @@
 				<ReceivablesAgingChart />
 			</UCard>
 
-			<!-- Expenses by category — at 2xl `order-2` lifts it
-				up to row 1 right next to Monthly cash flow. -->
-			<UCard class="2xl:order-2">
+			<!-- Expenses by category — at 2xl `order-2` lifts it up to
+				row 1 right next to Monthly cash flow, with `col-span-2`
+				taking 2/5 of the row (enough room for full category
+				labels in the legend). -->
+			<UCard class="2xl:order-2 2xl:col-span-2">
 				<template #header>
 					<div class="flex items-center justify-between gap-2">
 						<div>
