@@ -175,6 +175,11 @@
 				</div>
 			</main>
 		</div>
+
+		<!-- Dev-only floating chip showing the active Tailwind
+			breakpoint + viewport width. Self-gates on `import.meta.dev`
+			so the production build excludes it. -->
+		<BreakpointBadge />
 	</div>
 </template>
 
