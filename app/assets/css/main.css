@@ -390,16 +390,14 @@ textarea,
 	font-family: inherit;
 }
 
-/* Rounded card-style frame around the whole DataTable (table body +
- * paginator). Without this, PrimeVue draws a flat-corner table that
- * doesn't sit cleanly inside the surrounding UCard, and the horizontal
- * scrollbar between the body and the paginator looks like a stray
- * border running across the page. `overflow: hidden` clips the inner
- * scroll container so its scrollbar tucks under the rounded corners.
- * Border + radius use the same tones as the rest of the theme so the
- * table reads as a peer of NuxtUI cards. */
+/* Rounded corners on the DataTable so the table reads as a unified
+ * block (body + paginator) instead of bleeding to the edges of the
+ * surrounding UCard. No outer border — the parent UCard already
+ * provides the visible frame; doubling them up looked busy. The
+ * `overflow: hidden` is the load-bearing piece: it clips the inner
+ * horizontal-scroll container so its scrollbar tucks under the
+ * rounded edge rather than running flush across the page. */
 .p-datatable {
-	border: 1px solid color-mix(in oklab, var(--ui-text) 14%, transparent);
 	border-radius: 0.5rem;
 	overflow: hidden;
 }
