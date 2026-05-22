@@ -337,6 +337,11 @@ textarea,
 	--p-datatable-header-cell-border-color: color-mix(in oklab, var(--ui-text) 18%, transparent);
 	--p-datatable-sort-icon-color: var(--ui-text-muted);
 	--p-datatable-sort-icon-hover-color: var(--ui-primary);
+	/* Sort icons (the stacked up/down arrows next to each sortable
+	 * header) default to ~14px in Aura, which fights the 12px
+	 * uppercase header label visually. Match the label size so the
+	 * pair reads as one compact unit. */
+	--p-datatable-sort-icon-size: 0.75rem;
 
 	--p-datatable-row-background: var(--ui-bg);
 	--p-datatable-row-hover-background: var(--ui-bg-accented);
