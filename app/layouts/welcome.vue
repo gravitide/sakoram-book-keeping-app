@@ -9,5 +9,8 @@
 				<slot />
 			</div>
 		</div>
+		<!-- Same dev-only breakpoint chip the default layout shows so
+			the welcome screen also gets the viewport-width readout. -->
+		<BreakpointBadge />
 	</div>
 </template>

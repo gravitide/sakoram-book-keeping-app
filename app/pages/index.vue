@@ -129,32 +129,56 @@
 			</UCard>
 		</div>
 
-		<!-- Monthly cash flow — receipts vs payments grouped per month
-			over the last 12 months. Sourced directly off the voucher
-			ledger (which is now the single source of truth for cash
-			flow after the bills/invoices payments-via-vouchers
-			refactor). -->
-		<UCard class="mb-4">
-			<template #header>
-				<div class="flex items-center justify-between gap-4 flex-wrap">
-					<div>
-						<div class="font-medium">
-							Monthly cash flow
-						</div>
-						<div class="text-xs text-(--ui-text-muted) mt-0.5">
-							Receipts in, payments out — last 12 months from the voucher ledger.
-						</div>
-					</div>
-					<UIcon name="i-lucide-bar-chart-3" class="size-4 text-(--ui-text-muted)" />
-				</div>
-			</template>
-			<MonthlyCashFlowChart :vouchers="vouchersStore.vouchers" />
-		</UCard>
+		<!-- Insights block: monthly cash flow + receivables aging +
+			expenses by category. One grid that reflows per breakpoint.
 
-		<!-- Insights row 1: receivables aging + expense breakdown.
-			Two cards side-by-side on lg, stacked on mobile. -->
-		<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-			<UCard>
+			At sm/md everything stacks. At lg–xl, a 6-col grid lets
+			the user toggle the cashflow / expenses split. Collapsed
+			is 4/6 + 2/6 (donut hidden, legend only); expanded is
+			3/6 + 3/6 (donut + legend; cashflow shrinks to a
+			comfortable 1:1).
+			At 2xl, a 5-col grid is fixed at 3/5 + 2/5 with the donut
+			always shown (toggle hidden — there's enough room for
+			both without compromise). Receivables drops to its own
+			full-width row 2 from lg upward.
+
+			Achieved with `order-*` + responsive `col-span-*` plus a
+			small `:class` binding for the lg toggle. DOM order stays
+			declarative; no card markup is duplicated. -->
+		<div class="grid grid-cols-1 lg:grid-cols-6 2xl:grid-cols-5 gap-4 mb-4">
+			<!-- Monthly cash flow — receipts vs payments grouped per
+				month over the last 12 months. Sourced off the voucher
+				ledger (single source of truth for cash flow after the
+				bills/invoices payments-via-vouchers refactor).
+				`lg:col-span-2` (collapsed) shrinks to `lg:col-span-1`
+				when the user expands the expenses card. Fixed
+				col-span-3 at 2xl regardless of toggle. -->
+			<UCard
+				style="view-transition-name: dashboard-cashflow"
+				class="2xl:col-span-3" :class="[
+					expensesExpanded ? 'lg:col-span-3' : 'lg:col-span-4'
+				]"
+			>
+				<template #header>
+					<div class="flex items-center justify-between gap-4 flex-wrap">
+						<div>
+							<div class="font-medium">
+								Monthly cash flow
+							</div>
+							<div class="text-xs text-(--ui-text-muted) mt-0.5">
+								Receipts in, payments out — last 12 months from the voucher ledger.
+							</div>
+						</div>
+						<UIcon name="i-lucide-bar-chart-3" class="size-4 text-(--ui-text-muted)" />
+					</div>
+				</template>
+				<MonthlyCashFlowChart :vouchers="vouchersStore.vouchers" />
+			</UCard>
+
+			<!-- Receivables aging — full-width on its own row from lg
+				upward (`lg:order-3 lg:col-span-3` covers lg-xl,
+				`2xl:col-span-5` extends to the 5-col grid). -->
+			<UCard class="lg:order-3 lg:col-span-6 2xl:col-span-5">
 				<template #header>
 					<div class="flex items-center justify-between gap-2">
 						<div>
@@ -171,7 +195,17 @@
 				<ReceivablesAgingChart />
 			</UCard>
 
-			<UCard>
+			<!-- Expenses by category — `lg:order-2` keeps it next to
+				cashflow on row 1. Width swaps based on the expand
+				toggle: 1/3 collapsed (legend only) or 2/3 expanded
+				(donut + legend). At 2xl always col-span-2 (donut shown
+				since `showDonut` is forced true via `isLgRange`). -->
+			<UCard
+				style="view-transition-name: dashboard-expenses"
+				class="lg:order-2 2xl:col-span-2" :class="[
+					expensesExpanded ? 'lg:col-span-3' : 'lg:col-span-2'
+				]"
+			>
 				<template #header>
 					<div class="flex items-center justify-between gap-2">
 						<div>
@@ -182,10 +216,28 @@
 								Where the money's going, last 90 days.
 							</div>
 						</div>
-						<UIcon name="i-lucide-pie-chart" class="size-4 text-(--ui-text-muted)" />
+						<!-- Toggle only renders at lg-xl (where it has
+							something to do). At 2xl the card is already
+							fully expanded; at sm/md it stacks full width. -->
+						<UButton
+							v-if="isLgRange"
+							size="xs"
+							variant="ghost"
+							color="neutral"
+							:icon="userExpanded
+								? 'i-lucide-chevrons-right'
+								: 'i-lucide-chevrons-left'"
+							:title="userExpanded ? 'Collapse chart' : 'Expand chart'"
+							@click="toggleExpenses"
+						/>
+						<UIcon
+							v-else
+							name="i-lucide-pie-chart"
+							class="size-4 text-(--ui-text-muted)"
+						/>
 					</div>
 				</template>
-				<ExpensesByCategoryChart />
+				<ExpensesByCategoryChart :show-donut="showExpensesDonut" />
 			</UCard>
 		</div>
 
@@ -306,6 +358,7 @@
 // linked vouchers, so no flagOverdue call is needed at mount time.
 
 	import type { ClientSnapshot } from "~/stores/quotes";
+	import { useMediaQuery } from "@vueuse/core";
 	import { formatLKR } from "~/lib/money";
 	import { useBillsStore } from "~/stores/bills";
 	import { useInvoicesStore } from "~/stores/invoices";
@@ -318,6 +371,52 @@
 	const billsStore = useBillsStore();
 	const quotesStore = useQuotesStore();
 	const vouchersStore = useVouchersStore();
+
+	// Expand/collapse state for the Expenses-by-category card. Only
+	// meaningful at lg-xl (1024-1535px) — below lg cards stack with
+	// full width, at 2xl the 5-col grid already gives both cards
+	// enough room. `isLgRange` gates the toggle button's visibility
+	// and the donut-vs-legend visibility computed below.
+	const isLgRange = useMediaQuery("(min-width: 1024px) and (max-width: 1535.98px)");
+	const userExpanded = ref(false);
+
+	// What the dashboard binds to the chart's `:show-donut` prop:
+	// - At lg-xl: follows the user's toggle.
+	// - Anywhere else (sm/md stacked, or 2xl with room): always true.
+	const showExpensesDonut = computed(() => !isLgRange.value || userExpanded.value);
+
+	// What the grid uses for col-span decisions at lg. We don't want
+	// the col-span to "stick" expanded if the user shrinks the window
+	// back below lg or grows past 2xl — so this only counts when we're
+	// actively in the lg-xl range where the toggle is meaningful.
+	const expensesExpanded = computed(() => isLgRange.value && userExpanded.value);
+
+	// Toggle handler — wraps the state mutation in the View Transitions
+	// API so the cards smoothly morph between sizes and the donut
+	// fades in/out instead of the layout snapping instantly. The
+	// `view-transition-name` we set on each card in the template tells
+	// the browser to track them across the state change. Tauri's
+	// Chromium webview supports this; we fall back to an instant
+	// toggle if the API isn't there. Async DOM update is required
+	// because Vue commits state changes asynchronously — the callback
+	// returns the nextTick promise so the snapshot reflects the
+	// post-change DOM. Suspending nuxi `await nextTick()` is fine
+	// here since this only runs in response to a click event.
+	const toggleExpenses = async () => {
+		const next = !userExpanded.value;
+		const apply = async () => {
+			userExpanded.value = next;
+			await nextTick();
+		};
+		const doc = document as Document & {
+			startViewTransition?: (cb: () => Promise<void> | void) => unknown
+		};
+		if (typeof document !== "undefined" && doc.startViewTransition) {
+			doc.startViewTransition(apply);
+		} else {
+			void apply();
+		}
+	};
 
 	const loadError = ref<string | null>(null);
 

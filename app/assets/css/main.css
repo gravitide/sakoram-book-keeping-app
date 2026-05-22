@@ -298,6 +298,23 @@ textarea,
 		0 12px 24px -8px rgb(0 0 0 / 0.35);
 }
 
+/* View-transition tuning for the dashboard's expand/collapse toggle
+ * (Expenses-by-category card). The card-morphing animation gets a
+ * slightly longer + easier curve than the browser default snap, so
+ * the resize reads as deliberate rather than reflexive. Each card
+ * is identified by `view-transition-name` inline in the template. */
+::view-transition-group(dashboard-cashflow),
+::view-transition-group(dashboard-expenses) {
+	animation-duration: 260ms;
+	animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+::view-transition-old(dashboard-cashflow),
+::view-transition-new(dashboard-cashflow),
+::view-transition-old(dashboard-expenses),
+::view-transition-new(dashboard-expenses) {
+	animation-duration: 260ms;
+}
+
 /* ─── PrimeVue DataTable theming ───────────────────────────────────
  * The DataTable component ships with the Aura preset (emerald/green
  * accent). The rest of the app is themed via NuxtUI's `--ui-*` tokens,
