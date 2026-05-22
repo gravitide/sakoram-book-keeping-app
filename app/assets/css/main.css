@@ -327,7 +327,13 @@ textarea,
 	--p-datatable-header-cell-sort-color: var(--ui-text);
 	--p-datatable-header-cell-sort-hover-color: var(--ui-primary);
 	--p-datatable-header-cell-sort-selected-color: var(--ui-primary);
-	--p-datatable-header-cell-border-color: var(--ui-border);
+	/* Header border bumped to a higher overlay than body gridlines —
+	 * 14% (body) was almost the same tone as the header's 12% bg, so
+	 * column separators (and the drag-resize handle that lives on
+	 * that edge) disappeared in the header row. 25% lifts them
+	 * clearly above the header tone in both light and dark modes
+	 * without making body cells feel boxy. */
+	--p-datatable-header-cell-border-color: color-mix(in oklab, var(--ui-text) 25%, transparent);
 	--p-datatable-sort-icon-color: var(--ui-text-muted);
 	--p-datatable-sort-icon-hover-color: var(--ui-primary);
 
