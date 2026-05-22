@@ -390,6 +390,50 @@ textarea,
 	font-family: inherit;
 }
 
+/* Rounded card-style frame around the whole DataTable (table body +
+ * paginator). Without this, PrimeVue draws a flat-corner table that
+ * doesn't sit cleanly inside the surrounding UCard, and the horizontal
+ * scrollbar between the body and the paginator looks like a stray
+ * border running across the page. `overflow: hidden` clips the inner
+ * scroll container so its scrollbar tucks under the rounded corners.
+ * Border + radius use the same tones as the rest of the theme so the
+ * table reads as a peer of NuxtUI cards. */
+.p-datatable {
+	border: 1px solid color-mix(in oklab, var(--ui-text) 14%, transparent);
+	border-radius: 0.5rem;
+	overflow: hidden;
+}
+
+/* The paginator sits below the body and Aura paints its own top
+ * border AT the same colour as the body gridlines — which combines
+ * with the body's last-row bottom border to read as a doubled-up
+ * separator under the scrollbar. Drop the paginator's frame entirely:
+ * the body's last-row border already provides separation, and the
+ * paginator's background tint marks it as its own zone. */
+.p-datatable .p-datatable-paginator-bottom {
+	border: 0 !important;
+}
+
+/* PrimeVue with `showGridlines` adds a 1px border around the
+ * outermost table cells, which now doubles up against the `.p-datatable`
+ * frame. Drop the outer-edge borders so the rounded frame is the only
+ * visible boundary, and inner gridlines stay as the column/row
+ * separators. */
+.p-datatable.p-datatable-gridlines .p-datatable-thead > tr > th:first-child,
+.p-datatable.p-datatable-gridlines .p-datatable-tbody > tr > td:first-child {
+	border-inline-start-width: 0;
+}
+.p-datatable.p-datatable-gridlines .p-datatable-thead > tr > th:last-child,
+.p-datatable.p-datatable-gridlines .p-datatable-tbody > tr > td:last-child {
+	border-inline-end-width: 0;
+}
+.p-datatable.p-datatable-gridlines .p-datatable-thead > tr > th {
+	border-top-width: 0;
+}
+.p-datatable.p-datatable-gridlines .p-datatable-tbody > tr:last-child > td {
+	border-bottom-width: 0;
+}
+
 /* Row-click navigation is intentionally scoped to the leading cell
  * (see ResizableDataTable.vue) — cursor + colour cues here mirror
  * that, so the visual affordance matches the click target:
