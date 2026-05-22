@@ -20,12 +20,13 @@
 		</div>
 
 		<template v-else>
-			<!-- Donut. SVG is simple enough that we can hand-roll the
-				stroke-dasharray slices and avoid pulling in a chart
-				lib. Each slice's arc length is its share of the total
-				expressed as a fraction of the circumference. -->
+			<!-- Donut + legend. Donut is hidden when `showDonut` is
+				false (the lg-range collapsed mode on the dashboard
+				where the card sits in a narrow ~1/3-width slot and
+				the SVG would crowd the legend). The legend itself
+				stays — that's the actual data. -->
 			<div class="flex items-center gap-5 flex-wrap">
-				<svg viewBox="0 0 100 100" class="size-40 shrink-0 -rotate-90">
+				<svg v-if="showDonut" viewBox="0 0 100 100" class="size-40 shrink-0 -rotate-90">
 					<circle cx="50" cy="50" r="40" class="fill-none stroke-(--ui-bg-muted)" stroke-width="14" />
 					<circle
 						v-for="(slice, i) in slices"
@@ -120,6 +121,12 @@
 	import { formatLKR } from "~/lib/money";
 	import { themeHex } from "~/lib/theme";
 	import { useBillsStore } from "~/stores/bills";
+
+	// `showDonut` lets the dashboard collapse the SVG when the card
+	// sits in a narrow slot (lg-range, before the user expands it).
+	// Defaults to true so the chart still works as a standalone block
+	// for any other caller.
+	withDefaults(defineProps<{ showDonut?: boolean }>(), { showDonut: true });
 
 	const billsStore = useBillsStore();
 	const currency = useActiveCurrency();
