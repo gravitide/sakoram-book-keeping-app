@@ -154,6 +154,7 @@
 				when the user expands the expenses card. Fixed
 				col-span-3 at 2xl regardless of toggle. -->
 			<UCard
+				style="view-transition-name: dashboard-cashflow"
 				class="2xl:col-span-3" :class="[
 					expensesExpanded ? 'lg:col-span-3' : 'lg:col-span-4'
 				]"
@@ -200,6 +201,7 @@
 				(donut + legend). At 2xl always col-span-2 (donut shown
 				since `showDonut` is forced true via `isLgRange`). -->
 			<UCard
+				style="view-transition-name: dashboard-expenses"
 				class="lg:order-2 2xl:col-span-2" :class="[
 					expensesExpanded ? 'lg:col-span-3' : 'lg:col-span-2'
 				]"
@@ -226,7 +228,7 @@
 								? 'i-lucide-chevrons-right'
 								: 'i-lucide-chevrons-left'"
 							:title="userExpanded ? 'Collapse chart' : 'Expand chart'"
-							@click="userExpanded = !userExpanded"
+							@click="toggleExpenses"
 						/>
 						<UIcon
 							v-else
@@ -388,6 +390,33 @@
 	// back below lg or grows past 2xl — so this only counts when we're
 	// actively in the lg-xl range where the toggle is meaningful.
 	const expensesExpanded = computed(() => isLgRange.value && userExpanded.value);
+
+	// Toggle handler — wraps the state mutation in the View Transitions
+	// API so the cards smoothly morph between sizes and the donut
+	// fades in/out instead of the layout snapping instantly. The
+	// `view-transition-name` we set on each card in the template tells
+	// the browser to track them across the state change. Tauri's
+	// Chromium webview supports this; we fall back to an instant
+	// toggle if the API isn't there. Async DOM update is required
+	// because Vue commits state changes asynchronously — the callback
+	// returns the nextTick promise so the snapshot reflects the
+	// post-change DOM. Suspending nuxi `await nextTick()` is fine
+	// here since this only runs in response to a click event.
+	const toggleExpenses = async () => {
+		const next = !userExpanded.value;
+		const apply = async () => {
+			userExpanded.value = next;
+			await nextTick();
+		};
+		const doc = document as Document & {
+			startViewTransition?: (cb: () => Promise<void> | void) => unknown
+		};
+		if (typeof document !== "undefined" && doc.startViewTransition) {
+			doc.startViewTransition(apply);
+		} else {
+			void apply();
+		}
+	};
 
 	const loadError = ref<string | null>(null);
 
