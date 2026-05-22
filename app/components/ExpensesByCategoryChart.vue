@@ -83,8 +83,18 @@
 						<span class="text-xs text-(--ui-text-muted) tabular-nums w-10 text-right">
 							{{ Math.round((row.amount / total) * 100) }}%
 						</span>
-						<span class="tabular-nums w-32 text-right shrink-0 whitespace-nowrap">
-							{{ formatLKR(row.amount) }}
+						<!-- Compact amount (e.g. "Rs 100.3K") instead of the
+							full "Rs 100,300.00" — the headline at the
+							top already shows the precise total. Saves
+							~60px, letting the category-name column
+							breathe so the labels don't truncate at
+							this card width. Full figure stays
+							accessible via the title-attr tooltip. -->
+						<span
+							class="tabular-nums w-16 text-right shrink-0 whitespace-nowrap"
+							:title="formatLKR(row.amount)"
+						>
+							{{ currency.symbol }} {{ compactAmount(row.amount) }}
 						</span>
 					</li>
 				</ul>
@@ -106,11 +116,13 @@
 // created, and the swatch colour comes from the theme palette in
 // `app/lib/theme.ts`.
 
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { formatLKR } from "~/lib/money";
 	import { themeHex } from "~/lib/theme";
 	import { useBillsStore } from "~/stores/bills";
 
 	const billsStore = useBillsStore();
+	const currency = useActiveCurrency();
 
 	const hover = ref<number | null>(null);
 
