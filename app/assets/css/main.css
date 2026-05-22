@@ -312,10 +312,15 @@ textarea,
  * keeps these tokens off any other PrimeVue surface we might add.
  */
 :where(.p-datatable, .p-datatable-paginator-bottom, .p-datatable-paginator-top, .p-contextmenu) {
-	/* Surface tokens — keep cards/striped rows in our paper palette */
-	--p-datatable-header-cell-background: var(--ui-bg-muted);
-	--p-datatable-header-cell-hover-background: var(--ui-bg-accented);
-	--p-datatable-header-cell-selected-background: color-mix(in oklab, var(--ui-primary) 14%, var(--ui-bg-muted));
+	/* Surface tokens — keep cards/striped rows in our paper palette.
+	 * Header uses a 12% text overlay on `--ui-bg` so it sits clearly
+	 * darker than rows (light mode) / lighter than rows (dark mode)
+	 * AND distinct from the gridline tone below (which is 14% text on
+	 * transparent). `--ui-bg-muted` was too close to the border colour
+	 * to read as a header — they bled into each other. */
+	--p-datatable-header-cell-background: color-mix(in oklab, var(--ui-text) 12%, var(--ui-bg));
+	--p-datatable-header-cell-hover-background: color-mix(in oklab, var(--ui-text) 18%, var(--ui-bg));
+	--p-datatable-header-cell-selected-background: color-mix(in oklab, var(--ui-primary) 18%, var(--ui-bg));
 	--p-datatable-header-cell-color: var(--ui-text);
 	--p-datatable-header-cell-hover-color: var(--ui-text);
 	--p-datatable-header-cell-selected-color: var(--ui-primary);
