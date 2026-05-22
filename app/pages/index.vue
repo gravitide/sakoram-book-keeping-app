@@ -132,21 +132,20 @@
 		<!-- Insights block: monthly cash flow + receivables aging +
 			expenses by category. One grid that reflows per breakpoint.
 
-			At sm/md everything stacks. At lg–xl (where there's enough
-			room for two cards side-by-side but not a full 3:2 split)
-			cashflow + expenses share row 1 — and the user can toggle
-			how much room each takes by hitting the expand button on
-			the expenses card. The donut is hidden in the collapsed
-			state (~1/3 width is too narrow for a useful pie); the
-			legend stays. At 2xl the layout is fixed: 3:2 split with
-			both fully expanded, no toggle needed (room exists).
-			Receivables drops to its own full-width row 2 from lg
-			upward.
+			At sm/md everything stacks. At lg–xl, a 6-col grid lets
+			the user toggle the cashflow / expenses split. Collapsed
+			is 4/6 + 2/6 (donut hidden, legend only); expanded is
+			3/6 + 3/6 (donut + legend; cashflow shrinks to a
+			comfortable 1:1).
+			At 2xl, a 5-col grid is fixed at 3/5 + 2/5 with the donut
+			always shown (toggle hidden — there's enough room for
+			both without compromise). Receivables drops to its own
+			full-width row 2 from lg upward.
 
 			Achieved with `order-*` + responsive `col-span-*` plus a
 			small `:class` binding for the lg toggle. DOM order stays
 			declarative; no card markup is duplicated. -->
-		<div class="grid grid-cols-1 lg:grid-cols-3 2xl:grid-cols-5 gap-4 mb-4">
+		<div class="grid grid-cols-1 lg:grid-cols-6 2xl:grid-cols-5 gap-4 mb-4">
 			<!-- Monthly cash flow — receipts vs payments grouped per
 				month over the last 12 months. Sourced off the voucher
 				ledger (single source of truth for cash flow after the
@@ -156,7 +155,7 @@
 				col-span-3 at 2xl regardless of toggle. -->
 			<UCard
 				class="2xl:col-span-3" :class="[
-					expensesExpanded ? 'lg:col-span-1' : 'lg:col-span-2'
+					expensesExpanded ? 'lg:col-span-3' : 'lg:col-span-4'
 				]"
 			>
 				<template #header>
@@ -178,7 +177,7 @@
 			<!-- Receivables aging — full-width on its own row from lg
 				upward (`lg:order-3 lg:col-span-3` covers lg-xl,
 				`2xl:col-span-5` extends to the 5-col grid). -->
-			<UCard class="lg:order-3 lg:col-span-3 2xl:col-span-5">
+			<UCard class="lg:order-3 lg:col-span-6 2xl:col-span-5">
 				<template #header>
 					<div class="flex items-center justify-between gap-2">
 						<div>
@@ -202,7 +201,7 @@
 				since `showDonut` is forced true via `isLgRange`). -->
 			<UCard
 				class="lg:order-2 2xl:col-span-2" :class="[
-					expensesExpanded ? 'lg:col-span-2' : 'lg:col-span-1'
+					expensesExpanded ? 'lg:col-span-3' : 'lg:col-span-2'
 				]"
 			>
 				<template #header>
