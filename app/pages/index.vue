@@ -129,32 +129,41 @@
 			</UCard>
 		</div>
 
-		<!-- Monthly cash flow — receipts vs payments grouped per month
-			over the last 12 months. Sourced directly off the voucher
-			ledger (which is now the single source of truth for cash
-			flow after the bills/invoices payments-via-vouchers
-			refactor). -->
-		<UCard class="mb-4">
-			<template #header>
-				<div class="flex items-center justify-between gap-4 flex-wrap">
-					<div>
-						<div class="font-medium">
-							Monthly cash flow
+		<!-- Insights block: monthly cash flow + receivables aging +
+			expenses by category. One grid that reflows per breakpoint.
+			At sm/md everything stacks. At lg cashflow goes full-width
+			(col-span-2) with receivables + expenses paired below. At
+			2xl cashflow takes 2/3 with expenses tucked in at 1/3 next
+			to it (the screen has room for both), and receivables drops
+			to its own full-width row. Achieved with `order-*` +
+			responsive `col-span-*` so the DOM stays declarative and no
+			card markup is duplicated. -->
+		<div class="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 mb-4">
+			<!-- Monthly cash flow — receipts vs payments grouped per
+				month over the last 12 months. Sourced off the voucher
+				ledger (single source of truth for cash flow after the
+				bills/invoices payments-via-vouchers refactor). -->
+			<UCard class="lg:col-span-2 2xl:col-span-2">
+				<template #header>
+					<div class="flex items-center justify-between gap-4 flex-wrap">
+						<div>
+							<div class="font-medium">
+								Monthly cash flow
+							</div>
+							<div class="text-xs text-(--ui-text-muted) mt-0.5">
+								Receipts in, payments out — last 12 months from the voucher ledger.
+							</div>
 						</div>
-						<div class="text-xs text-(--ui-text-muted) mt-0.5">
-							Receipts in, payments out — last 12 months from the voucher ledger.
-						</div>
+						<UIcon name="i-lucide-bar-chart-3" class="size-4 text-(--ui-text-muted)" />
 					</div>
-					<UIcon name="i-lucide-bar-chart-3" class="size-4 text-(--ui-text-muted)" />
-				</div>
-			</template>
-			<MonthlyCashFlowChart :vouchers="vouchersStore.vouchers" />
-		</UCard>
+				</template>
+				<MonthlyCashFlowChart :vouchers="vouchersStore.vouchers" />
+			</UCard>
 
-		<!-- Insights row 1: receivables aging + expense breakdown.
-			Two cards side-by-side on lg, stacked on mobile. -->
-		<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-			<UCard>
+			<!-- Receivables aging — pairs with Expenses at lg (default
+				DOM order), drops to its own full-width row at 2xl via
+				`order-3` + `col-span-3`. -->
+			<UCard class="2xl:order-3 2xl:col-span-3">
 				<template #header>
 					<div class="flex items-center justify-between gap-2">
 						<div>
@@ -171,7 +180,9 @@
 				<ReceivablesAgingChart />
 			</UCard>
 
-			<UCard>
+			<!-- Expenses by category — at 2xl `order-2` lifts it
+				up to row 1 right next to Monthly cash flow. -->
+			<UCard class="2xl:order-2">
 				<template #header>
 					<div class="flex items-center justify-between gap-2">
 						<div>
