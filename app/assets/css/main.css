@@ -402,6 +402,31 @@ textarea,
 	overflow: hidden;
 }
 
+/* Header text styling — match the pre-migration hand-rolled tables:
+ *   - uppercase + slight letter-spacing reads as a caption row, not
+ *     just bolder body text
+ *   - 0.75rem (12px) is smaller than body's 0.875rem so the column
+ *     names recede when scanning data
+ *   - font-weight: 500 (medium) instead of Aura's default bold, so
+ *     the body data has the visual weight, not the labels
+ *   - muted text colour lets the body read as the primary content
+ * The header bg + bottom border still mark it as a distinct zone. */
+.p-datatable .p-datatable-thead > tr > th {
+	font-size: 0.75rem;
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--ui-text-muted);
+}
+.p-datatable .p-datatable-column-title {
+	font-weight: 500;
+}
+/* Active-sort column flips the muted tone to primary so the sorted-by
+ * column is glanceable; the rest of the header styling stays. */
+.p-datatable .p-datatable-column-sorted .p-datatable-column-title {
+	color: var(--ui-primary);
+}
+
 /* The paginator sits below the body and Aura paints its own top
  * border AT the same colour as the body gridlines — which combines
  * with the body's last-row bottom border to read as a doubled-up
