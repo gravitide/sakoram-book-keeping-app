@@ -345,14 +345,13 @@ textarea,
 	--p-datatable-row-selected-background: color-mix(in oklab, var(--ui-primary) 14%, var(--ui-bg));
 	--p-datatable-row-selected-color: var(--ui-text);
 	/* Zebra stripes vs. column dividers — explicit text-tinted layers
-	 * with a clear gap between them (4% vs 10%) so the stripes read
+	 * with a clear gap between them (4% vs 7%) so the stripes read
 	 * as alternating bands and the borders read as thin separators on
-	 * top of them. Gridlines were 14% but felt boxy across an
-	 * 8-column table; 10% is enough to delimit columns without making
-	 * each cell feel framed. */
+	 * top of them. Kept dialing gridlines down from 14% → 10% → 7%;
+	 * 7% delimits columns without making each cell feel framed. */
 	--p-datatable-row-striped-background: color-mix(in oklab, var(--ui-text) 4%, transparent);
-	--p-datatable-border-color: color-mix(in oklab, var(--ui-text) 10%, transparent);
-	--p-datatable-body-cell-border-color: color-mix(in oklab, var(--ui-text) 10%, transparent);
+	--p-datatable-border-color: color-mix(in oklab, var(--ui-text) 7%, transparent);
+	--p-datatable-body-cell-border-color: color-mix(in oklab, var(--ui-text) 7%, transparent);
 
 	/* Cell padding — Aura defaults to roomy bookkeeping-table density.
 	 * Trim both header + body cells to ~half height so we can fit more
