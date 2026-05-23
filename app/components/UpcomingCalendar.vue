@@ -106,9 +106,9 @@
 			badge). Clicking an event navigates to its detail page. -->
 		<UModal v-model:open="dayOpen" :title="selectedDayLabel">
 			<template #body>
-				<div v-if="selectedDayEvents.length === 0" class="py-6 text-center text-sm text-(--ui-text-muted)">
-					<UIcon name="i-lucide-calendar" class="size-8 mx-auto mb-2 opacity-50" />
-					Nothing's due on this day.
+				<div v-if="selectedDayEvents.length === 0" class="py-6 flex flex-col items-center gap-2 text-sm text-(--ui-text-muted)">
+					<UIcon name="i-lucide-calendar" class="size-8 opacity-50" />
+					<span>Nothing's due on this day.</span>
 				</div>
 				<ul v-else class="divide-y divide-(--ui-border)">
 					<li

@@ -148,30 +148,18 @@
 			</UCard>
 		</div>
 
-		<!-- Insights block: monthly cash flow + receivables aging +
-			expenses by category. One grid that reflows per breakpoint.
+		<!-- Insights row 1: monthly cash flow + expenses by category.
+			Stacks at sm/md. At lg-xl a 6-col grid lets the user toggle
+			the split: collapsed = 4/6 + 2/6 (donut hidden, legend only);
+			expanded = 3/6 + 3/6 (donut + legend; cashflow shrinks).
+			At 2xl a 5-col grid is fixed at 3/5 + 2/5 with the donut
+			always shown (toggle hidden — there's enough room without
+			compromise).
 
-			At sm/md everything stacks. At lg–xl, a 6-col grid lets
-			the user toggle the cashflow / expenses split. Collapsed
-			is 4/6 + 2/6 (donut hidden, legend only); expanded is
-			3/6 + 3/6 (donut + legend; cashflow shrinks to a
-			comfortable 1:1).
-			At 2xl, a 5-col grid is fixed at 3/5 + 2/5 with the donut
-			always shown (toggle hidden — there's enough room for
-			both without compromise). Receivables drops to its own
-			full-width row 2 from lg upward.
-
-			Achieved with `order-*` + responsive `col-span-*` plus a
-			small `:class` binding for the lg toggle. DOM order stays
-			declarative; no card markup is duplicated. -->
+			Calendar + receivables aging now live in their own rows
+			below this block — see the cards under the calendar
+			placement comment. -->
 		<div class="grid grid-cols-1 lg:grid-cols-6 2xl:grid-cols-5 gap-4 mb-4">
-			<!-- Monthly cash flow — receipts vs payments grouped per
-				month over the last 12 months. Sourced off the voucher
-				ledger (single source of truth for cash flow after the
-				bills/invoices payments-via-vouchers refactor).
-				`lg:col-span-2` (collapsed) shrinks to `lg:col-span-1`
-				when the user expands the expenses card. Fixed
-				col-span-3 at 2xl regardless of toggle. -->
 			<UCard
 				style="view-transition-name: dashboard-cashflow"
 				class="2xl:col-span-3" :class="[
@@ -194,34 +182,9 @@
 				<MonthlyCashFlowChart :vouchers="vouchersStore.vouchers" :months-back="cashflowMonths" />
 			</UCard>
 
-			<!-- Receivables aging — full-width on its own row from lg
-				upward (`lg:order-3 lg:col-span-3` covers lg-xl,
-				`2xl:col-span-5` extends to the 5-col grid). -->
-			<UCard class="lg:order-3 lg:col-span-6 2xl:col-span-5">
-				<template #header>
-					<div class="flex items-center justify-between gap-2">
-						<div>
-							<div class="font-medium">
-								Receivables aging
-							</div>
-							<div class="text-xs text-(--ui-text-muted) mt-0.5">
-								Outstanding invoice balances by days past due.
-							</div>
-						</div>
-						<UIcon name="i-lucide-alarm-clock" class="size-4 text-(--ui-text-muted)" />
-					</div>
-				</template>
-				<ReceivablesAgingChart />
-			</UCard>
-
-			<!-- Expenses by category — `lg:order-2` keeps it next to
-				cashflow on row 1. Width swaps based on the expand
-				toggle: 1/3 collapsed (legend only) or 2/3 expanded
-				(donut + legend). At 2xl always col-span-2 (donut shown
-				since `showDonut` is forced true via `isLgRange`). -->
 			<UCard
 				style="view-transition-name: dashboard-expenses"
-				class="lg:order-2 2xl:col-span-2" :class="[
+				class="2xl:col-span-2" :class="[
 					expensesExpanded ? 'lg:col-span-3' : 'lg:col-span-2'
 				]"
 			>
@@ -259,6 +222,50 @@
 				<ExpensesByCategoryChart :show-donut="showExpensesDonut" />
 			</UCard>
 		</div>
+
+		<!-- Upcoming due-dates calendar. Compact density so the
+			dashboard row stays roughly aligned in height with the
+			surrounding cards. "View calendar" link in the header jumps
+			to the full page for the fuller view + filter chips. -->
+		<UCard class="mb-4">
+			<template #header>
+				<div class="flex items-center justify-between gap-2">
+					<div>
+						<div class="font-medium">
+							Upcoming
+						</div>
+						<div class="text-xs text-(--ui-text-muted) mt-0.5">
+							Due dates across receivables, payables, quote expiries and payslips.
+						</div>
+					</div>
+					<NuxtLink to="/calendar" class="text-xs text-(--ui-primary) hover:underline inline-flex items-center gap-1">
+						View calendar
+						<UIcon name="i-lucide-arrow-right" class="size-3.5" />
+					</NuxtLink>
+				</div>
+			</template>
+			<UpcomingCalendar density="compact" />
+		</UCard>
+
+		<!-- Receivables aging — full-width row, sits below the calendar
+			so "what's coming due" reads first, then the past-due
+			breakdown for finer triage. -->
+		<UCard class="mb-4">
+			<template #header>
+				<div class="flex items-center justify-between gap-2">
+					<div>
+						<div class="font-medium">
+							Receivables aging
+						</div>
+						<div class="text-xs text-(--ui-text-muted) mt-0.5">
+							Outstanding invoice balances by days past due.
+						</div>
+					</div>
+					<UIcon name="i-lucide-alarm-clock" class="size-4 text-(--ui-text-muted)" />
+				</div>
+			</template>
+			<ReceivablesAgingChart />
+		</UCard>
 
 		<!-- Recent activity + at-a-glance lists. Placed above Top clients
 			so the things that need attention (activity, overdue) come
@@ -381,6 +388,7 @@
 	import { formatLKR, formatMoneyCompact } from "~/lib/money";
 	import { useBillsStore } from "~/stores/bills";
 	import { useInvoicesStore } from "~/stores/invoices";
+	import { usePayslipsStore } from "~/stores/payslips";
 	import { useQuotesStore } from "~/stores/quotes";
 	import { useVouchersStore } from "~/stores/vouchers";
 
@@ -390,6 +398,7 @@
 	const billsStore = useBillsStore();
 	const quotesStore = useQuotesStore();
 	const vouchersStore = useVouchersStore();
+	const payslipsStore = usePayslipsStore();
 
 	// Expand/collapse state for the Expenses-by-category card. Only
 	// meaningful at lg-xl (1024-1535px) — below lg cards stack with
@@ -473,7 +482,10 @@
 				invoicesStore.load(),
 				billsStore.load(),
 				quotesStore.load(),
-				vouchersStore.load()
+				vouchersStore.load(),
+				// Calendar embed needs payslip due-dates too. Cheap to load
+				// here so the calendar paints fully on first dashboard hit.
+				payslipsStore.load()
 			]);
 		} catch (err) {
 			loadError.value = err instanceof Error ? err.message : String(err);
