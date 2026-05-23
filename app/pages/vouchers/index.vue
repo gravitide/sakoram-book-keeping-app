@@ -123,19 +123,13 @@
 				>
 					Auto-fit columns
 				</UButton>
-				<div class="flex items-baseline gap-3 ml-auto flex-wrap">
-					<span v-if="hasAnyFilter" class="text-xs">{{ store.filtered.length }} of {{ store.vouchers.length }} shown</span>
-					<span class="text-(--ui-success)">+ {{ formatLKR(filteredReceipts) }}</span>
-					<span class="text-(--ui-error)">− {{ formatLKR(filteredPayments) }}</span>
-					<span>
-						Net
-						<span
-							class="font-medium"
-							:class="filteredNet >= 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'"
-						>
-							{{ filteredNet >= 0 ? '+' : '−' }}{{ formatLKR(Math.abs(filteredNet)) }}
-						</span>
-					</span>
+				<div class="flex items-center gap-2 ml-auto flex-wrap">
+					<span v-if="hasAnyFilter" class="text-xs text-(--ui-text-muted) mr-1">{{ store.filtered.length }} of {{ store.vouchers.length }} shown</span>
+					<StatChip label="In" color="success" :value="`+ ${formatLKR(filteredReceipts)}`" />
+					<StatChip label="Out" color="error" :value="`− ${formatLKR(filteredPayments)}`" />
+					<StatChip label="Net" :color="filteredNet >= 0 ? 'success' : 'error'">
+						{{ filteredNet >= 0 ? '+' : '−' }} {{ formatLKR(Math.abs(filteredNet)) }}
+					</StatChip>
 				</div>
 			</div>
 
