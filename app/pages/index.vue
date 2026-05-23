@@ -41,12 +41,11 @@
 		</div>
 
 		<!-- KPI tiles -->
-		<!-- Layout: 1 col (mobile) → 2 col (md) → 4 col (lg+).
-			From lg upward the tiles get cramped (≈180px each at lg, growing
-			to ≈300px at 2xl). Full money strings like "Rs 3,553,600.00"
-			don't fit at lg/xl, so the headline number switches to compact
-			form (K/M/B) via `kpiMoney()` while the `title` attribute
-			carries the exact value for hover. -->
+		<!-- Layout: 1 col (mobile) → 2 col (md) → 4 col (lg+). The
+			money figures switch to compact form (K/M/B) at md and lg
+			where tile width is tightest — see `kpiMoney()` below. At
+			xl the 4-up tiles get enough room (~240px+) to fit the full
+			"Rs 3,553,600.00" string again. -->
 		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
 			<NuxtLink to="/invoices" class="block group" @click="prefilterReceivables">
 				<UCard class="transition group-hover:border-(--ui-primary)">
@@ -396,13 +395,16 @@
 	const isLgRange = useMediaQuery("(min-width: 1024px) and (max-width: 1535.98px)");
 	const userExpanded = ref(false);
 
-	// KPI tiles compact their headline number from lg upward, where
-	// 4 tiles share a row. At md (2-up) and below there's room for the
-	// full "Rs 3,553,600.00" form. `title` attributes on every compacted
-	// cell carry the exact value so a hover still reveals it.
-	const isLgUp = useMediaQuery("(min-width: 1024px)");
+	// KPI tiles compact their headline number through md and lg, where
+	// the strip is tightest — md packs 2-up into a half-width row and
+	// lg packs 4-up across a sidebar'd content area (~180-230px per
+	// tile). At xl the 4-up tiles open up to ~240-300px and full
+	// "Rs 3,553,600.00" strings fit again; sub-md stacks single-column
+	// with the most room of all. `title` carries the exact value on
+	// every compacted cell so hover always reveals the precise number.
+	const isKpiCompact = useMediaQuery("(min-width: 768px) and (max-width: 1279.98px)");
 	const kpiMoney = (cents: number) =>
-		(isLgUp.value ? formatMoneyCompact(cents) : formatLKR(cents));
+		(isKpiCompact.value ? formatMoneyCompact(cents) : formatLKR(cents));
 
 	// Monthly-cashflow horizon, decided per breakpoint × expand state.
 	// We drop to 6 months whenever the chart is in its narrow form,
