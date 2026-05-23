@@ -25,7 +25,7 @@
 					:title="dirty ? 'Save first' : 'Preview this quote as a PDF'"
 					@click="onPdfClick"
 				>
-					PDF
+					PDF & Print
 				</UButton>
 				<UButton
 					v-if="canConvert"

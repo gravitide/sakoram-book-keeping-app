@@ -49,7 +49,7 @@
 					:title="dirty ? 'Save first' : 'Preview this voucher as a PDF'"
 					@click="onPdfClick"
 				>
-					PDF
+					PDF & Print
 				</UButton>
 				<UButton color="error" variant="ghost" icon="i-lucide-trash-2" @click="askDelete">
 					Delete

@@ -603,7 +603,7 @@
 			});
 		}
 		const exports = [{
-			label: "Generate PDF",
+			label: "Generate PDF & Print",
 			icon: "i-lucide-file-down",
 			onSelect: () => {
 				void onPdfClick(r);

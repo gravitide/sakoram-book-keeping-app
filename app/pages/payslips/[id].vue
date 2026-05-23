@@ -34,7 +34,7 @@
 					:loading="pdf.state.rendering"
 					@click="onPdfClick"
 				>
-					PDF
+					PDF & Print
 				</UButton>
 				<UButton
 					v-if="row?.status === 'draft'"

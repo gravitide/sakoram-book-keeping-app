@@ -36,7 +36,7 @@
 					:title="dirty ? 'Save first' : 'Preview this bill as a PDF'"
 					@click="onPdfClick"
 				>
-					PDF
+					PDF & Print
 				</UButton>
 				<!-- Cancellation is only legal while there's still a balance
 					owed. Once the bill is fully paid (paidCents covers
