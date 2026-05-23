@@ -34,7 +34,7 @@
 					:loading="pdf.state.rendering"
 					@click="onPdfClick"
 				>
-					PDF
+					PDF & Print
 				</UButton>
 				<UButton
 					v-if="row?.status === 'draft'"
@@ -287,6 +287,7 @@
 		<PdfPreviewModal
 			v-model:open="pdf.state.open"
 			:asset-url="pdf.state.assetUrl"
+			:temp-path="pdf.state.tempPath"
 			:suggested-file-name="pdf.state.suggestedFileName"
 			:saving="pdf.state.saving"
 			title="Payslip PDF preview"

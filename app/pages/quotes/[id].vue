@@ -25,7 +25,7 @@
 					:title="dirty ? 'Save first' : 'Preview this quote as a PDF'"
 					@click="onPdfClick"
 				>
-					PDF
+					PDF & Print
 				</UButton>
 				<UButton
 					v-if="canConvert"
@@ -358,6 +358,7 @@
 		<PdfPreviewModal
 			v-model:open="pdf.state.open"
 			:asset-url="pdf.state.assetUrl"
+			:temp-path="pdf.state.tempPath"
 			:suggested-file-name="pdf.state.suggestedFileName"
 			:saving="pdf.state.saving"
 			title="Quote PDF preview"

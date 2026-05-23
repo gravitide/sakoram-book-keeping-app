@@ -46,7 +46,7 @@
 					:title="dirty ? 'Save first' : 'Preview this invoice as a PDF'"
 					@click="onPdfClick"
 				>
-					PDF
+					PDF & Print
 				</UButton>
 				<!-- Legal next-state transitions as individual buttons —
 					replaces an opaque 'Status' dropdown so the available
@@ -415,6 +415,7 @@
 		<PdfPreviewModal
 			v-model:open="pdf.state.open"
 			:asset-url="pdf.state.assetUrl"
+			:temp-path="pdf.state.tempPath"
 			:suggested-file-name="pdf.state.suggestedFileName"
 			:saving="pdf.state.saving"
 			title="Invoice PDF preview"
