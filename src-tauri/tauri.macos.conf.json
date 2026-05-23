@@ -1,5 +1,4 @@
 {
-	"$comment": "macOS-specific overrides. Tauri 2 deep-merges this on top of tauri.conf.json for macOS builds. We re-enable native decorations (so the OS-drawn traffic lights stay visible) and set titleBarStyle to Overlay — that makes the titlebar transparent while keeping the red/yellow/green buttons. Our custom <TitleBar /> then paints behind/under the OS controls with ~78px of left padding to clear them. The window block is duplicated in full (not just the deltas) so the merge result is unambiguous regardless of how Tauri's array-of-windows merge resolves.",
 	"app": {
 		"windows": [
 			{
