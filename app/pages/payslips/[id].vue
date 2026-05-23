@@ -287,6 +287,7 @@
 		<PdfPreviewModal
 			v-model:open="pdf.state.open"
 			:asset-url="pdf.state.assetUrl"
+			:temp-path="pdf.state.tempPath"
 			:suggested-file-name="pdf.state.suggestedFileName"
 			:saving="pdf.state.saving"
 			title="Payslip PDF preview"
