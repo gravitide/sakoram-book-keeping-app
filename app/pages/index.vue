@@ -4,7 +4,11 @@
 			overview (KPI tiles, charts, activity feed), not data the user
 			copies out — so the whole page opts out of text selection. -->
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
-			<div>
+			<!-- Left column flex-1 + min-w-0 so the subtitle wraps inside
+				this group instead of pushing the date+New cluster down to
+				its own row. At very small widths the right group still
+				wraps below thanks to flex-wrap on the header. -->
+			<div class="min-w-0 flex-1">
 				<h1 class="text-2xl font-semibold">
 					Dashboard
 				</h1>
@@ -12,7 +16,7 @@
 					Where the money is — what you're owed, what you owe, what's in motion.
 				</p>
 			</div>
-			<div class="flex items-center gap-3">
+			<div class="flex items-center gap-3 shrink-0">
 				<span class="text-xs text-(--ui-text-muted) tabular-nums">
 					{{ todayLabel }}
 				</span>
