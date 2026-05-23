@@ -25,10 +25,10 @@
 					Converted from quote
 				</NuxtLink>
 			</div>
-			<!-- xl+ inline cluster. Below xl this collapses into a single
+			<!-- lg+ inline cluster. Below lg this collapses into a single
 				⋯ dropdown so the header doesn't get cramped on narrower
 				windows; both paths share the same handlers. -->
-			<div class="hidden xl:flex gap-2 items-center">
+			<div class="hidden lg:flex gap-2 items-center">
 				<UButton
 					v-if="canRecordPayments"
 					size="sm"
@@ -81,7 +81,7 @@
 				</UButton>
 			</div>
 
-			<div class="xl:hidden">
+			<div class="lg:hidden">
 				<UDropdownMenu :items="actionMenuItems">
 					<UButton
 						size="sm"
