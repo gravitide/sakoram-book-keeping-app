@@ -37,7 +37,7 @@
 				:disabled="!canGoBack"
 				@click="goBack"
 			>
-				<UIcon name="i-lucide-arrow-left" class="size-[16px]" />
+				<UIcon name="i-lucide-move-left" class="size-[20px]" />
 			</button>
 		</div>
 
