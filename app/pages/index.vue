@@ -56,7 +56,7 @@
 						<UIcon name="i-lucide-arrow-down-left" class="size-4 text-(--ui-success)" />
 					</div>
 					<div
-						class="mt-2 text-2xl font-semibold tabular-nums"
+						class="mt-2 text-2xl md:text-xl xl:text-2xl font-semibold tabular-nums"
 						:title="formatLKR(invoicesStore.outstandingTotal)"
 					>
 						{{ kpiMoney(invoicesStore.outstandingTotal) }}
@@ -84,7 +84,7 @@
 						<UIcon name="i-lucide-arrow-up-right" class="size-4 text-(--ui-error)" />
 					</div>
 					<div
-						class="mt-2 text-2xl font-semibold tabular-nums"
+						class="mt-2 text-2xl md:text-xl xl:text-2xl font-semibold tabular-nums"
 						:title="formatLKR(billsStore.outstandingTotal)"
 					>
 						{{ kpiMoney(billsStore.outstandingTotal) }}
@@ -112,7 +112,7 @@
 						<UIcon name="i-lucide-file-text" class="size-4 text-(--ui-primary)" />
 					</div>
 					<div
-						class="mt-2 text-2xl font-semibold tabular-nums"
+						class="mt-2 text-2xl md:text-xl xl:text-2xl font-semibold tabular-nums"
 						:title="formatLKR(openQuotesValue)"
 					>
 						{{ kpiMoney(openQuotesValue) }}
@@ -131,7 +131,7 @@
 					<UIcon name="i-lucide-trending-up" class="size-4" :class="netCashThisMonth >= 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'" />
 				</div>
 				<div
-					class="mt-2 text-2xl font-semibold tabular-nums"
+					class="mt-2 text-2xl md:text-xl xl:text-2xl font-semibold tabular-nums"
 					:class="netCashThisMonth >= 0 ? 'text-(--ui-text)' : 'text-(--ui-error)'"
 					:title="`${netCashThisMonth >= 0 ? '+' : '−'}${formatLKR(Math.abs(netCashThisMonth))}`"
 				>
