@@ -380,16 +380,21 @@
 	const isLgRange = useMediaQuery("(min-width: 1024px) and (max-width: 1535.98px)");
 	const userExpanded = ref(false);
 
-	// Monthly-cashflow horizon by breakpoint. At the lg tier the
-	// cashflow card sits next to expenses (4/6 collapsed, 3/6 expanded)
-	// so a full 12-month series squeezes the bars uncomfortably. We
-	// drop to 6 months in that narrow band and keep 12 everywhere
-	// else — sm/md (full-width stack), xl (still col-span-4 but wider
-	// container), and 2xl (3/5 of a wider grid). Tied to a media query
-	// rather than container width so it stays in sync with the
-	// Tailwind tier the rest of the dashboard reasons about.
+	// Monthly-cashflow horizon, decided per breakpoint × expand state.
+	// We drop to 6 months whenever the chart is in its narrow form,
+	// where 12 bars would squeeze uncomfortably:
+	//   - lg collapsed (1024-1279, col-span-4 of 6 ≈ 2/3 of a ~750px row)
+	//   - lg expanded (col-span-3 of 6 = half) — even narrower
+	//   - xl expanded (1280-1535, col-span-3 of 6 = half) — same chart
+	//     width as lg collapsed, so the same horizon makes sense
+	// 12 months everywhere else — sm/md stack full width, xl collapsed
+	// has the wider container, 2xl gives col-span-3 of 5.
 	const isLgOnly = useMediaQuery("(min-width: 1024px) and (max-width: 1279.98px)");
-	const cashflowMonths = computed(() => (isLgOnly.value ? 6 : 12));
+	const cashflowMonths = computed(() => {
+		if (isLgOnly.value) return 6;
+		if (isLgRange.value && userExpanded.value) return 6;
+		return 12;
+	});
 
 	// What the dashboard binds to the chart's `:show-donut` prop:
 	// - At lg-xl: follows the user's toggle.
