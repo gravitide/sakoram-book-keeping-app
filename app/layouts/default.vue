@@ -170,7 +170,10 @@
 				breakpoint. Wider than the default `max-w-7xl` (1280px) so
 				multi-column list pages have more room on a wide desktop
 				monitor without stretching edge-to-edge on ultrawide. -->
-				<div class="p-4 max-w-[96rem] mx-auto">
+				<!-- Bottom pad matches the sidebar's m-2 outer gap (8px)
+					so the main content's lower edge lines up with the
+					sidebar's floating card. Other sides stay at 16px. -->
+				<div class="p-4 pb-2 max-w-[96rem] mx-auto">
 					<slot />
 				</div>
 			</main>
