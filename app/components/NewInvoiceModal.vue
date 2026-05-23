@@ -1,0 +1,106 @@
+<template>
+	<UModal v-model:open="openModel" title="New invoice">
+		<template #body>
+			<p class="text-sm text-(--ui-text-muted) mb-4">
+				A draft will be created with a number allocated. Edit details and add line items on the next screen.
+			</p>
+			<div class="space-y-4">
+				<UFormField label="Client" required>
+					<ClientPicker v-model="clientId" />
+				</UFormField>
+
+				<UFormField label="Project title" hint="The centred subtitle on the PDF (optional)">
+					<UInput v-model="projectTitle" placeholder="e.g. Q3 retainer" />
+				</UFormField>
+			</div>
+		</template>
+		<template #footer>
+			<div class="flex justify-end gap-2 w-full">
+				<UButton type="button" color="neutral" variant="outline" :disabled="creating" @click="cancel">
+					Cancel
+				</UButton>
+				<UButton :loading="creating" :disabled="clientId === null" icon="i-lucide-plus" @click="create">
+					Create draft
+				</UButton>
+			</div>
+		</template>
+	</UModal>
+</template>
+
+<script setup lang="ts">
+// New-invoice creation as a modal — supersedes the standalone
+// /invoices/new page. Two fields (client + optional project title) is
+// small enough that a page navigation felt heavy; the modal keeps the
+// user on the invoices list and the freshly-created draft opens after
+// submit.
+//
+// State is owned externally via `v-model:open`. On successful create
+// we close the modal and navigate to the new draft's detail page. On
+// cancel/close we just reset the form fields so the next open starts
+// clean.
+
+	import type { ClientRow } from "~/stores/clients";
+	import { useClientsStore } from "~/stores/clients";
+	import { useInvoicesStore } from "~/stores/invoices";
+	import { useSettingsStore } from "~/stores/settings";
+
+	const openModel = defineModel<boolean>("open", { default: false });
+
+	const router = useRouter();
+	const toast = useToast();
+	const settings = useSettingsStore();
+	const clients = useClientsStore();
+	const invoices = useInvoicesStore();
+
+	const clientId = ref<number | null>(null);
+	const projectTitle = ref("");
+	const creating = ref(false);
+
+	// Reset form whenever the modal closes so reopening starts from a
+	// clean slate. Lazy-load the stores the form needs on first open so
+	// we don't pay for them when the modal never appears.
+	watch(openModel, async (open) => {
+		if (open) {
+			await Promise.all([settings.ensureLoaded(), clients.load()]);
+		} else {
+			clientId.value = null;
+			projectTitle.value = "";
+			creating.value = false;
+		}
+	});
+
+	const cancel = () => {
+		openModel.value = false;
+	};
+
+	const create = async () => {
+		if (clientId.value === null) {
+			toast.add({ title: "Pick a client first", color: "warning", icon: "i-lucide-circle-alert" });
+			return;
+		}
+		const client: ClientRow | undefined = clients.clients.find((c) => c.id === clientId.value);
+		if (!client) {
+			toast.add({ title: "Client not found", color: "error", icon: "i-lucide-circle-alert" });
+			return;
+		}
+		creating.value = true;
+		try {
+			const id = await invoices.createDraft({
+				client: { ...client, id: client.id },
+				project_title: projectTitle.value.trim()
+			});
+			toast.add({ title: "Draft invoice created", color: "success", icon: "i-lucide-check" });
+			openModel.value = false;
+			await router.push(`/invoices/${id}`);
+		} catch (err) {
+			toast.add({
+				title: "Could not create invoice",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		} finally {
+			creating.value = false;
+		}
+	};
+</script>

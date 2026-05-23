@@ -507,7 +507,9 @@
 	// menu next to the date.
 	const newItems = [
 		{ label: "Quote", icon: "i-lucide-file-text", to: "/quotes/new" },
-		{ label: "Invoice", icon: "i-lucide-receipt", to: "/invoices/new" },
+		// /invoices?new=1 makes the list page auto-open the New Invoice
+		// modal on mount. The standalone /invoices/new page was removed.
+		{ label: "Invoice", icon: "i-lucide-receipt", to: "/invoices?new=1" },
 		{ label: "Bill", icon: "i-lucide-file-input", to: "/bills/new" },
 		{ label: "Voucher", icon: "i-lucide-ticket", to: "/vouchers/new" }
 	];
