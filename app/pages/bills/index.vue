@@ -100,17 +100,6 @@
 						>
 							Reset
 						</UButton>
-						<UButton
-							size="md"
-							variant="soft"
-							color="neutral"
-							icon="i-lucide-table-columns-split"
-							:class="hasAnyFilter ? '' : 'ml-auto'"
-							title="Auto-size columns to their content"
-							@click="autoFitColumns"
-						>
-							Auto-fit columns
-						</UButton>
 					</div>
 
 					<div class="flex items-center gap-1.5 flex-wrap">
@@ -143,6 +132,28 @@
 					</div>
 				</div>
 			</template>
+
+			<!-- Table action bar + filtered-rows summary; Auto-fit on
+				the left, totals on the right. -->
+			<div
+				v-if="!store.loading && !store.error"
+				class="flex justify-between items-center gap-3 flex-wrap text-sm text-(--ui-text-muted) tabular-nums mb-3"
+			>
+				<UButton
+					size="xs"
+					variant="soft"
+					color="neutral"
+					icon="i-lucide-table-columns-split"
+					title="Auto-size columns to their content"
+					@click="autoFitColumns"
+				>
+					Auto-fit columns
+				</UButton>
+				<div class="flex items-baseline gap-3 ml-auto">
+					<span v-if="hasAnyFilter" class="text-xs">{{ store.filtered.length }} of {{ store.bills.length }} shown</span>
+					<span>Total <span class="text-(--ui-text) font-medium">{{ formatLKR(filteredTotal) }}</span></span>
+				</div>
+			</div>
 
 			<div v-if="store.loading" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				Loading bills…
@@ -336,6 +347,12 @@
 				_status: store.derivedStatus(b)
 			};
 		})
+	);
+
+	// Sum of total_cents across the currently visible (filtered) rows.
+	// Tracks whatever the active filters narrow the list to.
+	const filteredTotal = computed(() =>
+		store.filtered.reduce((sum, b) => sum + b.total_cents, 0)
 	);
 
 	const newBill = () => router.push("/bills/new");
