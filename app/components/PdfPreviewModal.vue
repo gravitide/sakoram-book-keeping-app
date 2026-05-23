@@ -18,6 +18,7 @@
 			<div class="h-full w-full bg-(--ui-bg-muted) rounded overflow-hidden">
 				<iframe
 					v-if="iframeSrc"
+					ref="iframeRef"
 					:src="iframeSrc"
 					class="w-full h-full block border-0 rounded"
 					title="PDF preview"
@@ -33,6 +34,9 @@
 				<div class="flex gap-2">
 					<UButton color="neutral" variant="outline" @click="close">
 						Cancel
+					</UButton>
+					<UButton color="neutral" variant="outline" icon="i-lucide-printer" @click="onPrint">
+						Print
 					</UButton>
 					<UButton :loading="saving" icon="i-lucide-save" @click="onSave">
 						Save as…
@@ -81,6 +85,9 @@
 		cancel: []
 	}>();
 
+	const toast = useToast();
+	const iframeRef = ref<HTMLIFrameElement | null>(null);
+
 	const close = () => {
 		emit("cancel");
 		emit("update:open", false);
@@ -88,6 +95,35 @@
 
 	const onSave = () => {
 		emit("save");
+	};
+
+	// Trigger the browser's print dialog on the iframe's PDF content
+	// (the modal-level print would print the modal chrome too). PDFium
+	// in Webview2 / WKWebView serves the rendered PDF same-origin under
+	// the asset:// scheme, so contentWindow.print() reaches into it and
+	// pops the OS print dialog scoped to the document.
+	const onPrint = () => {
+		const win = iframeRef.value?.contentWindow;
+		if (!win) {
+			toast.add({
+				title: "Couldn't reach the PDF viewer to print",
+				description: "Try saving the file and printing it directly.",
+				color: "warning",
+				icon: "i-lucide-circle-alert"
+			});
+			return;
+		}
+		try {
+			win.focus();
+			win.print();
+		} catch (err) {
+			toast.add({
+				title: "Print failed",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
 	};
 
 	const onOpenChange = (next: boolean) => {
