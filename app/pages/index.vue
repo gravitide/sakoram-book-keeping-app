@@ -42,7 +42,7 @@
 
 		<!-- KPI tiles -->
 		<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-			<NuxtLink to="/invoices" class="block group">
+			<NuxtLink to="/invoices" class="block group" @click="prefilterReceivables">
 				<UCard class="transition group-hover:border-(--ui-primary)">
 					<div class="flex items-start justify-between gap-2">
 						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
@@ -67,7 +67,7 @@
 				</UCard>
 			</NuxtLink>
 
-			<NuxtLink to="/bills" class="block group">
+			<NuxtLink to="/bills" class="block group" @click="prefilterPayables">
 				<UCard class="transition group-hover:border-(--ui-primary)">
 					<div class="flex items-start justify-between gap-2">
 						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
@@ -92,7 +92,7 @@
 				</UCard>
 			</NuxtLink>
 
-			<NuxtLink to="/quotes" class="block group">
+			<NuxtLink to="/quotes" class="block group" @click="prefilterOpenQuotes">
 				<UCard class="transition group-hover:border-(--ui-primary)">
 					<div class="flex items-start justify-between gap-2">
 						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
@@ -469,6 +469,37 @@
 		{ label: "Bill", icon: "i-lucide-file-input", to: "/bills/new" },
 		{ label: "Voucher", icon: "i-lucide-ticket", to: "/vouchers/new" }
 	];
+
+	// --- KPI tile prefilters ---
+	// Each tile narrows the destination list to the slice the tile
+	// summarises, so the user lands on exactly the rows behind the
+	// headline number. Pinia state survives navigation, so we mutate
+	// the target store synchronously here and NuxtLink follows up
+	// with the route change. Other filters (search, client, dates)
+	// are cleared so the slice isn't unintentionally narrower than
+	// what the tile promises.
+
+	const prefilterReceivables = () => {
+		invoicesStore.search = "";
+		invoicesStore.clientFilter = "all";
+		invoicesStore.clearDateFilters();
+		invoicesStore.statusFilters = ["sent", "partial", "overdue"];
+	};
+
+	const prefilterPayables = () => {
+		billsStore.search = "";
+		billsStore.vendorFilter = "all";
+		billsStore.categoryFilter = "all";
+		billsStore.clearDateFilters();
+		billsStore.statusFilters = ["unpaid", "partial", "overdue"];
+	};
+
+	const prefilterOpenQuotes = () => {
+		quotesStore.search = "";
+		quotesStore.clientFilter = "all";
+		quotesStore.clearDateFilters();
+		quotesStore.statusFilters = ["draft", "sent"];
+	};
 
 	// --- Counts that don't already exist on the stores ---
 
