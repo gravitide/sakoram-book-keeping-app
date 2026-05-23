@@ -1,5 +1,11 @@
 <template>
-	<UBadge :color="color" variant="subtle" :size="size">
+	<!-- min-w-24 + justify-center holds every status badge at a uniform
+		width — picks up the longest label we'd render ("Cancelled" /
+		"Converted") with comfortable side padding, so the column reads
+		as a tidy stack of pills rather than a ragged-right alignment.
+		Used on table rows, detail-page headers, payroll dashboards and
+		linked-doc dropdowns — uniform width helps each surface. -->
+	<UBadge :color="color" variant="subtle" :size="size" class="min-w-24 justify-center uppercase tracking-wider">
 		{{ label }}
 	</UBadge>
 </template>
