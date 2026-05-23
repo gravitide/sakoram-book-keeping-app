@@ -112,17 +112,24 @@
 					{{ archivedEmployeeCount }} archived
 				</div>
 			</UCard>
-			<UCard>
-				<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
-					Outstanding payroll
-				</div>
-				<div class="mt-1 text-2xl font-semibold tabular-nums">
-					{{ formatLKR(outstandingPayroll) }}
-				</div>
-				<div class="mt-1 text-xs text-(--ui-text-muted)">
-					{{ outstandingPayslips.length }} payslip{{ outstandingPayslips.length === 1 ? "" : "s" }} need attention
-				</div>
-			</UCard>
+			<!-- Outstanding payroll tile is the actionable one: clicking
+				jumps to /payslips with the unpaid+partial chips
+				preset, so the user lands directly on the rows that
+				need attention. Matches the dashboard KPI tile
+				prefilter pattern. -->
+			<NuxtLink to="/payslips" class="block group" @click="prefilterOutstanding">
+				<UCard class="h-full transition group-hover:border-(--ui-primary)">
+					<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
+						Outstanding payroll
+					</div>
+					<div class="mt-1 text-2xl font-semibold tabular-nums">
+						{{ formatLKR(outstandingPayroll) }}
+					</div>
+					<div class="mt-1 text-xs text-(--ui-text-muted)">
+						{{ outstandingPayslips.length }} payslip{{ outstandingPayslips.length === 1 ? "" : "s" }} need attention
+					</div>
+				</UCard>
+			</NuxtLink>
 			<UCard>
 				<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
 					Paid this year
@@ -341,6 +348,18 @@
 	const outstandingPayroll = computed(() =>
 		outstandingPayslips.value.reduce((s, p) => s + payslipsStore.balanceCentsFor(p), 0)
 	);
+
+	// Outstanding-payroll tile click → narrow the /payslips list to
+	// rows that need attention (unpaid + partial). Other filters are
+	// cleared so the landing view exactly matches the tile's set.
+	// Pinia state persists across navigation; NuxtLink follows up with
+	// the route change.
+	const prefilterOutstanding = () => {
+		payslipsStore.search = "";
+		payslipsStore.employeeFilter = "all";
+		payslipsStore.clearDateFilters();
+		payslipsStore.statusFilters = ["unpaid", "partial"];
+	};
 
 	// "Paid this year" — the salary-payment portion of the voucher
 	// ledger, scoped to the current calendar year (Jan 1 → today). Use
