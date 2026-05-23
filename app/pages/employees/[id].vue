@@ -531,6 +531,11 @@
 		{
 			label: "Delete",
 			icon: "i-lucide-trash-2",
+			// Destructive item in the dropdown reads in the error tone
+			// to match the inline Delete button at xl+ (color="error").
+			// Targets both the row + the icon so the leading icon picks
+			// up the tint instead of staying muted-grey.
+			class: "text-(--ui-error) hover:bg-(--ui-error)/10 [&>span>span:first-child]:text-(--ui-error)",
 			onSelect: () => {
 				confirmDelete.value = true;
 			}
