@@ -14,10 +14,10 @@
 			state-storage="local"
 			:state-key="stateKey"
 			paginator
-			:rows="rowsPerPage"
+			:rows="effectiveRows"
 			:rows-per-page-options="rowsPerPageOptions"
 			current-page-report-template="Showing {first} to {last} of {totalRecords}"
-			paginator-template="CurrentPageReport FirstPageLink PrevPageLink NextPageLink LastPageLink RowsPerPageDropdown"
+			paginator-template="CurrentPageReport FirstPageLink PrevPageLink NextPageLink LastPageLink"
 			:sort-field="defaultSortField"
 			:sort-order="defaultSortOrder"
 			class="text-sm"
@@ -52,6 +52,25 @@
 				default slot here works the same as nesting Columns
 				directly under DataTable. -->
 			<slot />
+
+			<!-- Custom rows-per-page picker rendered at the end of the
+				paginator strip. PrimeVue's built-in RowsPerPageDropdown
+				only takes a number[] — we want a "Fit" option that
+				auto-sizes the page to the viewport, so we drop the
+				built-in dropdown from paginator-template and render our
+				own here. -->
+			<template #paginatorend>
+				<div class="flex items-center gap-2 text-sm ml-2">
+					<span class="text-(--ui-text-muted)">Per page</span>
+					<USelect
+						v-model="pageSizeChoice"
+						:items="pageSizeOptions"
+						value-key="value"
+						label-key="label"
+						class="w-32"
+					/>
+				</div>
+			</template>
 		</DataTable>
 
 		<!-- Row right-click menu. Renders only when the parent supplied a
@@ -181,6 +200,100 @@
 
 	const tableWrap = ref<HTMLElement | null>(null);
 	useDragToScroll(".p-datatable-table-container", tableWrap);
+
+	// --- Page-size picker (with "Fit") ------------------------------------
+	// Replaces PrimeVue's built-in RowsPerPageDropdown so we can offer a
+	// "Fit" option that auto-sizes the page to whatever rows the current
+	// viewport can comfortably hold. PrimeVue's :rows is driven from our
+	// `effectiveRows` computed; everything else (paging buttons, current
+	// page indicator) stays untouched.
+	type PageSizeChoice = number | "fit";
+	const pageSizeStorageKey = `${props.stateKey}:pageSize`;
+
+	// Default to "fit" — most useful for a desktop app where the user
+	// expects the table to fill the pane. A persisted numeric pick
+	// (from a previous session) wins; otherwise we land on fit.
+	const readPersisted = (): PageSizeChoice => {
+		if (typeof localStorage === "undefined") return "fit";
+		try {
+			const raw = localStorage.getItem(pageSizeStorageKey);
+			if (raw === "fit") return "fit";
+			if (raw === null) return "fit";
+			const n = Number(raw);
+			return Number.isFinite(n) && n > 0 ? n : "fit";
+		} catch {
+			return "fit";
+		}
+	};
+
+	const pageSizeChoice = ref<PageSizeChoice>(readPersisted());
+
+	watch(pageSizeChoice, (v) => {
+		if (typeof localStorage === "undefined") return;
+		try {
+			localStorage.setItem(pageSizeStorageKey, String(v));
+		} catch { /* quota / disabled storage — ignore */ }
+	});
+
+	// `fitCount` is the number of rows the viewport can hold given the
+	// table's vertical position. Re-measured on mount, on window resize,
+	// and whenever the user switches to "Fit". Bounded at 3 (a single
+	// row table doesn't make sense) and at 200 (sanity ceiling).
+	const fitCount = ref<number>(props.rowsPerPage);
+
+	// Empirical chrome accounting for our DataTable styling. Header is
+	// ~36px (compact padding), each body row ~36px, paginator strip
+	// ~56px including its borders, plus a small bottom buffer so the
+	// last row isn't flush against the paginator border.
+	const ROW_PX = 36;
+	const HEADER_PX = 40;
+	const BELOW_TABLE_PX = 80;
+
+	// Trim 2 rows off the raw calculation — empirical eyeballing showed
+	// the table sat 2 rows taller than the comfortable mark, with the
+	// last rows pressing right up against the paginator. The right
+	// long-term fix is to lift the per-row height + chrome from real
+	// measurements rather than constants, but a small fixed nudge keeps
+	// the math simple and the result reliable across pages.
+	const FIT_SAFETY_ROWS = 2;
+
+	const recomputeFit = () => {
+		if (typeof window === "undefined") return;
+		const wrapEl = tableWrap.value;
+		if (!wrapEl) return;
+		const tableTop = wrapEl.getBoundingClientRect().top;
+		const available = window.innerHeight - tableTop - HEADER_PX - BELOW_TABLE_PX;
+		const n = Math.floor(available / ROW_PX) - FIT_SAFETY_ROWS;
+		fitCount.value = Math.max(3, Math.min(200, n));
+	};
+
+	const effectiveRows = computed<number>(() =>
+		pageSizeChoice.value === "fit" ? fitCount.value : pageSizeChoice.value
+	);
+
+	// Build the dropdown options. The "Fit" entry shows the resolved
+	// count so the user can see what the auto-sizing arrived at.
+	const pageSizeOptions = computed<{ label: string, value: PageSizeChoice }[]>(() => {
+		const fitLabel = `Fit (${fitCount.value})`;
+		return [
+			{ label: fitLabel, value: "fit" },
+			...props.rowsPerPageOptions.map((n) => ({ label: String(n), value: n }))
+		];
+	});
+
+	onMounted(() => {
+		nextTick(recomputeFit);
+		window.addEventListener("resize", recomputeFit);
+	});
+	onBeforeUnmount(() => {
+		window.removeEventListener("resize", recomputeFit);
+	});
+
+	// When the user switches to "Fit" from a fixed number, recompute
+	// straight away so the table doesn't stay at the old size for a beat.
+	watch(pageSizeChoice, (v) => {
+		if (v === "fit") recomputeFit();
+	});
 
 	// `tableKey` forces a DataTable remount when `autoFit()` is called,
 	// which lets the browser re-measure content widths from scratch
