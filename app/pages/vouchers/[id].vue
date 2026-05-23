@@ -51,7 +51,7 @@
 				>
 					PDF & Print
 				</UButton>
-				<UButton color="error" variant="ghost" icon="i-lucide-trash-2" @click="askDelete">
+				<UButton color="error" variant="soft" icon="i-lucide-trash-2" @click="askDelete">
 					Delete
 				</UButton>
 			</div>

@@ -59,7 +59,7 @@
 
 				<UButton
 					color="error"
-					variant="ghost"
+					variant="soft"
 					icon="i-lucide-trash-2"
 					@click="askDelete"
 				>
