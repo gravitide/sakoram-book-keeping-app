@@ -104,35 +104,45 @@
 						</UButton>
 					</div>
 
-					<!-- Multi-select status filter. -->
-					<div class="flex items-center gap-1.5 flex-wrap">
-						<UIcon name="i-lucide-flag" class="size-3.5 text-(--ui-text-muted) shrink-0 mr-1" />
-						<button
-							v-for="s in QUOTE_STATUSES"
-							:key="s"
-							type="button"
-							class="text-xs px-2.5 py-1 rounded-full border transition select-none cursor-pointer"
-							:class="statusChipClasses(s)"
-							@click="store.toggleStatusFilter(s)"
-						>
-							{{ STATUS_LABEL[s] }}
-						</button>
-					</div>
+					<!-- Status + issued-date chip rows. Stack at sm, sit
+						side-by-side from md+ so the filter strip stays
+						compact on a typical desktop window. items-start
+						keeps each column flush with the top of the row
+						even when one column wraps to two lines and the
+						other stays single — otherwise the shorter
+						column floats vertically centered against the
+						taller one. -->
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 items-start">
+						<!-- Multi-select status filter. -->
+						<div class="flex items-center gap-1.5 flex-wrap">
+							<UIcon name="i-lucide-flag" class="size-3.5 text-(--ui-text-muted) shrink-0 mr-1" />
+							<button
+								v-for="s in QUOTE_STATUSES"
+								:key="s"
+								type="button"
+								class="text-xs px-2.5 py-1 rounded-full border transition select-none cursor-pointer"
+								:class="statusChipClasses(s)"
+								@click="store.toggleStatusFilter(s)"
+							>
+								{{ STATUS_LABEL[s] }}
+							</button>
+						</div>
 
-					<!-- Quick issue-date preset chips. -->
-					<div class="flex items-center gap-1.5 flex-wrap">
-						<UIcon name="i-lucide-calendar" class="size-3.5 text-(--ui-text-muted) shrink-0 mr-1" />
-						<span class="text-xs text-(--ui-text-muted) mr-1">Issued:</span>
-						<button
-							v-for="p in DATE_PRESETS"
-							:key="p.key"
-							type="button"
-							class="text-xs px-2.5 py-1 rounded-full border transition select-none cursor-pointer"
-							:class="datePresetClasses(p.key)"
-							@click="toggleDatePreset(p.key)"
-						>
-							{{ p.label }}
-						</button>
+						<!-- Quick issue-date preset chips. -->
+						<div class="flex items-center gap-1.5 flex-wrap">
+							<UIcon name="i-lucide-calendar" class="size-3.5 text-(--ui-text-muted) shrink-0 mr-1" />
+							<span class="text-xs text-(--ui-text-muted) mr-1">Issued:</span>
+							<button
+								v-for="p in DATE_PRESETS"
+								:key="p.key"
+								type="button"
+								class="text-xs px-2.5 py-1 rounded-full border transition select-none cursor-pointer"
+								:class="datePresetClasses(p.key)"
+								@click="toggleDatePreset(p.key)"
+							>
+								{{ p.label }}
+							</button>
+						</div>
 					</div>
 				</div>
 			</template>
