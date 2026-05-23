@@ -9,17 +9,26 @@
 			Back to employees
 		</NuxtLink>
 
-		<!-- Identity hero -->
+		<!-- Identity hero. Layout: avatar + name/chips on the left,
+			action buttons cluster top-right. items-start so the buttons
+			pin to the top edge of the row regardless of how the chips
+			wrap underneath the name. -->
 		<section class="mb-10">
-			<div class="flex flex-col md:flex-row md:items-center gap-6">
-				<div class="size-32 shrink-0 rounded-2xl border border-(--ui-border) bg-(--ui-bg-muted) flex items-center justify-center overflow-hidden">
+			<div class="flex items-start gap-5 flex-wrap">
+				<!-- Avatar — circular, primary-tinted background with the
+					user's initials in the primary colour. Smaller and
+					more "person-shaped" than the prior 128px rounded
+					square (which read more like a company badge). Falls
+					back to a generic user icon when initials aren't
+					available (new employee, empty name). -->
+				<div class="size-20 shrink-0 rounded-full bg-(--ui-primary)/15 flex items-center justify-center overflow-hidden">
 					<span
 						v-if="initials"
-						class="font-semibold text-3xl tracking-tight text-(--ui-primary)"
+						class="font-semibold text-2xl tracking-tight text-(--ui-primary)"
 					>
 						{{ initials }}
 					</span>
-					<UIcon v-else name="i-lucide-user" class="size-10 text-(--ui-text-muted)" />
+					<UIcon v-else name="i-lucide-user" class="size-8 text-(--ui-text-muted)" />
 				</div>
 
 				<div class="flex-1 min-w-0">
@@ -56,17 +65,21 @@
 								: "No details captured yet — add some below." }}
 						</div>
 					</dl>
-					<div v-if="!isNew" class="mt-4 flex flex-wrap items-center gap-2">
-						<UButton
-							:icon="isArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
-							size="xs"
-							variant="soft"
-							color="neutral"
-							@click="toggleArchive"
-						>
-							{{ isArchived ? "Restore employee" : "Archive employee" }}
-						</UButton>
-					</div>
+				</div>
+
+				<!-- Right cluster: header-level actions (Archive). Hidden
+					for new employees since there's nothing to archive
+					yet. -->
+				<div v-if="!isNew" class="flex items-center gap-2 shrink-0 ml-auto">
+					<UButton
+						:icon="isArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
+						size="sm"
+						variant="soft"
+						color="neutral"
+						@click="toggleArchive"
+					>
+						{{ isArchived ? "Restore employee" : "Archive employee" }}
+					</UButton>
 				</div>
 			</div>
 		</section>
@@ -122,7 +135,7 @@
 				<SectionCard
 					icon="i-lucide-banknote"
 					title="Employment"
-					subtitle="Joining date and the headline monthly salary in {{currency}}."
+					:subtitle="`Joining date and the headline monthly salary in ${currency.code}.`"
 				>
 					<UFormField label="Joining date" name="joining_date">
 						<DateField v-model="form.joining_date" />
@@ -233,6 +246,7 @@
 <script setup lang="ts">
 	import type { EmployeeInput, EmployeeRow } from "~/stores/employees";
 	import { z } from "zod";
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { useEmployeesStore } from "~/stores/employees";
 
 	definePageMeta({ title: "Employee" });
@@ -241,6 +255,10 @@
 	const router = useRouter();
 	const store = useEmployeesStore();
 	const toast = useToast();
+	// Drives the dynamic "salary in {code}" subtitle on the Employment
+	// card — reactive so it updates when the user changes currency in
+	// Company settings without a reload.
+	const currency = useActiveCurrency();
 
 	const idParam = String(route.params.id ?? "");
 	const isNew = idParam === "new";
