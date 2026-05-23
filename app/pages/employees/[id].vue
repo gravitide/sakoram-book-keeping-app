@@ -67,9 +67,13 @@
 					</dl>
 				</div>
 
-				<!-- Right cluster: header-level actions (Archive). Hidden
-					for new employees since there's nothing to archive
-					yet. -->
+				<!-- Right cluster: header-level actions (Archive / Delete).
+					Hidden for new employees since there's nothing to act
+					on yet. Delete is for the "accidentally created an
+					employee" case — the payslips FK has ON DELETE
+					RESTRICT, so the DB blocks the hard-delete once any
+					payslip is issued; the error surfaces as a friendly
+					toast pointing the user at Archive instead. -->
 				<div v-if="!isNew" class="flex items-center gap-2 shrink-0 ml-auto">
 					<UButton
 						:icon="isArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
@@ -79,6 +83,15 @@
 						@click="toggleArchive"
 					>
 						{{ isArchived ? "Restore employee" : "Archive employee" }}
+					</UButton>
+					<UButton
+						icon="i-lucide-trash-2"
+						size="sm"
+						variant="soft"
+						color="error"
+						@click="confirmDelete = true"
+					>
+						Delete
 					</UButton>
 				</div>
 			</div>
@@ -240,6 +253,36 @@
 				</div>
 			</div>
 		</UForm>
+
+		<!-- Delete confirmation. The DB protects employees with linked
+			payslips via ON DELETE RESTRICT, so the destructive path is
+			only available before any payslip is issued — see the
+			handler below for the FK error fallback. -->
+		<UModal v-model:open="confirmDelete" title="Delete this employee?">
+			<template #body>
+				<div class="space-y-3 text-sm">
+					<p>
+						This permanently removes <span class="font-medium">{{ form.full_name || "this employee" }}</span> from the address book.
+					</p>
+					<p class="text-(--ui-text-muted)">
+						If a payslip has ever been issued for this employee,
+						the database will refuse the delete — archive
+						instead. Archived employees are hidden from pickers
+						but their payslip history stays intact.
+					</p>
+				</div>
+			</template>
+			<template #footer>
+				<div class="flex justify-end gap-2 w-full">
+					<UButton color="neutral" variant="ghost" @click="confirmDelete = false">
+						Cancel
+					</UButton>
+					<UButton color="error" :loading="deleting" icon="i-lucide-trash-2" @click="onDelete">
+						Delete employee
+					</UButton>
+				</div>
+			</template>
+		</UModal>
 	</div>
 </template>
 
@@ -290,6 +333,8 @@
 
 	const isArchived = ref(false);
 	const saving = ref(false);
+	const confirmDelete = ref(false);
+	const deleting = ref(false);
 
 	const initials = computed(() => {
 		const raw = form.full_name?.trim() ?? "";
@@ -400,6 +445,34 @@
 				color: "error",
 				icon: "i-lucide-circle-alert"
 			});
+		}
+	};
+
+	const onDelete = async () => {
+		if (employeeId === null) return;
+		deleting.value = true;
+		try {
+			await store.remove(employeeId);
+			toast.add({ title: "Employee deleted", color: "info", icon: "i-lucide-trash-2" });
+			confirmDelete.value = false;
+			await router.replace("/employees");
+		} catch (err) {
+			// SQLite throws a foreign-key constraint error when a payslip
+			// still references this employee (ON DELETE RESTRICT). Translate
+			// that into a friendly nudge toward Archive instead of dumping
+			// the raw SQL error on the user.
+			const raw = err instanceof Error ? err.message : String(err);
+			const isFkError = /foreign key|constraint|RESTRICT/i.test(raw);
+			toast.add({
+				title: isFkError ? "Can't delete — has payslip history" : "Delete failed",
+				description: isFkError
+					? "This employee has at least one issued payslip. Archive instead — payslips need to stay intact."
+					: raw,
+				color: isFkError ? "warning" : "error",
+				icon: "i-lucide-circle-alert"
+			});
+		} finally {
+			deleting.value = false;
 		}
 	};
 </script>
