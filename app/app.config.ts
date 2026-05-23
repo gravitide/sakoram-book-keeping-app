@@ -35,6 +35,16 @@ export default defineAppConfig({
 				base: "cursor-pointer"
 			}
 		},
+		card: {
+			// Match the sidebar's softened drop shadow so every elevated
+			// surface (KPI tiles, dashboard cards, section cards on
+			// detail pages, modals) reads as a single visual layer
+			// above the paper page bg. Tailwind-merge takes care of
+			// overriding UCard's default shadow token.
+			slots: {
+				root: "shadow-md shadow-black/10"
+			}
+		},
 		formField: {
 			slots: {
 				root: "w-full",
