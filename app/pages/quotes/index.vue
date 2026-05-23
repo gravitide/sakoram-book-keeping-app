@@ -102,17 +102,6 @@
 						>
 							Reset
 						</UButton>
-						<UButton
-							size="md"
-							variant="soft"
-							color="neutral"
-							icon="i-lucide-table-columns-split"
-							:class="hasAnyFilter ? '' : 'ml-auto'"
-							title="Auto-size columns to their content"
-							@click="autoFitColumns"
-						>
-							Auto-fit columns
-						</UButton>
 					</div>
 
 					<!-- Multi-select status filter. -->
@@ -147,6 +136,31 @@
 					</div>
 				</div>
 			</template>
+
+			<!-- Table action bar + filtered-rows summary. Sits just
+				below the header divider in the table zone. Auto-fit
+				lives on the left (it's a table action, not a filter);
+				the summary stays right-aligned. Hidden during loading
+				/ error to avoid a confusing 0 readout. -->
+			<div
+				v-if="!store.loading && !store.error"
+				class="flex justify-between items-center gap-3 flex-wrap text-sm text-(--ui-text-muted) tabular-nums mb-3"
+			>
+				<UButton
+					size="xs"
+					variant="soft"
+					color="neutral"
+					icon="i-lucide-table-columns-split"
+					title="Auto-size columns to their content"
+					@click="autoFitColumns"
+				>
+					Auto-fit columns
+				</UButton>
+				<div class="flex items-baseline gap-3 ml-auto">
+					<span v-if="hasAnyFilter" class="text-xs">{{ store.filtered.length }} of {{ store.quotes.length }} shown</span>
+					<span>Total <span class="text-(--ui-text) font-medium">{{ formatLKR(filteredTotal) }}</span></span>
+				</div>
+			</div>
 
 			<div v-if="store.loading" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				Loading quotes…
@@ -286,6 +300,13 @@
 	}
 	const rows = computed<QuoteRowVM[]>(() =>
 		store.filtered.map((q) => ({ ...q, _client: clientName(q.client_snapshot) }))
+	);
+
+	// Sum of total_cents across the currently visible (filtered) rows.
+	// Reflects whatever the active filters narrow the list to, so the
+	// header readout matches the slice the user is looking at.
+	const filteredTotal = computed(() =>
+		store.filtered.reduce((sum, q) => sum + q.total_cents, 0)
 	);
 
 	const newQuote = () => router.push("/quotes/new");

@@ -73,17 +73,6 @@
 						>
 							Reset
 						</UButton>
-						<UButton
-							size="md"
-							variant="soft"
-							color="neutral"
-							icon="i-lucide-table-columns-split"
-							:class="hasAnyFilter ? '' : 'ml-auto'"
-							title="Auto-size columns to their content"
-							@click="autoFitColumns"
-						>
-							Auto-fit columns
-						</UButton>
 					</div>
 
 					<div class="flex items-center gap-1.5 flex-wrap">
@@ -116,6 +105,39 @@
 					</div>
 				</div>
 			</template>
+
+			<!-- Table action bar + filtered-rows summary. Auto-fit on
+				the left; receipts/payments/net on the right (vouchers
+				carry both directions). -->
+			<div
+				v-if="!store.loading && !store.error"
+				class="flex justify-between items-center gap-3 flex-wrap text-sm text-(--ui-text-muted) tabular-nums mb-3"
+			>
+				<UButton
+					size="xs"
+					variant="soft"
+					color="neutral"
+					icon="i-lucide-table-columns-split"
+					title="Auto-size columns to their content"
+					@click="autoFitColumns"
+				>
+					Auto-fit columns
+				</UButton>
+				<div class="flex items-baseline gap-3 ml-auto flex-wrap">
+					<span v-if="hasAnyFilter" class="text-xs">{{ store.filtered.length }} of {{ store.vouchers.length }} shown</span>
+					<span class="text-(--ui-success)">+ {{ formatLKR(filteredReceipts) }}</span>
+					<span class="text-(--ui-error)">− {{ formatLKR(filteredPayments) }}</span>
+					<span>
+						Net
+						<span
+							class="font-medium"
+							:class="filteredNet >= 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'"
+						>
+							{{ filteredNet >= 0 ? '+' : '−' }}{{ formatLKR(Math.abs(filteredNet)) }}
+						</span>
+					</span>
+				</div>
+			</div>
 
 			<div v-if="store.loading" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				Loading vouchers…
@@ -229,6 +251,21 @@
 		|| store.typeFilters.length > 0
 		|| store.hasDateFilters
 	);
+
+	// Filtered totals — split by direction (receipt vs payment) so the
+	// readout matches the dual-direction nature of the voucher ledger.
+	// Net is just (in - out) on the visible slice.
+	const filteredReceipts = computed(() =>
+		store.filtered
+			.filter((v) => v.voucher_type === "receipt")
+			.reduce((sum, v) => sum + v.amount_cents, 0)
+	);
+	const filteredPayments = computed(() =>
+		store.filtered
+			.filter((v) => v.voucher_type === "payment")
+			.reduce((sum, v) => sum + v.amount_cents, 0)
+	);
+	const filteredNet = computed(() => filteredReceipts.value - filteredPayments.value);
 
 	const resetFilters = () => {
 		store.search = "";

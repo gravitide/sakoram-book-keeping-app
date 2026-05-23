@@ -101,17 +101,6 @@
 						>
 							Reset
 						</UButton>
-						<UButton
-							size="md"
-							variant="soft"
-							color="neutral"
-							icon="i-lucide-table-columns-split"
-							:class="hasAnyFilter ? '' : 'ml-auto'"
-							title="Auto-size columns to their content"
-							@click="autoFitColumns"
-						>
-							Auto-fit columns
-						</UButton>
 					</div>
 
 					<!-- Multi-select status filter. Matches StatusBadge colours. -->
@@ -146,6 +135,28 @@
 					</div>
 				</div>
 			</template>
+
+			<!-- Table action bar + filtered-rows summary; Auto-fit on
+				the left, totals on the right. -->
+			<div
+				v-if="!store.loading && !store.error"
+				class="flex justify-between items-center gap-3 flex-wrap text-sm text-(--ui-text-muted) tabular-nums mb-3"
+			>
+				<UButton
+					size="xs"
+					variant="soft"
+					color="neutral"
+					icon="i-lucide-table-columns-split"
+					title="Auto-size columns to their content"
+					@click="autoFitColumns"
+				>
+					Auto-fit columns
+				</UButton>
+				<div class="flex items-baseline gap-3 ml-auto">
+					<span v-if="hasAnyFilter" class="text-xs">{{ store.filtered.length }} of {{ store.invoices.length }} shown</span>
+					<span>Total <span class="text-(--ui-text) font-medium">{{ formatLKR(filteredTotal) }}</span></span>
+				</div>
+			</div>
 
 			<div v-if="store.loading" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				Loading invoices…
@@ -318,6 +329,12 @@
 			_balance: store.balanceCentsFor(i),
 			_status: store.derivedStatus(i)
 		}))
+	);
+
+	// Sum of total_cents across the currently visible (filtered) rows.
+	// Tracks whatever the active filters narrow the list to.
+	const filteredTotal = computed(() =>
+		store.filtered.reduce((sum, i) => sum + i.total_cents, 0)
 	);
 
 	// `ResizableDataTable` exposes `autoFit()` for the Auto-fit columns
