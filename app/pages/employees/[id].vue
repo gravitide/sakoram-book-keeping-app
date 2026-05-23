@@ -1,5 +1,9 @@
 <template>
-	<div>
+	<div class="select-none">
+		<!-- select-none on the page root: the management surface is for
+			editing fields, not copying chrome / labels. Inputs stay
+			selectable via the rule in main.css that puts user-select:text
+			back on input / textarea / [contenteditable]. -->
 		<NuxtLink to="/employees" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1 mb-4">
 			<UIcon name="i-lucide-arrow-left" class="size-4" />
 			Back to employees

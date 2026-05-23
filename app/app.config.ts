@@ -56,6 +56,16 @@ export default defineAppConfig({
 				root: "shadow-md shadow-black/10"
 			}
 		},
+		modal: {
+			// Modal chrome (title + supporting description in the
+			// header) is not data the user copies out — keep it out of
+			// the drag-select cycle. Form inputs inside the body still
+			// pick up user-select:text via the global rule in main.css.
+			slots: {
+				title: "select-none",
+				description: "select-none"
+			}
+		},
 		formField: {
 			slots: {
 				root: "w-full",

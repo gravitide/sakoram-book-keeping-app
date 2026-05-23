@@ -1,5 +1,9 @@
 <template>
-	<div>
+	<div class="select-none">
+		<!-- select-none on the page root: chrome / labels aren't
+			selectable; form inputs stay selectable via the main.css
+			rule that puts user-select:text back on input / textarea
+			/ [contenteditable] inside select-none containers. -->
 		<!-- Crumb / back link --------------------------------------------- -->
 		<NuxtLink to="/vendors" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1 mb-4">
 			<UIcon name="i-lucide-arrow-left" class="size-4" />
