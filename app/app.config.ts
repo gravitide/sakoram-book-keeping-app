@@ -31,8 +31,12 @@ export default defineAppConfig({
 			neutral: "zinc"
 		},
 		button: {
+			// Uppercase + a touch of letter-spacing across every button
+			// in the app — same treatment we use on chip labels and
+			// table headers. Reads as a clear "action" cue and matches
+			// the rest of the UI's typography rhythm.
 			slots: {
-				base: "cursor-pointer"
+				base: "cursor-pointer uppercase tracking-wide"
 			}
 		},
 		card: {

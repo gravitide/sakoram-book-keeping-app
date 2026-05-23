@@ -152,9 +152,9 @@
 				>
 					Auto-fit columns
 				</UButton>
-				<div class="flex items-baseline gap-3 ml-auto">
-					<span v-if="hasAnyFilter" class="text-xs">{{ store.filtered.length }} of {{ store.invoices.length }} shown</span>
-					<span>Total <span class="text-(--ui-text) font-medium">{{ formatLKR(filteredTotal) }}</span></span>
+				<div class="flex items-center gap-3 ml-auto">
+					<span v-if="hasAnyFilter" class="text-xs text-(--ui-text-muted)">{{ store.filtered.length }} of {{ store.invoices.length }} shown</span>
+					<StatChip label="Total" :value="formatLKR(filteredTotal)" />
 				</div>
 			</div>
 
