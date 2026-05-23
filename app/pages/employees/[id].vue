@@ -76,6 +76,15 @@
 					toast pointing the user at Archive instead. -->
 				<div v-if="!isNew" class="flex items-center gap-2 shrink-0 ml-auto">
 					<UButton
+						icon="i-lucide-file-spreadsheet"
+						size="sm"
+						variant="soft"
+						color="neutral"
+						@click="viewPayslips"
+					>
+						View payslips
+					</UButton>
+					<UButton
 						:icon="isArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
 						size="sm"
 						variant="soft"
@@ -426,6 +435,15 @@
 				toast.add({ title: "Changes discarded", color: "info", icon: "i-lucide-rotate-ccw" });
 			}
 		}
+	};
+
+	// Jump to the payslips list pre-filtered to this employee.
+	// Mirrors the "View payslips" row action on the employees list —
+	// /payslips?employee=ID; the payslips index reads the query and
+	// sets `store.employeeFilter` on mount.
+	const viewPayslips = () => {
+		if (employeeId === null) return;
+		void router.push(`/payslips?employee=${employeeId}`);
 	};
 
 	const toggleArchive = async () => {
