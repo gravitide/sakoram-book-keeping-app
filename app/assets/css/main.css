@@ -454,9 +454,16 @@ textarea,
  * with the body's last-row bottom border to read as a doubled-up
  * separator under the scrollbar. Drop the paginator's frame entirely:
  * the body's last-row border already provides separation, and the
- * paginator's background tint marks it as its own zone. */
-.p-datatable .p-datatable-paginator-bottom {
+ * paginator's background tint marks it as its own zone.
+ *
+ * Aura's preset also paints `.p-paginator` with its own (white)
+ * background rule that wins over our `:where()` token block above,
+ * so the paginator strip read as pure white in light mode against
+ * the warm paper palette. Force the matching paper tone here. */
+.p-datatable .p-datatable-paginator-bottom,
+.p-datatable .p-datatable-paginator-bottom .p-paginator {
 	border: 0 !important;
+	background: var(--ui-bg-muted) !important;
 }
 
 /* PrimeVue with `showGridlines` adds a 1px border around the
