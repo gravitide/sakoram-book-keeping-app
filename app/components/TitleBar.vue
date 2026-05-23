@@ -23,6 +23,22 @@
 			>
 				<UIcon :name="sidebarCollapsed ? 'i-lucide-panel-left-open' : 'i-lucide-panel-left-close'" class="size-[16px]" />
 			</button>
+			<!-- Global back button: returns to the previous route via Vue
+				Router's history stack. Disabled when there's nowhere to
+				go back (fresh app start, or after returning to the very
+				first entry) so it doesn't look broken or silently no-op. -->
+			<button
+				v-if="showSidebarToggle"
+				type="button"
+				class="w-[44px] flex items-center justify-center transition disabled:opacity-40 disabled:cursor-not-allowed"
+				:class="canGoBack ? 'hover:bg-(--ui-bg-accented) cursor-pointer' : ''"
+				title="Go back"
+				aria-label="Go back"
+				:disabled="!canGoBack"
+				@click="goBack"
+			>
+				<UIcon name="i-lucide-move-left" class="size-[20px]" />
+			</button>
 		</div>
 
 		<div class="flex-1 flex items-center gap-[8px] px-[12px] min-w-0" data-tauri-drag-region>
@@ -74,6 +90,34 @@
 	const { isMaximized } = useWindowState();
 	const { sidebarCollapsed, toggleSidebar } = useUiState();
 	const tenants = useTenantsStore();
+
+	// "Can we go back?" derived from Vue Router's history-state position
+	// counter (set on every nav via createWebHistory). Position 0 is the
+	// landing entry — anything higher means there's somewhere to return
+	// to. Recomputed after each navigation so the disabled state stays
+	// in sync as the user moves around. `router.afterEach` returns a
+	// teardown fn we keep around so the hook doesn't leak across
+	// titlebar remounts (layout transitions).
+	const router = useRouter();
+	const canGoBack = ref(false);
+	const refresh = () => {
+		if (typeof window === "undefined") return;
+		const pos = (window.history.state as { position?: number } | null)?.position;
+		canGoBack.value = typeof pos === "number" && pos > 0;
+	};
+	let unhook: (() => void) | null = null;
+	onMounted(() => {
+		refresh();
+		unhook = router.afterEach(() => nextTick(refresh));
+	});
+	onBeforeUnmount(() => {
+		unhook?.();
+	});
+
+	const goBack = () => {
+		if (!canGoBack.value) return;
+		router.back();
+	};
 
 	const title = computed(() => {
 		const name = tenants.activeTenant?.name;
