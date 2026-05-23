@@ -28,7 +28,10 @@
 					Converted from quote
 				</NuxtLink>
 			</div>
-			<div class="flex gap-2 items-center">
+			<!-- xl+ inline cluster. Below xl this collapses into a single
+				⋯ dropdown so the header doesn't get cramped on narrower
+				windows; both paths share the same handlers. -->
+			<div class="hidden xl:flex gap-2 items-center">
 				<UButton
 					v-if="canRecordPayments"
 					color="primary"
@@ -75,6 +78,18 @@
 				>
 					{{ isDraft ? "Delete draft" : "Delete" }}
 				</UButton>
+			</div>
+
+			<div class="xl:hidden">
+				<UDropdownMenu :items="actionMenuItems">
+					<UButton
+						color="neutral"
+						variant="outline"
+						icon="i-lucide-ellipsis-vertical"
+						title="Actions"
+						aria-label="Actions"
+					/>
+				</UDropdownMenu>
 			</div>
 		</header>
 
@@ -846,4 +861,35 @@
 		if (!invoice.value || dirty.value) return;
 		pdf.open();
 	};
+
+	// Items rendered into the responsive UDropdownMenu shown below xl
+	// (the inline cluster above is hidden at that width). Grouped so
+	// the dropdown draws separators between Record-payment + PDF,
+	// transitions, and Delete. Declared at the end so the handlers it
+	// references are already in scope.
+	const actionMenuItems = computed(() => {
+		const primary: { label: string, icon: string, disabled?: boolean, onSelect: () => void }[] = [];
+		if (canRecordPayments.value) {
+			primary.push({
+				label: "Record payment",
+				icon: "i-lucide-circle-dollar-sign",
+				onSelect: goRecordPayment
+			});
+		}
+		primary.push({
+			label: "PDF & Print",
+			icon: "i-lucide-file-down",
+			disabled: dirty.value || pdf.state.rendering,
+			onSelect: onPdfClick
+		});
+
+		const destructive = [{
+			label: isDraft.value ? "Delete draft" : "Delete",
+			icon: "i-lucide-trash-2",
+			class: "text-(--ui-error) hover:bg-(--ui-error)/10 [&>span>span:first-child]:text-(--ui-error)",
+			onSelect: askDelete
+		}];
+
+		return [primary, transitionActions.value, destructive].filter((g) => g.length > 0);
+	});
 </script>
