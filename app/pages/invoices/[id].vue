@@ -16,9 +16,6 @@
 						read-only after issue
 					</span>
 				</h1>
-				<p v-if="formProjectTitle" class="text-sm text-(--ui-text-muted) mt-1">
-					{{ formProjectTitle }}
-				</p>
 				<NuxtLink
 					v-if="invoice.source_quote_id"
 					:to="`/quotes/${invoice.source_quote_id}`"
