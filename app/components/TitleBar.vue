@@ -1,22 +1,41 @@
 <template>
-	<!-- Custom titlebar replacing the OS chrome (see tauri.conf.json
-	`decorations: false`). The drag region covers the whole bar except
-	the buttons; double-clicking toggles maximize, the OS handles that
-	via the drag-region attribute.
-
-	Pixel-pinned sizing (h-[36px], w-[44px], text-[12px], etc.) — keeps
-	the titlebar at its reference dimensions regardless of the user's
-	UI zoom level (which scales the root font-size; everything
-	rem-based inside the body would otherwise grow with it). -->
+	<!-- Custom titlebar replacing the OS chrome.
+	On Windows (tauri.conf.json `decorations: false`): we draw the whole
+	thing — sidebar toggle and back button on the left, title in the
+	middle, min/max/close buttons on the right. 36px tall to match the
+	Windows convention.
+	On macOS (tauri.macos.conf.json overrides decorations:true +
+	titleBarStyle:Overlay): the OS draws the traffic-light buttons
+	on the left and our chrome paints behind them — we reserve ~78px
+	of left padding so the sidebar toggle / back button don't overlap.
+	No min/max/close cluster on the right (OS owns that). 28pt tall to
+	match the macOS small-toolbar convention.
+	Drag region covers the bar except over our buttons; double-click
+	toggles maximize via the drag-region attribute (OS-handled).
+	Pixel-pinned sizing (h-[28px]/[36px], w-[44px], text-[12px]) keeps
+	the titlebar at reference dimensions regardless of the user's UI
+	zoom level (which scales root font-size; everything rem-based
+	inside the body would otherwise grow with it). -->
 	<div
-		class="h-[36px] shrink-0 flex items-stretch select-none bg-(--ui-bg-muted) text-(--ui-text-muted) text-[12px]"
+		class="shrink-0 flex items-stretch select-none bg-(--ui-bg-muted) text-(--ui-text-muted) text-[12px]"
+		:class="isMac ? 'h-[28px]' : 'h-[36px]'"
 		data-tauri-drag-region
 	>
+		<!-- Mac traffic-light reservation. The OS-drawn red/yellow/green
+			buttons live in this strip; the drag region still applies so
+			the user can grab anywhere outside the actual button hits. -->
+		<div
+			v-if="isMac"
+			class="w-[78px] shrink-0"
+			data-tauri-drag-region
+		/>
+
 		<div class="flex items-stretch shrink-0">
 			<button
 				v-if="showSidebarToggle"
 				type="button"
-				class="w-[44px] flex items-center justify-center hover:bg-(--ui-bg-accented) transition"
+				class="flex items-center justify-center hover:bg-(--ui-bg-accented) transition"
+				:class="isMac ? 'w-[36px]' : 'w-[44px]'"
 				:title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
 				:aria-label="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
 				@click="toggleSidebar"
@@ -30,8 +49,11 @@
 			<button
 				v-if="showSidebarToggle"
 				type="button"
-				class="w-[44px] flex items-center justify-center transition disabled:opacity-40 disabled:cursor-not-allowed"
-				:class="canGoBack ? 'hover:bg-(--ui-bg-accented) cursor-pointer' : ''"
+				class="flex items-center justify-center transition disabled:opacity-40 disabled:cursor-not-allowed"
+				:class="[
+					isMac ? 'w-[36px]' : 'w-[44px]',
+					canGoBack ? 'hover:bg-(--ui-bg-accented) cursor-pointer' : ''
+				]"
 				title="Go back"
 				aria-label="Go back"
 				:disabled="!canGoBack"
@@ -46,7 +68,9 @@
 			<span class="truncate" data-tauri-drag-region>{{ title }}</span>
 		</div>
 
-		<div class="flex items-stretch">
+		<!-- Right cluster: Windows-only. macOS uses the OS traffic-light
+			buttons on the left for these actions, so we omit ours here. -->
+		<div v-if="!isMac" class="flex items-stretch">
 			<button
 				type="button"
 				class="w-[44px] flex items-center justify-center hover:bg-(--ui-bg-accented) transition"
@@ -90,6 +114,9 @@
 	const { isMaximized } = useWindowState();
 	const { sidebarCollapsed, toggleSidebar } = useUiState();
 	const tenants = useTenantsStore();
+	// Platform-conditional bits — see template comment for what changes
+	// on macOS (traffic-light reservation, no right-side controls).
+	const { isMac } = useUserPlatform();
 
 	// "Can we go back?" derived from Vue Router's history-state position
 	// counter (set on every nav via createWebHistory). Position 0 is the
