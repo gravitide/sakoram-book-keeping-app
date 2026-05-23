@@ -41,12 +41,12 @@
 		</div>
 
 		<!-- KPI tiles -->
-		<!-- Layout: 1 col (mobile) → 2 col (md) → 4 col (lg+). The
-			money figures switch to compact form (K/M/B) at md and lg
-			where tile width is tightest — see `kpiMoney()` below. At
-			xl the 4-up tiles get enough room (~240px+) to fit the full
-			"Rs 3,553,600.00" string again. -->
-		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+		<!-- Layout: 1 col (mobile) → 4 col (md+). The money figures
+			switch to compact form (K/M/B) at md and lg where tile width
+			is tightest — see `kpiMoney()` below. At xl the 4-up tiles
+			get enough room (~240px+) to fit the full "Rs 3,553,600.00"
+			string again. -->
+		<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
 			<NuxtLink to="/invoices" class="block group" @click="prefilterReceivables">
 				<UCard class="transition group-hover:border-(--ui-primary)">
 					<div class="flex items-start justify-between gap-2">
