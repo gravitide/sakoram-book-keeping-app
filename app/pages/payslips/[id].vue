@@ -27,6 +27,7 @@
 
 			<div class="flex items-center gap-2 flex-wrap">
 				<UButton
+					size="sm"
 					icon="i-lucide-file-down"
 					variant="soft"
 					color="neutral"
@@ -38,6 +39,7 @@
 				</UButton>
 				<UButton
 					v-if="row?.status === 'draft'"
+					size="sm"
 					icon="i-lucide-send"
 					:disabled="!canIssue"
 					:loading="busy"
@@ -47,6 +49,7 @@
 				</UButton>
 				<UButton
 					v-if="row?.status === 'issued'"
+					size="sm"
 					icon="i-lucide-banknote"
 					color="success"
 					@click="recordPayment"
@@ -55,6 +58,7 @@
 				</UButton>
 				<UButton
 					v-if="canCancel"
+					size="sm"
 					icon="i-lucide-circle-x"
 					variant="soft"
 					color="neutral"
@@ -64,6 +68,7 @@
 					Cancel
 				</UButton>
 				<UButton
+					size="sm"
 					icon="i-lucide-trash-2"
 					variant="soft"
 					color="error"

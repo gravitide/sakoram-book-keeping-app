@@ -9,17 +9,26 @@
 			Back to employees
 		</NuxtLink>
 
-		<!-- Identity hero -->
+		<!-- Identity hero. Layout: avatar + name/chips on the left,
+			action buttons cluster top-right. items-start so the buttons
+			pin to the top edge of the row regardless of how the chips
+			wrap underneath the name. -->
 		<section class="mb-10">
-			<div class="flex flex-col md:flex-row md:items-center gap-6">
-				<div class="size-32 shrink-0 rounded-2xl border border-(--ui-border) bg-(--ui-bg-muted) flex items-center justify-center overflow-hidden">
+			<div class="flex items-start gap-5 flex-wrap">
+				<!-- Avatar — circular, primary-tinted background with the
+					user's initials in the primary colour. Smaller and
+					more "person-shaped" than the prior 128px rounded
+					square (which read more like a company badge). Falls
+					back to a generic user icon when initials aren't
+					available (new employee, empty name). -->
+				<div class="size-20 shrink-0 rounded-full bg-(--ui-primary)/15 flex items-center justify-center overflow-hidden">
 					<span
 						v-if="initials"
-						class="font-semibold text-3xl tracking-tight text-(--ui-primary)"
+						class="font-semibold text-2xl tracking-tight text-(--ui-primary)"
 					>
 						{{ initials }}
 					</span>
-					<UIcon v-else name="i-lucide-user" class="size-10 text-(--ui-text-muted)" />
+					<UIcon v-else name="i-lucide-user" class="size-8 text-(--ui-text-muted)" />
 				</div>
 
 				<div class="flex-1 min-w-0">
@@ -56,17 +65,60 @@
 								: "No details captured yet — add some below." }}
 						</div>
 					</dl>
-					<div v-if="!isNew" class="mt-4 flex flex-wrap items-center gap-2">
+				</div>
+
+				<!-- Right cluster: header-level actions (Archive / Delete).
+					Hidden for new employees since there's nothing to act
+					on yet. Delete is for the "accidentally created an
+					employee" case — the payslips FK has ON DELETE
+					RESTRICT, so the DB blocks the hard-delete once any
+					payslip is issued; the error surfaces as a friendly
+					toast pointing the user at Archive instead. -->
+				<!-- xl+ shows the three actions inline; below xl they
+					collapse into a dropdown so the header name doesn't
+					clip on narrower windows. Both paths feed off the
+					same handlers. -->
+				<div v-if="!isNew" class="hidden xl:flex items-center gap-2 shrink-0 ml-auto">
+					<UButton
+						icon="i-lucide-file-spreadsheet"
+						size="sm"
+						variant="soft"
+						color="neutral"
+						@click="viewPayslips"
+					>
+						View payslips
+					</UButton>
+					<UButton
+						:icon="isArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
+						size="sm"
+						variant="soft"
+						color="neutral"
+						@click="toggleArchive"
+					>
+						{{ isArchived ? "Restore employee" : "Archive employee" }}
+					</UButton>
+					<UButton
+						icon="i-lucide-trash-2"
+						size="sm"
+						variant="soft"
+						color="error"
+						@click="confirmDelete = true"
+					>
+						Delete
+					</UButton>
+				</div>
+
+				<div v-if="!isNew" class="xl:hidden shrink-0 ml-auto">
+					<UDropdownMenu :items="actionMenuItems">
 						<UButton
-							:icon="isArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
-							size="xs"
+							size="sm"
 							variant="soft"
 							color="neutral"
-							@click="toggleArchive"
-						>
-							{{ isArchived ? "Restore employee" : "Archive employee" }}
-						</UButton>
-					</div>
+							icon="i-lucide-ellipsis-vertical"
+							title="Actions"
+							aria-label="Actions"
+						/>
+					</UDropdownMenu>
 				</div>
 			</div>
 		</section>
@@ -122,7 +174,7 @@
 				<SectionCard
 					icon="i-lucide-banknote"
 					title="Employment"
-					subtitle="Joining date and the headline monthly salary in {{currency}}."
+					:subtitle="`Joining date and the headline monthly salary in ${currency.code}.`"
 				>
 					<UFormField label="Joining date" name="joining_date">
 						<DateField v-model="form.joining_date" />
@@ -227,12 +279,43 @@
 				</div>
 			</div>
 		</UForm>
+
+		<!-- Delete confirmation. The DB protects employees with linked
+			payslips via ON DELETE RESTRICT, so the destructive path is
+			only available before any payslip is issued — see the
+			handler below for the FK error fallback. -->
+		<UModal v-model:open="confirmDelete" title="Delete this employee?">
+			<template #body>
+				<div class="space-y-3 text-sm">
+					<p>
+						This permanently removes <span class="font-medium">{{ form.full_name || "this employee" }}</span> from the address book.
+					</p>
+					<p class="text-(--ui-text-muted)">
+						If a payslip has ever been issued for this employee,
+						the database will refuse the delete — archive
+						instead. Archived employees are hidden from pickers
+						but their payslip history stays intact.
+					</p>
+				</div>
+			</template>
+			<template #footer>
+				<div class="flex justify-end gap-2 w-full">
+					<UButton color="neutral" variant="ghost" @click="confirmDelete = false">
+						Cancel
+					</UButton>
+					<UButton color="error" :loading="deleting" icon="i-lucide-trash-2" @click="onDelete">
+						Delete employee
+					</UButton>
+				</div>
+			</template>
+		</UModal>
 	</div>
 </template>
 
 <script setup lang="ts">
 	import type { EmployeeInput, EmployeeRow } from "~/stores/employees";
 	import { z } from "zod";
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { useEmployeesStore } from "~/stores/employees";
 
 	definePageMeta({ title: "Employee" });
@@ -241,6 +324,10 @@
 	const router = useRouter();
 	const store = useEmployeesStore();
 	const toast = useToast();
+	// Drives the dynamic "salary in {code}" subtitle on the Employment
+	// card — reactive so it updates when the user changes currency in
+	// Company settings without a reload.
+	const currency = useActiveCurrency();
 
 	const idParam = String(route.params.id ?? "");
 	const isNew = idParam === "new";
@@ -272,6 +359,8 @@
 
 	const isArchived = ref(false);
 	const saving = ref(false);
+	const confirmDelete = ref(false);
+	const deleting = ref(false);
 
 	const initials = computed(() => {
 		const raw = form.full_name?.trim() ?? "";
@@ -365,6 +454,15 @@
 		}
 	};
 
+	// Jump to the payslips list pre-filtered to this employee.
+	// Mirrors the "View payslips" row action on the employees list —
+	// /payslips?employee=ID; the payslips index reads the query and
+	// sets `store.employeeFilter` on mount.
+	const viewPayslips = () => {
+		if (employeeId === null) return;
+		void router.push(`/payslips?employee=${employeeId}`);
+	};
+
 	const toggleArchive = async () => {
 		if (employeeId === null) return;
 		try {
@@ -384,4 +482,63 @@
 			});
 		}
 	};
+
+	const onDelete = async () => {
+		if (employeeId === null) return;
+		deleting.value = true;
+		try {
+			await store.remove(employeeId);
+			toast.add({ title: "Employee deleted", color: "info", icon: "i-lucide-trash-2" });
+			confirmDelete.value = false;
+			await router.replace("/employees");
+		} catch (err) {
+			// SQLite throws a foreign-key constraint error when a payslip
+			// still references this employee (ON DELETE RESTRICT). Translate
+			// that into a friendly nudge toward Archive instead of dumping
+			// the raw SQL error on the user.
+			const raw = err instanceof Error ? err.message : String(err);
+			const isFkError = /foreign key|constraint|RESTRICT/i.test(raw);
+			toast.add({
+				title: isFkError ? "Can't delete — has payslip history" : "Delete failed",
+				description: isFkError
+					? "This employee has at least one issued payslip. Archive instead — payslips need to stay intact."
+					: raw,
+				color: isFkError ? "warning" : "error",
+				icon: "i-lucide-circle-alert"
+			});
+		} finally {
+			deleting.value = false;
+		}
+	};
+
+	// Items rendered into the responsive UDropdownMenu shown below xl
+	// (the inline button cluster is hidden at that width). Two groups
+	// so UDropdownMenu draws a separator between Archive and Delete.
+	// Declared at the end so the handlers it references are already
+	// in scope.
+	const actionMenuItems = computed(() => [[
+		{
+			label: "View payslips",
+			icon: "i-lucide-file-spreadsheet",
+			onSelect: viewPayslips
+		},
+		{
+			label: isArchived.value ? "Restore employee" : "Archive employee",
+			icon: isArchived.value ? "i-lucide-archive-restore" : "i-lucide-archive",
+			onSelect: toggleArchive
+		}
+	], [
+		{
+			label: "Delete",
+			icon: "i-lucide-trash-2",
+			// Destructive item in the dropdown reads in the error tone
+			// to match the inline Delete button at xl+ (color="error").
+			// Targets both the row + the icon so the leading icon picks
+			// up the tint instead of staying muted-grey.
+			class: "text-(--ui-error) hover:bg-(--ui-error)/10 [&>span>span:first-child]:text-(--ui-error)",
+			onSelect: () => {
+				confirmDelete.value = true;
+			}
+		}
+	]]);
 </script>

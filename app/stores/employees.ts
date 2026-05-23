@@ -144,6 +144,17 @@ export const useEmployeesStore = defineStore("employees", () => {
 		await load();
 	};
 
+	// Hard delete. The payslips FK has ON DELETE RESTRICT, so the
+	// constraint protects rows with history — SQLite throws and the
+	// caller surfaces the error as a friendly toast. The intended use
+	// is "accidentally created an employee, need to remove it before
+	// any payslip is issued". For employees with payslips, the user
+	// should archive instead.
+	const remove = async (id: number): Promise<void> => {
+		await execute("DELETE FROM employees WHERE id = ?", [id]);
+		await load();
+	};
+
 	return {
 		employees,
 		loading,
@@ -157,6 +168,7 @@ export const useEmployeesStore = defineStore("employees", () => {
 		get,
 		create,
 		update,
-		setArchived
+		setArchived,
+		remove
 	};
 });

@@ -15,8 +15,12 @@
 					{{ formProjectTitle }}
 				</p>
 			</div>
-			<div class="flex gap-2 items-center">
+			<!-- lg+ inline cluster. Below lg this collapses into a single
+				⋯ dropdown so the header doesn't get cramped on narrower
+				windows; both paths share the same handlers. -->
+			<div class="hidden lg:flex gap-2 items-center">
 				<UButton
+					size="sm"
 					color="neutral"
 					variant="outline"
 					icon="i-lucide-file-down"
@@ -29,6 +33,7 @@
 				</UButton>
 				<UButton
 					v-if="canConvert"
+					size="sm"
 					color="primary"
 					icon="i-lucide-receipt"
 					@click="askConvert"
@@ -50,6 +55,7 @@
 				<UButton
 					v-for="t in transitionActions"
 					:key="t.label"
+					size="sm"
 					color="neutral"
 					variant="outline"
 					:icon="t.icon"
@@ -64,13 +70,27 @@
 				<div class="h-6 w-px bg-(--ui-border) mx-1" />
 
 				<UButton
+					size="sm"
 					color="error"
-					variant="ghost"
+					variant="soft"
 					icon="i-lucide-trash-2"
 					@click="askDelete"
 				>
 					{{ isDraft ? "Delete draft" : "Delete" }}
 				</UButton>
+			</div>
+
+			<div class="lg:hidden">
+				<UDropdownMenu :items="actionMenuItems">
+					<UButton
+						size="sm"
+						color="neutral"
+						variant="outline"
+						icon="i-lucide-ellipsis-vertical"
+						title="Actions"
+						aria-label="Actions"
+					/>
+				</UDropdownMenu>
 			</div>
 		</header>
 
@@ -751,5 +771,46 @@
 		if (canTransition(cur, "rejected")) items.push({ label: "Reject", icon: "i-lucide-thumbs-down", onSelect: () => transition("rejected") });
 		if (canTransition(cur, "expired")) items.push({ label: "Expire", icon: "i-lucide-calendar-x", onSelect: () => transition("expired") });
 		return items;
+	});
+
+	// Items rendered into the responsive UDropdownMenu shown below xl
+	// (the inline cluster above is hidden at that width). Grouped so
+	// the dropdown draws separators: PDF + Convert + View-linked /
+	// transitions / Delete. Declared at the end so the handlers it
+	// references are already in scope.
+	const actionMenuItems = computed(() => {
+		const primary: { label: string, icon: string, disabled?: boolean, onSelect: () => void }[] = [];
+		primary.push({
+			label: "PDF & Print",
+			icon: "i-lucide-file-down",
+			disabled: dirty.value || pdf.state.rendering,
+			onSelect: onPdfClick
+		});
+		if (canConvert.value) {
+			primary.push({
+				label: "Convert to invoice",
+				icon: "i-lucide-receipt",
+				onSelect: askConvert
+			});
+		}
+		if (quote.value?.converted_invoice_id) {
+			const linkedId = quote.value.converted_invoice_id;
+			primary.push({
+				label: "View linked invoice",
+				icon: "i-lucide-link",
+				onSelect: () => {
+					void router.push(`/invoices/${linkedId}`);
+				}
+			});
+		}
+
+		const destructive = [{
+			label: isDraft.value ? "Delete draft" : "Delete",
+			icon: "i-lucide-trash-2",
+			class: "text-(--ui-error) hover:bg-(--ui-error)/10 [&>span>span:first-child]:text-(--ui-error)",
+			onSelect: askDelete
+		}];
+
+		return [primary, transitionActions.value, destructive].filter((g) => g.length > 0);
 	});
 </script>

@@ -127,6 +127,15 @@ export const useVendorsStore = defineStore("vendors", () => {
 		await load();
 	};
 
+	// Hard delete. The bills FK references vendors(id) without an
+	// explicit ON DELETE clause (NO ACTION), so SQLite blocks the
+	// delete once a bill references the vendor — the caller surfaces
+	// the constraint error as a friendly nudge toward Archive.
+	const remove = async (id: number): Promise<void> => {
+		await execute("DELETE FROM vendors WHERE id = ?", [id]);
+		await load();
+	};
+
 	return {
 		vendors,
 		loading,
@@ -140,6 +149,7 @@ export const useVendorsStore = defineStore("vendors", () => {
 		get,
 		create,
 		update,
-		setArchived
+		setArchived,
+		remove
 	};
 });

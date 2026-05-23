@@ -175,7 +175,16 @@
 				</Column>
 				<Column field="voucher_type" header="Type" sortable>
 					<template #body="{ data }">
-						<UBadge :color="data.voucher_type === 'receipt' ? 'success' : 'warning'" variant="subtle" size="sm">
+						<!-- Same min-w + justify-center + uppercase shape as
+							StatusBadge so the Type column reads as a tidy
+							stack of equal-width pills alongside the status
+							columns on the other lists. -->
+						<UBadge
+							:color="data.voucher_type === 'receipt' ? 'success' : 'warning'"
+							variant="subtle"
+							size="sm"
+							class="min-w-24 justify-center uppercase tracking-wider"
+						>
 							{{ data.voucher_type === 'receipt' ? 'Receipt' : 'Payment' }}
 						</UBadge>
 					</template>

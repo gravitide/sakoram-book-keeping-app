@@ -125,6 +125,15 @@ export const useClientsStore = defineStore("clients", () => {
 		await load();
 	};
 
+	// Hard delete. The quotes / invoices FKs default to NO ACTION
+	// (no explicit ON DELETE clause), so SQLite blocks the delete
+	// once a document references the client — the caller surfaces
+	// that as a friendly toast nudging the user to Archive instead.
+	const remove = async (id: number): Promise<void> => {
+		await execute("DELETE FROM clients WHERE id = ?", [id]);
+		await load();
+	};
+
 	return {
 		clients,
 		loading,
@@ -138,6 +147,7 @@ export const useClientsStore = defineStore("clients", () => {
 		get,
 		create,
 		update,
-		setArchived
+		setArchived,
+		remove
 	};
 });

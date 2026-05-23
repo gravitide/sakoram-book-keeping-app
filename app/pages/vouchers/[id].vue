@@ -33,6 +33,7 @@
 					bar below once edit mode is on. -->
 				<UButton
 					v-if="!editing"
+					size="sm"
 					icon="i-lucide-pencil"
 					variant="soft"
 					color="neutral"
@@ -41,6 +42,7 @@
 					Edit
 				</UButton>
 				<UButton
+					size="sm"
 					color="neutral"
 					variant="outline"
 					icon="i-lucide-file-down"
@@ -51,7 +53,7 @@
 				>
 					PDF & Print
 				</UButton>
-				<UButton color="error" variant="ghost" icon="i-lucide-trash-2" @click="askDelete">
+				<UButton size="sm" color="error" variant="soft" icon="i-lucide-trash-2" @click="askDelete">
 					Delete
 				</UButton>
 			</div>

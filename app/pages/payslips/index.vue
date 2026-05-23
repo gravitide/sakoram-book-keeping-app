@@ -100,17 +100,6 @@
 						>
 							Reset
 						</UButton>
-						<UButton
-							size="md"
-							variant="soft"
-							color="neutral"
-							icon="i-lucide-table-columns-split"
-							:class="anyFilterActive ? '' : 'ml-auto'"
-							title="Auto-size columns to their content"
-							@click="autoFitColumns"
-						>
-							Auto-fit columns
-						</UButton>
 					</div>
 
 					<div class="flex items-center gap-1.5 flex-wrap">
@@ -128,6 +117,29 @@
 					</div>
 				</div>
 			</template>
+
+			<!-- Table action bar + filtered-rows summary; Auto-fit on
+				the left, net-pay total on the right. Mirrors the
+				pattern on the other list pages. -->
+			<div
+				v-if="!store.loading && !store.error"
+				class="flex justify-between items-center gap-3 flex-wrap text-sm text-(--ui-text-muted) tabular-nums mb-3"
+			>
+				<UButton
+					size="xs"
+					variant="soft"
+					color="neutral"
+					icon="i-lucide-table-columns-split"
+					title="Auto-size columns to their content"
+					@click="autoFitColumns"
+				>
+					Auto-fit columns
+				</UButton>
+				<div class="flex items-center gap-3 ml-auto">
+					<span v-if="anyFilterActive" class="text-xs text-(--ui-text-muted)">{{ store.filtered.length }} of {{ store.payslips.length }} shown</span>
+					<StatChip label="Total" :value="formatMoney(filteredTotal)" />
+				</div>
+			</div>
 
 			<div v-if="store.loading" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				Loading payslips…
@@ -407,6 +419,12 @@
 			_employee: employeeName(r),
 			_status: store.derivedStatus(r)
 		}))
+	);
+
+	// Sum of net_cents across the currently visible (filtered) rows —
+	// total payroll committed for the slice the user is looking at.
+	const filteredTotal = computed(() =>
+		store.filtered.reduce((sum, p) => sum + p.net_cents, 0)
 	);
 
 	// PrimeVue's selection model holds row references; the bulk-PDF logic

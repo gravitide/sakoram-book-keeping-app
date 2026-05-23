@@ -21,6 +21,7 @@
 			<div class="flex gap-2 items-center">
 				<UButton
 					v-if="balanceCents > 0 && !isCancelled"
+					size="sm"
 					color="primary"
 					icon="i-lucide-circle-dollar-sign"
 					@click="goRecordPayment"
@@ -28,6 +29,7 @@
 					Record payment
 				</UButton>
 				<UButton
+					size="sm"
 					color="neutral"
 					variant="outline"
 					icon="i-lucide-file-down"
@@ -45,6 +47,7 @@
 					user should delete the vouchers first. -->
 				<UButton
 					v-if="isCancelled || balanceCents > 0"
+					size="sm"
 					color="neutral"
 					variant="outline"
 					:icon="isCancelled ? 'i-lucide-rotate-ccw' : 'i-lucide-ban'"
@@ -58,8 +61,9 @@
 				<div class="h-6 w-px bg-(--ui-border) mx-1" />
 
 				<UButton
+					size="sm"
 					color="error"
-					variant="ghost"
+					variant="soft"
 					icon="i-lucide-trash-2"
 					@click="askDelete"
 				>

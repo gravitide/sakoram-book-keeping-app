@@ -10,22 +10,23 @@
 			Back to clients
 		</NuxtLink>
 
-		<!-- Identity hero -------------------------------------------------- -->
+		<!-- Identity hero. Same shape as the employee detail header:
+			small circular avatar on the left, name + chips in the
+			middle, header-level actions cluster top-right (collapses
+			into a ⋯ dropdown below lg). -->
 		<section class="mb-10">
-			<div class="flex flex-col md:flex-row md:items-center gap-6">
-				<!-- Avatar: initials over a tinted background. Clients don't
-					have uploaded logos, but the visual weight of an avatar
-					makes the page feel less flat than a bare form. -->
-				<div
-					class="size-32 shrink-0 rounded-2xl border border-(--ui-border) bg-(--ui-bg-muted) flex items-center justify-center overflow-hidden"
-				>
+			<div class="flex items-start gap-5 flex-wrap">
+				<!-- Avatar — circular, primary-tinted background with the
+					business's initials. Falls back to a generic icon
+					when initials aren't available. -->
+				<div class="size-20 shrink-0 rounded-full bg-(--ui-primary)/15 flex items-center justify-center overflow-hidden">
 					<span
 						v-if="initials"
-						class="font-semibold text-3xl tracking-tight text-(--ui-primary)"
+						class="font-semibold text-2xl tracking-tight text-(--ui-primary)"
 					>
 						{{ initials }}
 					</span>
-					<UIcon v-else name="i-lucide-user-round" class="size-10 text-(--ui-text-muted)" />
+					<UIcon v-else name="i-lucide-user-round" class="size-8 text-(--ui-text-muted)" />
 				</div>
 
 				<!-- Identity summary -->
@@ -59,17 +60,65 @@
 								: "No contact details captured yet — add some below." }}
 						</div>
 					</dl>
-					<div v-if="!isNew" class="mt-4 flex flex-wrap items-center gap-2">
+				</div>
+
+				<!-- Right cluster. lg+: inline buttons; below lg: ⋯
+					dropdown with the same actions grouped (View
+					quotes/invoices, Archive, Delete). Hidden for new
+					clients since there's nothing to act on. Delete is
+					blocked by the DB once any quote / invoice references
+					the client — the handler catches the FK error and
+					surfaces a friendly nudge toward Archive. -->
+				<div v-if="!isNew" class="hidden lg:flex items-center gap-2 shrink-0 ml-auto">
+					<UButton
+						size="sm"
+						icon="i-lucide-file-text"
+						variant="soft"
+						color="neutral"
+						@click="viewQuotes"
+					>
+						View quotes
+					</UButton>
+					<UButton
+						size="sm"
+						icon="i-lucide-receipt"
+						variant="soft"
+						color="neutral"
+						@click="viewInvoices"
+					>
+						View invoices
+					</UButton>
+					<UButton
+						size="sm"
+						:icon="isArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
+						variant="soft"
+						color="neutral"
+						@click="toggleArchive"
+					>
+						{{ isArchived ? "Restore client" : "Archive client" }}
+					</UButton>
+					<UButton
+						size="sm"
+						icon="i-lucide-trash-2"
+						variant="soft"
+						color="error"
+						@click="confirmDelete = true"
+					>
+						Delete
+					</UButton>
+				</div>
+
+				<div v-if="!isNew" class="lg:hidden shrink-0 ml-auto">
+					<UDropdownMenu :items="actionMenuItems">
 						<UButton
-							:icon="isArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
-							size="xs"
-							variant="soft"
+							size="sm"
+							variant="outline"
 							color="neutral"
-							@click="toggleArchive"
-						>
-							{{ isArchived ? "Restore client" : "Archive client" }}
-						</UButton>
-					</div>
+							icon="i-lucide-ellipsis-vertical"
+							title="Actions"
+							aria-label="Actions"
+						/>
+					</UDropdownMenu>
 				</div>
 			</div>
 		</section>
@@ -193,6 +242,36 @@
 				</div>
 			</div>
 		</UForm>
+
+		<!-- Delete confirmation. The DB protects clients with linked
+			quotes / invoices via the FK constraint, so the destructive
+			path is only available before any document is issued — see
+			the handler for the FK error fallback. -->
+		<UModal v-model:open="confirmDelete" title="Delete this client?">
+			<template #body>
+				<div class="space-y-3 text-sm">
+					<p>
+						This permanently removes <span class="font-medium">{{ form.name || "this client" }}</span> from the address book.
+					</p>
+					<p class="text-(--ui-text-muted)">
+						If a quote or invoice has ever been issued for this
+						client, the database will refuse the delete —
+						archive instead. Archived clients are hidden from
+						pickers but their document history stays intact.
+					</p>
+				</div>
+			</template>
+			<template #footer>
+				<div class="flex justify-end gap-2 w-full">
+					<UButton color="neutral" variant="ghost" @click="confirmDelete = false">
+						Cancel
+					</UButton>
+					<UButton color="error" :loading="deleting" icon="i-lucide-trash-2" @click="onDelete">
+						Delete client
+					</UButton>
+				</div>
+			</template>
+		</UModal>
 	</div>
 </template>
 
@@ -200,12 +279,19 @@
 	import type { ClientInput } from "~/stores/clients";
 	import { z } from "zod";
 	import { useClientsStore } from "~/stores/clients";
+	import { useInvoicesStore } from "~/stores/invoices";
+	import { useQuotesStore } from "~/stores/quotes";
 
 	definePageMeta({ title: "Client" });
 
 	const route = useRoute();
 	const router = useRouter();
 	const store = useClientsStore();
+	// Used by the viewQuotes / viewInvoices handlers — set the
+	// destination list's clientFilter before navigating so the user
+	// lands pre-filtered. Mirrors the row actions on the clients list.
+	const quotesStore = useQuotesStore();
+	const invoicesStore = useInvoicesStore();
 	const toast = useToast();
 
 	const idParam = String(route.params.id ?? "");
@@ -230,6 +316,8 @@
 	});
 
 	const isArchived = ref(false);
+	const confirmDelete = ref(false);
+	const deleting = ref(false);
 	const saving = ref(false);
 
 	// Derive a 1–2-character avatar label from the name. Falls back to a
@@ -341,4 +429,86 @@
 			});
 		}
 	};
+
+	// Jump to the quotes / invoices list pre-filtered to this client.
+	// Filters live on the destination stores (Pinia state survives
+	// navigation); we clear the others and set the client before
+	// routing. Mirrors the row actions on the clients list page.
+	const viewQuotes = () => {
+		if (clientId === null) return;
+		quotesStore.search = "";
+		quotesStore.clearStatusFilters();
+		quotesStore.clearDateFilters();
+		quotesStore.clientFilter = clientId;
+		void router.push("/quotes");
+	};
+	const viewInvoices = () => {
+		if (clientId === null) return;
+		invoicesStore.search = "";
+		invoicesStore.clearStatusFilters();
+		invoicesStore.clearDateFilters();
+		invoicesStore.clientFilter = clientId;
+		void router.push("/invoices");
+	};
+
+	const onDelete = async () => {
+		if (clientId === null) return;
+		deleting.value = true;
+		try {
+			await store.remove(clientId);
+			toast.add({ title: "Client deleted", color: "info", icon: "i-lucide-trash-2" });
+			confirmDelete.value = false;
+			await router.replace("/clients");
+		} catch (err) {
+			// quotes / invoices FK clients(id) without an explicit
+			// ON DELETE clause (defaults to NO ACTION). SQLite throws
+			// when a document still references this client. Translate
+			// that to a friendly nudge toward Archive instead of
+			// dumping the raw SQL error.
+			const raw = err instanceof Error ? err.message : String(err);
+			const isFkError = /foreign key|constraint|RESTRICT/i.test(raw);
+			toast.add({
+				title: isFkError ? "Can't delete — has quote/invoice history" : "Delete failed",
+				description: isFkError
+					? "This client has at least one quote or invoice. Archive instead — those documents need to stay intact."
+					: raw,
+				color: isFkError ? "warning" : "error",
+				icon: "i-lucide-circle-alert"
+			});
+		} finally {
+			deleting.value = false;
+		}
+	};
+
+	// Items rendered into the responsive UDropdownMenu shown below lg
+	// (the inline cluster above is hidden at that width). Two groups so
+	// the dropdown draws a separator between View+Archive and Delete.
+	// Declared at the end so the handlers it references are already in
+	// scope.
+	const actionMenuItems = computed(() => [[
+		{
+			label: "View quotes",
+			icon: "i-lucide-file-text",
+			onSelect: viewQuotes
+		},
+		{
+			label: "View invoices",
+			icon: "i-lucide-receipt",
+			onSelect: viewInvoices
+		},
+		{
+			label: isArchived.value ? "Restore client" : "Archive client",
+			icon: isArchived.value ? "i-lucide-archive-restore" : "i-lucide-archive",
+			onSelect: toggleArchive
+		}
+	], [
+		{
+			label: "Delete",
+			icon: "i-lucide-trash-2",
+			class: "text-(--ui-error) hover:bg-(--ui-error)/10 [&>span>span:first-child]:text-(--ui-error)",
+			onSelect: () => {
+				confirmDelete.value = true;
+			}
+		}
+	]]);
 </script>
