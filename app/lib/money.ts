@@ -106,6 +106,28 @@ export const formatMoney = (cents: Cents, opts: FormatMoneyOpts = {}): string =>
 // working but now respect whatever currency the active business picked.
 export const formatLKR = formatMoney;
 
+// Compact money formatter for cramped UI (dashboard KPI tiles at lg,
+// donut centres, etc.). Same currency symbol as formatMoney, but the
+// number collapses to K / M / B with one decimal — "Rs 3.6M" instead
+// of "Rs 3,553,600.00". Sub-1000 values fall through to a plain
+// integer (no decimal) since K-formatting them is pointless.
+export const formatMoneyCompact = (cents: Cents, opts: FormatMoneyOpts = {}): string => {
+	if (!isInt(cents)) throw new Error("formatMoneyCompact requires integer cents");
+	const meta = (opts.code && CURRENCIES[opts.code]) || getActiveCurrency();
+	const v = cents / CENTS_PER_RUPEE;
+	const abs = Math.abs(v);
+	const sign = v < 0 ? "-" : "";
+	const trim = (n: number, suffix: string): string =>
+		`${n.toFixed(1).replace(/\.0$/, "")}${suffix}`;
+	let body: string;
+	if (abs >= 1e9) body = trim(abs / 1e9, "B");
+	else if (abs >= 1e6) body = trim(abs / 1e6, "M");
+	else if (abs >= 1e3) body = trim(abs / 1e3, "K");
+	else body = abs.toFixed(0);
+	const signed = `${sign}${body}`;
+	return opts.withSymbol === false ? signed : `${meta.symbol} ${signed}`;
+};
+
 export const sumCents = (...values: Cents[]): Cents => values.reduce((a, b) => a + b, 0);
 
 // Convert a user-entered quantity (e.g. 2.5) to quantity_milli (qty * 1000).

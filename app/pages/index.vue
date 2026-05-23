@@ -4,7 +4,11 @@
 			overview (KPI tiles, charts, activity feed), not data the user
 			copies out — so the whole page opts out of text selection. -->
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
-			<div>
+			<!-- Left column flex-1 + min-w-0 so the subtitle wraps inside
+				this group instead of pushing the date+New cluster down to
+				its own row. At very small widths the right group still
+				wraps below thanks to flex-wrap on the header. -->
+			<div class="min-w-0 flex-1">
 				<h1 class="text-2xl font-semibold">
 					Dashboard
 				</h1>
@@ -12,7 +16,7 @@
 					Where the money is — what you're owed, what you owe, what's in motion.
 				</p>
 			</div>
-			<div class="flex items-center gap-3">
+			<div class="flex items-center gap-3 shrink-0">
 				<span class="text-xs text-(--ui-text-muted) tabular-nums">
 					{{ todayLabel }}
 				</span>
@@ -41,17 +45,25 @@
 		</div>
 
 		<!-- KPI tiles -->
-		<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-			<NuxtLink to="/invoices" class="block group">
-				<UCard class="transition group-hover:border-(--ui-primary)">
+		<!-- Layout: 1 col (mobile) → 4 col (md+). The money figures
+			switch to compact form (K/M/B) at md and lg where tile width
+			is tightest — see `kpiMoney()` below. At xl the 4-up tiles
+			get enough room (~240px+) to fit the full "Rs 3,553,600.00"
+			string again. -->
+		<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+			<NuxtLink to="/invoices" class="block group h-full" @click="prefilterReceivables">
+				<UCard class="h-full transition group-hover:border-(--ui-primary)">
 					<div class="flex items-start justify-between gap-2">
-						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
+						<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted)">
 							Receivables outstanding
 						</div>
 						<UIcon name="i-lucide-arrow-down-left" class="size-4 text-(--ui-success)" />
 					</div>
-					<div class="mt-2 text-2xl font-semibold tabular-nums">
-						{{ formatLKR(invoicesStore.outstandingTotal) }}
+					<div
+						class="mt-2 text-2xl md:text-xl xl:text-2xl font-semibold tabular-nums"
+						:title="formatLKR(invoicesStore.outstandingTotal)"
+					>
+						{{ kpiMoney(invoicesStore.outstandingTotal) }}
 					</div>
 					<div class="mt-1 text-xs text-(--ui-text-muted) flex items-center gap-2">
 						<span>{{ openInvoiceCount }} open</span>
@@ -67,16 +79,19 @@
 				</UCard>
 			</NuxtLink>
 
-			<NuxtLink to="/bills" class="block group">
-				<UCard class="transition group-hover:border-(--ui-primary)">
+			<NuxtLink to="/bills" class="block group h-full" @click="prefilterPayables">
+				<UCard class="h-full transition group-hover:border-(--ui-primary)">
 					<div class="flex items-start justify-between gap-2">
-						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
+						<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted)">
 							Payables outstanding
 						</div>
 						<UIcon name="i-lucide-arrow-up-right" class="size-4 text-(--ui-error)" />
 					</div>
-					<div class="mt-2 text-2xl font-semibold tabular-nums">
-						{{ formatLKR(billsStore.outstandingTotal) }}
+					<div
+						class="mt-2 text-2xl md:text-xl xl:text-2xl font-semibold tabular-nums"
+						:title="formatLKR(billsStore.outstandingTotal)"
+					>
+						{{ kpiMoney(billsStore.outstandingTotal) }}
 					</div>
 					<div class="mt-1 text-xs text-(--ui-text-muted) flex items-center gap-2">
 						<span>{{ openBillCount }} open</span>
@@ -92,16 +107,19 @@
 				</UCard>
 			</NuxtLink>
 
-			<NuxtLink to="/quotes" class="block group">
-				<UCard class="transition group-hover:border-(--ui-primary)">
+			<NuxtLink to="/quotes" class="block group h-full" @click="prefilterOpenQuotes">
+				<UCard class="h-full transition group-hover:border-(--ui-primary)">
 					<div class="flex items-start justify-between gap-2">
-						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
+						<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted)">
 							Open quotes
 						</div>
 						<UIcon name="i-lucide-file-text" class="size-4 text-(--ui-primary)" />
 					</div>
-					<div class="mt-2 text-2xl font-semibold tabular-nums">
-						{{ formatLKR(openQuotesValue) }}
+					<div
+						class="mt-2 text-2xl md:text-xl xl:text-2xl font-semibold tabular-nums"
+						:title="formatLKR(openQuotesValue)"
+					>
+						{{ kpiMoney(openQuotesValue) }}
 					</div>
 					<div class="mt-1 text-xs text-(--ui-text-muted)">
 						{{ openQuotesCount }} active · {{ acceptedQuotesCount }} accepted
@@ -109,22 +127,23 @@
 				</UCard>
 			</NuxtLink>
 
-			<UCard>
+			<UCard class="h-full">
 				<div class="flex items-start justify-between gap-2">
-					<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
+					<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted)">
 						Net cash · {{ monthLabel }}
 					</div>
 					<UIcon name="i-lucide-trending-up" class="size-4" :class="netCashThisMonth >= 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'" />
 				</div>
 				<div
-					class="mt-2 text-2xl font-semibold tabular-nums"
+					class="mt-2 text-2xl md:text-xl xl:text-2xl font-semibold tabular-nums"
 					:class="netCashThisMonth >= 0 ? 'text-(--ui-text)' : 'text-(--ui-error)'"
+					:title="`${netCashThisMonth >= 0 ? '+' : '−'}${formatLKR(Math.abs(netCashThisMonth))}`"
 				>
-					{{ netCashThisMonth >= 0 ? '+' : '−' }}{{ formatLKR(Math.abs(netCashThisMonth)) }}
+					{{ netCashThisMonth >= 0 ? '+' : '−' }}{{ kpiMoney(Math.abs(netCashThisMonth)) }}
 				</div>
 				<div class="mt-1 text-xs text-(--ui-text-muted) flex items-center gap-3">
-					<span class="text-(--ui-success)">+{{ formatLKR(receiptsThisMonth) }}</span>
-					<span class="text-(--ui-error)">−{{ formatLKR(paymentsThisMonth) }}</span>
+					<span class="text-(--ui-success)" :title="formatLKR(receiptsThisMonth)">+{{ kpiMoney(receiptsThisMonth) }}</span>
+					<span class="text-(--ui-error)" :title="formatLKR(paymentsThisMonth)">−{{ kpiMoney(paymentsThisMonth) }}</span>
 				</div>
 			</UCard>
 		</div>
@@ -359,7 +378,7 @@
 
 	import type { ClientSnapshot } from "~/stores/quotes";
 	import { useMediaQuery } from "@vueuse/core";
-	import { formatLKR } from "~/lib/money";
+	import { formatLKR, formatMoneyCompact } from "~/lib/money";
 	import { useBillsStore } from "~/stores/bills";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { useQuotesStore } from "~/stores/quotes";
@@ -379,6 +398,17 @@
 	// and the donut-vs-legend visibility computed below.
 	const isLgRange = useMediaQuery("(min-width: 1024px) and (max-width: 1535.98px)");
 	const userExpanded = ref(false);
+
+	// KPI tiles compact their headline number through md and lg, where
+	// the strip is tightest — md packs 2-up into a half-width row and
+	// lg packs 4-up across a sidebar'd content area (~180-230px per
+	// tile). At xl the 4-up tiles open up to ~240-300px and full
+	// "Rs 3,553,600.00" strings fit again; sub-md stacks single-column
+	// with the most room of all. `title` carries the exact value on
+	// every compacted cell so hover always reveals the precise number.
+	const isKpiCompact = useMediaQuery("(min-width: 768px) and (max-width: 1279.98px)");
+	const kpiMoney = (cents: number) =>
+		(isKpiCompact.value ? formatMoneyCompact(cents) : formatLKR(cents));
 
 	// Monthly-cashflow horizon, decided per breakpoint × expand state.
 	// We drop to 6 months whenever the chart is in its narrow form,
@@ -469,6 +499,37 @@
 		{ label: "Bill", icon: "i-lucide-file-input", to: "/bills/new" },
 		{ label: "Voucher", icon: "i-lucide-ticket", to: "/vouchers/new" }
 	];
+
+	// --- KPI tile prefilters ---
+	// Each tile narrows the destination list to the slice the tile
+	// summarises, so the user lands on exactly the rows behind the
+	// headline number. Pinia state survives navigation, so we mutate
+	// the target store synchronously here and NuxtLink follows up
+	// with the route change. Other filters (search, client, dates)
+	// are cleared so the slice isn't unintentionally narrower than
+	// what the tile promises.
+
+	const prefilterReceivables = () => {
+		invoicesStore.search = "";
+		invoicesStore.clientFilter = "all";
+		invoicesStore.clearDateFilters();
+		invoicesStore.statusFilters = ["sent", "partial", "overdue"];
+	};
+
+	const prefilterPayables = () => {
+		billsStore.search = "";
+		billsStore.vendorFilter = "all";
+		billsStore.categoryFilter = "all";
+		billsStore.clearDateFilters();
+		billsStore.statusFilters = ["unpaid", "partial", "overdue"];
+	};
+
+	const prefilterOpenQuotes = () => {
+		quotesStore.search = "";
+		quotesStore.clientFilter = "all";
+		quotesStore.clearDateFilters();
+		quotesStore.statusFilters = ["draft", "sent"];
+	};
 
 	// --- Counts that don't already exist on the stores ---
 
