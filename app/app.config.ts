@@ -35,8 +35,15 @@ export default defineAppConfig({
 			// in the app — same treatment we use on chip labels and
 			// table headers. Reads as a clear "action" cue and matches
 			// the rest of the UI's typography rhythm.
+			//
+			// `!text-xs` drops the default text-sm (14px) one step to
+			// 12px. Uppercase glyphs hit cap-height on every letter so
+			// the buttons read visually bigger than mixed-case body
+			// text at the same nominal size — trimming a step brings
+			// them back into proportion. The `!` is needed because the
+			// per-size variant (md → text-sm) would otherwise win.
 			slots: {
-				base: "cursor-pointer uppercase tracking-wide"
+				base: "cursor-pointer uppercase tracking-wide !text-xs"
 			}
 		},
 		card: {
