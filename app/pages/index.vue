@@ -506,9 +506,14 @@
 	// mid-dashboard "Quick actions" card into a single always-in-reach
 	// menu next to the date.
 	const newItems = [
-		{ label: "Quote", icon: "i-lucide-file-text", to: "/quotes/new" },
-		{ label: "Invoice", icon: "i-lucide-receipt", to: "/invoices/new" },
-		{ label: "Bill", icon: "i-lucide-file-input", to: "/bills/new" },
+		// `?new=1` makes each list page auto-open its New … modal on
+		// mount. The standalone /<type>/new pages were removed for
+		// quotes / invoices / bills. Vouchers still has a full page
+		// because the form is too heavy for a modal (8+ fields,
+		// prefill from query, conditional fields, overpayment guard).
+		{ label: "Quote", icon: "i-lucide-file-text", to: "/quotes?new=1" },
+		{ label: "Invoice", icon: "i-lucide-receipt", to: "/invoices?new=1" },
+		{ label: "Bill", icon: "i-lucide-file-input", to: "/bills?new=1" },
 		{ label: "Voucher", icon: "i-lucide-ticket", to: "/vouchers/new" }
 	];
 

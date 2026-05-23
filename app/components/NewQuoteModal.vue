@@ -1,19 +1,9 @@
 <template>
-	<div class="max-w-2xl">
-		<header class="mb-6">
-			<NuxtLink to="/quotes" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) flex items-center gap-1">
-				<UIcon name="i-lucide-arrow-left" class="size-4" />
-				Back to quotes
-			</NuxtLink>
-			<h1 class="text-2xl font-semibold mt-1">
-				New quote
-			</h1>
-			<p class="text-sm text-(--ui-text-muted)">
-				A draft will be created with a number allocated. You can edit details, add line items, and send it from the next screen.
+	<UModal v-model:open="openModel" title="New quote">
+		<template #body>
+			<p class="text-sm text-(--ui-text-muted) mb-4">
+				A draft will be created with a number allocated. Edit details and add line items on the next screen.
 			</p>
-		</header>
-
-		<UCard>
 			<div class="space-y-4">
 				<UFormField label="Client" required>
 					<ClientPicker v-model="clientId" />
@@ -23,33 +13,32 @@
 					<UInput v-model="projectTitle" placeholder="e.g. Website redesign — Phase 1" />
 				</UFormField>
 			</div>
-
-			<template #footer>
-				<div class="flex justify-end gap-2">
-					<UButton type="button" color="neutral" variant="outline" @click="router.push('/quotes')">
-						Cancel
-					</UButton>
-					<UButton :loading="creating" :disabled="clientId === null" icon="i-lucide-plus" @click="create">
-						Create draft
-					</UButton>
-				</div>
-			</template>
-		</UCard>
-	</div>
+		</template>
+		<template #footer>
+			<div class="flex justify-end gap-2 w-full">
+				<UButton type="button" color="neutral" variant="outline" :disabled="creating" @click="cancel">
+					Cancel
+				</UButton>
+				<UButton :loading="creating" :disabled="clientId === null" icon="i-lucide-plus" @click="create">
+					Create draft
+				</UButton>
+			</div>
+		</template>
+	</UModal>
 </template>
 
 <script setup lang="ts">
-// "New quote" is a one-shot screen: pick a client, click create, get
-// redirected to the editor for the freshly minted draft. Allocating the
-// number eagerly matches the spec ("number NOT NULL"). Drafts can be
-// deleted from the editor if the user changes their mind.
+// Mirror of NewInvoiceModal but for quotes. Same shape: pick a client +
+// optional project title, get redirected to the freshly minted draft's
+// editor. See NewInvoiceModal for the v-model:open contract and form
+// reset behaviour — identical here.
 
 	import type { ClientRow } from "~/stores/clients";
 	import { useClientsStore } from "~/stores/clients";
 	import { useQuotesStore } from "~/stores/quotes";
 	import { useSettingsStore } from "~/stores/settings";
 
-	definePageMeta({ title: "New quote" });
+	const openModel = defineModel<boolean>("open", { default: false });
 
 	const router = useRouter();
 	const toast = useToast();
@@ -57,11 +46,23 @@
 	const clients = useClientsStore();
 	const quotes = useQuotesStore();
 
-	await Promise.all([settings.ensureLoaded(), clients.load()]);
-
 	const clientId = ref<number | null>(null);
 	const projectTitle = ref("");
 	const creating = ref(false);
+
+	watch(openModel, async (open) => {
+		if (open) {
+			await Promise.all([settings.ensureLoaded(), clients.load()]);
+		} else {
+			clientId.value = null;
+			projectTitle.value = "";
+			creating.value = false;
+		}
+	});
+
+	const cancel = () => {
+		openModel.value = false;
+	};
 
 	const create = async () => {
 		if (clientId.value === null) {
@@ -80,7 +81,8 @@
 				project_title: projectTitle.value.trim()
 			});
 			toast.add({ title: "Draft created", color: "success", icon: "i-lucide-check" });
-			await router.replace(`/quotes/${id}`);
+			openModel.value = false;
+			await router.push(`/quotes/${id}`);
 		} catch (err) {
 			toast.add({
 				title: "Could not create quote",

@@ -271,6 +271,12 @@
 			@save="pdf.onSave"
 			@cancel="pdf.onCancel"
 		/>
+
+		<!-- New-invoice creation lives as a modal (was a standalone page).
+			Two fields didn't justify a navigation; the modal keeps the
+			user on the list. After create the modal pushes the new
+			draft's detail route. -->
+		<NewInvoiceModal v-model:open="newInvoiceOpen" />
 	</div>
 </template>
 
@@ -344,7 +350,24 @@
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();
 
-	const newInvoice = () => router.push("/invoices/new");
+	// Drives <NewInvoiceModal>; the New button below opens it. Also
+	// flipped to true on mount when the page is hit with `?new=1` so
+	// shortcuts from the dashboard "New" dropdown still work.
+	const newInvoiceOpen = ref(false);
+	const newInvoice = () => {
+		newInvoiceOpen.value = true;
+	};
+
+	// Auto-open if the route asked for it (e.g. dashboard New > Invoice
+	// menu). Clear the query param once consumed so back/forward doesn't
+	// re-trigger.
+	const route = useRoute();
+	onMounted(() => {
+		if (route.query.new === "1") {
+			newInvoiceOpen.value = true;
+			void router.replace({ query: { ...route.query, new: undefined } });
+		}
+	});
 	const open = (i: InvoiceRow) => router.push(`/invoices/${i.id}`);
 
 	// "All clients" sentinel + every loaded client. Includes archived

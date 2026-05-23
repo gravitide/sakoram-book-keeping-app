@@ -191,7 +191,7 @@
 			payroll.unshift({
 				label: "Create payslip",
 				icon: "i-lucide-receipt",
-				onSelect: () => router.push(`/payslips/new?employee=${e.id}`)
+				onSelect: () => router.push(`/payslips?new=1&employee=${e.id}`)
 			});
 		}
 		return [lifecycle, payroll];

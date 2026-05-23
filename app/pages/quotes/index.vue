@@ -252,6 +252,9 @@
 			@save="pdf.onSave"
 			@cancel="pdf.onCancel"
 		/>
+
+		<!-- New-quote creation lives as a modal (was a standalone page). -->
+		<NewQuoteModal v-model:open="newQuoteOpen" />
 	</div>
 </template>
 
@@ -309,7 +312,20 @@
 		store.filtered.reduce((sum, q) => sum + q.total_cents, 0)
 	);
 
-	const newQuote = () => router.push("/quotes/new");
+	// Drives <NewQuoteModal>; the New button below opens it. Auto-opens
+	// on mount when the route carries ?new=1 (dashboard New > Quote
+	// shortcut).
+	const newQuoteOpen = ref(false);
+	const newQuote = () => {
+		newQuoteOpen.value = true;
+	};
+	const route = useRoute();
+	onMounted(() => {
+		if (route.query.new === "1") {
+			newQuoteOpen.value = true;
+			void router.replace({ query: { ...route.query, new: undefined } });
+		}
+	});
 	const open = (q: QuoteRow) => router.push(`/quotes/${q.id}`);
 
 	// Does any filter narrow the list right now? Drives the visibility
