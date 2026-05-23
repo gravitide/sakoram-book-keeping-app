@@ -166,13 +166,13 @@
 								Monthly cash flow
 							</div>
 							<div class="text-xs text-(--ui-text-muted) mt-0.5">
-								Receipts in, payments out — last 12 months from the voucher ledger.
+								Receipts in, payments out — last {{ cashflowMonths }} months from the voucher ledger.
 							</div>
 						</div>
 						<UIcon name="i-lucide-bar-chart-3" class="size-4 text-(--ui-text-muted)" />
 					</div>
 				</template>
-				<MonthlyCashFlowChart :vouchers="vouchersStore.vouchers" />
+				<MonthlyCashFlowChart :vouchers="vouchersStore.vouchers" :months-back="cashflowMonths" />
 			</UCard>
 
 			<!-- Receivables aging — full-width on its own row from lg
@@ -379,6 +379,17 @@
 	// and the donut-vs-legend visibility computed below.
 	const isLgRange = useMediaQuery("(min-width: 1024px) and (max-width: 1535.98px)");
 	const userExpanded = ref(false);
+
+	// Monthly-cashflow horizon by breakpoint. At the lg tier the
+	// cashflow card sits next to expenses (4/6 collapsed, 3/6 expanded)
+	// so a full 12-month series squeezes the bars uncomfortably. We
+	// drop to 6 months in that narrow band and keep 12 everywhere
+	// else — sm/md (full-width stack), xl (still col-span-4 but wider
+	// container), and 2xl (3/5 of a wider grid). Tied to a media query
+	// rather than container width so it stays in sync with the
+	// Tailwind tier the rest of the dashboard reasons about.
+	const isLgOnly = useMediaQuery("(min-width: 1024px) and (max-width: 1279.98px)");
+	const cashflowMonths = computed(() => (isLgOnly.value ? 6 : 12));
 
 	// What the dashboard binds to the chart's `:show-donut` prop:
 	// - At lg-xl: follows the user's toggle.

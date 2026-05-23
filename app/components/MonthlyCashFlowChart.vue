@@ -296,10 +296,13 @@
 		return out;
 	});
 
+	// Reactive column width: must track `props.monthsBack` so the
+	// hover hit-zone and label/tooltip positions match the bars when
+	// the parent swaps horizons (e.g. 12mo → 6mo at the lg tier).
 	const COL_WIDTH = computed(() => {
 		const totalMonths = props.monthsBack ?? 12;
 		return (SVG_WIDTH - PADDING_LEFT - PADDING_RIGHT) / totalMonths;
-	}).value;
+	});
 
 	// Y-axis tick values + their pixel positions. Three lines: 0, mid,
 	// max — minimal but enough to read the magnitudes.
@@ -356,6 +359,6 @@
 		if (hover.value === null) return 0;
 		const m = months.value[hover.value];
 		if (!m) return 0;
-		return ((m.colX + COL_WIDTH / 2) / SVG_WIDTH) * 100;
+		return ((m.colX + COL_WIDTH.value / 2) / SVG_WIDTH) * 100;
 	});
 </script>
