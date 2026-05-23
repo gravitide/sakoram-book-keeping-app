@@ -333,6 +333,7 @@
 
 	const nav: NavItem[] = [
 		{ to: "/", label: "Dashboard", icon: "i-lucide-layout-dashboard" },
+		{ to: "/calendar", label: "Calendar", icon: "i-lucide-calendar-days" },
 		{ to: "/quotes", label: "Quotes", icon: "i-lucide-file-text", divider: true },
 		{ to: "/invoices", label: "Invoices", icon: "i-lucide-receipt" },
 		{ to: "/bills", label: "Bills", icon: "i-lucide-file-input" },
