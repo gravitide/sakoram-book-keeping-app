@@ -47,8 +47,8 @@
 			get enough room (~240px+) to fit the full "Rs 3,553,600.00"
 			string again. -->
 		<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-			<NuxtLink to="/invoices" class="block group" @click="prefilterReceivables">
-				<UCard class="transition group-hover:border-(--ui-primary)">
+			<NuxtLink to="/invoices" class="block group h-full" @click="prefilterReceivables">
+				<UCard class="h-full transition group-hover:border-(--ui-primary)">
 					<div class="flex items-start justify-between gap-2">
 						<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted)">
 							Receivables outstanding
@@ -75,8 +75,8 @@
 				</UCard>
 			</NuxtLink>
 
-			<NuxtLink to="/bills" class="block group" @click="prefilterPayables">
-				<UCard class="transition group-hover:border-(--ui-primary)">
+			<NuxtLink to="/bills" class="block group h-full" @click="prefilterPayables">
+				<UCard class="h-full transition group-hover:border-(--ui-primary)">
 					<div class="flex items-start justify-between gap-2">
 						<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted)">
 							Payables outstanding
@@ -103,8 +103,8 @@
 				</UCard>
 			</NuxtLink>
 
-			<NuxtLink to="/quotes" class="block group" @click="prefilterOpenQuotes">
-				<UCard class="transition group-hover:border-(--ui-primary)">
+			<NuxtLink to="/quotes" class="block group h-full" @click="prefilterOpenQuotes">
+				<UCard class="h-full transition group-hover:border-(--ui-primary)">
 					<div class="flex items-start justify-between gap-2">
 						<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted)">
 							Open quotes
@@ -123,7 +123,7 @@
 				</UCard>
 			</NuxtLink>
 
-			<UCard>
+			<UCard class="h-full">
 				<div class="flex items-start justify-between gap-2">
 					<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted)">
 						Net cash · {{ monthLabel }}
