@@ -74,7 +74,11 @@
 					RESTRICT, so the DB blocks the hard-delete once any
 					payslip is issued; the error surfaces as a friendly
 					toast pointing the user at Archive instead. -->
-				<div v-if="!isNew" class="flex items-center gap-2 shrink-0 ml-auto">
+				<!-- xl+ shows the three actions inline; below xl they
+					collapse into a dropdown so the header name doesn't
+					clip on narrower windows. Both paths feed off the
+					same handlers. -->
+				<div v-if="!isNew" class="hidden xl:flex items-center gap-2 shrink-0 ml-auto">
 					<UButton
 						icon="i-lucide-file-spreadsheet"
 						size="sm"
@@ -102,6 +106,19 @@
 					>
 						Delete
 					</UButton>
+				</div>
+
+				<div v-if="!isNew" class="xl:hidden shrink-0 ml-auto">
+					<UDropdownMenu :items="actionMenuItems">
+						<UButton
+							size="sm"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-ellipsis-vertical"
+							title="Actions"
+							aria-label="Actions"
+						/>
+					</UDropdownMenu>
 				</div>
 			</div>
 		</section>
@@ -493,4 +510,30 @@
 			deleting.value = false;
 		}
 	};
+
+	// Items rendered into the responsive UDropdownMenu shown below xl
+	// (the inline button cluster is hidden at that width). Two groups
+	// so UDropdownMenu draws a separator between Archive and Delete.
+	// Declared at the end so the handlers it references are already
+	// in scope.
+	const actionMenuItems = computed(() => [[
+		{
+			label: "View payslips",
+			icon: "i-lucide-file-spreadsheet",
+			onSelect: viewPayslips
+		},
+		{
+			label: isArchived.value ? "Restore employee" : "Archive employee",
+			icon: isArchived.value ? "i-lucide-archive-restore" : "i-lucide-archive",
+			onSelect: toggleArchive
+		}
+	], [
+		{
+			label: "Delete",
+			icon: "i-lucide-trash-2",
+			onSelect: () => {
+				confirmDelete.value = true;
+			}
+		}
+	]]);
 </script>
