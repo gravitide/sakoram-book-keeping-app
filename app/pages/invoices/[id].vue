@@ -34,6 +34,7 @@
 			<div class="hidden xl:flex gap-2 items-center">
 				<UButton
 					v-if="canRecordPayments"
+					size="sm"
 					color="primary"
 					icon="i-lucide-circle-dollar-sign"
 					@click="goRecordPayment"
@@ -41,6 +42,7 @@
 					Record payment
 				</UButton>
 				<UButton
+					size="sm"
 					color="neutral"
 					variant="outline"
 					icon="i-lucide-file-down"
@@ -57,6 +59,7 @@
 				<UButton
 					v-for="a in transitionActions"
 					:key="a.label"
+					size="sm"
 					color="neutral"
 					variant="outline"
 					:icon="a.icon"
@@ -71,6 +74,7 @@
 				<div class="h-6 w-px bg-(--ui-border) mx-1" />
 
 				<UButton
+					size="sm"
 					color="error"
 					variant="soft"
 					icon="i-lucide-trash-2"
@@ -83,6 +87,7 @@
 			<div class="xl:hidden">
 				<UDropdownMenu :items="actionMenuItems">
 					<UButton
+						size="sm"
 						color="neutral"
 						variant="outline"
 						icon="i-lucide-ellipsis-vertical"

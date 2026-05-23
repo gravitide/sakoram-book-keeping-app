@@ -20,6 +20,7 @@
 				windows; both paths share the same handlers. -->
 			<div class="hidden xl:flex gap-2 items-center">
 				<UButton
+					size="sm"
 					color="neutral"
 					variant="outline"
 					icon="i-lucide-file-down"
@@ -32,6 +33,7 @@
 				</UButton>
 				<UButton
 					v-if="canConvert"
+					size="sm"
 					color="primary"
 					icon="i-lucide-receipt"
 					@click="askConvert"
@@ -53,6 +55,7 @@
 				<UButton
 					v-for="t in transitionActions"
 					:key="t.label"
+					size="sm"
 					color="neutral"
 					variant="outline"
 					:icon="t.icon"
@@ -67,6 +70,7 @@
 				<div class="h-6 w-px bg-(--ui-border) mx-1" />
 
 				<UButton
+					size="sm"
 					color="error"
 					variant="soft"
 					icon="i-lucide-trash-2"
@@ -79,6 +83,7 @@
 			<div class="xl:hidden">
 				<UDropdownMenu :items="actionMenuItems">
 					<UButton
+						size="sm"
 						color="neutral"
 						variant="outline"
 						icon="i-lucide-ellipsis-vertical"
