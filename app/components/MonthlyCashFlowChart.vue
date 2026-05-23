@@ -196,8 +196,18 @@
 	const PADDING_RIGHT = 12;
 	const PADDING_TOP = 12;
 	const PADDING_BOTTOM = 32;
-	const BAR_WIDTH = 14;
-	const BAR_GAP = 3;
+	// Bar geometry scales with the horizon so a shorter series doesn't
+	// look anaemic (e.g. at 6 months each column is ~2x wider, so we
+	// double the bar width to keep the column ~55%-filled). Baseline:
+	// 14px bars + 3px gap tuned for 12 months.
+	const BAR_WIDTH = computed(() => {
+		const totalMonths = props.monthsBack ?? 12;
+		return Math.round(14 * (12 / totalMonths));
+	});
+	const BAR_GAP = computed(() => {
+		const totalMonths = props.monthsBack ?? 12;
+		return Math.round(3 * (12 / totalMonths));
+	});
 
 	// ISO `YYYY-MM` key for a given Date.
 	const monthKey = (d: Date) =>
@@ -233,6 +243,8 @@
 		const usableWidth = SVG_WIDTH - PADDING_LEFT - PADDING_RIGHT;
 		const colWidth = usableWidth / colCount;
 		const usableHeight = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
+		const barW = BAR_WIDTH.value;
+		const barGap = BAR_GAP.value;
 
 		// Find the max single-bar value so heights are scaled consistently
 		// across the series. 0 is replaced with 1 to avoid divide-by-zero.
@@ -269,7 +281,7 @@
 			const key = monthKey(d);
 			const slot = buckets.get(key) ?? { income: 0, expense: 0 };
 			const colX = PADDING_LEFT + i * colWidth;
-			const innerStart = colX + (colWidth - BAR_WIDTH * 2 - BAR_GAP) / 2;
+			const innerStart = colX + (colWidth - barW * 2 - barGap) / 2;
 			const incomeH = (slot.income / scaleMax) * usableHeight;
 			const expenseH = (slot.expense / scaleMax) * usableHeight;
 			out.push({
@@ -283,7 +295,7 @@
 				showYear: i === 0 || d.getFullYear() !== prevYear,
 				colX,
 				incomeX: innerStart,
-				expenseX: innerStart + BAR_WIDTH + BAR_GAP,
+				expenseX: innerStart + barW + barGap,
 				incomeY: baseline - incomeH,
 				expenseY: baseline - expenseH,
 				incomeH,
@@ -296,10 +308,13 @@
 		return out;
 	});
 
+	// Reactive column width: must track `props.monthsBack` so the
+	// hover hit-zone and label/tooltip positions match the bars when
+	// the parent swaps horizons (e.g. 12mo → 6mo at the lg tier).
 	const COL_WIDTH = computed(() => {
 		const totalMonths = props.monthsBack ?? 12;
 		return (SVG_WIDTH - PADDING_LEFT - PADDING_RIGHT) / totalMonths;
-	}).value;
+	});
 
 	// Y-axis tick values + their pixel positions. Three lines: 0, mid,
 	// max — minimal but enough to read the magnitudes.
@@ -356,6 +371,6 @@
 		if (hover.value === null) return 0;
 		const m = months.value[hover.value];
 		if (!m) return 0;
-		return ((m.colX + COL_WIDTH / 2) / SVG_WIDTH) * 100;
+		return ((m.colX + COL_WIDTH.value / 2) / SVG_WIDTH) * 100;
 	});
 </script>
