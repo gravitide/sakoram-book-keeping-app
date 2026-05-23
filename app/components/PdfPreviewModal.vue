@@ -4,7 +4,8 @@
 		:title="title"
 		:ui="{
 			content: 'w-[min(96vw,1200px)] h-[96vh] max-w-none',
-			body: 'flex-1 min-h-0 overflow-hidden p-3 sm:p-3'
+			body: 'flex-1 min-h-0 overflow-hidden p-3 sm:p-3',
+			header: 'sr-only'
 		}"
 		:close="false"
 		@update:open="onOpenChange"
@@ -16,8 +17,8 @@
 			scrollbars stacked on top of each other. -->
 			<div class="h-full w-full bg-(--ui-bg-muted) rounded overflow-hidden">
 				<iframe
-					v-if="assetUrl"
-					:src="assetUrl"
+					v-if="iframeSrc"
+					:src="iframeSrc"
 					class="w-full h-full block border-0 rounded"
 					title="PDF preview"
 				/>
@@ -52,6 +53,14 @@
 // emit `save` (with the temp path) when the user clicks "Save as…", and
 // the parent calls commitPdfPreview() to copy the temp to the chosen
 // destination.
+//
+// Chrome dialled down to maximise the PDF preview surface:
+//   - The modal title is `sr-only` — kept for screen-reader a11y, hidden
+//     visually. Users close via Escape or the Cancel button.
+//   - The PDF viewer's own toolbar is suppressed by appending
+//     #toolbar=0&navpanes=0 to the asset URL. PDFium (Webview2 / WKWebView)
+//     honours these PDF Open Parameters, so the inner zoom / page / save
+//     strip disappears and the page sits flush against the modal body.
 
 	interface Props {
 		open: boolean
@@ -87,8 +96,16 @@
 		emit("update:open", next);
 	};
 
-	// Re-trigger iframe load when the URL changes (e.g. preview re-rendered
-	// for the same doc) by binding `assetUrl` directly — the cache-bust
-	// query string in renderPdfPreview ensures the browser re-fetches.
-	const _ = props; // silence unused-prop lint; iframe key not needed.
+	// Append PDF Open Parameters to suppress the built-in viewer's
+	// toolbar / nav panes. Preserves any existing hash (the
+	// cache-busting query lives in the search string, not the hash, so
+	// this stays clean) and merges if one's already present.
+	const iframeSrc = computed<string | null>(() => {
+		if (!props.assetUrl) return null;
+		const hashIndex = props.assetUrl.indexOf("#");
+		const base = hashIndex >= 0 ? props.assetUrl.slice(0, hashIndex) : props.assetUrl;
+		const existing = hashIndex >= 0 ? props.assetUrl.slice(hashIndex + 1) : "";
+		const ours = "toolbar=0&navpanes=0";
+		return `${base}#${existing ? `${ours}&${existing}` : ours}`;
+	});
 </script>
