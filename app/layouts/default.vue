@@ -170,7 +170,7 @@
 				breakpoint. Wider than the default `max-w-7xl` (1280px) so
 				multi-column list pages have more room on a wide desktop
 				monitor without stretching edge-to-edge on ultrawide. -->
-				<div class="pl-4 pr-8 py-6 max-w-[96rem] mx-auto">
+				<div class="p-4 max-w-[96rem] mx-auto">
 					<slot />
 				</div>
 			</main>
