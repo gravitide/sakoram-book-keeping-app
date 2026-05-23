@@ -41,7 +41,13 @@
 		</div>
 
 		<!-- KPI tiles -->
-		<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+		<!-- Layout: 1 col (mobile) → 2 col (md) → 4 col (lg+).
+			From lg upward the tiles get cramped (≈180px each at lg, growing
+			to ≈300px at 2xl). Full money strings like "Rs 3,553,600.00"
+			don't fit at lg/xl, so the headline number switches to compact
+			form (K/M/B) via `kpiMoney()` while the `title` attribute
+			carries the exact value for hover. -->
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
 			<NuxtLink to="/invoices" class="block group" @click="prefilterReceivables">
 				<UCard class="transition group-hover:border-(--ui-primary)">
 					<div class="flex items-start justify-between gap-2">
@@ -50,8 +56,11 @@
 						</div>
 						<UIcon name="i-lucide-arrow-down-left" class="size-4 text-(--ui-success)" />
 					</div>
-					<div class="mt-2 text-2xl font-semibold tabular-nums">
-						{{ formatLKR(invoicesStore.outstandingTotal) }}
+					<div
+						class="mt-2 text-2xl font-semibold tabular-nums"
+						:title="formatLKR(invoicesStore.outstandingTotal)"
+					>
+						{{ kpiMoney(invoicesStore.outstandingTotal) }}
 					</div>
 					<div class="mt-1 text-xs text-(--ui-text-muted) flex items-center gap-2">
 						<span>{{ openInvoiceCount }} open</span>
@@ -75,8 +84,11 @@
 						</div>
 						<UIcon name="i-lucide-arrow-up-right" class="size-4 text-(--ui-error)" />
 					</div>
-					<div class="mt-2 text-2xl font-semibold tabular-nums">
-						{{ formatLKR(billsStore.outstandingTotal) }}
+					<div
+						class="mt-2 text-2xl font-semibold tabular-nums"
+						:title="formatLKR(billsStore.outstandingTotal)"
+					>
+						{{ kpiMoney(billsStore.outstandingTotal) }}
 					</div>
 					<div class="mt-1 text-xs text-(--ui-text-muted) flex items-center gap-2">
 						<span>{{ openBillCount }} open</span>
@@ -100,8 +112,11 @@
 						</div>
 						<UIcon name="i-lucide-file-text" class="size-4 text-(--ui-primary)" />
 					</div>
-					<div class="mt-2 text-2xl font-semibold tabular-nums">
-						{{ formatLKR(openQuotesValue) }}
+					<div
+						class="mt-2 text-2xl font-semibold tabular-nums"
+						:title="formatLKR(openQuotesValue)"
+					>
+						{{ kpiMoney(openQuotesValue) }}
 					</div>
 					<div class="mt-1 text-xs text-(--ui-text-muted)">
 						{{ openQuotesCount }} active · {{ acceptedQuotesCount }} accepted
@@ -119,12 +134,13 @@
 				<div
 					class="mt-2 text-2xl font-semibold tabular-nums"
 					:class="netCashThisMonth >= 0 ? 'text-(--ui-text)' : 'text-(--ui-error)'"
+					:title="`${netCashThisMonth >= 0 ? '+' : '−'}${formatLKR(Math.abs(netCashThisMonth))}`"
 				>
-					{{ netCashThisMonth >= 0 ? '+' : '−' }}{{ formatLKR(Math.abs(netCashThisMonth)) }}
+					{{ netCashThisMonth >= 0 ? '+' : '−' }}{{ kpiMoney(Math.abs(netCashThisMonth)) }}
 				</div>
 				<div class="mt-1 text-xs text-(--ui-text-muted) flex items-center gap-3">
-					<span class="text-(--ui-success)">+{{ formatLKR(receiptsThisMonth) }}</span>
-					<span class="text-(--ui-error)">−{{ formatLKR(paymentsThisMonth) }}</span>
+					<span class="text-(--ui-success)" :title="formatLKR(receiptsThisMonth)">+{{ kpiMoney(receiptsThisMonth) }}</span>
+					<span class="text-(--ui-error)" :title="formatLKR(paymentsThisMonth)">−{{ kpiMoney(paymentsThisMonth) }}</span>
 				</div>
 			</UCard>
 		</div>
@@ -359,7 +375,7 @@
 
 	import type { ClientSnapshot } from "~/stores/quotes";
 	import { useMediaQuery } from "@vueuse/core";
-	import { formatLKR } from "~/lib/money";
+	import { formatLKR, formatMoneyCompact } from "~/lib/money";
 	import { useBillsStore } from "~/stores/bills";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { useQuotesStore } from "~/stores/quotes";
@@ -379,6 +395,14 @@
 	// and the donut-vs-legend visibility computed below.
 	const isLgRange = useMediaQuery("(min-width: 1024px) and (max-width: 1535.98px)");
 	const userExpanded = ref(false);
+
+	// KPI tiles compact their headline number from lg upward, where
+	// 4 tiles share a row. At md (2-up) and below there's room for the
+	// full "Rs 3,553,600.00" form. `title` attributes on every compacted
+	// cell carry the exact value so a hover still reveals it.
+	const isLgUp = useMediaQuery("(min-width: 1024px)");
+	const kpiMoney = (cents: number) =>
+		(isLgUp.value ? formatMoneyCompact(cents) : formatLKR(cents));
 
 	// Monthly-cashflow horizon, decided per breakpoint × expand state.
 	// We drop to 6 months whenever the chart is in its narrow form,
