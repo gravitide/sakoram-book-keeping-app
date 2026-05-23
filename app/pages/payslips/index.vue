@@ -21,7 +21,7 @@
 				>
 					Bulk for all
 				</UButton>
-				<UButton icon="i-lucide-plus" @click="router.push('/payslips/new')">
+				<UButton icon="i-lucide-plus" @click="openNewPayslip()">
 					New payslip
 				</UButton>
 			</div>
@@ -308,6 +308,14 @@
 				</div>
 			</template>
 		</UModal>
+
+		<!-- New-payslip creation lives as a modal (was a standalone page).
+			preselectEmployeeId honours the ?employee=ID shortcut from the
+			employees list row action. -->
+		<NewPayslipModal
+			v-model:open="newPayslipOpen"
+			:preselect-employee-id="newPayslipPreselectId"
+		/>
 	</div>
 </template>
 
@@ -346,12 +354,33 @@
 
 	// Optional ?employee=ID query — used by the "View payslips" action on
 	// the employees list to land here pre-filtered to that employee.
-	{
+	const queryEmployeeId = (() => {
 		const raw = route.query.employee;
 		const v = Array.isArray(raw) ? raw[0] : raw;
 		const n = v ? Number(v) : Number.NaN;
-		if (Number.isFinite(n)) store.employeeFilter = n;
+		return Number.isFinite(n) ? n : null;
+	})();
+	if (queryEmployeeId !== null) {
+		store.employeeFilter = queryEmployeeId;
 	}
+
+	// New-payslip modal state. Opened by the New button or the
+	// dashboard / employees-list shortcut routes (`?new=1`, optionally
+	// `?new=1&employee=ID` to preselect). preselectEmployeeId is sticky
+	// on the modal between opens — the modal itself resets its picker
+	// when the user closes and re-opens it.
+	const newPayslipOpen = ref(false);
+	const newPayslipPreselectId = ref<number | null>(null);
+	const openNewPayslip = (preselect: number | null = null) => {
+		newPayslipPreselectId.value = preselect;
+		newPayslipOpen.value = true;
+	};
+	onMounted(() => {
+		if (route.query.new === "1") {
+			openNewPayslip(queryEmployeeId);
+			void router.replace({ query: { ...route.query, new: undefined } });
+		}
+	});
 
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();

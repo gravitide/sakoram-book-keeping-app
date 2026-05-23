@@ -1,27 +1,19 @@
 <template>
-	<div class="max-w-2xl mx-auto">
-		<header class="mb-6">
-			<NuxtLink to="/payslips" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) flex items-center gap-1">
-				<UIcon name="i-lucide-arrow-left" class="size-4" />
-				Back to payslips
-			</NuxtLink>
-			<h1 class="text-2xl font-semibold mt-1">
-				New payslip
-			</h1>
-			<p class="text-sm text-(--ui-text-muted)">
-				Pick an employee and the pay period — we'll snapshot their details
-				onto the payslip and seed a Basic earning equal to their saved
-				salary. You can edit lines and finalise on the next screen.
+	<UModal v-model:open="openModel" title="New payslip">
+		<template #body>
+			<p class="text-sm text-(--ui-text-muted) mb-4">
+				Pick an employee and the pay period — we'll snapshot their details onto the payslip and seed a Basic earning equal to their saved salary. Lines and finalisation come on the next screen.
 			</p>
-		</header>
-
-		<UCard>
 			<div class="space-y-4">
 				<UFormField label="Employee" required>
 					<EmployeePicker v-model="employeeId" required @select="onPick" />
 				</UFormField>
 				<p class="text-xs text-(--ui-text-muted)">
-					Don't see them? <NuxtLink to="/employees/new" class="text-(--ui-primary) hover:underline">
+					Don't see them? <NuxtLink
+						to="/employees/new"
+						class="text-(--ui-primary) hover:underline"
+						@click="openModel = false"
+					>
 						Add a new employee
 					</NuxtLink> and they'll appear in the picker.
 				</p>
@@ -31,19 +23,12 @@
 						<DateField v-model="periodStart" />
 					</UFormField>
 					<UFormField label="Period end" required>
-						<DateField
-							v-model="periodEnd"
-							:min-value="periodStart"
-						/>
+						<DateField v-model="periodEnd" :min-value="periodStart" />
 					</UFormField>
 				</div>
 
 				<UFormField label="Pay date" required hint="Must fall within the pay period.">
-					<DateField
-						v-model="payDate"
-						:min-value="periodStart"
-						:max-value="periodEnd"
-					/>
+					<DateField v-model="payDate" :min-value="periodStart" :max-value="periodEnd" />
 				</UFormField>
 
 				<div v-if="duplicateExists" class="rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/10 px-3 py-2 text-xs flex items-start gap-2">
@@ -58,6 +43,7 @@
 							v-if="duplicateId"
 							:to="`/payslips/${duplicateId}`"
 							class="inline-flex items-center gap-1 mt-1 text-(--ui-primary) hover:underline"
+							@click="openModel = false"
 						>
 							Open existing payslip
 							<UIcon name="i-lucide-arrow-right" class="size-3" />
@@ -65,86 +51,109 @@
 					</div>
 				</div>
 			</div>
-
-			<template #footer>
-				<div class="flex justify-end gap-2">
-					<UButton type="button" color="neutral" variant="outline" @click="router.push('/payslips')">
-						Cancel
-					</UButton>
-					<UButton
-						:loading="creating"
-						:disabled="!canCreate"
-						icon="i-lucide-plus"
-						@click="create"
-					>
-						Create payslip
-					</UButton>
-				</div>
-			</template>
-		</UCard>
-	</div>
+		</template>
+		<template #footer>
+			<div class="flex justify-end gap-2 w-full">
+				<UButton type="button" color="neutral" variant="outline" :disabled="creating" @click="cancel">
+					Cancel
+				</UButton>
+				<UButton
+					:loading="creating"
+					:disabled="!canCreate"
+					icon="i-lucide-plus"
+					@click="create"
+				>
+					Create payslip
+				</UButton>
+			</div>
+		</template>
+	</UModal>
 </template>
 
 <script setup lang="ts">
+// Modal version of /payslips/new. Same form (employee + 3 dates +
+// duplicate-period guard) compressed into the standard new-document
+// modal shape. Period-start / period-end / pay-date all watch each
+// other to stay self-consistent — moving period_start snaps period_end
+// to the last day of the new month and drags pay_date back into range
+// if it fell out.
+//
+// The ?employee=ID query param from the employees list ("Create
+// payslip" row action) still preselects; the invoking page passes it
+// in via the `preselectEmployeeId` prop.
+
 	import type { EmployeeRow } from "~/stores/employees";
 	import { nextPayrollCycle } from "~/lib/payroll-cycle";
 	import { useEmployeesStore } from "~/stores/employees";
 	import { monthBounds, usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
 
-	definePageMeta({ title: "New payslip" });
+	const props = defineProps<{
+		preselectEmployeeId?: number | null
+	}>();
+
+	const openModel = defineModel<boolean>("open", { default: false });
 
 	const router = useRouter();
-	const route = useRoute();
 	const toast = useToast();
 	const store = usePayslipsStore();
 	const employeesStore = useEmployeesStore();
 	const settingsStore = useSettingsStore();
 
-	await Promise.all([
-		store.load(),
-		employeesStore.employees.length === 0 ? employeesStore.load() : Promise.resolve(),
-		settingsStore.ensureLoaded()
-	]);
-
-	// Optional ?employee=ID query — used by the "Create payslip" action on
-	// the employees list to preselect.
-	const preselectedId = (() => {
-		const raw = route.query.employee;
-		const v = Array.isArray(raw) ? raw[0] : raw;
-		const n = v ? Number(v) : Number.NaN;
-		return Number.isFinite(n) ? n : null;
-	})();
-	const preselected = preselectedId !== null
-		? employeesStore.employees.find((e) => e.id === preselectedId) ?? null
-		: null;
-
-	const employeeId = ref<number | null>(preselected?.id ?? null);
-	const picked = ref<EmployeeRow | null>(preselected);
+	const employeeId = ref<number | null>(null);
+	const picked = ref<EmployeeRow | null>(null);
+	const periodStart = ref<string | null>(null);
+	const periodEnd = ref<string | null>(null);
+	const payDate = ref<string | null>(null);
 	const creating = ref(false);
 
-	// Seed the three date fields from the tenant's payroll cycle for
-	// "the next pay cycle relative to today". The user can hand-edit
-	// any of them — the watchers below still snap things together for
-	// off-template inputs, just like before.
-	const todayISO = (() => {
+	const todayISO = (): string => {
 		const d = new Date();
 		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-	})();
-	const cycleConfig = {
-		payroll_period_start_day: settingsStore.settings?.payroll_period_start_day ?? 1,
-		payroll_period_end_day: settingsStore.settings?.payroll_period_end_day ?? 31,
-		payroll_pay_day: settingsStore.settings?.payroll_pay_day ?? 31
 	};
-	const initialCycle = nextPayrollCycle(todayISO, cycleConfig).cycle;
-	const periodStart = ref<string | null>(initialCycle.periodStart);
-	const periodEnd = ref<string | null>(initialCycle.periodEnd);
-	const payDate = ref<string | null>(initialCycle.payDate);
 
-	// When the user changes period_start, snap period_end to the last
-	// day of *that* month and pull pay_date in if it has fallen out of
-	// the new range. Saves the user from manually fixing two fields
-	// every time they shift the period.
+	// Initialise dates from the active tenant's payroll cycle so the
+	// common case (next cycle, default settings) needs zero clicks.
+	const seedDates = () => {
+		const cycleConfig = {
+			payroll_period_start_day: settingsStore.settings?.payroll_period_start_day ?? 1,
+			payroll_period_end_day: settingsStore.settings?.payroll_period_end_day ?? 31,
+			payroll_pay_day: settingsStore.settings?.payroll_pay_day ?? 31
+		};
+		const initialCycle = nextPayrollCycle(todayISO(), cycleConfig).cycle;
+		periodStart.value = initialCycle.periodStart;
+		periodEnd.value = initialCycle.periodEnd;
+		payDate.value = initialCycle.payDate;
+	};
+
+	// On open: lazy-load the data, then seed fields. If the caller passed
+	// a preselected employee, honour it. On close: reset everything so the
+	// next open is clean.
+	watch(openModel, async (open) => {
+		if (open) {
+			await Promise.all([
+				store.load(),
+				employeesStore.employees.length === 0 ? employeesStore.load() : Promise.resolve(),
+				settingsStore.ensureLoaded()
+			]);
+			const pre = props.preselectEmployeeId;
+			if (pre !== null && pre !== undefined) {
+				employeeId.value = pre;
+				picked.value = employeesStore.employees.find((e) => e.id === pre) ?? null;
+			}
+			seedDates();
+		} else {
+			employeeId.value = null;
+			picked.value = null;
+			periodStart.value = null;
+			periodEnd.value = null;
+			payDate.value = null;
+			creating.value = false;
+		}
+	});
+
+	// Snap period_end to the last day of the new month when period_start
+	// moves; pull pay_date back into range when either bound shifts.
 	watch(periodStart, (next, prev) => {
 		if (!next || next === prev) return;
 		const bounds = monthBounds(next);
@@ -152,8 +161,6 @@
 		if (!payDate.value || payDate.value < bounds.start) payDate.value = bounds.end;
 		else if (payDate.value > bounds.end) payDate.value = bounds.end;
 	});
-
-	// If the user shrinks period_end, drag pay_date back into range.
 	watch(periodEnd, (next) => {
 		if (!next) return;
 		if (payDate.value && payDate.value > next) payDate.value = next;
@@ -163,8 +170,8 @@
 		picked.value = e;
 	};
 
-	// Soft pre-flight check against the UNIQUE (employee_id, period_start)
-	// constraint. Pure UI hint — the DB still owns the truth.
+	// Soft pre-flight check against UNIQUE (employee_id, period_start).
+	// Pure UI hint — the DB still owns the truth.
 	const duplicate = computed(() => {
 		if (employeeId.value === null || !periodStart.value) return null;
 		return store.payslips.find((p) =>
@@ -182,6 +189,10 @@
 		&& payDate.value !== null
 		&& !duplicateExists.value
 	);
+
+	const cancel = () => {
+		openModel.value = false;
+	};
 
 	const create = async () => {
 		if (!canCreate.value || employeeId.value === null) return;
@@ -220,7 +231,8 @@
 				payDate: payDate.value!
 			});
 			toast.add({ title: "Payslip created", color: "success", icon: "i-lucide-check" });
-			await router.replace(`/payslips/${id}`);
+			openModel.value = false;
+			await router.push(`/payslips/${id}`);
 		} catch (err) {
 			toast.add({
 				title: "Could not create payslip",

@@ -274,6 +274,9 @@
 				</Column>
 			</ResizableDataTable>
 		</UCard>
+
+		<!-- New-bill creation lives as a modal (was a standalone page). -->
+		<NewBillModal v-model:open="newBillOpen" />
 	</div>
 </template>
 
@@ -355,7 +358,19 @@
 		store.filtered.reduce((sum, b) => sum + b.total_cents, 0)
 	);
 
-	const newBill = () => router.push("/bills/new");
+	// Drives <NewBillModal>; the New button opens it. Auto-opens when
+	// the route carries ?new=1 (dashboard New > Bill shortcut).
+	const newBillOpen = ref(false);
+	const newBill = () => {
+		newBillOpen.value = true;
+	};
+	const route = useRoute();
+	onMounted(() => {
+		if (route.query.new === "1") {
+			newBillOpen.value = true;
+			void router.replace({ query: { ...route.query, new: undefined } });
+		}
+	});
 
 	const vendorOptions = computed<{ label: string, value: number | "all" }[]>(() => [
 		{ label: "All vendors", value: "all" },
