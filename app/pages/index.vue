@@ -54,7 +54,7 @@
 			<NuxtLink to="/invoices" class="block group h-full" @click="prefilterReceivables">
 				<UCard class="h-full transition group-hover:border-(--ui-primary)">
 					<div class="flex items-start justify-between gap-2">
-						<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted)">
+						<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight min-h-[2lh]">
 							Receivables outstanding
 						</div>
 						<UIcon name="i-lucide-arrow-down-left" class="size-4 text-(--ui-success)" />
@@ -82,7 +82,7 @@
 			<NuxtLink to="/bills" class="block group h-full" @click="prefilterPayables">
 				<UCard class="h-full transition group-hover:border-(--ui-primary)">
 					<div class="flex items-start justify-between gap-2">
-						<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted)">
+						<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight min-h-[2lh]">
 							Payables outstanding
 						</div>
 						<UIcon name="i-lucide-arrow-up-right" class="size-4 text-(--ui-error)" />
@@ -110,7 +110,7 @@
 			<NuxtLink to="/quotes" class="block group h-full" @click="prefilterOpenQuotes">
 				<UCard class="h-full transition group-hover:border-(--ui-primary)">
 					<div class="flex items-start justify-between gap-2">
-						<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted)">
+						<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight min-h-[2lh]">
 							Open quotes
 						</div>
 						<UIcon name="i-lucide-file-text" class="size-4 text-(--ui-primary)" />
@@ -129,7 +129,7 @@
 
 			<UCard class="h-full">
 				<div class="flex items-start justify-between gap-2">
-					<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted)">
+					<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight min-h-[2lh]">
 						Net cash · {{ monthLabel }}
 					</div>
 					<UIcon name="i-lucide-trending-up" class="size-4" :class="netCashThisMonth >= 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'" />
