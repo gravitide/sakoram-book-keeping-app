@@ -50,10 +50,17 @@ export const buildBillPdfPayload = ({ row: b, lines, settings, currency, paidCen
 	const balanceCents = Math.max(0, b.total_cents - paidCents);
 	const categoryName = categoryNameFromSnapshot(b.category_snapshot);
 
+	// Allow per-document override of the big PDF header. Empty / null
+	// falls back to the hardcoded type label; otherwise we upper-case
+	// the user string. See migration 0027 + `title_override` column.
+	const title = b.title_override?.trim()
+		? b.title_override.trim().toUpperCase()
+		: "BILL";
+
 	return {
 		kind: "bill",
 		number: b.number,
-		title: "BILL",
+		title,
 		theme_color: themeHex(settings?.theme_color),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,

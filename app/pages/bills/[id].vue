@@ -132,6 +132,13 @@
 						</div>
 					</div>
 					<div class="space-y-3">
+						<UFormField label="PDF header" hint="Big header at the top of the PDF. Leave blank for the default (BILL).">
+							<UInput
+								v-model="formTitleOverride"
+								:disabled="!editable"
+								placeholder="BILL"
+							/>
+						</UFormField>
 						<UFormField label="Vendor invoice #" hint="The number on THEIR invoice (e.g. INV-2024-9821).">
 							<UInput v-model="formVendorInvoiceNumber" :disabled="!editable" />
 						</UFormField>
@@ -490,6 +497,10 @@
 	const formDueDate = ref("");
 	const formCategoryId = ref<number | null>(null);
 	const formNotes = ref("");
+	// PDF big-header override. Empty = "BILL" default in the PDF
+	// builder (see app/lib/bill-pdf.ts). Stored as-is; the builder
+	// upper-cases at render time.
+	const formTitleOverride = ref("");
 
 	// The frozen-at-creation snapshot. Edited indirectly: picking a different
 	// vendor swaps in a fresh copy, the "Refresh vendor snapshot" button
@@ -553,6 +564,7 @@
 		formDueDate.value = row.due_date;
 		formCategoryId.value = row.category_id;
 		formNotes.value = row.notes ?? "";
+		formTitleOverride.value = row.title_override ?? "";
 		vatRatePct.value = row.vat_rate_basis_points / 100;
 		bundleSubtotalCents.value = row.subtotal_cents;
 
@@ -575,7 +587,7 @@
 	// Mark dirty when any directly v-model'd form field changes. Registered
 	// after the initial hydrate; hydrating-flag guards re-hydrate paths.
 	watch(
-		[formVendorInvoiceNumber, formIssueDate, formDueDate, formCategoryId, formNotes, vatRatePct, bundleSubtotalCents],
+		[formVendorInvoiceNumber, formIssueDate, formDueDate, formCategoryId, formNotes, formTitleOverride, vatRatePct, bundleSubtotalCents],
 		() => {
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
@@ -689,7 +701,8 @@
 				total_cents: total,
 				category_id: formCategoryId.value,
 				category_snapshot: snapshotForSelectedCategory(),
-				notes: formNotes.value || null
+				notes: formNotes.value || null,
+				title_override: formTitleOverride.value.trim() || null
 			});
 			await store.load();
 			await hydrate();

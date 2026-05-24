@@ -54,6 +54,12 @@ export interface BillRow {
 	category_id: number | null
 	category_snapshot: string | null
 	notes: string | null
+	/**
+	 * Per-document override of the PDF's big header. Null/empty = the
+	 * hardcoded default ("BILL"); when set, the PDF builder
+	 * upper-cases this verbatim for the header.
+	 */
+	title_override: string | null
 	created_at: string
 	updated_at: string
 }
@@ -312,7 +318,8 @@ export const useBillsStore = defineStore("bills", () => {
 		| "pricing_mode"
 		| "vat_rate_basis_points"
 		| "subtotal_cents" | "tax_cents" | "total_cents"
-		| "category_id" | "category_snapshot" | "notes">>;
+		| "category_id" | "category_snapshot" | "notes"
+		| "title_override">>;
 
 	const UPDATABLE: ReadonlyArray<keyof BillUpdate> = [
 		"vendor_id",
@@ -327,7 +334,8 @@ export const useBillsStore = defineStore("bills", () => {
 		"total_cents",
 		"category_id",
 		"category_snapshot",
-		"notes"
+		"notes",
+		"title_override"
 	];
 
 	const update = async (id: number, patch: BillUpdate): Promise<void> => {

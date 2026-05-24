@@ -144,6 +144,13 @@
 						</div>
 					</div>
 					<div class="space-y-3">
+						<UFormField label="PDF header" hint="Big header at the top of the PDF. Leave blank for the default (INVOICE).">
+							<UInput
+								v-model="formTitleOverride"
+								:disabled="!editable"
+								placeholder="INVOICE"
+							/>
+						</UFormField>
 						<UFormField label="Project title" hint="Centered subtitle on the PDF">
 							<UInput v-model="formProjectTitle" :disabled="!editable" />
 						</UFormField>
@@ -514,6 +521,10 @@
 	const formTerms = ref("");
 	const formPreparedBy = ref("");
 	const formBankId = ref<number | null>(null);
+	// PDF big-header override. Empty = "INVOICE" default in the PDF
+	// builder (see app/lib/invoice-pdf.ts). Stored as-is; the builder
+	// upper-cases at render time.
+	const formTitleOverride = ref("");
 
 	// Bank picker options: every active bank plus a "no bank" entry so the
 	// user can deliberately render an invoice without a bank block on the
@@ -610,6 +621,7 @@
 		formTerms.value = row.terms ?? "";
 		formPreparedBy.value = row.prepared_by ?? "";
 		formBankId.value = row.business_bank_id;
+		formTitleOverride.value = row.title_override ?? "";
 		vatRatePct.value = row.vat_rate_basis_points / 100;
 		bundleSubtotalCents.value = row.subtotal_cents;
 
@@ -639,7 +651,7 @@
 	// it. Re-runs of hydrate() reset dirty to false at the end, so the watcher
 	// firing during a re-hydrate is harmless.
 	watch(
-		[formProjectTitle, formIssueDate, formDueDate, formNotes, formTerms, formPreparedBy, formBankId, vatRatePct, bundleSubtotalCents],
+		[formProjectTitle, formIssueDate, formDueDate, formNotes, formTerms, formPreparedBy, formBankId, formTitleOverride, vatRatePct, bundleSubtotalCents],
 		() => {
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
@@ -737,7 +749,8 @@
 				prepared_by: formPreparedBy.value || null,
 				client_snapshot: invoice.value.client_snapshot,
 				business_bank_id: formBankId.value,
-				bank_details_snapshot: bankSnapshot
+				bank_details_snapshot: bankSnapshot,
+				title_override: formTitleOverride.value.trim() || null
 			});
 			await invoicesStore.load();
 			await hydrate();
