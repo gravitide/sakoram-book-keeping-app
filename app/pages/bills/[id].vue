@@ -100,8 +100,15 @@
 						</UButton>
 					</div>
 				</template>
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-					<div class="space-y-3">
+				<!-- 1:3 split at md+: see quote detail page for rationale.
+					The bill variant keeps the VendorPicker on the left
+					because the picker is part of the bill's identity (a
+					bill can be re-linked to a different vendor before
+					payment is recorded). It does mean the picker is
+					narrower at md (~200px) than at lg+ — acceptable
+					trade-off for the consistency. -->
+				<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+					<div class="md:col-span-1 space-y-3">
 						<UFormField label="Vendor" required>
 							<VendorPicker
 								v-model="formVendorId"
@@ -132,8 +139,9 @@
 						</div>
 					</div>
 					<!-- Right column uses a 2-col inner grid — see quote
-						detail page for the rationale. -->
-					<div class="grid grid-cols-2 gap-3">
+						detail page for the rationale. md:col-span-3 ties
+						to the 1:3 outer split. -->
+					<div class="md:col-span-3 grid grid-cols-2 gap-3">
 						<UFormField label="PDF header">
 							<UInput
 								v-model="formTitleOverride"

@@ -120,8 +120,9 @@
 						</UButton>
 					</div>
 				</template>
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-					<div>
+				<!-- 1:3 split at md+: see quote detail page for rationale. -->
+				<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+					<div class="md:col-span-1">
 						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) mb-1">
 							Bill to
 						</div>
@@ -144,8 +145,9 @@
 						</div>
 					</div>
 					<!-- Right column uses a 2-col inner grid — see quote
-						detail page for the rationale. -->
-					<div class="grid grid-cols-2 gap-3">
+						detail page for the rationale. md:col-span-3 ties
+						to the 1:3 outer split. -->
+					<div class="md:col-span-3 grid grid-cols-2 gap-3">
 						<UFormField label="PDF header">
 							<UInput
 								v-model="formTitleOverride"

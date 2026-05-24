@@ -119,8 +119,12 @@
 						</UButton>
 					</div>
 				</template>
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-					<div>
+				<!-- 1:3 split at md+: the Quote-to snapshot is only ~3 short
+					lines, so a 1:1 split left the right column cramped
+					and the left column with a tall empty gap. Stays
+					stacked at sm. -->
+				<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+					<div class="md:col-span-1">
 						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) mb-1">
 							Quote to
 						</div>
@@ -147,8 +151,9 @@
 						than stacking — keeps the column height close to the
 						snapshot on the left instead of leaving a big gap.
 						Hints move to the #help slot (rendered below the
-						field) so they fit cleanly at half-width. -->
-					<div class="grid grid-cols-2 gap-3">
+						field) so they fit cleanly at half-width. The
+						md:col-span-3 ties to the 1:3 outer split. -->
+					<div class="md:col-span-3 grid grid-cols-2 gap-3">
 						<UFormField label="PDF header">
 							<UInput
 								v-model="formTitleOverride"
