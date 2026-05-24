@@ -265,8 +265,8 @@
 	// User-chosen fonts that AREN'T installed locally fall through to it
 	// instead of jumping straight to system-ui.
 	const appFontStack = computed(() => {
-		const f = settings.settings?.ui_font?.trim() || "Inter";
-		return `'${f}', 'Inter', system-ui, sans-serif`;
+		const f = settings.settings?.ui_font?.trim() || "Akt";
+		return `'${f}', 'Akt', 'Inter', system-ui, sans-serif`;
 	});
 
 	watch(appFontStack, (stack) => {

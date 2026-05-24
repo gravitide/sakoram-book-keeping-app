@@ -658,12 +658,12 @@ shared family name and selects the right one for each weight request.
 
 | Family | Weights bundled | License |
 |---|---|---|
-| Inter | Regular / Medium / Bold | OFL. **Default** for both UI and PDF. |
+| Akt | Regular / Medium / Bold | OFL. **Default** for both UI and PDF (since migration 0024). Geometric sans from Google Fonts. |
+| Inter | Regular / Medium / Bold | OFL. Previous default, kept as the universal fallback in font cascades. |
 | Inter Tight | Regular / Medium / Bold | OFL. Tighter sibling — useful for invoice headers. |
 | Stack Sans Text | Regular / Bold | OFL. Extra bundled choice. |
 | Miriam Libre | Regular / Bold | OFL. |
 | Amarna | Regular / Bold | OFL. Decorative-leaning sans. |
-| Akt | Regular / Medium / Bold | OFL. Geometric sans from Google Fonts. |
 
 The statics are generated from upstream variable files via
 `scripts/instance-fonts.py` (run with `uv run scripts/instance-fonts.py`
@@ -908,6 +908,8 @@ dynamically — adding a column to a migration auto-flows into export.
 0020_pdf_protection.sql                 ← pdf_protect_password + 5 per-type pdf_protect_* flags on company_settings
 0021_invoice_attachments.sql            ← invoice_attachments table (scans / photos per invoice)
 0022_document_attachments.sql           ← drop invoice_attachments; polymorphic document_attachments table
+0023_business_banks.sql                 ← multi-bank business accounts: business_banks table + business_bank_id FK on quotes/invoices; bank cols dropped from company_settings
+0024_default_font_akt.sql               ← flip default ui_font / pdf_font Inter → Akt
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,

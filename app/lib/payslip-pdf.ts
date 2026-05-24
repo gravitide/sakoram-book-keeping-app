@@ -58,7 +58,7 @@ export function buildPayslipPdfPayload(args: PayslipPdfPayloadArgs): Record<stri
 	return {
 		number: row.number,
 		theme_color: themeHex(settings?.theme_color),
-		font_family: settings?.pdf_font ?? "Inter",
+		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,
 		currency_symbol: currency.symbol,
 		period_start: row.period_start,

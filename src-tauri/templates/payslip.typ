@@ -26,7 +26,7 @@
   ],
 )
 
-#let chosen-font = if "font_family" in data and data.font_family != none { data.font_family } else { "Inter" }
+#let chosen-font = if "font_family" in data and data.font_family != none { data.font_family } else { "Akt" }
 #set text(font: (chosen-font, "Inter", "Inter Tight", "Miriam Libre"), size: 9.5pt, lang: "en", number-width: "tabular")
 #set par(leading: 0.55em, spacing: 0.65em)
 
