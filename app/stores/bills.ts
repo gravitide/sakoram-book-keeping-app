@@ -91,7 +91,11 @@ export interface BillLineRow {
 	line_total_cents: number
 }
 
-export type BillLineDraft = Omit<BillLineRow,	| "id" | "bill_id"
+// sort_order is omitted from the draft because `replaceLines` always
+// derives it from the array index at write time — passing it in would
+// have no effect, so the type contract shouldn't pretend it's an input.
+export type BillLineDraft = Omit<BillLineRow,
+	| "id" | "bill_id" | "sort_order"
 	| "line_subtotal_cents" | "line_tax_cents" | "line_total_cents">;
 
 const todayISO = (): string => {

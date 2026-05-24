@@ -61,7 +61,12 @@ export interface QuoteLineRow {
 	line_total_cents: number
 }
 
-export type QuoteLineDraft = Omit<QuoteLineRow, "id" | "quote_id" | "line_subtotal_cents" | "line_tax_cents" | "line_total_cents">;
+// sort_order is omitted from the draft because `replaceLines` always
+// derives it from the array index at write time — passing it in would
+// have no effect, so the type contract shouldn't pretend it's an input.
+export type QuoteLineDraft = Omit<QuoteLineRow,
+	| "id" | "quote_id" | "sort_order"
+	| "line_subtotal_cents" | "line_tax_cents" | "line_total_cents">;
 
 export interface ClientSnapshot {
 	name: string
