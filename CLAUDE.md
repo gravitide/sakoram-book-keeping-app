@@ -713,10 +713,18 @@ across every page:
   always span their container; helper text doesn't drag-select like
   data would.
 - `ui.input.slots.root` / `ui.textarea.slots.root` → `w-full`.
+- `ui.modal.slots.title` / `ui.modal.slots.description` → `select-none`
+  so the modal header / supporting text stops drag-selecting (matches
+  the rest of the chrome). Form inputs inside the body still pick up
+  `user-select:text` via the global rule in main.css.
 - `ui.colors: { primary: "green", neutral: "zinc" }` — the source of
   the app's accent. Settings → Appearance writes a CSS-variable
   override on `:root` (`--ui-primary` etc.) that flows through
   every component without needing to touch this config.
+
+`<UApp :toaster="{ position: 'top-center' }">` in `app/app.vue`
+pushes every toast to top-centre — keeps them out of the way of the
+sticky save bar pinned bottom-right on every detail / settings page.
 
 When a future component-wide rule is needed (e.g. "all USelect get a
 border radius nudge"), drop it here rather than chasing per-call
@@ -724,6 +732,48 @@ classes. The exception is **`StatusBadge`** — that's a thin wrapper
 around UBadge with its own min-w + uppercase + tracking, kept as a
 component because the colour-by-status logic doesn't belong in
 config.
+
+### Address-book detail pages share one hero pattern
+
+Employees, clients, and vendors all use the same detail-page hero
+shape (`app/pages/{employees,clients,vendors}/[id].vue`):
+
+```
+[avatar]  Name + status badge                         [View … · Archive · Delete]
+          chip · chip · chip · chip                   (or ⋯ dropdown below lg)
+```
+
+- **Avatar**: 80px circle, `bg-(--ui-primary)/15`, initials in
+  primary colour (`text-2xl font-semibold`). Falls back to
+  `i-lucide-user` (employee), `i-lucide-user-round` (client), or
+  `i-lucide-store` (vendor) when no initials are available.
+- **Right cluster**: `hidden lg:flex` inline buttons at lg+, swaps
+  to a `lg:hidden` `⋯` `UDropdownMenu` trigger below. Both paths
+  share the same handlers via a `actionMenuItems` computed declared
+  at the end of the script so its handler references are in scope.
+  Items grouped so the menu draws a separator between View+Archive
+  and Delete; Delete row carries
+  `class: "text-(--ui-error) hover:bg-(--ui-error)/10 [&>span>span:first-child]:text-(--ui-error)"`
+  to tint the icon + text in error tone.
+- **Cross-doc shortcuts** — View payslips / View quotes+invoices /
+  View bills — set the destination store's `…Filter` field, clear
+  the other filters on that store, then `router.push`. Matches the
+  same-named row actions on each list page.
+- **Hard delete**: each store gained a `remove(id)` method that does
+  `DELETE FROM <table> WHERE id = ?`. The FK on related rows is
+  RESTRICT / NO ACTION (payslips → employees, quotes+invoices →
+  clients, bills → vendors), so SQLite blocks the delete once
+  history exists. The page handler catches the constraint error
+  with `/foreign key|constraint|RESTRICT/i.test(raw)` and surfaces
+  a friendly warning toast nudging the user toward Archive instead
+  of dumping the raw SQL error.
+
+Document detail pages (quote / invoice / bill / voucher / payslip)
+don't share the avatar but follow the same right-cluster collapse
+pattern: inline header buttons from lg+ that swap to a `⋯` dropdown
+below. Quote and invoice headers carry an `actionMenuItems` computed
+that flattens primary actions + transition actions + a destructive
+Delete into the dropdown.
 
 ### Why the light theme uses a paper palette (not pure white)
 
@@ -1315,6 +1365,49 @@ persisted to localStorage).
   **tighter, symmetric content padding** (`p-4 pb-2` — was
   asymmetric `pl-4 pr-8 py-6`). Bottom matches the sidebar's `m-2`
   floor gap so both surfaces line up.
+- ✅ **Address-book detail-page hero pattern** — employees, clients,
+  and vendors share one shape: 80px circular avatar with primary-tinted
+  bg + initials, name + chip strip in the middle, and a right cluster
+  with a cross-doc shortcut + Archive + Delete. Right cluster collapses
+  to a `⋯` dropdown below lg. See the "Address-book detail pages share
+  one hero pattern" decision section above.
+- ✅ **Hard-delete for employees / clients / vendors** — each store
+  gained a `remove(id)` method; the FK-constraint error
+  (`payslips → employees ON DELETE RESTRICT`, `quotes`/`invoices →
+  clients` and `bills → vendors` NO ACTION) is caught by a regex
+  match in the page handler and translated into a friendly toast
+  nudging the user toward Archive instead of dumping raw SQL.
+- ✅ **Responsive header dropdowns on document detail pages** —
+  quote / invoice headers swap their inline button cluster for a `⋯`
+  dropdown below lg. The dropdown items computed flattens primary
+  actions + transition actions + Delete (with error-tone class).
+  Bill / voucher / payslip headers stay inline; payslip uses
+  `flex-wrap` so it can spill onto a second row at narrow widths.
+- ✅ **Detail-page button styling uniformity** — `size="sm"` on every
+  header button across all 5 docs (icons no longer dominate the 12px
+  uppercase text), `variant="soft"` on every destructive Delete
+  button (was a mix of soft / ghost), voucher Type badge picks up
+  the StatusBadge `min-w-24 + uppercase + tracking-wider` shape.
+- ✅ **Payroll Outstanding payroll tile** is clickable — sets
+  `payslipsStore.statusFilters = ['unpaid', 'partial']` before
+  navigating to `/payslips`, matching the dashboard KPI prefilter
+  pattern.
+- ✅ **Appearance settings 2-col layout at lg+** — UI font card on
+  the left, Theme color + Theme + Zoom stacked on the right inside
+  `max-w-5xl`. Sticky save bar stays outside the grid so it spans
+  both columns.
+- ✅ **Toasts pop top-centre** via `<UApp :toaster="{ position:
+  'top-center' }">` so they don't fight the sticky save bar pinned
+  bottom-right on every detail / settings page.
+- ✅ **Modal title + description `select-none`** via
+  `ui.modal.slots` in app.config — modal chrome stops drag-selecting.
+- ✅ **Payslips list table action bar** — Auto-fit columns moved out
+  of the filter strip into the table action bar (left); StatChip
+  summing `net_cents` across visible rows on the right with `X of Y
+  shown` appendix when filtered.
+- ✅ **KPI headline at xl now stays at `text-xl`** (was bumping back
+  to text-2xl). Full money strings still wrapped to two lines at
+  240-300px tile widths; text-2xl now only kicks back in at 2xl.
 
 ### Deferred / open items
 
