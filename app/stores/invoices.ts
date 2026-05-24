@@ -294,13 +294,17 @@ export const useInvoicesStore = defineStore("invoices", () => {
 	const createDraft = async (input: {
 		client: ClientSnapshot & { id: number }
 		project_title?: string
+		/** Override `issue_date` (e.g. when launched from the calendar
+			with a specific day in mind). Defaults to today. `due_date`
+			derives from this date + the business's default payment terms. */
+		issue_date?: string
 	}): Promise<number> => {
 		const settingsStore = useSettingsStore();
 		await settingsStore.ensureLoaded();
 		const settings = settingsStore.settings;
 		if (!settings) throw new Error("createDraft: settings not loaded");
 
-		const issue = todayISO();
+		const issue = input.issue_date ?? todayISO();
 		const due = addDays(issue, settings.default_payment_terms_days);
 
 		const allocation = await allocateDocumentNumber("invoice", issue);

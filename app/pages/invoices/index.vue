@@ -283,7 +283,7 @@
 			Two fields didn't justify a navigation; the modal keeps the
 			user on the list. After create the modal pushes the new
 			draft's detail route. -->
-		<NewInvoiceModal v-model:open="newInvoiceOpen" />
+		<NewInvoiceModal v-model:open="newInvoiceOpen" :issue-date="newInvoiceIssueDate" />
 	</div>
 </template>
 
@@ -361,18 +361,27 @@
 	// flipped to true on mount when the page is hit with `?new=1` so
 	// shortcuts from the dashboard "New" dropdown still work.
 	const newInvoiceOpen = ref(false);
+	// Optional issue-date prefill carried over from `?issued=YYYY-MM-DD`
+	// — set when the user arrived here via "Create on this day" on the
+	// calendar. Threaded into NewInvoiceModal, which passes it through
+	// to invoices.createDraft (due_date derives from issue + settings).
+	const newInvoiceIssueDate = ref<string | null>(null);
 	const newInvoice = () => {
+		newInvoiceIssueDate.value = null;
 		newInvoiceOpen.value = true;
 	};
 
 	// Auto-open if the route asked for it (e.g. dashboard New > Invoice
-	// menu). Clear the query param once consumed so back/forward doesn't
-	// re-trigger.
+	// menu or calendar Create-on-this-day). Clear the query params once
+	// consumed so back/forward doesn't re-trigger and a manual "New"
+	// click later doesn't accidentally inherit the date.
 	const route = useRoute();
 	onMounted(() => {
 		if (route.query.new === "1") {
+			const issued = typeof route.query.issued === "string" ? route.query.issued : null;
+			newInvoiceIssueDate.value = issued;
 			newInvoiceOpen.value = true;
-			void router.replace({ query: { ...route.query, new: undefined } });
+			void router.replace({ query: { ...route.query, new: undefined, issued: undefined } });
 		}
 	});
 	const open = (i: InvoiceRow) => router.push(`/invoices/${i.id}`);

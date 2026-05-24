@@ -271,8 +271,16 @@ export const useBillsStore = defineStore("bills", () => {
 		tax_id: v.tax_id ?? null
 	} satisfies VendorSnapshot);
 
-	const createBill = async (input: { vendor: VendorSnapshot & { id: number } }): Promise<number> => {
-		const issue = todayISO();
+	const createBill = async (input: {
+		vendor: VendorSnapshot & { id: number }
+		/** Override `issue_date` (e.g. when launched from the calendar
+			with a specific day in mind). Defaults to today. `due_date`
+			matches `issue_date` on create — the user typically adjusts
+			it on the editor based on the vendor's terms. */
+		issue_date?: string
+	}): Promise<number> => {
+		const issue = input.issue_date ?? todayISO();
+		const due = issue;
 		const allocation = await allocateDocumentNumber("bill", issue);
 		const snap = buildVendorSnapshot(input.vendor);
 		// Default due_date = today (vendor probably wants payment "now"); user
@@ -284,7 +292,7 @@ export const useBillsStore = defineStore("bills", () => {
 				issue_date, due_date, status, pricing_mode,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents
 			) VALUES (?, ?, ?, ?, ?, 'open', 'bundle', 0, 0, 0, 0)`,
-			[allocation.number, input.vendor.id, snap, issue, issue]
+			[allocation.number, input.vendor.id, snap, issue, due]
 		);
 		if (result.lastInsertId === undefined) throw new Error("createBill: no lastInsertId");
 		await load();

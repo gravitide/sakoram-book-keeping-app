@@ -40,6 +40,14 @@
 
 	const openModel = defineModel<boolean>("open", { default: false });
 
+	// Optional initial issue_date — set by the list page when the user
+	// arrived via "Create on this day" from the calendar. Plumbed
+	// straight through to createDraft so the picked date becomes the
+	// draft's issue_date (valid_until derives from issue + settings).
+	const props = defineProps<{
+		issueDate?: string | null
+	}>();
+
 	const router = useRouter();
 	const toast = useToast();
 	const settings = useSettingsStore();
@@ -78,7 +86,8 @@
 		try {
 			const id = await quotes.createDraft({
 				client: { ...client, id: client.id },
-				project_title: projectTitle.value.trim()
+				project_title: projectTitle.value.trim(),
+				issue_date: props.issueDate ?? undefined
 			});
 			toast.add({ title: "Draft created", color: "success", icon: "i-lucide-check" });
 			openModel.value = false;

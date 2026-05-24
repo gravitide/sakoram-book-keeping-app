@@ -282,7 +282,7 @@
 		</UCard>
 
 		<!-- New-bill creation lives as a modal (was a standalone page). -->
-		<NewBillModal v-model:open="newBillOpen" />
+		<NewBillModal v-model:open="newBillOpen" :issue-date="newBillIssueDate" />
 	</div>
 </template>
 
@@ -365,16 +365,22 @@
 	);
 
 	// Drives <NewBillModal>; the New button opens it. Auto-opens when
-	// the route carries ?new=1 (dashboard New > Bill shortcut).
+	// the route carries ?new=1 (dashboard New > Bill shortcut or
+	// calendar Create-on-this-day). Optional ?issued=YYYY-MM-DD carries
+	// through to NewBillModal as the initial issue_date.
 	const newBillOpen = ref(false);
+	const newBillIssueDate = ref<string | null>(null);
 	const newBill = () => {
+		newBillIssueDate.value = null;
 		newBillOpen.value = true;
 	};
 	const route = useRoute();
 	onMounted(() => {
 		if (route.query.new === "1") {
+			const issued = typeof route.query.issued === "string" ? route.query.issued : null;
+			newBillIssueDate.value = issued;
 			newBillOpen.value = true;
-			void router.replace({ query: { ...route.query, new: undefined } });
+			void router.replace({ query: { ...route.query, new: undefined, issued: undefined } });
 		}
 	});
 

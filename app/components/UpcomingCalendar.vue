@@ -56,54 +56,65 @@
 			gap-px on a (--ui-border) background creates the 1px grid
 			lines without us drawing them per-cell. -->
 		<div class="grid grid-cols-7 gap-px bg-(--ui-border) rounded-md overflow-hidden border border-(--ui-border)">
-			<button
+			<!-- Each cell is both a left-click target (opens the day-detail
+				modal) and a right-click target (UContextMenu offers the
+				same Quote / Invoice / Bill / Payslip shortcuts the modal
+				footer has, scoped to this cell's date). -->
+			<UContextMenu
 				v-for="cell in cells"
 				:key="cell.date"
-				type="button"
-				class="text-left p-1.5 flex flex-col gap-1 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-inset focus:ring-(--ui-primary)"
-				:class="cellClass(cell)"
-				:style="{ minHeight: `${cellHeight}px` }"
-				@click="openDay(cell)"
+				:items="cellMenuItems(cell)"
 			>
-				<div class="flex items-center justify-between gap-1">
-					<span
-						class="text-xs tabular-nums leading-none px-1 py-0.5 rounded"
-						:class="dayLabelClass(cell)"
-					>
-						{{ cell.day }}
-					</span>
-					<span
-						v-if="cell.overdueCount > 0"
-						class="text-[10px] leading-none px-1 py-0.5 rounded bg-(--ui-error)/15 text-(--ui-error) font-medium"
-						:title="`${cell.overdueCount} overdue`"
-					>
-						!{{ cell.overdueCount }}
-					</span>
-				</div>
-				<div class="flex-1 min-h-0 space-y-0.5 overflow-hidden">
-					<div
-						v-for="e in cell.events.slice(0, maxEventsPerCell)"
-						:key="e.id"
-						class="text-[10px] leading-tight truncate rounded px-1 py-0.5 font-medium cursor-pointer hover:brightness-95"
-						:class="pillClass(e)"
-						:title="`${EVENT_KIND_META[e.kind].label} · ${e.title} · ${e.party} · ${formatLKR(e.balanceCents)}`"
-						@click.stop="navigateTo(e)"
-					>
-						{{ e.title }}
+				<button
+					type="button"
+					class="text-left p-1.5 flex flex-col gap-1 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-inset focus:ring-(--ui-primary) w-full"
+					:class="cellClass(cell)"
+					:style="{ minHeight: `${cellHeight}px` }"
+					@click="openDay(cell)"
+				>
+					<div class="flex items-center justify-between gap-1">
+						<span
+							class="text-xs tabular-nums leading-none px-1 py-0.5 rounded"
+							:class="dayLabelClass(cell)"
+						>
+							{{ cell.day }}
+						</span>
+						<span
+							v-if="cell.overdueCount > 0"
+							class="text-[10px] leading-none px-1 py-0.5 rounded bg-(--ui-error)/15 text-(--ui-error) font-medium"
+							:title="`${cell.overdueCount} overdue`"
+						>
+							!{{ cell.overdueCount }}
+						</span>
 					</div>
-					<div
-						v-if="cell.events.length > maxEventsPerCell"
-						class="text-[10px] text-(--ui-text-muted) px-1 leading-tight"
-					>
-						+{{ cell.events.length - maxEventsPerCell }} more
+					<div class="flex-1 min-h-0 space-y-0.5 overflow-hidden">
+						<div
+							v-for="e in cell.events.slice(0, maxEventsPerCell)"
+							:key="e.id"
+							class="text-[10px] leading-tight truncate rounded px-1 py-0.5 font-medium cursor-pointer hover:brightness-95"
+							:class="pillClass(e)"
+							:title="`${EVENT_KIND_META[e.kind].label} · ${e.title} · ${e.party} · ${formatLKR(e.balanceCents)}`"
+							@click.stop="navigateTo(e)"
+						>
+							{{ e.title }}
+						</div>
+						<div
+							v-if="cell.events.length > maxEventsPerCell"
+							class="text-[10px] text-(--ui-text-muted) px-1 leading-tight"
+						>
+							+{{ cell.events.length - maxEventsPerCell }} more
+						</div>
 					</div>
-				</div>
-			</button>
+				</button>
+			</UContextMenu>
 		</div>
 
 		<!-- Day-detail modal: opens on cell click. Lists every event for
 			the day with full context (kind, party, amount, overdue
-			badge). Clicking an event navigates to its detail page. -->
+			badge). Clicking an event navigates to its detail page.
+			Footer carries quick-create shortcuts so the user can spin
+			off a new quote / invoice / bill / payslip without leaving
+			the calendar flow. -->
 		<UModal v-model:open="dayOpen" :title="selectedDayLabel">
 			<template #body>
 				<div v-if="selectedDayEvents.length === 0" class="py-6 flex flex-col items-center gap-2 text-sm text-(--ui-text-muted)">
@@ -151,6 +162,26 @@
 						</div>
 					</li>
 				</ul>
+			</template>
+			<template #footer>
+				<div class="w-full">
+					<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) mb-2">
+						Create on this day
+					</div>
+					<div class="flex flex-wrap gap-2">
+						<UButton
+							v-for="action in createActions"
+							:key="action.label"
+							size="sm"
+							variant="soft"
+							color="neutral"
+							:icon="action.icon"
+							@click="action.onSelect"
+						>
+							{{ action.label }}
+						</UButton>
+					</div>
+				</div>
 			</template>
 		</UModal>
 	</div>
@@ -301,6 +332,74 @@
 		dayOpen.value = false;
 		void router.push(e.href);
 	};
+
+	// Document types the user can spin off from a calendar date. Both
+	// the day-detail modal's footer buttons and the right-click context
+	// menu on each cell render off this list — `createForDate` does the
+	// routing.
+	//
+	// - Quote / Invoice / Bill route to their list page with `?new=1`,
+	//   which auto-opens the New modal. The picked date threads through
+	//   as `?issued=YYYY-MM-DD` → becomes the draft's issue_date.
+	//   valid_until / due_date derive from issue + settings defaults.
+	// - Voucher routes to the full /vouchers/new page (no modal — too
+	//   many fields to fit one) with `?date=YYYY-MM-DD` → becomes the
+	//   voucher_date.
+	//
+	// Payslip is intentionally omitted: its cycle math derives period
+	// dates from the cycle template, so a free-form picked date isn't
+	// directly meaningful. Users go via the Payroll page for those.
+	interface CreateKind {
+		label: string
+		icon: string
+		buildPath: (date: string | null) => string
+	}
+	const CREATE_KINDS: ReadonlyArray<CreateKind> = [
+		{
+			label: "Quote",
+			icon: "i-lucide-file-text",
+			buildPath: (d) => `/quotes?new=1${d ? `&issued=${d}` : ""}`
+		},
+		{
+			label: "Invoice",
+			icon: "i-lucide-receipt",
+			buildPath: (d) => `/invoices?new=1${d ? `&issued=${d}` : ""}`
+		},
+		{
+			label: "Bill",
+			icon: "i-lucide-file-input",
+			buildPath: (d) => `/bills?new=1${d ? `&issued=${d}` : ""}`
+		},
+		{
+			label: "Voucher",
+			icon: "i-lucide-ticket",
+			buildPath: (d) => `/vouchers/new${d ? `?date=${d}` : ""}`
+		}
+	];
+
+	const createForDate = (kind: CreateKind, date: string | null) => {
+		dayOpen.value = false;
+		void router.push(kind.buildPath(date));
+	};
+
+	// Day-detail modal footer: route off the currently-open day.
+	const createActions = computed(() =>
+		CREATE_KINDS.map((kind) => ({
+			label: kind.label,
+			icon: kind.icon,
+			onSelect: () => createForDate(kind, selectedDate.value || null)
+		}))
+	);
+
+	// Per-cell right-click menu. Same actions as the modal footer but
+	// scoped to that cell's date — lets the user create from the grid
+	// without having to open the modal first.
+	const cellMenuItems = (cell: Cell) =>
+		CREATE_KINDS.map((kind) => ({
+			label: `New ${kind.label.toLowerCase()}`,
+			icon: kind.icon,
+			onSelect: () => createForDate(kind, cell.date)
+		}));
 
 	// --- Styling helpers ---------------------------------------------------
 	// Out-of-month cells dim down a notch; today gets a primary-tinted

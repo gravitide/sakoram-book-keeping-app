@@ -49,6 +49,14 @@
 
 	const openModel = defineModel<boolean>("open", { default: false });
 
+	// Optional initial issue_date — set by the list page when the user
+	// arrived via "Create on this day" from the calendar. Bills default
+	// issue_date / due_date both to today; this overrides both with the
+	// picked date (user can fine-tune due_date on the editor).
+	const props = defineProps<{
+		issueDate?: string | null
+	}>();
+
 	const router = useRouter();
 	const toast = useToast();
 	const store = useBillsStore();
@@ -103,7 +111,8 @@
 					postal_code: v.postal_code,
 					country: v.country,
 					tax_id: v.tax_id
-				}
+				},
+				issue_date: props.issueDate ?? undefined
 			});
 			toast.add({ title: "Bill recorded", color: "success", icon: "i-lucide-check" });
 			openModel.value = false;

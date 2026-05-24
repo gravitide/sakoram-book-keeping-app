@@ -12,16 +12,22 @@
 			whenever the user picked "Custom currency…" or arrived on the
 			page with a code that isn't in the built-in list. -->
 		<div v-if="isCustom" class="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-md border border-(--ui-border) bg-(--ui-bg-muted) p-3">
-			<UFormField label="Code" hint="ISO 4217 short code (e.g. NZD, ZAR, JPY).">
+			<UFormField label="Code">
 				<UInput
 					v-model="customCode"
 					placeholder="NZD"
 					:maxlength="6"
 					class="uppercase"
 				/>
+				<template #help>
+					<span class="text-xs text-(--ui-text-muted)">ISO 4217 short code (e.g. NZD, ZAR, JPY).</span>
+				</template>
 			</UFormField>
-			<UFormField label="Symbol" hint="Printed before every amount.">
+			<UFormField label="Symbol">
 				<UInput v-model="customSymbol" placeholder="NZ$" :maxlength="6" />
+				<template #help>
+					<span class="text-xs text-(--ui-text-muted)">Printed before every amount.</span>
+				</template>
 			</UFormField>
 		</div>
 	</div>
