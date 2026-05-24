@@ -112,11 +112,13 @@
 
 <script setup lang="ts">
 	import type { VendorRow } from "~/stores/vendors";
+	import { useBillsStore } from "~/stores/bills";
 	import { useVendorsStore } from "~/stores/vendors";
 
 	definePageMeta({ title: "Vendors" });
 
 	const store = useVendorsStore();
+	const billsStore = useBillsStore();
 	const toast = useToast();
 	const router = useRouter();
 
@@ -146,23 +148,45 @@
 		}
 	};
 
-	// Row-action callback consumed by ResizableDataTable's right-click
-	// menu. Returns groups of `{ label, icon, onSelect }`; one separator
-	// renders between each group.
+	// Pre-narrow the bills list to this vendor and navigate. Other
+	// filters on the bills store are cleared so the user lands on a
+	// clean view of just this vendor's bills — same pattern as the
+	// "View invoices" action on the clients list.
+	const viewBills = (v: VendorRow) => {
+		billsStore.vendorFilter = v.id;
+		billsStore.categoryFilter = "all";
+		billsStore.clearStatusFilters();
+		billsStore.clearDateFilters();
+		billsStore.search = "";
+		router.push("/bills");
+	};
+
+	// Two-group row-actions menu: cross-page navigation first (View
+	// bills), then per-row lifecycle. ResizableDataTable renders one
+	// separator between the groups. Mirrors the clients list pattern.
 	function itemsFor(v: VendorRow) {
-		return [[
-			{
-				label: "Edit",
-				icon: "i-lucide-pencil",
-				onSelect: () => router.push(`/vendors/${v.id}`)
-			},
-			{
-				label: v.is_archived === 0 ? "Archive" : "Restore",
-				icon: v.is_archived === 0 ? "i-lucide-archive" : "i-lucide-archive-restore",
-				onSelect: () => {
-					void toggleArchive(v);
+		return [
+			[
+				{
+					label: "View bills",
+					icon: "i-lucide-file-input",
+					onSelect: () => viewBills(v)
 				}
-			}
-		]];
+			],
+			[
+				{
+					label: "Edit",
+					icon: "i-lucide-pencil",
+					onSelect: () => router.push(`/vendors/${v.id}`)
+				},
+				{
+					label: v.is_archived === 0 ? "Archive" : "Restore",
+					icon: v.is_archived === 0 ? "i-lucide-archive" : "i-lucide-archive-restore",
+					onSelect: () => {
+						void toggleArchive(v);
+					}
+				}
+			]
+		];
 	}
 </script>

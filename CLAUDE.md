@@ -274,6 +274,8 @@ sakoram_app/
 │  │  ├─ pdf.ts                       ← preview/commit/legacy export helpers; PdfCommand union
 │  │  ├─ quote-pdf.ts                 ← shared payload builder; detail page + list-row Generate-PDF call this
 │  │  ├─ invoice-pdf.ts               ← same shape as quote-pdf; takes paidCents for the paid/balance row
+│  │  ├─ bill-pdf.ts                  ← same shape as invoice-pdf; "Bill from" party block, no bank, no prepared_by
+│  │  ├─ voucher-pdf.ts               ← shared builder for the one-page voucher.typ template + resolveVoucherRelatedLabel helper for the linked-doc tag
 │  │  ├─ payslip-pdf.ts               ← shared payload builder used by both payslip detail page and list-row Generate-PDF action
 │  │  ├─ payroll-cycle.ts             ← resolvePayrollCycle + nextPayrollCycle: turn (year, month, settings) → ISO dates with clamping (31 = last day of month)
 │  │  └─ theme.ts                     ← THEME_COLORS palette (name → hex)
@@ -1446,15 +1448,20 @@ persisted to localStorage).
   (muted-text filled label + matching outline). Used on the
   calendar's `Shown` summary chip; available for any future
   count-with-no-semantic-tone use case.
+- ✅ **Row context menu + bulk PDF on bills / vouchers / vendors** —
+  brings the last three holdouts into the same shape every other
+  list page uses. Bills and vouchers get the multi-select column +
+  selection action bar + progress modal for bulk PDF; vendors gets
+  the row-action menu with View bills / Edit / Archive (no PDF —
+  vendor records don't generate documents on their own). The
+  per-document detail pages now delegate their PDF payload building
+  to two new shared libs: `bill-pdf.ts` and `voucher-pdf.ts`
+  (matching the quote / invoice / payslip pattern).
 
 ### Deferred / open items
 
 - **Cmd/Ctrl+K command palette** — biggest "feels native" win still
   outstanding. Routes + recent docs + new-thing actions in one input.
-- **Bills / vouchers / vendors context menu + bulk PDF** — the
-  row-context-menu pattern is on quotes / invoices / payslips /
-  employees / clients / bill categories today; the bills, vouchers,
-  and vendors list pages are still dropdown-less.
 - **Mac titlebar visual QA** — Approach A (overlay-style traffic
   lights) was committed but never hands-on tested. Need to verify the
   78px reservation, 28px height, and title alignment on real macOS

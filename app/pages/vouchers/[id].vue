@@ -236,7 +236,7 @@
 	import type { VoucherMethod, VoucherRow } from "~/stores/vouchers";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { formatLKR } from "~/lib/money";
-	import { themeHex } from "~/lib/theme";
+	import { buildVoucherPdfPayload, resolveVoucherRelatedLabel } from "~/lib/voucher-pdf";
 	import { useBillsStore } from "~/stores/bills";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { usePayslipsStore } from "~/stores/payslips";
@@ -400,85 +400,20 @@
 		showDeleteDialog.value = true;
 	};
 	// ---- PDF export ----------------------------------------------------------
-	// Vouchers use the dedicated voucher.typ template (one-page receipt
-	// layout, big amount up top). Receipts are rendered in green, payments
-	// in red — the colour comes through `amount_color` because Typst can't
-	// derive it from the JSON kind alone without a switch.
-	const methodFriendlyLabel = (m: VoucherMethod | null): string | null => {
-		if (!m) return null;
-		return ({
-			bank_transfer: "Bank transfer",
-			cash: "Cash",
-			cheque: "Cheque",
-			card: "Card",
-			other: "Other"
-		} as const)[m] ?? m;
-	};
-
-	const buildPdfPayload = () => {
-		const v = voucher.value!;
-		const isReceiptDoc = v.voucher_type === "receipt";
-		const partyLabel = isReceiptDoc ? "Received from" : "Paid to";
-		const counterSig = isReceiptDoc ? "Received by" : "Paid to (signature)";
-		const amountColor = isReceiptDoc ? "#16a34a" : "#dc2626";
-
-		// Receipts can link only to invoices; payments to a bill *or* a
-		// payslip. Bill wins ties (a single voucher should never link
-		// to both — the UI dropdowns are mutually exclusive in spirit,
-		// though the schema allows both columns).
-		let relatedLabel: string | null = null;
-		if (isReceiptDoc) {
-			const inv = v.related_invoice_id
-				? invoicesStore.invoices.find((i) => i.id === v.related_invoice_id)
-				: null;
-			if (inv) relatedLabel = `Invoice ${inv.number}`;
-		} else {
-			const bill = v.related_bill_id
-				? billsStore.bills.find((b) => b.id === v.related_bill_id)
-				: null;
-			if (bill) {
-				relatedLabel = `Bill ${bill.number}`;
-			} else {
-				const ps = v.related_payslip_id
-					? payslipsStore.payslips.find((p) => p.id === v.related_payslip_id)
-					: null;
-				if (ps) relatedLabel = `Payslip ${ps.number}`;
-			}
-		}
-
-		// LKR amount as a string — formatLKR returns "LKR 1,234.56", we
-		// strip the prefix because the template re-adds it.
-		const amountDisplay = formatLKR(v.amount_cents, { withSymbol: false });
-
-		return {
-			number: v.number,
-			title: isReceiptDoc ? "Receipt voucher" : "Payment voucher",
-			theme_color: themeHex(settingsStore.settings?.theme_color),
-			font_family: settingsStore.settings?.pdf_font ?? "Akt",
-			currency_code: currency.value.code,
-			currency_symbol: currency.value.symbol,
-			voucher_date: v.voucher_date,
-			amount_display: amountDisplay,
-			amount_color: amountColor,
-			party_label: partyLabel,
-			party_name: v.party_name,
-			method_display: methodFriendlyLabel(v.payment_method),
-			reference: v.reference ?? null,
-			description: v.description ?? null,
-			related_label: relatedLabel,
-			counter_signature_label: counterSig,
-			business_name: settingsStore.settings?.business_name ?? null,
-			website: settingsStore.settings?.website ?? null,
-			phone: settingsStore.settings?.phone ?? null,
-			logo_path: settingsStore.settings?.pdf_header_logo_path ?? null
-		};
-	};
-
-	// Vouchers don't have line items, so no caching needed — just call
-	// buildPayload() directly each render.
+	// Payload shape lives in `app/lib/voucher-pdf.ts` so the list page
+	// can render from the same builder for its row action + bulk export.
 	const pdf = usePdfPreview({
 		command: "export_voucher_pdf",
-		buildPayload: () => buildPdfPayload(),
+		buildPayload: () => buildVoucherPdfPayload({
+			row: voucher.value!,
+			settings: settingsStore.settings,
+			currency: currency.value,
+			relatedLabel: resolveVoucherRelatedLabel(voucher.value!, {
+				invoices: invoicesStore,
+				bills: billsStore,
+				payslips: payslipsStore
+			})
+		}),
 		fileName: () => `${voucher.value?.number ?? "voucher"}.pdf`,
 		title: "Voucher PDF preview"
 	});

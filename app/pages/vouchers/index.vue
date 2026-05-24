@@ -154,16 +154,46 @@
 				</div>
 			</div>
 
-			<!-- No `:row-actions` — the original vouchers list page had no
-				overflow / right-click menu, so the migration preserves
-				that. First-cell click opens the voucher detail. -->
+			<!-- Selection action bar — renders above the table whenever any
+				row is ticked. Surfaces a count + Clear + Generate PDFs. -->
+			<div
+				v-if="selectedRows.length > 0 && !store.loading && !store.error"
+				class="mb-3 flex items-center justify-between gap-3 px-3 py-2 rounded-md border border-(--ui-primary)/30 bg-(--ui-primary)/10 text-sm"
+			>
+				<div>
+					<span class="font-medium">{{ selectedRows.length }} selected</span>
+					<span class="text-(--ui-text-muted)"> · across all filters / pages</span>
+				</div>
+				<div class="flex items-center gap-2">
+					<UButton
+						size="xs"
+						color="neutral"
+						variant="ghost"
+						@click="selectedRows = []"
+					>
+						Clear
+					</UButton>
+					<UButton
+						size="xs"
+						icon="i-lucide-file-down"
+						:loading="bulkPdf.running"
+						@click="generateBulkPdfs"
+					>
+						Generate PDFs
+					</UButton>
+				</div>
+			</div>
+
 			<ResizableDataTable
-				v-else
+				v-if="!store.loading && !store.error && store.filtered.length > 0"
 				ref="tableRef"
+				v-model:selection="selectedRows"
 				:rows="store.filtered"
 				state-key="vouchers-table"
+				:row-actions="itemsFor"
 				default-sort-field="voucher_date"
 				:default-sort-order="-1"
+				selectable
 				@row-click="(row) => router.push(`/vouchers/${row.id}`)"
 			>
 				<Column field="number" header="Number" sortable>
@@ -234,20 +264,120 @@
 				</Column>
 			</ResizableDataTable>
 		</UCard>
+
+		<PdfPreviewModal
+			v-model:open="pdf.state.open"
+			:asset-url="pdf.state.assetUrl"
+			:temp-path="pdf.state.tempPath"
+			:suggested-file-name="pdf.state.suggestedFileName"
+			:saving="pdf.state.saving"
+			title="Voucher PDF preview"
+			@save="pdf.onSave"
+			@cancel="pdf.onCancel"
+		/>
+
+		<!-- Bulk PDF progress modal. Same shape as bills/payslips —
+			progress bar, current filename, error list, Cancel /
+			Open folder / Done. Dismiss is blocked while running. -->
+		<UModal
+			:open="bulkPdf.modalOpen"
+			:dismissible="false"
+			:close="false"
+			title="Generating voucher PDFs"
+		>
+			<template #body>
+				<div class="space-y-3">
+					<div class="text-sm">
+						<div class="flex justify-between tabular-nums">
+							<span>{{ bulkPdf.progress }} of {{ bulkPdf.total }}</span>
+							<span class="text-(--ui-text-muted)">{{ bulkPdf.errors.length }} error{{ bulkPdf.errors.length === 1 ? "" : "s" }}</span>
+						</div>
+						<div class="mt-2 h-2 rounded-full bg-(--ui-bg-muted) overflow-hidden">
+							<div
+								class="h-full bg-(--ui-primary) transition-all duration-150"
+								:style="{ width: bulkPdf.total === 0 ? '0%' : `${Math.round((bulkPdf.progress / bulkPdf.total) * 100)}%` }"
+							/>
+						</div>
+					</div>
+					<div v-if="bulkPdf.currentName" class="text-xs text-(--ui-text-muted) truncate">
+						Rendering <span class="font-medium">{{ bulkPdf.currentName }}</span>…
+					</div>
+					<div v-if="bulkPdf.errors.length > 0" class="max-h-32 overflow-auto text-xs space-y-1 rounded-md border border-(--ui-error)/30 bg-(--ui-error)/5 p-2">
+						<div v-for="(e, i) in bulkPdf.errors" :key="i">
+							<span class="font-medium">{{ e.name }}:</span>
+							<span class="text-(--ui-text-muted)"> {{ e.message }}</span>
+						</div>
+					</div>
+				</div>
+			</template>
+			<template #footer>
+				<div class="flex justify-end gap-2 w-full">
+					<UButton
+						v-if="bulkPdf.running"
+						color="neutral"
+						variant="outline"
+						@click="bulkPdf.cancelled = true"
+					>
+						{{ bulkPdf.cancelled ? "Cancelling…" : "Cancel" }}
+					</UButton>
+					<UButton
+						v-else-if="bulkPdf.outputDir"
+						color="neutral"
+						variant="outline"
+						icon="i-lucide-folder-open"
+						@click="openOutputFolder"
+					>
+						Open folder
+					</UButton>
+					<UButton
+						v-if="!bulkPdf.running"
+						@click="bulkPdf.modalOpen = false"
+					>
+						Done
+					</UButton>
+				</div>
+			</template>
+		</UModal>
 	</div>
 </template>
 
 <script setup lang="ts">
-	import type { VoucherType } from "~/stores/vouchers";
+	import type { VoucherRow, VoucherType } from "~/stores/vouchers";
+	import { invoke } from "@tauri-apps/api/core";
+	import { join } from "@tauri-apps/api/path";
+	import { open as openDialog } from "@tauri-apps/plugin-dialog";
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
+	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { formatLKR } from "~/lib/money";
+	import { resolveProtectPassword } from "~/lib/pdf";
+	import { buildVoucherPdfPayload, resolveVoucherRelatedLabel } from "~/lib/voucher-pdf";
+	import { useBillsStore } from "~/stores/bills";
+	import { useInvoicesStore } from "~/stores/invoices";
+	import { usePayslipsStore } from "~/stores/payslips";
+	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Vouchers" });
 
 	const router = useRouter();
+	const toast = useToast();
 	const store = useVouchersStore();
+	const settingsStore = useSettingsStore();
+	const invoicesStore = useInvoicesStore();
+	const billsStore = useBillsStore();
+	const payslipsStore = usePayslipsStore();
+	const currency = useActiveCurrency();
 
-	await store.load();
+	// Vouchers load brings the linked-doc stores along too so the
+	// resolved "Invoice INV-2026-0001" / "Bill BIL-…" / "Payslip PSL-…"
+	// label on each PDF is available without an extra lookup per row.
+	await Promise.all([
+		store.load(),
+		invoicesStore.invoices.length === 0 ? invoicesStore.load() : Promise.resolve(),
+		billsStore.bills.length === 0 ? billsStore.load() : Promise.resolve(),
+		payslipsStore.payslips.length === 0 ? payslipsStore.load() : Promise.resolve(),
+		settingsStore.ensureLoaded()
+	]);
 
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();
@@ -360,5 +490,171 @@
 			card: "Card",
 			other: "Other"
 		} as Record<string, string>)[m] ?? m;
+	};
+
+	// --- Row selection (for bulk PDF) -------------------------------------
+	const selectedRows = ref<VoucherRow[]>([]);
+
+	// --- Single-row PDF preview ------------------------------------------
+	// `currentVoucher` is captured before opening so the builder always
+	// renders the row the user clicked from. The linked-doc label is
+	// resolved against the three sibling stores so the receipt / payment
+	// PDF shows the right "Invoice / Bill / Payslip" tag.
+	const currentVoucher = ref<VoucherRow | null>(null);
+	const pdf = usePdfPreview({
+		command: "export_voucher_pdf",
+		buildPayload: () => {
+			if (!currentVoucher.value) return {};
+			return buildVoucherPdfPayload({
+				row: currentVoucher.value,
+				settings: settingsStore.settings,
+				currency: currency.value,
+				relatedLabel: resolveVoucherRelatedLabel(currentVoucher.value, {
+					invoices: invoicesStore,
+					bills: billsStore,
+					payslips: payslipsStore
+				})
+			});
+		},
+		fileName: () => `${currentVoucher.value?.number ?? "voucher"}.pdf`,
+		title: "Voucher PDF preview"
+	});
+
+	const onPdfClick = (v: VoucherRow) => {
+		currentVoucher.value = v;
+		pdf.open();
+	};
+
+	// --- Row actions ------------------------------------------------------
+	// Two-group menu: Open, then Generate PDF. Vouchers have no lifecycle
+	// transitions to surface (voucher_type is immutable post-creation), so
+	// no middle group like quotes / bills.
+	function itemsFor(v: VoucherRow) {
+		return [
+			[
+				{
+					label: "Open",
+					icon: "i-lucide-pencil",
+					onSelect: () => router.push(`/vouchers/${v.id}`)
+				}
+			],
+			[
+				{
+					label: "Generate PDF & Print",
+					icon: "i-lucide-file-down",
+					onSelect: () => onPdfClick(v)
+				}
+			]
+		];
+	}
+
+	// --- Bulk PDF generation ---------------------------------------------
+	const bulkPdf = reactive({
+		modalOpen: false,
+		running: false,
+		cancelled: false,
+		progress: 0,
+		total: 0,
+		currentName: "",
+		outputDir: "" as string,
+		errors: [] as { name: string, message: string }[]
+	});
+
+	const openOutputFolder = async () => {
+		if (!bulkPdf.outputDir) return;
+		try {
+			await invoke("open_path", { path: bulkPdf.outputDir });
+		} catch (err) {
+			toast.add({
+				title: "Could not open folder",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	const safeName = (s: string): string => s.replace(/[^\w.-]+/g, "_");
+
+	const generateBulkPdfs = async () => {
+		if (bulkPdf.running) return;
+		if (selectedRows.value.length === 0) return;
+
+		let folder: string | null = null;
+		try {
+			const picked = await openDialog({ directory: true, multiple: false });
+			folder = Array.isArray(picked) ? picked[0] ?? null : picked;
+		} catch (err) {
+			toast.add({
+				title: "Could not open folder picker",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+			return;
+		}
+		if (!folder) return;
+
+		const selectedIds = new Set(selectedRows.value.map((r) => r.id));
+		const targets: VoucherRow[] = [];
+		for (const v of store.vouchers) {
+			if (selectedIds.has(v.id)) targets.push(v);
+		}
+		targets.sort((a, b) => a.number.localeCompare(b.number));
+
+		bulkPdf.modalOpen = true;
+		bulkPdf.running = true;
+		bulkPdf.cancelled = false;
+		bulkPdf.progress = 0;
+		bulkPdf.total = targets.length;
+		bulkPdf.currentName = "";
+		bulkPdf.outputDir = folder;
+		bulkPdf.errors = [];
+
+		const protectPassword = await resolveProtectPassword("export_voucher_pdf");
+
+		for (const row of targets) {
+			if (bulkPdf.cancelled) break;
+			bulkPdf.currentName = row.number;
+
+			try {
+				const payload = buildVoucherPdfPayload({
+					row,
+					settings: settingsStore.settings,
+					currency: currency.value,
+					relatedLabel: resolveVoucherRelatedLabel(row, {
+						invoices: invoicesStore,
+						bills: billsStore,
+						payslips: payslipsStore
+					})
+				});
+
+				const outputPath = await join(folder, `${safeName(row.number)}.pdf`);
+				await invoke("export_voucher_pdf", { data: payload, outputPath, protectPassword });
+			} catch (err) {
+				bulkPdf.errors.push({
+					name: row.number,
+					message: err instanceof Error ? err.message : String(err)
+				});
+			} finally {
+				bulkPdf.progress += 1;
+			}
+		}
+
+		bulkPdf.running = false;
+		bulkPdf.currentName = "";
+
+		const successCount = bulkPdf.progress - bulkPdf.errors.length;
+		const cancelledTail = bulkPdf.cancelled ? ` · ${bulkPdf.total - bulkPdf.progress} skipped` : "";
+		toast.add({
+			title: bulkPdf.cancelled
+				? `Cancelled — ${successCount} of ${bulkPdf.total} done${cancelledTail}`
+				: `Generated ${successCount} of ${bulkPdf.total} PDFs`,
+			description: bulkPdf.errors.length > 0
+				? `${bulkPdf.errors.length} error${bulkPdf.errors.length === 1 ? "" : "s"} — see modal for details.`
+				: undefined,
+			color: bulkPdf.errors.length === 0 && !bulkPdf.cancelled ? "success" : "warning",
+			icon: bulkPdf.errors.length === 0 && !bulkPdf.cancelled ? "i-lucide-check" : "i-lucide-triangle-alert"
+		});
 	};
 </script>
