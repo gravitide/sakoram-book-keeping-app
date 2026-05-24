@@ -1,6 +1,8 @@
 <template>
 	<div>
-		<UPopover v-model:open="open" :ui="{ content: 'w-(--reka-popper-anchor-width)' }">
+		<!-- min-w-72 so the popover doesn't get cramped at ~210px on
+			narrow detail-page columns; matches the trigger when wider. -->
+		<UPopover v-model:open="open" :ui="{ content: 'min-w-72 w-(--reka-popper-anchor-width)' }">
 			<UButton
 				color="neutral"
 				variant="outline"

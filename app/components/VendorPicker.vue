@@ -1,6 +1,10 @@
 <template>
 	<div>
-		<UPopover v-model:open="open" :ui="{ content: 'w-(--reka-popper-anchor-width)' }">
+		<!-- Popover width: at least 288px, but matches the trigger when
+			the trigger is wider. The default `w-(--reka-popper-anchor-width)`
+			alone left the popover ~210px wide on detail-page columns,
+			cramping long vendor names. -->
+		<UPopover v-model:open="open" :ui="{ content: 'min-w-72 w-(--reka-popper-anchor-width)' }">
 			<UButton
 				color="neutral"
 				variant="outline"
