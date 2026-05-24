@@ -573,8 +573,7 @@
 				description: description.value.trim() || null,
 				related_invoice_id: voucherType.value === "receipt" ? relatedInvoiceId.value : null,
 				related_bill_id: voucherType.value === "payment" ? relatedBillId.value : null,
-				related_payslip_id: voucherType.value === "payment" ? relatedPayslipId.value : null,
-				attachment_path: null
+				related_payslip_id: voucherType.value === "payment" ? relatedPayslipId.value : null
 			};
 			const id = await store.create({
 				...input,

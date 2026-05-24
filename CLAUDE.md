@@ -242,8 +242,6 @@ sakoram_app/
 │  │  ├─ DayOfMonthField.vue          ← 1–31 integer input + "Last day of month" toggle (used on payroll settings)
 │  │  ├─ DocumentLineEditor.vue       ← bundle/itemized line-item editor for quotes/invoices/bills
 │  │  ├─ PayslipLineEditor.vue        ← two-section earnings/deductions editor with live subtotals + net
-│  │  ├─ ListPagination.vue           ← (legacy) page-size selector + first/prev/next/last; superseded by PrimeVue's paginator inside ResizableDataTable
-│  │  ├─ SortableTh.vue               ← (legacy) clickable header cell; superseded by PrimeVue's sortable Columns
 │  │  ├─ MoneyInput.vue               ← integer-cents v-model
 │  │  ├─ PdfPreviewModal.vue          ← chromeless PDF preview (header sr-only, PDFium toolbar suppressed via #toolbar=0). iframe loads from a same-origin blob URL (built from the temp file via tauri-plugin-fs readFile) so the footer "Print" button can call contentWindow.print() without tripping same-origin policy.
 │  │  ├─ PhoneUploadModal.vue         ← QR + LAN-server flow to attach a photo from a phone
@@ -261,7 +259,7 @@ sakoram_app/
 │  │  └─ TopClientsChart.vue          ← dashboard: top clients by invoiced revenue, last 12 months
 │  ├─ composables/
 │  │  ├─ usePdfPreview.ts             ← preview→commit flow used by every detail page that has a PDF button
-│  │  ├─ useListView.ts               ← (legacy) sort + paginate any reactive array; only employed on pages not yet migrated to ResizableDataTable
+│  │  ├─ useDocumentNumber.ts         ← editable sequence + live formatted preview + uniqueness check for the New* forms
 │  │  ├─ useUiState.ts                ← localStorage-backed UI prefs: sidebarCollapsed, zoomLevel
 │  │  ├─ useWindowState.ts            ← reactive isMaximized; subscribes to Tauri onResized
 │  │  ├─ useActiveCurrency.ts         ← live ref of the active business's currency meta
@@ -915,6 +913,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0023_business_banks.sql                 ← multi-bank business accounts: business_banks table + business_bank_id FK on quotes/invoices; bank cols dropped from company_settings
 0024_default_font_akt.sql               ← flip default ui_font / pdf_font Inter → Akt
 0025_currency_symbol_override.sql       ← allow custom (non-curated) currency_code by persisting a user-supplied symbol
+0026_drop_attachment_path.sql           ← drop the dead bills.attachment_path / vouchers.attachment_path columns (the polymorphic document_attachments table from 0022 has owned attachments for a while)
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,
@@ -1069,8 +1068,8 @@ tenant ever crosses ~10k in a single table, the migration is to
 swap `store.load()` for paged fetches; don't pre-optimise.
 
 **Legacy components** `ListPagination.vue`, `SortableTh.vue`, and
-`useListView.ts` are still in the tree from the pre-PrimeVue era —
-not used by any document list page today.
+`useListView.ts` were removed in the post-PrimeVue cleanup — every
+list page is on `ResizableDataTable` now.
 
 ---
 
@@ -1456,14 +1455,6 @@ persisted to localStorage).
   row-context-menu pattern is on quotes / invoices / payslips /
   employees / clients / bill categories today; the bills, vouchers,
   and vendors list pages are still dropdown-less.
-- **Legacy `attachment_path` columns** — bills / vouchers still carry an
-  unused single `attachment_path` column from the original 0003 schema.
-  The real attachments system is the polymorphic `document_attachments`
-  table (migration 0022) — the dead columns can be dropped in a future
-  migration.
-- **Legacy `ListPagination.vue` / `SortableTh.vue` / `useListView.ts`**
-  — superseded by `ResizableDataTable` but still in the tree. Safe to
-  delete once nothing references them.
 - **Mac titlebar visual QA** — Approach A (overlay-style traffic
   lights) was committed but never hands-on tested. Need to verify the
   78px reservation, 28px height, and title alignment on real macOS
@@ -1652,8 +1643,10 @@ next-most-impactful add after that.
 - For new stores, follow the pattern of `app/stores/clients.ts` (simple
   CRUD) or `app/stores/payslips.ts` (FSM + derived-from-vouchers).
 - For new list pages, copy the shape from
-  `app/pages/payslips/index.vue` — `useListView` + `<SortableTh>` +
-  `<ListPagination>` + `UContextMenu`-wrapped rows + `itemsFor(row)`.
+  `app/pages/payslips/index.vue` — `<ResizableDataTable>` with PrimeVue
+  `<Column>` children, an `itemsFor(row)` callback feeding the row
+  context menu and the optional ⋯ overflow, and synthetic `_…` fields
+  on each row so by-field sorting matches the rendered cell.
 - For lint conformance, the project uses tabs and a fairly strict
   eslint config. `bun run lint` auto-fixes most issues.
 
