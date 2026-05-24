@@ -154,6 +154,15 @@
 								<DateField v-model="formValidUntil" :min-value="formIssueDate || undefined" :disabled="!editable" />
 							</UFormField>
 						</div>
+						<UFormField label="Bank account" hint="Printed on the PDF so the client knows where to pay.">
+							<USelect
+								v-model="formBankId"
+								:items="bankPickerOptions"
+								value-key="value"
+								class="w-full"
+								:disabled="!editable"
+							/>
+						</UFormField>
 					</div>
 				</div>
 			</UCard>
@@ -412,6 +421,7 @@
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
 	import { buildQuotePdfPayload } from "~/lib/quote-pdf";
+	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { canTransition, useQuotesStore } from "~/stores/quotes";
@@ -424,6 +434,7 @@
 	const toast = useToast();
 
 	const settingsStore = useSettingsStore();
+	const banksStore = useBusinessBanksStore();
 	const clientsStore = useClientsStore();
 	const quotesStore = useQuotesStore();
 	const invoicesStore = useInvoicesStore();
@@ -451,6 +462,20 @@
 	const formNotes = ref("");
 	const formTerms = ref("");
 	const formPreparedBy = ref("");
+	const formBankId = ref<number | null>(null);
+
+	// Bank picker options: every active bank plus a "no bank" entry so the
+	// user can deliberately render a quote without a bank block on the PDF.
+	const bankPickerOptions = computed(() => {
+		const items: { label: string, value: number | null }[] = [
+			{ label: "— No bank —", value: null }
+		];
+		for (const b of banksStore.activeBanks) {
+			const suffix = b.bank_account_number ? ` · ${b.bank_account_number}` : "";
+			items.push({ label: `${b.label}${suffix}`, value: b.id });
+		}
+		return items;
+	});
 
 	const pricingMode = computed<PricingMode>(() => quote.value?.pricing_mode ?? "bundle");
 	const status = computed<QuoteStatus>(() => quote.value?.status ?? "draft");
@@ -466,7 +491,7 @@
 		}
 	});
 
-	await Promise.all([settingsStore.ensureLoaded(), clientsStore.load()]);
+	await Promise.all([settingsStore.ensureLoaded(), clientsStore.load(), banksStore.ensureLoaded()]);
 
 	const hydrate = async () => {
 		hydrating.value = true;
@@ -482,6 +507,7 @@
 		formNotes.value = row.notes ?? "";
 		formTerms.value = row.terms ?? "";
 		formPreparedBy.value = row.prepared_by ?? "";
+		formBankId.value = row.business_bank_id;
 		vatRatePct.value = row.vat_rate_basis_points / 100;
 		bundleSubtotalCents.value = row.subtotal_cents;
 
@@ -504,7 +530,7 @@
 	// Mark dirty when any directly v-model'd form field changes. Registered
 	// after the initial hydrate; hydrating-flag guards re-hydrate paths.
 	watch(
-		[formProjectTitle, formIssueDate, formValidUntil, formNotes, formTerms, formPreparedBy, vatRatePct, bundleSubtotalCents],
+		[formProjectTitle, formIssueDate, formValidUntil, formNotes, formTerms, formPreparedBy, formBankId, vatRatePct, bundleSubtotalCents],
 		() => {
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
@@ -590,6 +616,12 @@
 				? totalsFromLines.total_cents
 				: subtotal + tax;
 
+			// Re-snapshot the bank from its current row at every save so
+			// label / account-number edits flow into the snapshot until the
+			// quote is issued. Once issued, this code path is gated by
+			// `editable` and the snapshot stays frozen.
+			const bankSnapshot = await banksStore.buildSnapshotForId(formBankId.value);
+
 			await quotesStore.update(quoteId, {
 				pricing_mode: quote.value.pricing_mode,
 				project_title: formProjectTitle.value,
@@ -602,7 +634,9 @@
 				notes: formNotes.value || null,
 				terms: formTerms.value || null,
 				prepared_by: formPreparedBy.value || null,
-				client_snapshot: quote.value.client_snapshot
+				client_snapshot: quote.value.client_snapshot,
+				business_bank_id: formBankId.value,
+				bank_details_snapshot: bankSnapshot
 			});
 			await quotesStore.load();
 			await hydrate();

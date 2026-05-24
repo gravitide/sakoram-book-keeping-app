@@ -65,6 +65,7 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(20, "pdf protection", include_str!("../migrations/0020_pdf_protection.sql")),
 	(21, "invoice attachments", include_str!("../migrations/0021_invoice_attachments.sql")),
 	(22, "document attachments", include_str!("../migrations/0022_document_attachments.sql")),
+	(23, "business banks", include_str!("../migrations/0023_business_banks.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

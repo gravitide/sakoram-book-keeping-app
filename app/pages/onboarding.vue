@@ -322,6 +322,7 @@
 	import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import { CURRENCIES } from "~/lib/money";
+	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
 
@@ -332,6 +333,7 @@
 
 	const toast = useToast();
 	const settingsStore = useSettingsStore();
+	const banksStore = useBusinessBanksStore();
 	const tenants = useTenantsStore();
 
 	await settingsStore.ensureLoaded();
@@ -365,10 +367,14 @@
 		default_vat_rate_pct: (settingsStore.settings?.default_vat_rate ?? 1800) / 100,
 		default_payment_terms_days: settingsStore.settings?.default_payment_terms_days ?? 30,
 		default_quote_validity_days: settingsStore.settings?.default_quote_validity_days ?? 30,
-		bank_name: settingsStore.settings?.bank_name ?? "",
-		bank_account_name: settingsStore.settings?.bank_account_name ?? "",
-		bank_account_number: settingsStore.settings?.bank_account_number ?? "",
-		bank_branch: settingsStore.settings?.bank_branch ?? ""
+		// Bank fields on this form aren't part of company_settings any
+		// more (migration 0023 split them into a managed business_banks
+		// list). The step 4 save creates a new business_banks row + sets
+		// it as default if anything's filled in.
+		bank_name: "",
+		bank_account_name: "",
+		bank_account_number: "",
+		bank_branch: ""
 	});
 
 	const currencyOptions = Object.values(CURRENCIES).map((c) => ({
@@ -432,12 +438,26 @@
 				default_quote_validity_days: form.default_quote_validity_days
 			});
 		} else {
-			await settingsStore.save({
-				bank_name: form.bank_name.trim() || null,
-				bank_account_name: form.bank_account_name.trim() || null,
-				bank_account_number: form.bank_account_number.trim() || null,
-				bank_branch: form.bank_branch.trim() || null
-			});
+			// Banking lives in business_banks now. Only create a row if
+			// the user filled anything in — empty step 4 means "skip,
+			// I'll add bank accounts later from Settings → Business
+			// details".
+			const bn = form.bank_name.trim();
+			const ba = form.bank_account_name.trim();
+			const an = form.bank_account_number.trim();
+			const br = form.bank_branch.trim();
+			if (bn || ba || an || br) {
+				const id = await banksStore.create({
+					// Auto-label using the bank name (or fall back to a
+					// generic "Default") — the user can rename later.
+					label: bn || "Default",
+					bank_name: bn || null,
+					bank_account_name: ba || null,
+					bank_account_number: an || null,
+					bank_branch: br || null
+				});
+				await banksStore.setDefault(id);
+			}
 		}
 	};
 

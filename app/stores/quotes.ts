@@ -15,6 +15,7 @@ import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { computeLineTotals, sumCents } from "~/lib/money";
 import { allocateDocumentNumber } from "~/lib/numbering";
+import { useBusinessBanksStore } from "~/stores/business_banks";
 import { purgeDocumentAttachments } from "~/stores/document_attachments";
 import { useSettingsStore } from "~/stores/settings";
 
@@ -39,6 +40,7 @@ export interface QuoteRow {
 	terms: string | null
 	prepared_by: string | null
 	bank_details_snapshot: string | null
+	business_bank_id: number | null
 	converted_invoice_id: number | null
 	created_at: string
 	updated_at: string
@@ -199,20 +201,21 @@ export const useQuotesStore = defineStore("quotes", () => {
 		tax_id: client.tax_id ?? null
 	} satisfies ClientSnapshot);
 
-	// Read bank fields from the settings store at issue time. Returns a JSON
-	// string snapshot or null if no bank fields are filled in.
-	const buildBankSnapshot = (): string | null => {
-		const settingsStore = useSettingsStore();
-		const row = settingsStore.settings;
-		if (!row) return null;
-		const snap: BankSnapshot = {
-			bank_name: row.bank_name,
-			bank_branch: row.bank_branch,
-			bank_account_name: row.bank_account_name,
-			bank_account_number: row.bank_account_number
-		};
-		const anyFilled = Object.values(snap).some((v) => v != null && v !== "");
-		return anyFilled ? JSON.stringify(snap) : null;
+	// Resolve the bank id + snapshot pair for a draft. If no explicit id is
+	// passed, falls back to the business's default bank. Returns
+	// { id: null, snapshot: null } when no banks exist yet (e.g. on a
+	// fresh tenant before the user has added any) — the document just
+	// renders without a bank block.
+	const resolveBankForDraft = async (
+		explicitId?: number | null
+	): Promise<{ id: number | null, snapshot: string | null }> => {
+		const banksStore = useBusinessBanksStore();
+		await banksStore.ensureLoaded();
+		const id = explicitId !== undefined && explicitId !== null
+			? explicitId
+			: banksStore.defaultBank?.id ?? null;
+		const snapshot = await banksStore.buildSnapshotForId(id);
+		return { id, snapshot };
 	};
 
 	// Today's date in YYYY-MM-DD using local time (not UTC).
@@ -258,7 +261,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 
 		const allocation = await allocateDocumentNumber("quote", issue);
 		const clientSnap = buildClientSnapshot(input.client);
-		const bankSnap = buildBankSnapshot();
+		const { id: bankId, snapshot: bankSnap } = await resolveBankForDraft();
 
 		// Seed the draft's VAT rate from the business profile's default so
 		// the editor lands with the right percentage already filled in.
@@ -270,8 +273,8 @@ export const useQuotesStore = defineStore("quotes", () => {
 				number, client_id, client_snapshot, issue_date, valid_until,
 				status, pricing_mode, project_title,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents,
-				prepared_by, bank_details_snapshot
-			) VALUES (?, ?, ?, ?, ?, 'draft', 'bundle', ?, ?, 0, 0, 0, ?, ?)`,
+				prepared_by, bank_details_snapshot, business_bank_id
+			) VALUES (?, ?, ?, ?, ?, 'draft', 'bundle', ?, ?, 0, 0, 0, ?, ?, ?)`,
 			[
 				allocation.number,
 				input.client.id,
@@ -281,7 +284,8 @@ export const useQuotesStore = defineStore("quotes", () => {
 				input.project_title ?? "",
 				defaultVatBp,
 				null,
-				bankSnap
+				bankSnap,
+				bankId
 			]
 		);
 		if (result.lastInsertId === undefined) throw new Error("createDraft: no lastInsertId");
@@ -305,15 +309,19 @@ export const useQuotesStore = defineStore("quotes", () => {
 		const validUntil = addDaysSafe(issue, span);
 
 		const allocation = await allocateDocumentNumber("quote", issue);
-		const bankSnap = buildBankSnapshot();
+		// Carry forward the source quote's chosen bank if it still exists
+		// (resolveBankForDraft falls back to default when null). Snapshot
+		// is rebuilt from the bank's current row, so a renamed account
+		// shows the new details on the duplicate.
+		const { id: bankId, snapshot: bankSnap } = await resolveBankForDraft(src.business_bank_id);
 
 		const result = await execute(
 			`INSERT INTO quotes (
 				number, client_id, client_snapshot, issue_date, valid_until,
 				status, pricing_mode, project_title,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents,
-				notes, terms, prepared_by, bank_details_snapshot
-			) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				notes, terms, prepared_by, bank_details_snapshot, business_bank_id
+			) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				allocation.number,
 				src.client_id,
@@ -329,7 +337,8 @@ export const useQuotesStore = defineStore("quotes", () => {
 				src.notes,
 				src.terms,
 				src.prepared_by,
-				bankSnap
+				bankSnap,
+				bankId
 			]
 		);
 		if (result.lastInsertId === undefined) throw new Error("duplicate: no lastInsertId");
@@ -368,7 +377,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 		| "pricing_mode" | "project_title"
 		| "vat_rate_basis_points"
 		| "subtotal_cents" | "tax_cents" | "total_cents"
-		| "notes" | "terms" | "prepared_by" | "bank_details_snapshot">>;
+		| "notes" | "terms" | "prepared_by" | "bank_details_snapshot" | "business_bank_id">>;
 
 	const UPDATABLE: ReadonlyArray<keyof QuoteUpdate> = [
 		"client_id",
@@ -384,7 +393,8 @@ export const useQuotesStore = defineStore("quotes", () => {
 		"notes",
 		"terms",
 		"prepared_by",
-		"bank_details_snapshot"
+		"bank_details_snapshot",
+		"business_bank_id"
 	];
 
 	const update = async (id: number, patch: QuoteUpdate): Promise<void> => {
@@ -549,6 +559,6 @@ export const useQuotesStore = defineStore("quotes", () => {
 		remove,
 		expireOverdue,
 		buildClientSnapshot,
-		buildBankSnapshot
+		resolveBankForDraft
 	};
 });

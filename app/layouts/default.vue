@@ -368,7 +368,17 @@
 			icon: "i-lucide-settings",
 			divider: true,
 			children: [
-				{ to: "/settings/company", label: "Company details", icon: "i-lucide-building-2" },
+				{
+					to: "/settings/company",
+					label: "Business details",
+					icon: "i-lucide-building-2",
+					sections: [
+						{ hash: "#company", label: "Company", icon: "i-lucide-building-2" },
+						{ hash: "#address", label: "Address", icon: "i-lucide-map-pin" },
+						{ hash: "#bank-accounts", label: "Bank accounts", icon: "i-lucide-landmark" },
+						{ hash: "#defaults", label: "Defaults", icon: "i-lucide-sliders-horizontal" }
+					]
+				},
 				{
 					to: "/settings/pdf",
 					label: "PDF",

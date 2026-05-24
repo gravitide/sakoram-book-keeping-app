@@ -1110,7 +1110,7 @@ Lists
   └─ Bill categories
 ─── (divider)
 Settings                ← per-tenant business config (exported in backups)
-  ├─ Company details
+  ├─ Business details
   ├─ PDF
   │   ├─ Font                ← third-level in-page #anchors, shown only
   │   ├─ Header logo            while /settings/pdf is the active route

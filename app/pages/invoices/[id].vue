@@ -155,6 +155,15 @@
 								<DateField v-model="formDueDate" :min-value="formIssueDate || undefined" :disabled="!editable" />
 							</UFormField>
 						</div>
+						<UFormField label="Bank account" hint="Printed on the PDF so the client knows where to pay.">
+							<USelect
+								v-model="formBankId"
+								:items="bankPickerOptions"
+								value-key="value"
+								class="w-full"
+								:disabled="!editable"
+							/>
+						</UFormField>
 					</div>
 				</div>
 			</UCard>
@@ -466,6 +475,7 @@
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { buildInvoicePdfPayload } from "~/lib/invoice-pdf";
 	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
+	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { useSettingsStore } from "~/stores/settings";
@@ -478,6 +488,7 @@
 	const toast = useToast();
 
 	const settingsStore = useSettingsStore();
+	const banksStore = useBusinessBanksStore();
 	const clientsStore = useClientsStore();
 	const invoicesStore = useInvoicesStore();
 	const vouchersStore = useVouchersStore();
@@ -502,6 +513,21 @@
 	const formNotes = ref("");
 	const formTerms = ref("");
 	const formPreparedBy = ref("");
+	const formBankId = ref<number | null>(null);
+
+	// Bank picker options: every active bank plus a "no bank" entry so the
+	// user can deliberately render an invoice without a bank block on the
+	// PDF.
+	const bankPickerOptions = computed(() => {
+		const items: { label: string, value: number | null }[] = [
+			{ label: "— No bank —", value: null }
+		];
+		for (const b of banksStore.activeBanks) {
+			const suffix = b.bank_account_number ? ` · ${b.bank_account_number}` : "";
+			items.push({ label: `${b.label}${suffix}`, value: b.id });
+		}
+		return items;
+	});
 
 	const pricingMode = computed<PricingMode>(() => invoice.value?.pricing_mode ?? "bundle");
 	// Persisted bit (draft|sent|cancelled) drives editability and the
@@ -564,6 +590,7 @@
 	// the panel would otherwise be empty until a manual refresh.
 	await Promise.all([
 		settingsStore.ensureLoaded(),
+		banksStore.ensureLoaded(),
 		clientsStore.load(),
 		vouchersStore.load()
 	]);
@@ -582,6 +609,7 @@
 		formNotes.value = row.notes ?? "";
 		formTerms.value = row.terms ?? "";
 		formPreparedBy.value = row.prepared_by ?? "";
+		formBankId.value = row.business_bank_id;
 		vatRatePct.value = row.vat_rate_basis_points / 100;
 		bundleSubtotalCents.value = row.subtotal_cents;
 
@@ -611,7 +639,7 @@
 	// it. Re-runs of hydrate() reset dirty to false at the end, so the watcher
 	// firing during a re-hydrate is harmless.
 	watch(
-		[formProjectTitle, formIssueDate, formDueDate, formNotes, formTerms, formPreparedBy, vatRatePct, bundleSubtotalCents],
+		[formProjectTitle, formIssueDate, formDueDate, formNotes, formTerms, formPreparedBy, formBankId, vatRatePct, bundleSubtotalCents],
 		() => {
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
@@ -689,6 +717,12 @@
 				? totalsFromLines.total_cents
 				: subtotal + tax;
 
+			// Re-snapshot the bank from its current row at every save so
+			// label / account-number edits flow into the snapshot while the
+			// invoice is still a draft. Once issued the picker is read-only
+			// and the snapshot stays frozen.
+			const bankSnapshot = await banksStore.buildSnapshotForId(formBankId.value);
+
 			await invoicesStore.update(invoiceId, {
 				pricing_mode: invoice.value.pricing_mode,
 				project_title: formProjectTitle.value,
@@ -701,7 +735,9 @@
 				notes: formNotes.value || null,
 				terms: formTerms.value || null,
 				prepared_by: formPreparedBy.value || null,
-				client_snapshot: invoice.value.client_snapshot
+				client_snapshot: invoice.value.client_snapshot,
+				business_bank_id: formBankId.value,
+				bank_details_snapshot: bankSnapshot
 			});
 			await invoicesStore.load();
 			await hydrate();
