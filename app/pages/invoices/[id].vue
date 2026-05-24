@@ -3,32 +3,20 @@
 		<!-- select-none on the page root: labels, totals, and other static
 			copy aren't drag-selectable; form fields stay selectable via the
 			input rule in main.css, so editing a draft invoice still works. -->
-		<header class="mb-6 flex items-start justify-between gap-4 flex-wrap">
-			<div>
-				<NuxtLink to="/invoices" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) flex items-center gap-1">
-					<UIcon name="i-lucide-arrow-left" class="size-4" />
-					Back to invoices
-				</NuxtLink>
-				<h1 class="text-2xl font-semibold mt-1 flex items-center gap-3 flex-wrap">
-					<span class="tabular-nums">{{ invoice.number }}</span>
-					<StatusBadge :status="status" size="md" />
-					<span v-if="!editable" class="app-chrome text-xs text-(--ui-text-muted) font-normal">
-						read-only after issue
-					</span>
-				</h1>
-				<NuxtLink
-					v-if="invoice.source_quote_id"
-					:to="`/quotes/${invoice.source_quote_id}`"
-					class="text-xs text-(--ui-primary) hover:underline mt-1 inline-flex items-center gap-1"
-				>
-					<UIcon name="i-lucide-link" class="size-3" />
-					Converted from quote
-				</NuxtLink>
-			</div>
-			<!-- lg+ inline cluster. Below lg this collapses into a single
-				⋯ dropdown so the header doesn't get cramped on narrower
-				windows; both paths share the same handlers. -->
-			<div class="hidden lg:flex gap-2 items-center">
+		<!-- Top toolbar row: back link on the left, action cluster on the
+			right. Pinned above the title block so the buttons can't
+			collide with the number / status / subtitle as the viewport
+			narrows — same shape as the address-book detail pages. -->
+		<div class="mb-4 flex items-center justify-between gap-4">
+			<NuxtLink to="/invoices" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
+				<UIcon name="i-lucide-arrow-left" class="size-4" />
+				Back to invoices
+			</NuxtLink>
+
+			<!-- md+ inline cluster. Below md this collapses into a single
+				⋯ dropdown so the toolbar stays a tidy two-element row on
+				narrow windows; both paths share the same handlers. -->
+			<div class="hidden md:flex gap-2 items-center shrink-0">
 				<UButton
 					v-if="canRecordPayments"
 					size="sm"
@@ -68,7 +56,7 @@
 				<!-- Visual separator before the destructive action so the
 					delete button doesn't sit shoulder-to-shoulder with the
 					everyday actions and get accidentally clicked. -->
-				<div class="h-6 w-px bg-(--ui-border) mx-1" />
+				<div class="h-6 w-px bg-(--ui-border-accented) mx-1" />
 
 				<UButton
 					size="sm"
@@ -81,7 +69,7 @@
 				</UButton>
 			</div>
 
-			<div class="lg:hidden">
+			<div class="md:hidden shrink-0">
 				<UDropdownMenu :items="actionMenuItems">
 					<UButton
 						size="sm"
@@ -93,6 +81,24 @@
 					/>
 				</UDropdownMenu>
 			</div>
+		</div>
+
+		<header class="mb-6">
+			<h1 class="text-2xl font-semibold flex items-center gap-3 flex-wrap">
+				<span class="tabular-nums">{{ invoice.number }}</span>
+				<StatusBadge :status="status" size="md" />
+				<span v-if="!editable" class="app-chrome text-xs text-(--ui-text-muted) font-normal">
+					read-only after issue
+				</span>
+			</h1>
+			<NuxtLink
+				v-if="invoice.source_quote_id"
+				:to="`/quotes/${invoice.source_quote_id}`"
+				class="text-xs text-(--ui-primary) hover:underline mt-1 inline-flex items-center gap-1"
+			>
+				<UIcon name="i-lucide-link" class="size-3" />
+				Converted from quote
+			</NuxtLink>
 		</header>
 
 		<div class="space-y-6">

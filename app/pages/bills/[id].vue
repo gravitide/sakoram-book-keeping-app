@@ -1,24 +1,19 @@
 <template>
 	<div v-if="bill">
-		<header class="mb-6 flex items-start justify-between gap-4 flex-wrap">
-			<div>
-				<NuxtLink to="/bills" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) flex items-center gap-1">
-					<UIcon name="i-lucide-arrow-left" class="size-4" />
-					Back to bills
-				</NuxtLink>
-				<h1 class="text-2xl font-semibold mt-1 flex items-center gap-3 flex-wrap">
-					<span class="tabular-nums">{{ bill.number }}</span>
-					<StatusBadge :status="status" size="md" />
-					<span v-if="!editable" class="app-chrome text-xs text-(--ui-text-muted) font-normal">
-						read-only
-					</span>
-				</h1>
-				<p class="app-chrome text-sm text-(--ui-text-muted) mt-1">
-					From {{ vendorSnapshot?.name || "(no vendor)" }}
-					<span v-if="formVendorInvoiceNumber"> · #{{ formVendorInvoiceNumber }}</span>
-				</p>
-			</div>
-			<div class="flex gap-2 items-center">
+		<!-- Top toolbar row: back link on the left, action cluster on the
+			right. Pinned above the title block so the buttons can't
+			collide with the number / status / subtitle as the viewport
+			narrows. flex-wrap on the row lets the cluster spill onto a
+			second toolbar row at very narrow widths instead of crashing
+			into the title; the cluster itself stays inline (no dropdown
+			collapse — bills has fewer header actions than quotes /
+			invoices, so a dropdown would be overkill). -->
+		<div class="mb-4 flex items-center justify-between gap-x-4 gap-y-2 flex-wrap">
+			<NuxtLink to="/bills" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
+				<UIcon name="i-lucide-arrow-left" class="size-4" />
+				Back to bills
+			</NuxtLink>
+			<div class="flex gap-2 items-center flex-wrap shrink-0">
 				<UButton
 					v-if="balanceCents > 0 && !isCancelled"
 					size="sm"
@@ -58,7 +53,7 @@
 
 				<!-- Visual separator before the destructive action so a
 					stray click on Cancel doesn't land on Delete. -->
-				<div class="h-6 w-px bg-(--ui-border) mx-1" />
+				<div class="h-6 w-px bg-(--ui-border-accented) mx-1" />
 
 				<UButton
 					size="sm"
@@ -70,6 +65,20 @@
 					Delete
 				</UButton>
 			</div>
+		</div>
+
+		<header class="mb-6">
+			<h1 class="text-2xl font-semibold flex items-center gap-3 flex-wrap">
+				<span class="tabular-nums">{{ bill.number }}</span>
+				<StatusBadge :status="status" size="md" />
+				<span v-if="!editable" class="app-chrome text-xs text-(--ui-text-muted) font-normal">
+					read-only
+				</span>
+			</h1>
+			<p class="app-chrome text-sm text-(--ui-text-muted) mt-1">
+				From {{ vendorSnapshot?.name || "(no vendor)" }}
+				<span v-if="formVendorInvoiceNumber"> · #{{ formVendorInvoiceNumber }}</span>
+			</p>
 		</header>
 
 		<div class="space-y-6">

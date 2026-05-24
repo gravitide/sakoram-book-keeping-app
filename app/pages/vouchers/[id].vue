@@ -53,6 +53,9 @@
 				>
 					PDF & Print
 				</UButton>
+				<!-- Visual separator before the destructive action so a stray
+					click on the everyday buttons doesn't land on Delete. -->
+				<div class="h-6 w-px bg-(--ui-border-accented) mx-1" />
 				<UButton size="sm" color="error" variant="soft" icon="i-lucide-trash-2" @click="askDelete">
 					Delete
 				</UButton>

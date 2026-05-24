@@ -4,15 +4,63 @@
 			editing fields, not copying chrome / labels. Inputs stay
 			selectable via the rule in main.css that puts user-select:text
 			back on input / textarea / [contenteditable]. -->
-		<NuxtLink to="/employees" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1 mb-4">
-			<UIcon name="i-lucide-arrow-left" class="size-4" />
-			Back to employees
-		</NuxtLink>
+		<!-- Top toolbar row: back link on the left, action cluster on the
+			right. Pinned above the hero so the buttons can't collide
+			with the name / chip strip below as the viewport narrows.
+			flex-wrap on the row lets the cluster spill onto a second
+			toolbar row at very narrow widths instead of crashing into
+			the title; the cluster itself stays inline (no dropdown
+			collapse — the set of actions is small enough to fit). -->
+		<div class="mb-4 flex items-center justify-between gap-x-4 gap-y-2 flex-wrap">
+			<NuxtLink to="/employees" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
+				<UIcon name="i-lucide-arrow-left" class="size-4" />
+				Back to employees
+			</NuxtLink>
 
-		<!-- Identity hero. Layout: avatar + name/chips on the left,
-			action buttons cluster top-right. items-start so the buttons
-			pin to the top edge of the row regardless of how the chips
-			wrap underneath the name. -->
+			<!-- Header-level actions: View payslips / Archive / Delete.
+				Hidden for new employees since there's nothing to act on
+				yet. Delete is for the "accidentally created an employee"
+				case — the payslips FK has ON DELETE RESTRICT, so the DB
+				blocks the hard-delete once any payslip is issued; the
+				error surfaces as a friendly toast pointing the user at
+				Archive instead. -->
+			<div v-if="!isNew" class="flex items-center gap-2 flex-wrap shrink-0">
+				<UButton
+					icon="i-lucide-file-spreadsheet"
+					size="sm"
+					variant="soft"
+					color="neutral"
+					@click="viewPayslips"
+				>
+					View payslips
+				</UButton>
+				<UButton
+					:icon="isArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
+					size="sm"
+					variant="soft"
+					color="neutral"
+					@click="toggleArchive"
+				>
+					{{ isArchived ? "Restore employee" : "Archive employee" }}
+				</UButton>
+				<!-- Visual separator before the destructive action so a stray
+					click on Archive doesn't land on Delete. -->
+				<div class="h-6 w-px bg-(--ui-border-accented) mx-1" />
+				<UButton
+					icon="i-lucide-trash-2"
+					size="sm"
+					variant="soft"
+					color="error"
+					@click="confirmDelete = true"
+				>
+					Delete
+				</UButton>
+			</div>
+		</div>
+
+		<!-- Identity hero. Avatar + name + chips only — actions moved
+			to the top row above so they can't crash into this content
+			as the viewport narrows. -->
 		<section class="mb-10">
 			<div class="flex items-start gap-5 flex-wrap">
 				<!-- Avatar — circular, primary-tinted background with the
@@ -66,172 +114,172 @@
 						</div>
 					</dl>
 				</div>
-
-				<!-- Right cluster: header-level actions (Archive / Delete).
-					Hidden for new employees since there's nothing to act
-					on yet. Delete is for the "accidentally created an
-					employee" case — the payslips FK has ON DELETE
-					RESTRICT, so the DB blocks the hard-delete once any
-					payslip is issued; the error surfaces as a friendly
-					toast pointing the user at Archive instead. -->
-				<!-- xl+ shows the three actions inline; below xl they
-					collapse into a dropdown so the header name doesn't
-					clip on narrower windows. Both paths feed off the
-					same handlers. -->
-				<div v-if="!isNew" class="hidden xl:flex items-center gap-2 shrink-0 ml-auto">
-					<UButton
-						icon="i-lucide-file-spreadsheet"
-						size="sm"
-						variant="soft"
-						color="neutral"
-						@click="viewPayslips"
-					>
-						View payslips
-					</UButton>
-					<UButton
-						:icon="isArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
-						size="sm"
-						variant="soft"
-						color="neutral"
-						@click="toggleArchive"
-					>
-						{{ isArchived ? "Restore employee" : "Archive employee" }}
-					</UButton>
-					<UButton
-						icon="i-lucide-trash-2"
-						size="sm"
-						variant="soft"
-						color="error"
-						@click="confirmDelete = true"
-					>
-						Delete
-					</UButton>
-				</div>
-
-				<div v-if="!isNew" class="xl:hidden shrink-0 ml-auto">
-					<UDropdownMenu :items="actionMenuItems">
-						<UButton
-							size="sm"
-							variant="soft"
-							color="neutral"
-							icon="i-lucide-ellipsis-vertical"
-							title="Actions"
-							aria-label="Actions"
-						/>
-					</UDropdownMenu>
-				</div>
 			</div>
 		</section>
 
 		<UForm :schema="schema" :state="form" @submit="onSubmit">
-			<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-				<SectionCard
-					icon="i-lucide-id-card"
-					title="Identity"
-					subtitle="Who they are and how to reach them."
-				>
-					<UFormField label="Full name" name="full_name" required>
-						<UInput v-model="form.full_name" placeholder="A. B. Perera" />
-					</UFormField>
-					<UFormField label="Employee number" name="employee_number" hint="Optional">
-						<UInput
-							v-model="form.employee_number"
-							leading-icon="i-lucide-hash"
-							placeholder="e.g. E001"
-						/>
-					</UFormField>
-					<UFormField label="Designation" name="designation">
-						<UInput
-							v-model="form.designation"
-							leading-icon="i-lucide-briefcase"
-							placeholder="Accountant"
-						/>
-					</UFormField>
-					<UFormField label="NIC" name="nic">
-						<UInput
-							v-model="form.nic"
-							leading-icon="i-lucide-id-card"
-							placeholder="200012345678"
-						/>
-					</UFormField>
-					<UFormField label="Email" name="email">
-						<UInput
-							v-model="form.email"
-							type="email"
-							leading-icon="i-lucide-mail"
-							placeholder="name@company.lk"
-						/>
-					</UFormField>
-					<UFormField label="Phone" name="phone">
-						<UInput
-							v-model="form.phone"
-							leading-icon="i-lucide-phone"
-							placeholder="+94 ..."
-						/>
-					</UFormField>
-				</SectionCard>
+			<!-- Form layout. The two-column grid at lg+ used to share rows
+				across cards, which forced short cards (Employment with just
+				2 fields) to stretch up to the height of their row partner
+				(Identity with 6). Wrapping each column in its own vertical
+				stack instead lets short and tall cards flow independently
+				per column — Employment now sits directly above Bank without
+				inheriting Identity's height. At sm/md the page is single-
+				column anyway, so this is a no-op there. -->
+			<div class="space-y-6">
+				<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+					<!-- Left column: Identity + Address (tall cards) -->
+					<div class="space-y-6">
+						<SectionCard
+							icon="i-lucide-id-card"
+							title="Identity"
+							subtitle="Who they are and how to reach them."
+						>
+							<!-- Column count tracks the card's effective width:
+								- sm: 1 col (page is single-column, card full-width
+								  but viewport is narrow)
+								- md: 2 cols (page still single-column, card has
+								  full viewport width — plenty of room)
+								- lg: 1 col (page goes 2-col, card drops to
+								  half-width and 2 cols of fields cramp long
+								  values like email)
+								- xl+: 2 cols (page is wider, the half-width card
+								  is wide enough for 2 cols again)
+								SectionCard's outer space-y-4 is a no-op here
+								because this grid is its only child. -->
+							<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
+								<UFormField label="Full name" name="full_name" required>
+									<UInput v-model="form.full_name" placeholder="A. B. Perera" />
+								</UFormField>
+								<UFormField label="Employee number" name="employee_number" hint="Optional">
+									<UInput
+										v-model="form.employee_number"
+										leading-icon="i-lucide-hash"
+										placeholder="e.g. E001"
+									/>
+								</UFormField>
+								<UFormField label="Designation" name="designation">
+									<UInput
+										v-model="form.designation"
+										leading-icon="i-lucide-briefcase"
+										placeholder="Accountant"
+									/>
+								</UFormField>
+								<UFormField label="NIC" name="nic">
+									<UInput
+										v-model="form.nic"
+										leading-icon="i-lucide-id-card"
+										placeholder="200012345678"
+									/>
+								</UFormField>
+								<UFormField label="Email" name="email">
+									<UInput
+										v-model="form.email"
+										type="email"
+										leading-icon="i-lucide-mail"
+										placeholder="name@company.lk"
+									/>
+								</UFormField>
+								<UFormField label="Phone" name="phone">
+									<UInput
+										v-model="form.phone"
+										leading-icon="i-lucide-phone"
+										placeholder="+94 ..."
+									/>
+								</UFormField>
+							</div>
+						</SectionCard>
 
-				<SectionCard
-					icon="i-lucide-banknote"
-					title="Employment"
-					:subtitle="`Joining date and the headline monthly salary in ${currency.code}.`"
-				>
-					<UFormField label="Joining date" name="joining_date">
-						<DateField v-model="form.joining_date" />
-					</UFormField>
-					<UFormField label="Basic monthly salary" name="basic_salary_cents">
-						<MoneyInput v-model="form.basic_salary_cents" />
-					</UFormField>
-				</SectionCard>
-
-				<SectionCard
-					icon="i-lucide-map-pin"
-					title="Address"
-					subtitle="Optional — useful for HR records and EPF/ETF filings."
-				>
-					<UFormField label="Address line 1" name="address_line1">
-						<UInput v-model="form.address_line1" />
-					</UFormField>
-					<UFormField label="Address line 2" name="address_line2">
-						<UInput v-model="form.address_line2" />
-					</UFormField>
-					<div class="grid grid-cols-3 gap-3">
-						<UFormField label="City" name="city" class="col-span-2">
-							<UInput v-model="form.city" />
-						</UFormField>
-						<UFormField label="Postal" name="postal_code">
-							<UInput v-model="form.postal_code" />
-						</UFormField>
+						<SectionCard
+							icon="i-lucide-map-pin"
+							title="Address"
+							subtitle="Optional — useful for HR records and EPF/ETF filings."
+						>
+							<UFormField label="Address line 1" name="address_line1">
+								<UInput v-model="form.address_line1" />
+							</UFormField>
+							<UFormField label="Address line 2" name="address_line2">
+								<UInput v-model="form.address_line2" />
+							</UFormField>
+							<!-- City / Postal / Country layout flexes per breakpoint:
+								- sm: stacked (each field on its own row)
+								- md: 3 equal cols, all three on one row
+								- lg: City(2) + Postal(1) on row 1, Country
+								  full-width on row 2 — the half-width card at
+								  lg makes three side-by-side fields cramped
+								- xl+: 3 cols again, all three on one row -->
+							<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+								<UFormField label="City" name="city" class="lg:col-span-2 xl:col-span-1">
+									<UInput v-model="form.city" />
+								</UFormField>
+								<UFormField label="Postal" name="postal_code">
+									<UInput v-model="form.postal_code" />
+								</UFormField>
+								<UFormField label="Country" name="country" class="lg:col-span-3 xl:col-span-1">
+									<UInput v-model="form.country" />
+								</UFormField>
+							</div>
+						</SectionCard>
 					</div>
-					<UFormField label="Country" name="country">
-						<UInput v-model="form.country" />
-					</UFormField>
-				</SectionCard>
 
-				<SectionCard
-					icon="i-lucide-landmark"
-					title="Bank for salary payments"
-					subtitle="Printed on the payslip so the bank knows where to send the money."
-				>
-					<UFormField label="Bank name" name="bank_name">
-						<UInput v-model="form.bank_name" />
-					</UFormField>
-					<UFormField label="Branch" name="bank_branch">
-						<UInput v-model="form.bank_branch" />
-					</UFormField>
-					<UFormField label="Account number" name="bank_account_number">
-						<UInput v-model="form.bank_account_number" />
-					</UFormField>
-					<UFormField label="Account name" name="bank_account_name">
-						<UInput v-model="form.bank_account_name" />
-					</UFormField>
-				</SectionCard>
+					<!-- Right column: Employment (short) + Bank. Stacks
+						independently of the left column so Employment isn't
+						forced up to Identity's height. -->
+					<div class="space-y-6">
+						<SectionCard
+							icon="i-lucide-banknote"
+							title="Employment"
+							:subtitle="`Joining date and the headline monthly salary in ${currency.code}.`"
+						>
+							<!-- Same column-count step as Identity: 2-col at md
+								where the card is full-width, drop to 1-col at lg
+								where the card is half-width (paired field row
+								would feel cramped), back to 2-col at xl+ where
+								the half-width card has enough room again. -->
+							<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
+								<UFormField label="Joining date" name="joining_date">
+									<DateField v-model="form.joining_date" />
+								</UFormField>
+								<UFormField label="Basic monthly salary" name="basic_salary_cents">
+									<MoneyInput v-model="form.basic_salary_cents" />
+								</UFormField>
+							</div>
+						</SectionCard>
 
+						<SectionCard
+							icon="i-lucide-landmark"
+							title="Bank for salary payments"
+							subtitle="Printed on the payslip so the bank knows where to send the money."
+						>
+							<!-- Same column-count step as Identity / Employment:
+								1 → 2 (md) → 1 (lg) → 2 (xl+). Bank name and
+								Account name can be long, so the lg step back to
+								1-col matters here too. -->
+							<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
+								<UFormField label="Bank name" name="bank_name">
+									<UInput v-model="form.bank_name" />
+								</UFormField>
+								<UFormField label="Branch" name="bank_branch">
+									<UInput v-model="form.bank_branch" />
+								</UFormField>
+								<UFormField label="Account number" name="bank_account_number">
+									<UInput v-model="form.bank_account_number" />
+								</UFormField>
+								<UFormField label="Account name" name="bank_account_name">
+									<UInput v-model="form.bank_account_name" />
+								</UFormField>
+							</div>
+						</SectionCard>
+					</div>
+				</div>
+
+				<!-- Notes card sits below the two-column grid as a single
+					full-width row. (Previously used lg:col-span-2 inside
+					the grid — no longer needed now that it lives outside.) -->
 				<SectionCard
 					icon="i-lucide-sticky-note"
 					title="Internal notes"
 					subtitle="Visible only to you — never appears on a payslip."
-					class="lg:col-span-2"
 				>
 					<UFormField name="notes">
 						<UTextarea
@@ -511,34 +559,4 @@
 		}
 	};
 
-	// Items rendered into the responsive UDropdownMenu shown below xl
-	// (the inline button cluster is hidden at that width). Two groups
-	// so UDropdownMenu draws a separator between Archive and Delete.
-	// Declared at the end so the handlers it references are already
-	// in scope.
-	const actionMenuItems = computed(() => [[
-		{
-			label: "View payslips",
-			icon: "i-lucide-file-spreadsheet",
-			onSelect: viewPayslips
-		},
-		{
-			label: isArchived.value ? "Restore employee" : "Archive employee",
-			icon: isArchived.value ? "i-lucide-archive-restore" : "i-lucide-archive",
-			onSelect: toggleArchive
-		}
-	], [
-		{
-			label: "Delete",
-			icon: "i-lucide-trash-2",
-			// Destructive item in the dropdown reads in the error tone
-			// to match the inline Delete button at xl+ (color="error").
-			// Targets both the row + the icon so the leading icon picks
-			// up the tint instead of staying muted-grey.
-			class: "text-(--ui-error) hover:bg-(--ui-error)/10 [&>span>span:first-child]:text-(--ui-error)",
-			onSelect: () => {
-				confirmDelete.value = true;
-			}
-		}
-	]]);
 </script>
