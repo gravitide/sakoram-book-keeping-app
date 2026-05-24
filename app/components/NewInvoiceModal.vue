@@ -1,25 +1,37 @@
 <template>
 	<UModal v-model:open="openModel" title="New invoice">
 		<template #body>
-			<p class="text-sm text-(--ui-text-muted) mb-4">
-				A draft will be created with a number allocated. Edit details and add line items on the next screen.
-			</p>
-			<div class="space-y-4">
-				<UFormField label="Client" required>
-					<ClientPicker v-model="clientId" />
-				</UFormField>
+			<!-- Body wrapped in a <form> so Enter inside any input submits.
+				Footer's Create draft button references this form via the
+				`form` attribute + type="submit" to share the submit flow.
+				See NewQuoteModal for the rationale. -->
+			<form id="new-invoice-form" @submit.prevent="create">
+				<p class="text-sm text-(--ui-text-muted) mb-4">
+					A draft will be created with a number allocated. Edit details and add line items on the next screen.
+				</p>
+				<div class="space-y-4">
+					<UFormField label="Client" required>
+						<ClientPicker v-model="clientId" />
+					</UFormField>
 
-				<UFormField label="Project title" hint="The centred subtitle on the PDF (optional)">
-					<UInput v-model="projectTitle" placeholder="e.g. Q3 retainer" />
-				</UFormField>
-			</div>
+					<UFormField label="Project title" hint="The centred subtitle on the PDF (optional)">
+						<UInput v-model="projectTitle" placeholder="e.g. Q3 retainer" />
+					</UFormField>
+				</div>
+			</form>
 		</template>
 		<template #footer>
 			<div class="flex justify-end gap-2 w-full">
 				<UButton type="button" color="neutral" variant="outline" :disabled="creating" @click="cancel">
 					Cancel
 				</UButton>
-				<UButton :loading="creating" :disabled="clientId === null" icon="i-lucide-plus" @click="create">
+				<UButton
+					type="submit"
+					form="new-invoice-form"
+					:loading="creating"
+					:disabled="clientId === null"
+					icon="i-lucide-plus"
+				>
 					Create draft
 				</UButton>
 			</div>
