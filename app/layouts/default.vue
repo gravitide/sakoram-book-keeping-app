@@ -90,8 +90,20 @@
 					</template>
 				</nav>
 
-				<div class="px-4 py-3 border-t border-(--ui-border) text-xs text-(--ui-text-muted) flex items-center justify-between">
-					<span>v{{ appVersion }}</span>
+				<div class="px-4 py-3 border-t border-(--ui-border) flex items-center justify-between gap-2">
+					<!-- Wordmark replaces the version label as the footer
+						identity. The PNG/SVG is drawn for a light background;
+						in dark mode we invert + hue-rotate 180° so the dark
+						strokes read as light while the coloured glyph flips
+						back to its original hue. `title` keeps the version
+						readable on hover for the user who wants it. -->
+					<img
+						:src="sakoramLogo"
+						alt="Sakoram"
+						:title="`Sakoram Bookkeeping · v${appVersion}`"
+						class="h-5 w-auto select-none dark:invert dark:hue-rotate-180"
+						draggable="false"
+					>
 					<UButton
 						icon="i-lucide-info"
 						size="xs"
