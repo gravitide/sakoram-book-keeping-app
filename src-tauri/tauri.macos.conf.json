@@ -12,6 +12,7 @@
 				"fullscreen": false,
 				"decorations": true,
 				"titleBarStyle": "Overlay",
+				"hiddenTitle": true,
 				"shadow": true,
 				"dragDropEnabled": false
 			}
