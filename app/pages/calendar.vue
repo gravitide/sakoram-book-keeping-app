@@ -49,15 +49,19 @@
 				</div>
 			</template>
 
-			<!-- Summary line above the calendar: how many events the
-				current filter is showing + how many are already overdue. -->
-			<div class="flex justify-end items-baseline text-sm text-(--ui-text-muted) tabular-nums mb-3 gap-3 flex-wrap">
-				<span v-if="overdueCount > 0" class="text-(--ui-error) font-medium">
-					{{ overdueCount }} overdue
-				</span>
-				<span>
-					<span class="text-(--ui-text) font-medium">{{ visibleEvents.length }}</span> shown
-				</span>
+			<!-- Summary above the calendar: how many events the current
+				filter is showing + how many are already overdue. Uses
+				the same StatChip joined-pill design as the table summary
+				bars on every list page (quotes / invoices / bills /
+				vouchers) for a consistent at-a-glance feel. -->
+			<div class="flex justify-end items-center mb-3 gap-2 flex-wrap">
+				<StatChip
+					v-if="overdueCount > 0"
+					label="Overdue"
+					color="error"
+					:value="String(overdueCount)"
+				/>
+				<StatChip label="Shown" color="neutral" :value="String(visibleEvents.length)" />
 			</div>
 
 			<UpcomingCalendar density="full" :kind-filter="kindFilter" />
