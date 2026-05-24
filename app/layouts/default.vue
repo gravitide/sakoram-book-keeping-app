@@ -117,7 +117,12 @@
 
 				<UModal v-model:open="aboutOpen" title="About Sakoram">
 					<template #content>
-						<div class="p-6 space-y-5">
+						<!-- About is read-only chrome (version, description,
+							credits, links) — no inputs, no copyable data —
+							so drop drag-select on the whole body. Matches
+							the convention applied to other read-only
+							surfaces across the app. -->
+						<div class="p-6 space-y-5 select-none">
 							<div class="flex flex-col items-center text-center gap-2">
 								<!-- The wordmark PNG is designed for a light background.
 								In dark mode we invert + 180° hue-rotate so the dark
