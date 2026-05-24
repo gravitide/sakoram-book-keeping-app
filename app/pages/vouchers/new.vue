@@ -96,6 +96,28 @@
 					</div>
 				</UFormField>
 
+				<!-- Editable voucher number with live uniqueness check. The
+					fiscal year derives from `voucher_date`, so changing
+					the date can shift the prefix and reseed the default.
+					See app/composables/useDocumentNumber.ts. -->
+				<UFormField label="Number" required>
+					<template #help>
+						<span v-if="docNum.numberTaken.value" class="text-(--ui-error)">
+							{{ docNum.numberFormatted.value }} is already in use — pick another sequence.
+						</span>
+						<span v-else-if="docNum.numberFormatted.value">
+							Will be saved as <span class="font-medium">{{ docNum.numberFormatted.value }}</span>
+						</span>
+					</template>
+					<UInput
+						v-model.number="docNum.sequence.value"
+						type="number"
+						min="1"
+						step="1"
+						placeholder="e.g. 1"
+					/>
+				</UFormField>
+
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<UFormField label="Date" required>
 						<DateField v-model="voucherDate" :min-value="dateMin" />
@@ -340,6 +362,17 @@
 	const relatedPayslipId = ref<number | null>(seedPayslip?.id ?? null);
 	const creating = ref(false);
 
+	// Editable voucher number with live uniqueness check. The page is
+	// always mounted-and-enabled while the user is on it (no modal open
+	// state to gate on), so `enabled` is a const-true ref. See
+	// app/composables/useDocumentNumber.ts for the reactive contract.
+	const enabled = ref(true);
+	const docNum = useDocumentNumber({
+		type: "voucher",
+		issueDate: voucherDate,
+		enabled
+	});
+
 	// Voucher type rendered as two selectable tiles (not a dropdown) —
 	// directional arrows carry the money-in / money-out meaning.
 	const typeChoices: { value: VoucherType, label: string, desc: string, icon: string }[] = [
@@ -499,6 +532,7 @@
 		partyName.value.trim() !== ""
 		&& amountCents.value > 0
 		&& /^\d{4}-\d{2}-\d{2}$/.test(voucherDate.value)
+		&& docNum.numberValid.value
 	);
 
 	// Where to go when the user backs out — both the top-of-page
@@ -543,7 +577,10 @@
 				related_payslip_id: voucherType.value === "payment" ? relatedPayslipId.value : null,
 				attachment_path: null
 			};
-			const id = await store.create(input);
+			const id = await store.create({
+				...input,
+				sequence: docNum.sequence.value ?? undefined
+			});
 			toast.add({ title: "Voucher created", color: "success", icon: "i-lucide-check" });
 			// If we arrived from a bill or invoice, bounce back so the
 			// user sees the new payment row appear in the document's

@@ -14,7 +14,7 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { computeLineTotals, sumCents } from "~/lib/money";
-import { allocateDocumentNumber } from "~/lib/numbering";
+import { allocateDocumentNumber, allocateSpecificDocumentNumber } from "~/lib/numbering";
 import { useBusinessBanksStore } from "~/stores/business_banks";
 import { purgeDocumentAttachments } from "~/stores/document_attachments";
 import { useSettingsStore } from "~/stores/settings";
@@ -64,8 +64,7 @@ export interface QuoteLineRow {
 // sort_order is omitted from the draft because `replaceLines` always
 // derives it from the array index at write time — passing it in would
 // have no effect, so the type contract shouldn't pretend it's an input.
-export type QuoteLineDraft = Omit<QuoteLineRow,
-	| "id" | "quote_id" | "sort_order"
+export type QuoteLineDraft = Omit<QuoteLineRow,	| "id" | "quote_id" | "sort_order"
 	| "line_subtotal_cents" | "line_tax_cents" | "line_total_cents">;
 
 export interface ClientSnapshot {
@@ -257,10 +256,18 @@ export const useQuotesStore = defineStore("quotes", () => {
 	const createDraft = async (input: {
 		client: ClientSnapshot & { id: number }
 		project_title?: string
-		/** Override `issue_date` (e.g. when launched from the calendar
+		/**
+			 Override `issue_date` (e.g. when launched from the calendar
 			with a specific day in mind). Defaults to today. `valid_until`
-			derives from this date + the business's default quote validity. */
+			derives from this date + the business's default quote validity.
+			*/
 		issue_date?: string
+		/**
+			 Override the auto-allocated sequence number. Used by the New
+			modal's editable Number field so the user can fill a gap left
+			by an earlier deletion. Validates uniqueness before insert.
+			*/
+		sequence?: number
 	}): Promise<number> => {
 		const settingsStore = useSettingsStore();
 		await settingsStore.ensureLoaded();
@@ -271,7 +278,9 @@ export const useQuotesStore = defineStore("quotes", () => {
 		const validity = settings.default_quote_validity_days;
 		const validUntil = addDaysSafe(issue, validity);
 
-		const allocation = await allocateDocumentNumber("quote", issue);
+		const allocation = input.sequence !== undefined
+			? await allocateSpecificDocumentNumber("quote", issue, input.sequence)
+			: await allocateDocumentNumber("quote", issue);
 		const clientSnap = buildClientSnapshot(input.client);
 		const { id: bankId, snapshot: bankSnap } = await resolveBankForDraft();
 

@@ -1,56 +1,84 @@
 <template>
 	<UModal v-model:open="openModel" title="New payslip">
 		<template #body>
-			<p class="text-sm text-(--ui-text-muted) mb-4">
-				Pick an employee and the pay period — we'll snapshot their details onto the payslip and seed a Basic earning equal to their saved salary. Lines and finalisation come on the next screen.
-			</p>
-			<div class="space-y-4">
-				<UFormField label="Employee" required>
-					<EmployeePicker v-model="employeeId" required @select="onPick" />
-				</UFormField>
-				<p class="text-xs text-(--ui-text-muted)">
-					Don't see them? <NuxtLink
-						to="/employees/new"
-						class="text-(--ui-primary) hover:underline"
-						@click="openModel = false"
-					>
-						Add a new employee
-					</NuxtLink> and they'll appear in the picker.
+			<!-- Body wrapped in a <form> so Enter inside the Number field
+				submits. Date pickers consume Enter for their own
+				selection, so this only really fires from the Number
+				input; still useful. -->
+			<form id="new-payslip-form" @submit.prevent="create">
+				<p class="text-sm text-(--ui-text-muted) mb-4">
+					Pick an employee and the pay period — we'll snapshot their details onto the payslip and seed a Basic earning equal to their saved salary. Lines and finalisation come on the next screen.
 				</p>
-
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<UFormField label="Period start" required>
-						<DateField v-model="periodStart" />
+				<div class="space-y-4">
+					<UFormField label="Employee" required>
+						<EmployeePicker v-model="employeeId" required @select="onPick" />
 					</UFormField>
-					<UFormField label="Period end" required>
-						<DateField v-model="periodEnd" :min-value="periodStart" />
-					</UFormField>
-				</div>
-
-				<UFormField label="Pay date" required hint="Must fall within the pay period.">
-					<DateField v-model="payDate" :min-value="periodStart" :max-value="periodEnd" />
-				</UFormField>
-
-				<div v-if="duplicateExists" class="rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/10 px-3 py-2 text-xs flex items-start gap-2">
-					<UIcon name="i-lucide-triangle-alert" class="size-4 text-(--ui-warning) shrink-0 mt-0.5" />
-					<div class="flex-1">
-						<div>
-							A payslip already exists for this employee for the period starting
-							<span class="font-medium tabular-nums">{{ periodStart }}</span>.
-							Choose a different period, or open the existing one.
-						</div>
-						<NuxtLink
-							v-if="duplicateId"
-							:to="`/payslips/${duplicateId}`"
-							class="inline-flex items-center gap-1 mt-1 text-(--ui-primary) hover:underline"
+					<p class="text-xs text-(--ui-text-muted)">
+						Don't see them? <NuxtLink
+							to="/employees/new"
+							class="text-(--ui-primary) hover:underline"
 							@click="openModel = false"
 						>
-							Open existing payslip
-							<UIcon name="i-lucide-arrow-right" class="size-3" />
-						</NuxtLink>
+							Add a new employee
+						</NuxtLink> and they'll appear in the picker.
+					</p>
+
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<UFormField label="Period start" required>
+							<DateField v-model="periodStart" />
+						</UFormField>
+						<UFormField label="Period end" required>
+							<DateField v-model="periodEnd" :min-value="periodStart" />
+						</UFormField>
+					</div>
+
+					<UFormField label="Pay date" required hint="Must fall within the pay period.">
+						<DateField v-model="payDate" :min-value="periodStart" :max-value="periodEnd" />
+					</UFormField>
+
+					<!-- Editable payslip number with live uniqueness check. The
+					fiscal year derives from the pay date (matching the
+					payslip-store's allocator), so changing the pay date
+					can shift the prefix and reseed the default. -->
+					<UFormField label="Number" required>
+						<template #help>
+							<span v-if="docNum.numberTaken.value" class="text-(--ui-error)">
+								{{ docNum.numberFormatted.value }} is already in use — pick another sequence.
+							</span>
+							<span v-else-if="docNum.numberFormatted.value">
+								Will be saved as <span class="font-medium">{{ docNum.numberFormatted.value }}</span>
+							</span>
+						</template>
+						<UInput
+							v-model.number="docNum.sequence.value"
+							type="number"
+							min="1"
+							step="1"
+							placeholder="e.g. 1"
+						/>
+					</UFormField>
+
+					<div v-if="duplicateExists" class="rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/10 px-3 py-2 text-xs flex items-start gap-2">
+						<UIcon name="i-lucide-triangle-alert" class="size-4 text-(--ui-warning) shrink-0 mt-0.5" />
+						<div class="flex-1">
+							<div>
+								A payslip already exists for this employee for the period starting
+								<span class="font-medium tabular-nums">{{ periodStart }}</span>.
+								Choose a different period, or open the existing one.
+							</div>
+							<NuxtLink
+								v-if="duplicateId"
+								:to="`/payslips/${duplicateId}`"
+								class="inline-flex items-center gap-1 mt-1 text-(--ui-primary) hover:underline"
+								@click="openModel = false"
+							>
+								Open existing payslip
+								<UIcon name="i-lucide-arrow-right" class="size-3" />
+							</NuxtLink>
+						</div>
 					</div>
 				</div>
-			</div>
+			</form>
 		</template>
 		<template #footer>
 			<div class="flex justify-end gap-2 w-full">
@@ -58,10 +86,11 @@
 					Cancel
 				</UButton>
 				<UButton
+					type="submit"
+					form="new-payslip-form"
 					:loading="creating"
 					:disabled="!canCreate"
 					icon="i-lucide-plus"
-					@click="create"
 				>
 					Create payslip
 				</UButton>
@@ -107,6 +136,15 @@
 	const payDate = ref<string | null>(null);
 	const creating = ref(false);
 
+	// Editable payslip number — driven by pay date because the payslip
+	// store keys the counter off pay_date too. See NewQuoteModal for the
+	// gap-filling rationale.
+	const docNum = useDocumentNumber({
+		type: "payslip",
+		issueDate: payDate,
+		enabled: openModel
+	});
+
 	const todayISO = (): string => {
 		const d = new Date();
 		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -149,6 +187,7 @@
 			periodEnd.value = null;
 			payDate.value = null;
 			creating.value = false;
+			docNum.reset();
 		}
 	});
 
@@ -188,6 +227,7 @@
 		&& periodEnd.value !== null
 		&& payDate.value !== null
 		&& !duplicateExists.value
+		&& docNum.numberValid.value
 	);
 
 	const cancel = () => {
@@ -228,7 +268,8 @@
 				},
 				periodStart: periodStart.value!,
 				periodEnd: periodEnd.value!,
-				payDate: payDate.value!
+				payDate: payDate.value!,
+				sequence: docNum.sequence.value ?? undefined
 			});
 			toast.add({ title: "Payslip created", color: "success", icon: "i-lucide-check" });
 			openModel.value = false;

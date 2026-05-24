@@ -12,7 +12,7 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
-import { allocateDocumentNumber } from "~/lib/numbering";
+import { allocateDocumentNumber, allocateSpecificDocumentNumber } from "~/lib/numbering";
 import { purgeDocumentAttachments } from "~/stores/document_attachments";
 
 export type VoucherType = "payment" | "receipt";
@@ -121,12 +121,18 @@ export const useVouchersStore = defineStore("vouchers", () => {
 	const get = async (id: number): Promise<VoucherRow | null> =>
 		selectOne<VoucherRow>("SELECT * FROM vouchers WHERE id = ?", [id]);
 
-	const create = async (input: VoucherInput): Promise<number> => {
+	const create = async (input: VoucherInput & { sequence?: number }): Promise<number> => {
 		if (input.amount_cents <= 0) {
 			throw new Error("Voucher amount must be positive");
 		}
 		const issue = input.voucher_date || todayISO();
-		const allocation = await allocateDocumentNumber("voucher", issue);
+		// `sequence` is the user-picked number override from the New
+		// voucher form's editable Number field. When set we go through
+		// the specific-allocator (validates uniqueness, bumps counter to
+		// MAX). When absent we auto-allocate as usual.
+		const allocation = input.sequence !== undefined
+			? await allocateSpecificDocumentNumber("voucher", issue, input.sequence)
+			: await allocateDocumentNumber("voucher", issue);
 		const result = await execute(
 			`INSERT INTO vouchers (
 				number, voucher_type, voucher_date, party_name, amount_cents,
