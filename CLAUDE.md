@@ -230,6 +230,8 @@ sakoram_app/
 │  │  ├─ EmployeePicker.vue           ← clone of VendorPicker, used by payslip creation
 │  │  ├─ CategoryPicker.vue           ← bill-category dropdown w/ inline "+ New" modal
 │  │  ├─ CategoryFormModal.vue        ← create/edit category (8-color × 16-icon picker)
+│  │  ├─ CurrencyPicker.vue           ← onboarding + Settings → Business details currency dropdown. Built-in CURRENCIES list plus a "Custom currency…" option that reveals Code + Symbol inputs; emits both v-models so parents just bind code + symbol-override.
+│  │  ├─ BusinessBankFormModal.vue    ← create/edit modal for managed bank accounts (label + bank fields). Auto-marks the first bank as default so freshly-created accounts immediately seed new quotes / invoices.
 │  │  ├─ NewQuoteModal.vue            ← "New quote" form-in-a-modal (client + project title) — replaces /quotes/new
 │  │  ├─ NewInvoiceModal.vue          ← "New invoice" form-in-a-modal — replaces /invoices/new
 │  │  ├─ NewBillModal.vue             ← "New bill" form-in-a-modal (vendor picker) — replaces /bills/new
@@ -251,7 +253,7 @@ sakoram_app/
 │  │  ├─ LinkedBillField.vue          ← USelectMenu of open bills with status badge + remaining balance — used by the new-voucher form
 │  │  ├─ LinkedInvoiceField.vue       ← same shape, open invoices
 │  │  ├─ LinkedPayslipField.vue       ← same shape, unpaid payslips
-│  │  ├─ UpcomingCalendar.vue         ← month-grid view of every due-date event from useCalendarEvents. Two densities: "full" for the /calendar page, "compact" for the dashboard embed.
+│  │  ├─ UpcomingCalendar.vue         ← month-grid view of every due-date event from useCalendarEvents. Two densities: "full" for the /calendar page, "compact" for the dashboard embed. Day-detail modal footer + per-cell right-click UContextMenu both expose a quick-create flow (Quote / Invoice / Bill / Voucher) routed through one `createForDate(kind, date)` helper that threads the picked date through as the new doc's issue_date (or voucher_date).
 │  │  ├─ MonthlyCashFlowChart.vue     ← dashboard: 12-month receipts vs payments (drops to 6 months at lg / xl-expanded)
 │  │  ├─ MonthlySalaryPaidChart.vue   ← payroll dashboard: 12-month salary-paid bars
 │  │  ├─ ReceivablesAgingChart.vue    ← dashboard: outstanding invoices by days-past-due bucket
@@ -269,7 +271,7 @@ sakoram_app/
 │  ├─ lib/
 │  │  ├─ db.ts                        ← getDb() (lazy, reads active tenant URL), select/execute
 │  │  ├─ demo-seed.ts                 ← createDemoBusiness() — curated + bulk-fill (~25/section) + 10 employees + 3 months of payslips
-│  │  ├─ money.ts                     ← toCents, formatMoney/formatLKR, computeLineTotals (integer math)
+│  │  ├─ money.ts                     ← toCents, formatMoney/formatLKR, computeLineTotals (integer math). Plus the runtime currency registry: built-in CURRENCIES map + registerCurrency() / isBuiltinCurrency() helpers so user-defined currencies (slotted in by the settings store on load from company_settings.currency_symbol_override) work everywhere formatMoney does.
 │  │  ├─ numbering.ts                 ← allocateDocumentNumber (single-statement atomic)
 │  │  ├─ pdf.ts                       ← preview/commit/legacy export helpers; PdfCommand union
 │  │  ├─ quote-pdf.ts                 ← shared payload builder; detail page + list-row Generate-PDF call this
@@ -290,6 +292,7 @@ sakoram_app/
 │     ├─ vendors.ts
 │     ├─ employees.ts                 ← payroll address book
 │     ├─ bill_categories.ts           ← managed lookup powering CategoryPicker
+│     ├─ business_banks.ts            ← managed list of business bank accounts (label + bank fields + is_default + archived). Atomic setDefault via single CASE-WHEN UPDATE. Quotes / invoices snapshot from here on save via buildSnapshotForId().
 │     ├─ quotes.ts                    ← quotes + quote_lines, status FSM, pricing modes, date filters
 │     ├─ invoices.ts                  ← invoices + invoice_lines. Payments live on vouchers; derivedStatus/paidCentsFor sum vouchers.related_invoice_id.
 │     ├─ document_attachments.ts      ← scans / photos attached to any document (local file + phone upload)
@@ -305,12 +308,13 @@ sakoram_app/
    │  └─ main.json                    ← fs scopes, sql, dialog, window controls, shell-execute (typst arg validators)
    ├─ binaries/
    │  └─ typst-x86_64-pc-windows-msvc.exe   (gitignored, ~48 MB, target-triple naming required)
-   ├─ fonts/                          ← same 5 fonts as app/assets/fonts (Typst reads from here)
-   │  ├─ InterVariable.ttf
-   │  ├─ InterTight.ttf
-   │  ├─ StackSansText.ttf
-   │  ├─ MiriamLibre.ttf              (variable; replaced earlier static Regular/Bold pair)
-   │  └─ Amarna.ttf
+   ├─ fonts/                          ← same 6 families as app/assets/fonts (Typst reads from here). Statics-per-weight TTFs generated via scripts/instance-fonts.py — see "Why bundle fonts" decision below.
+   │  ├─ Inter-{Regular,Medium,Bold}.ttf
+   │  ├─ InterTight-{Regular,Medium,Bold}.ttf
+   │  ├─ StackSansText-{Regular,Bold}.ttf
+   │  ├─ MiriamLibre-{Regular,Bold}.ttf
+   │  ├─ Amarna-{Regular,Bold}.ttf
+   │  └─ Akt-{Regular,Medium,Bold}.ttf  ← default UI + PDF font since migration 0024
    ├─ migrations/                     ← see "Migrations" section below
    ├─ templates/
    │  ├─ document.typ                 ← unified Typst template for quotes/invoices/bills
@@ -1157,7 +1161,7 @@ persisted to localStorage).
 
 ### Done
 
-- ✅ DB schema + migrations 0001..0022 (`SCHEMA_VERSION` 22)
+- ✅ DB schema + migrations 0001..0025 (`SCHEMA_VERSION` 25)
 - ✅ Clients / Vendors / Employees CRUD (hero + SectionCard layout)
 - ✅ Quotes (full lifecycle, PDF, convert-to-invoice; default VAT seeded
   from settings on draft creation)
@@ -1411,6 +1415,38 @@ persisted to localStorage).
 - ✅ **KPI headline at xl now stays at `text-xl`** (was bumping back
   to text-2xl). Full money strings still wrapped to two lines at
   240-300px tile widths; text-2xl now only kicks back in at 2xl.
+- ✅ **Multi-bank business accounts** (migration 0023) — the single
+  bank record on `company_settings` became a managed list in
+  `business_banks`. One bank is marked default and auto-applies to
+  new quotes / invoices via the picker on each detail page. The
+  existing `bank_details_snapshot` JSON on quote / invoice rows is
+  unchanged, so Typst templates need no edit; the new
+  `business_bank_id` FK is informational. Settings → Business
+  details renames from "Company details" and gains a "Bank
+  accounts" SectionCard + sidebar sub-link sections (#company /
+  #address / #bank-accounts / #defaults).
+- ✅ **Custom currencies** (migration 0025) — the currency picker on
+  onboarding + Business details offers a "Custom currency…" option
+  that takes a free-text code + symbol (persisted as
+  `company_settings.currency_symbol_override`). On load the settings
+  store calls `registerCurrency()` to slot the override into
+  `money.ts`'s CURRENCIES map so `formatMoney()` works for any code.
+- ✅ **Default UI / PDF font flipped to Akt** (migration 0024) —
+  geometric sans replaces Inter as the default for both ui_font and
+  pdf_font. Inter is still bundled as a secondary fallback in the
+  CSS / Typst cascades for missing glyphs.
+- ✅ **Quick-create from calendar** — every cell on `/calendar` (and
+  the dashboard embed) offers two paths to spin off a new document:
+  left-click for the day-detail modal's "Create on this day" footer
+  buttons, right-click for a UContextMenu with the same actions.
+  The picked date threads through to the New modal as the draft's
+  `issue_date` (for quote / invoice / bill) or `voucher_date` (for
+  voucher). Quote / invoice / bill takes
+  `?new=1&issued=YYYY-MM-DD`; voucher takes `/vouchers/new?date=…`.
+- ✅ **StatChip `neutral` colour variant** for informational counts
+  (muted-text filled label + matching outline). Used on the
+  calendar's `Shown` summary chip; available for any future
+  count-with-no-semantic-tone use case.
 
 ### Deferred / open items
 
