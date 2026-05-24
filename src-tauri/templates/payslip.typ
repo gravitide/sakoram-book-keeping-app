@@ -86,10 +86,12 @@
     ]
   ],
   // ----- right: meta rows
+  // 12pt row-gutter (was 6pt) so each label/value pair has a clear
+  // break before the next — matches the same change on document.typ.
   align(right)[
     #grid(
       columns: 1,
-      row-gutter: 6pt,
+      row-gutter: 12pt,
       [
         #label("Payslip #")
         \

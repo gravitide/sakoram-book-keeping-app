@@ -96,11 +96,22 @@
     ]
   ],
   // ----- right: meta rows
+  //
+  // Two-column grid so the Date + secondary date (Due / Valid till)
+  // pair sits side-by-side instead of stacking — saves vertical
+  // space and visually relates the pair. The Number and (optional)
+  // Vendor invoice # rows span both columns.
+  //
+  // row-gutter is the vertical break between rows; column-gutter is
+  // the horizontal break between Date and Due/Valid. Both align
+  // right so each value's edge aligns with the meta column edge.
   align(right)[
     #grid(
-      columns: 1,
-      row-gutter: 6pt,
-      [
+      columns: (auto, auto),
+      column-gutter: 24pt,
+      row-gutter: 12pt,
+      align: right,
+      grid.cell(colspan: 2)[
         #label(data.primary_label) \
         \##data.number
       ],
@@ -108,17 +119,13 @@
         #label(data.date_label) \
         #data.date_value
       ],
-      ..if data.secondary_label != none {
-        (
-          [
-            #label(data.secondary_label) \
-            #data.secondary_value
-          ],
-        )
-      } else { () },
+      if data.secondary_label != none [
+        #label(data.secondary_label) \
+        #data.secondary_value
+      ] else [],
       ..if data.vendor_invoice_label != none {
         (
-          [
+          grid.cell(colspan: 2)[
             #label(data.vendor_invoice_label) \
             #data.vendor_invoice_value
           ],
