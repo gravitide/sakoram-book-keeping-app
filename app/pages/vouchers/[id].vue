@@ -1,5 +1,5 @@
 <template>
-	<div v-if="voucher" class="max-w-2xl mx-auto">
+	<div v-if="voucher" class="max-w-2xl mx-auto select-none">
 		<!-- Centered narrow shape, same as the new-voucher page and the
 			Appearance / PDF settings pages. The form's intrinsic width is
 			much smaller than the wider main-content cap. Comment lives

@@ -58,12 +58,27 @@ export default defineAppConfig({
 		},
 		modal: {
 			// Modal chrome (title + supporting description in the
-			// header) is not data the user copies out — keep it out of
-			// the drag-select cycle. Form inputs inside the body still
-			// pick up user-select:text via the global rule in main.css.
+			// header) AND the body content are not data the user copies
+			// out — keep the whole dialog out of the drag-select cycle.
+			// Form inputs inside the body still pick up user-select:text
+			// via the global rule in main.css, so forms stay editable.
+			// (Modals using #content instead of #body need to add
+			// `select-none` themselves — the slot styling here only
+			// reaches the default body slot.)
 			slots: {
 				title: "select-none",
-				description: "select-none"
+				description: "select-none",
+				body: "select-none"
+			}
+		},
+		popover: {
+			// Popover bodies host pickers (Client / Vendor / Employee /
+			// Category / Date) and filter strips — list-like read-only
+			// UI that shouldn't drag-select like data. Form inputs
+			// (search boxes etc.) inside still stay text-selectable via
+			// the input/textarea override in main.css.
+			slots: {
+				content: "select-none"
 			}
 		},
 		formField: {

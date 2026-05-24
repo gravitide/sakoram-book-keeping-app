@@ -1,5 +1,5 @@
 <template>
-	<div v-if="quote">
+	<div v-if="quote" class="select-none">
 		<!-- Top toolbar row: back link on the left, action cluster on the
 			right. Pinned above the title block so the buttons can't
 			collide with the number / status / subtitle as the viewport
