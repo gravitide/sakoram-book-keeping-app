@@ -1,5 +1,5 @@
 <template>
-	<div class="max-w-2xl mx-auto">
+	<div class="max-w-2xl mx-auto select-none">
 		<!-- Centered narrow shape, same as Settings → Appearance / PDF.
 			The form's intrinsic width (max-w-2xl) is much smaller than
 			the wider main-content cap, and a left-anchored block looks

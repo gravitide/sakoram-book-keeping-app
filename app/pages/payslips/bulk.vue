@@ -1,5 +1,5 @@
 <template>
-	<div class="max-w-3xl mx-auto">
+	<div class="max-w-3xl mx-auto select-none">
 		<header class="mb-6">
 			<NuxtLink to="/payslips" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) flex items-center gap-1">
 				<UIcon name="i-lucide-arrow-left" class="size-4" />

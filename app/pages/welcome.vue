@@ -1,5 +1,5 @@
 <template>
-	<div class="w-full max-w-3xl">
+	<div class="w-full max-w-3xl select-none">
 		<header class="text-center mb-8">
 			<img
 				:src="sakoramLogo"

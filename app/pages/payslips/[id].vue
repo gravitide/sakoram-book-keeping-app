@@ -1,5 +1,5 @@
 <template>
-	<div>
+	<div class="select-none">
 		<NuxtLink to="/payslips" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1 mb-4">
 			<UIcon name="i-lucide-arrow-left" class="size-4" />
 			Back to payslips

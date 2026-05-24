@@ -1,5 +1,5 @@
 <template>
-	<div v-if="bill">
+	<div v-if="bill" class="select-none">
 		<!-- Top toolbar row: back link on the left, action cluster on the
 			right. Pinned above the title block so the buttons can't
 			collide with the number / status / subtitle as the viewport
