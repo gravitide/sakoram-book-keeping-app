@@ -1493,6 +1493,81 @@ persisted to localStorage).
 - **Code-signing the installers** — currently unsigned; SmartScreen
   warns on first run.
 
+### Roadmap — what's missing to call this a complete bookkeeping app
+
+Snapshot taken 2026-05-24 after the multi-bank / custom-currency /
+calendar-quick-create batch landed. The app today is solidly an
+**invoicing + expense + payroll tracker with PDFs**. To cross into
+"real bookkeeping software" territory in the user's perception, this
+is the gap list — ordered by impact, not effort.
+
+**Tier 1 — biggest single gap: a reports module.** All the data is
+already in the DB; nothing aggregates it for a date range. Build a
+`/reports` section that mirrors the document-list shape (filter strip
++ printable Typst PDF) and bake in:
+
+- **Profit & Loss** — invoice income − bill expenses − payslip net,
+  by date range. Could group by month or by category.
+- **VAT / tax report** — output VAT (sum of tax lines on issued
+  invoices) vs input VAT (sum of tax lines on open/paid bills), net
+  payable for the period. This is the one a Sri Lankan business
+  *actually needs* to file VAT returns.
+- **Aged receivables** — outstanding invoices bucketed by days past
+  due (0–30 / 31–60 / 61–90 / 90+). Dashboard chart exists but no
+  printable / per-client breakdown.
+- **Aged payables** — same shape on bills.
+- **Cash flow report** — receipts − payments by month for any range.
+  The dashboard chart is 12-month only.
+- **Sales by client** + **expenses by vendor** for a date range,
+  with drill-down to underlying documents.
+- **Payroll register** — every payslip in a period with employee /
+  earnings / deductions / net / paid columns. Most of the data is
+  already on the payroll dashboard; this just exports it.
+
+**Tier 2 — meaningful workflow features still missing:**
+
+- **Credit notes / refunds** — no way to issue a negative document
+  today. When you over-invoice or accept a return, you can't settle
+  it cleanly against the original invoice. Add a `credit_note`
+  document type that references an invoice and offsets its balance.
+- **Customer statements** — "everything outstanding for client X"
+  as a printable PDF. Data is already there; just needs a Typst
+  template + a button on the client detail page.
+- **Recurring invoices / recurring bills** — for retainers,
+  subscriptions, monthly rent. A template + a "due today" generator
+  that runs on app open (or on a Tauri startup hook).
+- **Bank reconciliation** — import a bank statement CSV and tick off
+  matched vouchers. Manual today; a side-by-side reconcile screen
+  would be a real productivity win for any business with > ~20
+  transactions/month.
+
+**Tier 3 — niceties, low-leverage:**
+
+- **Products / services catalog** — reusable line items so users
+  stop retyping descriptions on every invoice.
+- **Year-end closing / period lock** — refuse edits to documents
+  in a closed fiscal year. The immutability rules cover most of
+  this already; this would just lock everything older than X.
+- **Cmd/Ctrl+K command palette** — also on the Deferred list above.
+- **Email invoice directly** — currently PDF + manual attach.
+  Requires SMTP config + an outbox UI.
+
+**Explicitly out of scope:**
+
+- Full double-entry chart of accounts. Overkill for the audience;
+  the immutable-document + voucher-ledger model already gives them
+  what they need without making them learn debits / credits.
+- Multi-currency *per document*. One currency per business is a
+  golden rule (Golden rule #8).
+- Inventory with stock levels. Service-business focus; only matters
+  if they sell physical goods.
+- Time tracking. Out of scope for the audience.
+
+If you're planning the next iteration: **Tier 1 reports first** —
+P&L + VAT + aged receivables alone close 80% of the "is this real
+bookkeeping software" perception gap. Credit notes are the
+next-most-impactful add after that.
+
 ---
 
 ## Known landmines
