@@ -22,6 +22,7 @@ import type { Tenant } from "~/stores/tenants";
 import type { VendorRow } from "~/stores/vendors";
 import { buildCategorySnapshot, useBillCategoriesStore } from "~/stores/bill_categories";
 import { useBillsStore } from "~/stores/bills";
+import { useBusinessBanksStore } from "~/stores/business_banks";
 import { useClientsStore } from "~/stores/clients";
 import { useEmployeesStore } from "~/stores/employees";
 import { useInvoicesStore } from "~/stores/invoices";
@@ -61,15 +62,28 @@ const seedSettings = async () => {
 		email: "hello@acme.example",
 		phone: "+94 11 234 5678",
 		website: "https://acme.example",
-		bank_name: "Hatton National Bank",
-		bank_account_name: "Acme Trading Co",
-		bank_account_number: "0049-1234-5678",
-		bank_branch: "Colombo Main",
 		default_vat_rate: 1800,
 		default_payment_terms_days: 30,
 		default_quote_validity_days: 30,
 		fiscal_year_start_month: 4
 	});
+};
+
+// ---------- Bank accounts --------------------------------------------------
+
+// Plant a default bank account so quotes / invoices created next have
+// something to snapshot. Caller can add more from Settings → Business
+// details later.
+const seedBanks = async () => {
+	const store = useBusinessBanksStore();
+	const id = await store.create({
+		label: "HNB Colombo Main",
+		bank_name: "Hatton National Bank",
+		bank_account_name: "Acme Trading Co",
+		bank_account_number: "0049-1234-5678",
+		bank_branch: "Colombo Main"
+	});
+	await store.setDefault(id);
 };
 
 // ---------- Clients --------------------------------------------------------
@@ -1234,6 +1248,10 @@ export const createDemoBusiness = async (
 	// pages have realistic content. Bulk fill afterwards adds enough volume
 	// to exercise list pages, filters, and (eventually) pagination.
 	await seedSettings();
+	// Bank account is seeded before clients/quotes/invoices so the
+	// document seeders can pick it up via the default-bank lookup in
+	// quotes/invoices stores.
+	await seedBanks();
 	const clients = await seedClients();
 	const vendors = await seedVendors();
 	const categories = await seedCategories();

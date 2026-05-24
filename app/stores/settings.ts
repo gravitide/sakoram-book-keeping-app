@@ -19,10 +19,6 @@ export interface CompanySettingsRow {
 	email: string | null
 	phone: string | null
 	website: string | null
-	bank_name: string | null
-	bank_account_name: string | null
-	bank_account_number: string | null
-	bank_branch: string | null
 	logo_path: string | null
 	pdf_header_logo_path: string | null
 	default_vat_rate: number
@@ -68,10 +64,6 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"email",
 	"phone",
 	"website",
-	"bank_name",
-	"bank_account_name",
-	"bank_account_number",
-	"bank_branch",
 	"logo_path",
 	"pdf_header_logo_path",
 	"default_vat_rate",

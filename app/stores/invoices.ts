@@ -20,12 +20,13 @@
 // from the invoice detail page — the New Voucher form prefills the
 // type, party, amount, and link, then bounces back here on save.
 
-import type { BankSnapshot, ClientSnapshot, PricingMode, QuoteLineRow, QuoteRow } from "~/stores/quotes";
+import type { ClientSnapshot, PricingMode, QuoteLineRow, QuoteRow } from "~/stores/quotes";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { computeLineTotals, sumCents } from "~/lib/money";
 import { allocateDocumentNumber } from "~/lib/numbering";
+import { useBusinessBanksStore } from "~/stores/business_banks";
 import { purgeDocumentAttachments } from "~/stores/document_attachments";
 import { useSettingsStore } from "~/stores/settings";
 import { useVouchersStore } from "~/stores/vouchers";
@@ -58,6 +59,7 @@ export interface InvoiceRow {
 	terms: string | null
 	prepared_by: string | null
 	bank_details_snapshot: string | null
+	business_bank_id: number | null
 	created_at: string
 	updated_at: string
 }
@@ -124,18 +126,19 @@ const buildClientSnapshot = (
 	tax_id: c.tax_id ?? null
 } satisfies ClientSnapshot);
 
-const buildBankSnapshot = (): string | null => {
-	const settingsStore = useSettingsStore();
-	const row = settingsStore.settings;
-	if (!row) return null;
-	const snap: BankSnapshot = {
-		bank_name: row.bank_name,
-		bank_branch: row.bank_branch,
-		bank_account_name: row.bank_account_name,
-		bank_account_number: row.bank_account_number
-	};
-	const anyFilled = Object.values(snap).some((v) => v != null && v !== "");
-	return anyFilled ? JSON.stringify(snap) : null;
+// Resolve the bank id + snapshot pair for a draft. If no explicit id is
+// passed, falls back to the business default. Returns nulls when no
+// banks exist yet (the document just renders without a bank block).
+const resolveBankForDraft = async (
+	explicitId?: number | null
+): Promise<{ id: number | null, snapshot: string | null }> => {
+	const banksStore = useBusinessBanksStore();
+	await banksStore.ensureLoaded();
+	const id = explicitId !== undefined && explicitId !== null
+		? explicitId
+		: banksStore.defaultBank?.id ?? null;
+	const snapshot = await banksStore.buildSnapshotForId(id);
+	return { id, snapshot };
 };
 
 export const useInvoicesStore = defineStore("invoices", () => {
@@ -298,7 +301,7 @@ export const useInvoicesStore = defineStore("invoices", () => {
 
 		const allocation = await allocateDocumentNumber("invoice", issue);
 		const clientSnap = buildClientSnapshot(input.client);
-		const bankSnap = buildBankSnapshot();
+		const { id: bankId, snapshot: bankSnap } = await resolveBankForDraft();
 
 		// Seed the draft's VAT rate from the business profile's default so
 		// the editor lands with the right percentage already filled in.
@@ -310,8 +313,8 @@ export const useInvoicesStore = defineStore("invoices", () => {
 				number, client_id, client_snapshot, source_quote_id,
 				issue_date, due_date, status, pricing_mode, project_title,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents,
-				prepared_by, bank_details_snapshot
-			) VALUES (?, ?, ?, NULL, ?, ?, 'draft', 'bundle', ?, ?, 0, 0, 0, ?, ?)`,
+				prepared_by, bank_details_snapshot, business_bank_id
+			) VALUES (?, ?, ?, NULL, ?, ?, 'draft', 'bundle', ?, ?, 0, 0, 0, ?, ?, ?)`,
 			[
 				allocation.number,
 				input.client.id,
@@ -321,7 +324,8 @@ export const useInvoicesStore = defineStore("invoices", () => {
 				input.project_title ?? "",
 				defaultVatBp,
 				null,
-				bankSnap
+				bankSnap,
+				bankId
 			]
 		);
 		if (result.lastInsertId === undefined) throw new Error("createDraft: no lastInsertId");
@@ -344,17 +348,18 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		const due = addDays(issue, settings.default_payment_terms_days);
 		const allocation = await allocateDocumentNumber("invoice", issue);
 
-		// Snapshot of bank details captured fresh at issue time for the invoice;
-		// the quote's snapshot is preserved on the quote row.
-		const bankSnap = buildBankSnapshot();
+		// Inherit the source quote's chosen bank, falling back to the
+		// business default if the quote's bank has been deleted. Snapshot
+		// is rebuilt from the bank's current row.
+		const { id: bankId, snapshot: bankSnap } = await resolveBankForDraft(quote.business_bank_id);
 
 		const result = await execute(
 			`INSERT INTO invoices (
 				number, client_id, client_snapshot, source_quote_id,
 				issue_date, due_date, status, pricing_mode, project_title,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents,
-				notes, terms, prepared_by, bank_details_snapshot
-			) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				notes, terms, prepared_by, bank_details_snapshot, business_bank_id
+			) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				allocation.number,
 				quote.client_id,
@@ -371,7 +376,8 @@ export const useInvoicesStore = defineStore("invoices", () => {
 				quote.notes,
 				quote.terms,
 				quote.prepared_by,
-				bankSnap
+				bankSnap,
+				bankId
 			]
 		);
 		if (result.lastInsertId === undefined) throw new Error("createFromQuote: no lastInsertId");
@@ -423,15 +429,15 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		const due = addDays(issue, span);
 
 		const allocation = await allocateDocumentNumber("invoice", issue);
-		const bankSnap = buildBankSnapshot();
+		const { id: bankId, snapshot: bankSnap } = await resolveBankForDraft(src.business_bank_id);
 
 		const result = await execute(
 			`INSERT INTO invoices (
 				number, client_id, client_snapshot, source_quote_id,
 				issue_date, due_date, status, pricing_mode, project_title,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents,
-				notes, terms, prepared_by, bank_details_snapshot
-			) VALUES (?, ?, ?, NULL, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				notes, terms, prepared_by, bank_details_snapshot, business_bank_id
+			) VALUES (?, ?, ?, NULL, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				allocation.number,
 				src.client_id,
@@ -447,7 +453,8 @@ export const useInvoicesStore = defineStore("invoices", () => {
 				src.notes,
 				src.terms,
 				src.prepared_by,
-				bankSnap
+				bankSnap,
+				bankId
 			]
 		);
 		if (result.lastInsertId === undefined) throw new Error("duplicate: no lastInsertId");
@@ -486,7 +493,7 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		| "pricing_mode" | "project_title"
 		| "vat_rate_basis_points"
 		| "subtotal_cents" | "tax_cents" | "total_cents"
-		| "notes" | "terms" | "prepared_by" | "bank_details_snapshot">>;
+		| "notes" | "terms" | "prepared_by" | "bank_details_snapshot" | "business_bank_id">>;
 
 	const UPDATABLE: ReadonlyArray<keyof InvoiceUpdate> = [
 		"client_id",
@@ -502,7 +509,8 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		"notes",
 		"terms",
 		"prepared_by",
-		"bank_details_snapshot"
+		"bank_details_snapshot",
+		"business_bank_id"
 	];
 
 	const update = async (id: number, patch: InvoiceUpdate): Promise<void> => {

@@ -112,89 +112,137 @@
 			@submit="onSubmit"
 		>
 			<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-				<SectionCard
-					icon="i-lucide-building-2"
-					title="Company"
-					subtitle="The legal entity behind quotes and invoices."
-				>
-					<UFormField label="Business name" name="business_name" required>
-						<UInput v-model="form.business_name" placeholder="Acme (Pvt) Ltd" />
-					</UFormField>
-					<UFormField label="Tax / VAT registration ID" name="tax_id">
-						<UInput v-model="form.tax_id" />
-					</UFormField>
-					<UFormField label="Email" name="email">
-						<UInput
-							v-model="form.email"
-							type="email"
-							leading-icon="i-lucide-mail"
-							placeholder="hello@acme.lk"
-						/>
-					</UFormField>
-					<UFormField label="Phone" name="phone">
-						<UInput
-							v-model="form.phone"
-							leading-icon="i-lucide-phone"
-							placeholder="+94 ..."
-						/>
-					</UFormField>
-					<UFormField label="Website" name="website">
-						<UInput
-							v-model="form.website"
-							leading-icon="i-lucide-globe"
-							placeholder="https://"
-						/>
-					</UFormField>
-				</SectionCard>
-
-				<SectionCard
-					icon="i-lucide-map-pin"
-					title="Address"
-					subtitle="Printed on every issued document."
-				>
-					<UFormField label="Address line 1" name="address_line1">
-						<UInput v-model="form.address_line1" />
-					</UFormField>
-					<UFormField label="Address line 2" name="address_line2">
-						<UInput v-model="form.address_line2" />
-					</UFormField>
-					<div class="grid grid-cols-3 gap-3">
-						<UFormField label="City" name="city" class="col-span-2">
-							<UInput v-model="form.city" />
+				<div id="company" class="scroll-mt-6">
+					<SectionCard
+						icon="i-lucide-building-2"
+						title="Company"
+						subtitle="The legal entity behind quotes and invoices."
+					>
+						<UFormField label="Business name" name="business_name" required>
+							<UInput v-model="form.business_name" placeholder="Acme (Pvt) Ltd" />
 						</UFormField>
-						<UFormField label="Postal" name="postal_code">
-							<UInput v-model="form.postal_code" />
+						<UFormField label="Tax / VAT registration ID" name="tax_id">
+							<UInput v-model="form.tax_id" />
 						</UFormField>
-					</div>
-					<UFormField label="Country" name="country">
-						<UInput v-model="form.country" />
-					</UFormField>
-				</SectionCard>
+						<UFormField label="Email" name="email">
+							<UInput
+								v-model="form.email"
+								type="email"
+								leading-icon="i-lucide-mail"
+								placeholder="hello@acme.lk"
+							/>
+						</UFormField>
+						<UFormField label="Phone" name="phone">
+							<UInput
+								v-model="form.phone"
+								leading-icon="i-lucide-phone"
+								placeholder="+94 ..."
+							/>
+						</UFormField>
+						<UFormField label="Website" name="website">
+							<UInput
+								v-model="form.website"
+								leading-icon="i-lucide-globe"
+								placeholder="https://"
+							/>
+						</UFormField>
+					</SectionCard>
+				</div>
 
-				<SectionCard
-					icon="i-lucide-landmark"
-					title="Bank details"
-					subtitle="Shown on invoice PDFs so clients know where to pay."
-				>
-					<UFormField label="Bank name" name="bank_name">
-						<UInput v-model="form.bank_name" />
-					</UFormField>
-					<UFormField label="Branch" name="bank_branch">
-						<UInput v-model="form.bank_branch" />
-					</UFormField>
-					<UFormField label="Account name" name="bank_account_name">
-						<UInput v-model="form.bank_account_name" />
-					</UFormField>
-					<UFormField label="Account number" name="bank_account_number">
-						<UInput v-model="form.bank_account_number" />
-					</UFormField>
-				</SectionCard>
+				<div id="address" class="scroll-mt-6">
+					<SectionCard
+						icon="i-lucide-map-pin"
+						title="Address"
+						subtitle="Printed on every issued document."
+					>
+						<UFormField label="Address line 1" name="address_line1">
+							<UInput v-model="form.address_line1" />
+						</UFormField>
+						<UFormField label="Address line 2" name="address_line2">
+							<UInput v-model="form.address_line2" />
+						</UFormField>
+						<div class="grid grid-cols-3 gap-3">
+							<UFormField label="City" name="city" class="col-span-2">
+								<UInput v-model="form.city" />
+							</UFormField>
+							<UFormField label="Postal" name="postal_code">
+								<UInput v-model="form.postal_code" />
+							</UFormField>
+						</div>
+						<UFormField label="Country" name="country">
+							<UInput v-model="form.country" />
+						</UFormField>
+					</SectionCard>
+				</div>
 
-				<SectionCard
-					icon="i-lucide-sliders-horizontal"
-					title="Operational defaults"
-					subtitle="Pre-fill values when creating new documents."
-				>
+				<!-- Bank accounts: managed list, one marked default. Auto-applied
+					to new quotes / invoices (with per-document override on the
+					detail page). Card sits inside the form for layout rhythm
+					but its own actions don't trigger the main form submit —
+					each row's action is its own immediate write. -->
+				<div id="bank-accounts" class="scroll-mt-6">
+					<SectionCard
+						icon="i-lucide-landmark"
+						title="Bank accounts"
+						subtitle="Shown on invoice PDFs so clients know where to pay. One is the default for new quotes / invoices."
+					>
+						<div v-if="banksStore.activeBanks.length === 0" class="text-sm text-(--ui-text-muted) py-4 text-center">
+							No bank accounts yet. Add one to show payment instructions on your quotes and invoices.
+						</div>
+						<ul v-else class="divide-y divide-(--ui-border) -mt-2">
+							<li
+								v-for="bank in banksStore.activeBanks"
+								:key="bank.id"
+								class="py-3 flex items-center gap-3"
+							>
+								<div class="flex-1 min-w-0">
+									<div class="flex items-center gap-2 flex-wrap">
+										<span class="font-medium truncate">{{ bank.label }}</span>
+										<UBadge
+											v-if="bank.is_default === 1"
+											color="primary"
+											variant="subtle"
+											size="sm"
+										>
+											Default
+										</UBadge>
+									</div>
+									<div class="text-xs text-(--ui-text-muted) truncate mt-0.5">
+										<span>{{ bank.bank_name || "—" }}</span>
+										<span v-if="bank.bank_account_number" class="tabular-nums"> · {{ bank.bank_account_number }}</span>
+										<span v-if="bank.bank_branch"> · {{ bank.bank_branch }}</span>
+									</div>
+								</div>
+								<UDropdownMenu :items="bankMenuItems(bank)">
+									<UButton
+										size="sm"
+										variant="ghost"
+										color="neutral"
+										icon="i-lucide-ellipsis-vertical"
+										aria-label="Bank actions"
+									/>
+								</UDropdownMenu>
+							</li>
+						</ul>
+						<UButton
+							block
+							size="sm"
+							variant="soft"
+							icon="i-lucide-plus"
+							class="mt-3"
+							@click="openNewBank"
+						>
+							Add bank account
+						</UButton>
+					</SectionCard>
+				</div>
+
+				<div id="defaults" class="scroll-mt-6">
+					<SectionCard
+						icon="i-lucide-sliders-horizontal"
+						title="Operational defaults"
+						subtitle="Pre-fill values when creating new documents."
+					>
 					<UFormField label="Currency" name="currency_code" hint="Used everywhere money is displayed and on every PDF.">
 						<USelect
 							v-model="form.currency_code"
@@ -238,7 +286,8 @@
 							/>
 						</UFormField>
 					</div>
-				</SectionCard>
+					</SectionCard>
+				</div>
 			</div>
 
 			<!-- Sticky save bar — lives inside the form so it shares the
@@ -281,21 +330,69 @@
 				</div>
 			</div>
 		</UForm>
+
+		<!-- Bank account create / edit modal. -->
+		<BusinessBankFormModal v-model:open="bankModalOpen" :bank="editingBank" />
+
+		<!-- Delete confirmation. Bank rows on issued quotes / invoices have
+			their data frozen in bank_details_snapshot, so deletion can't
+			corrupt history — drafts with the deleted bank linked fall back
+			to the default at next save (ON DELETE SET NULL on the FK). -->
+		<UModal
+			:open="bankToDelete !== null"
+			title="Delete this bank account?"
+			@update:open="(v) => { if (!v) bankToDelete = null }"
+		>
+			<template #body>
+				<div class="space-y-3 text-sm">
+					<p>
+						This removes <span class="font-medium">{{ bankToDelete?.label }}</span> from your bank accounts list.
+					</p>
+					<p class="text-(--ui-text-muted)">
+						Quotes and invoices that have already been issued keep their
+						bank details on the PDF — those are frozen at issue time and
+						are not affected by deletion.
+					</p>
+					<p v-if="bankToDelete?.is_default === 1" class="text-(--ui-warning)">
+						This is the default bank. Another bank will be promoted to
+						default after deletion.
+					</p>
+				</div>
+			</template>
+			<template #footer>
+				<div class="flex justify-end gap-2 w-full">
+					<UButton color="neutral" variant="ghost" @click="bankToDelete = null">
+						Cancel
+					</UButton>
+					<UButton
+						color="error"
+						:loading="deletingBank"
+						icon="i-lucide-trash-2"
+						@click="confirmDeleteBank"
+					>
+						Delete bank account
+					</UButton>
+				</div>
+			</template>
+		</UModal>
 	</div>
 </template>
 
 <script setup lang="ts">
+	import type { BusinessBankRow } from "~/stores/business_banks";
 	import type { SettingsUpdate } from "~/stores/settings";
 	import { appDataDir, join } from "@tauri-apps/api/path";
 	import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
 	import { z } from "zod";
 	import { CURRENCIES } from "~/lib/money";
+	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
 
-	definePageMeta({ title: "Company details" });
+	definePageMeta({ title: "Business details" });
 
 	const store = useSettingsStore();
+	const banksStore = useBusinessBanksStore();
 	const tenants = useTenantsStore();
 	const toast = useToast();
 
@@ -317,10 +414,6 @@
 		email: "",
 		phone: "",
 		website: "",
-		bank_name: "",
-		bank_account_name: "",
-		bank_account_number: "",
-		bank_branch: "",
 		logo_path: null,
 		default_vat_rate: 1800,
 		default_payment_terms_days: 30,
@@ -368,10 +461,6 @@
 		form.email = s.email ?? "";
 		form.phone = s.phone ?? "";
 		form.website = s.website ?? "";
-		form.bank_name = s.bank_name ?? "";
-		form.bank_account_name = s.bank_account_name ?? "";
-		form.bank_account_number = s.bank_account_number ?? "";
-		form.bank_branch = s.bank_branch ?? "";
 		form.logo_path = s.logo_path;
 		form.default_vat_rate = s.default_vat_rate;
 		form.default_payment_terms_days = s.default_payment_terms_days;
@@ -381,8 +470,109 @@
 		vatRatePct.value = s.default_vat_rate / 100;
 	};
 
-	await store.ensureLoaded();
+	await Promise.all([store.ensureLoaded(), banksStore.ensureLoaded()]);
 	hydrate();
+
+	// --- Bank accounts management ---------------------------------------
+	// The list lives inside the same form for layout rhythm but its row
+	// actions write directly (no form-submit flow needed). Edit / create
+	// open the modal, set-default is a single atomic UPDATE, delete is
+	// guarded by a confirmation modal that mentions the snapshot
+	// preservation so the user understands historical PDFs stay intact.
+
+	const bankModalOpen = ref(false);
+	const editingBank = ref<BusinessBankRow | null>(null);
+	const bankToDelete = ref<BusinessBankRow | null>(null);
+	const deletingBank = ref(false);
+
+	const openNewBank = () => {
+		editingBank.value = null;
+		bankModalOpen.value = true;
+	};
+	const openEditBank = (bank: BusinessBankRow) => {
+		editingBank.value = bank;
+		bankModalOpen.value = true;
+	};
+
+	const setBankDefault = async (bank: BusinessBankRow) => {
+		try {
+			await banksStore.setDefault(bank.id);
+			toast.add({
+				title: `${bank.label} is now the default`,
+				color: "success",
+				icon: "i-lucide-check"
+			});
+		} catch (err) {
+			toast.add({
+				title: "Could not set default",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	const askDeleteBank = (bank: BusinessBankRow) => {
+		bankToDelete.value = bank;
+	};
+
+	const confirmDeleteBank = async () => {
+		const bank = bankToDelete.value;
+		if (!bank) return;
+		deletingBank.value = true;
+		try {
+			await banksStore.remove(bank.id);
+			// If we just deleted the default and other banks remain, promote
+			// the first one so quotes / invoices don't lose their auto-pick.
+			if (bank.is_default === 1 && banksStore.activeBanks.length > 0) {
+				const promote = banksStore.activeBanks[0];
+				if (promote) await banksStore.setDefault(promote.id);
+			}
+			toast.add({
+				title: `${bank.label} deleted`,
+				color: "info",
+				icon: "i-lucide-trash-2"
+			});
+			bankToDelete.value = null;
+		} catch (err) {
+			toast.add({
+				title: "Could not delete",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		} finally {
+			deletingBank.value = false;
+		}
+	};
+
+	// Per-row dropdown items. The Set-default item only appears when the
+	// row isn't already the default. Delete is in its own group so the
+	// menu draws a divider above it, matching the convention on document
+	// list pages.
+	const bankMenuItems = (bank: BusinessBankRow) => {
+		const primary: { label: string, icon: string, onSelect: () => void | Promise<void> }[] = [];
+		if (bank.is_default !== 1) {
+			primary.push({
+				label: "Set as default",
+				icon: "i-lucide-star",
+				onSelect: () => setBankDefault(bank)
+			});
+		}
+		primary.push({
+			label: "Edit",
+			icon: "i-lucide-pencil",
+			onSelect: () => openEditBank(bank)
+		});
+		return [primary, [
+			{
+				label: "Delete",
+				icon: "i-lucide-trash-2",
+				class: "text-(--ui-error) hover:bg-(--ui-error)/10 [&>span>span:first-child]:text-(--ui-error)",
+				onSelect: () => askDeleteBank(bank)
+			}
+		]];
+	};
 
 	// Dirty tracking via JSON snapshot. Re-baselined after save / discard.
 	const formSnapshot = computed(() =>
