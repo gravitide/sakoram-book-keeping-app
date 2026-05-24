@@ -318,9 +318,16 @@
 	// Default to today, but never earlier than the payslip's pay_date
 	// when one's prefilled — saves the user a manual fix when they
 	// open the form before the salary is officially due.
+	//
+	// `?date=YYYY-MM-DD` from the calendar's "New voucher" shortcut
+	// overrides today. The min-date guard above still applies so the
+	// voucher can't predate a linked payslip.
 	const initialDate = (() => {
-		const t = todayISO();
-		return dateMin && t < dateMin ? dateMin : t;
+		const queryDate = typeof route.query.date === "string" ? route.query.date : null;
+		const candidate = queryDate && /^\d{4}-\d{2}-\d{2}$/.test(queryDate)
+			? queryDate
+			: todayISO();
+		return dateMin && candidate < dateMin ? dateMin : candidate;
 	})();
 	const voucherDate = ref<string>(initialDate);
 	const partyName = ref<string>(initialPartyName);

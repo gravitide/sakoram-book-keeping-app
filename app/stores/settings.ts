@@ -5,7 +5,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, selectOne } from "~/lib/db";
-import { setActiveCurrency } from "~/lib/money";
+import { isBuiltinCurrency, registerCurrency, setActiveCurrency } from "~/lib/money";
 
 export interface CompanySettingsRow {
 	id: number
@@ -28,6 +28,10 @@ export interface CompanySettingsRow {
 	quote_footer_notes: string | null
 	fiscal_year_start_month: number
 	currency_code: string
+	// Set only when currency_code isn't a built-in (CURRENCIES map). The
+	// settings store registers this as the active CurrencyMeta on load,
+	// so formatMoney() / formatLKR() work for any user-entered code.
+	currency_symbol_override: string | null
 	ui_font: string
 	pdf_font: string
 	theme_color: string
@@ -73,6 +77,7 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"quote_footer_notes",
 	"fiscal_year_start_month",
 	"currency_code",
+	"currency_symbol_override",
 	"ui_font",
 	"pdf_font",
 	"theme_color",
@@ -131,7 +136,26 @@ export const useSettingsStore = defineStore("settings", () => {
 			// Mirror the chosen currency into the formatMoney() module cache
 			// so list pages, dashboards, and PDFs all render with the right
 			// symbol without each callsite having to thread it through.
-			if (row?.currency_code) setActiveCurrency(row.currency_code);
+			//
+			// For codes not in the built-in CURRENCIES map (user picked
+			// "Custom currency…"), register the supplied symbol first so
+			// setActiveCurrency below finds a real entry instead of
+			// silently falling back to LKR. Label defaults to the code
+			// itself; locale defaults to en-US — only affects grouping
+			// separators, which is a reasonable starting point for
+			// anything we don't recognise.
+			if (row?.currency_code) {
+				if (!isBuiltinCurrency(row.currency_code)) {
+					const symbol = row.currency_symbol_override?.trim() || row.currency_code;
+					registerCurrency({
+						code: row.currency_code,
+						label: row.currency_code,
+						symbol,
+						locale: "en-US"
+					});
+				}
+				setActiveCurrency(row.currency_code);
+			}
 		} catch (err) {
 			error.value = err instanceof Error ? err.message : String(err);
 			throw err;

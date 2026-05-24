@@ -265,7 +265,7 @@
 		/>
 
 		<!-- New-quote creation lives as a modal (was a standalone page). -->
-		<NewQuoteModal v-model:open="newQuoteOpen" />
+		<NewQuoteModal v-model:open="newQuoteOpen" :issue-date="newQuoteIssueDate" />
 	</div>
 </template>
 
@@ -325,16 +325,21 @@
 
 	// Drives <NewQuoteModal>; the New button below opens it. Auto-opens
 	// on mount when the route carries ?new=1 (dashboard New > Quote
-	// shortcut).
+	// shortcut or calendar Create-on-this-day). Optional ?issued=YYYY-MM-DD
+	// carries through to NewQuoteModal as the initial issue_date.
 	const newQuoteOpen = ref(false);
+	const newQuoteIssueDate = ref<string | null>(null);
 	const newQuote = () => {
+		newQuoteIssueDate.value = null;
 		newQuoteOpen.value = true;
 	};
 	const route = useRoute();
 	onMounted(() => {
 		if (route.query.new === "1") {
+			const issued = typeof route.query.issued === "string" ? route.query.issued : null;
+			newQuoteIssueDate.value = issued;
 			newQuoteOpen.value = true;
-			void router.replace({ query: { ...route.query, new: undefined } });
+			void router.replace({ query: { ...route.query, new: undefined, issued: undefined } });
 		}
 	});
 	const open = (q: QuoteRow) => router.push(`/quotes/${q.id}`);

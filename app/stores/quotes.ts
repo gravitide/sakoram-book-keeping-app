@@ -254,13 +254,20 @@ export const useQuotesStore = defineStore("quotes", () => {
 		return Math.round((b - a) / 86_400_000);
 	};
 
-	const createDraft = async (input: { client: ClientSnapshot & { id: number }, project_title?: string }): Promise<number> => {
+	const createDraft = async (input: {
+		client: ClientSnapshot & { id: number }
+		project_title?: string
+		/** Override `issue_date` (e.g. when launched from the calendar
+			with a specific day in mind). Defaults to today. `valid_until`
+			derives from this date + the business's default quote validity. */
+		issue_date?: string
+	}): Promise<number> => {
 		const settingsStore = useSettingsStore();
 		await settingsStore.ensureLoaded();
 		const settings = settingsStore.settings;
 		if (!settings) throw new Error("createDraft: settings not loaded");
 
-		const issue = todayISO();
+		const issue = input.issue_date ?? todayISO();
 		const validity = settings.default_quote_validity_days;
 		const validUntil = addDaysSafe(issue, validity);
 
