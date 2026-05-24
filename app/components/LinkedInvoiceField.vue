@@ -41,8 +41,10 @@
 		</UButton>
 		<span v-else class="text-sm text-(--ui-text-muted)">Not linked</span>
 
-		<!-- Picker modal: search + status chips + a clickable table. -->
-		<UModal v-model:open="open" title="Link an invoice" :ui="{ content: 'sm:max-w-3xl' }">
+		<!-- Picker modal: search + status chips + ResizableDataTable. See
+			LinkedBillField for the rationale on swapping the hand-rolled
+			table for the shared component. -->
+		<UModal v-model:open="open" title="Link an invoice" :ui="{ content: 'sm:max-w-5xl' }">
 			<template #body>
 				<div class="space-y-3">
 					<UInput
@@ -66,67 +68,58 @@
 						</button>
 					</div>
 
-					<div class="border border-(--ui-border) rounded-md max-h-[55vh] overflow-auto">
-						<table class="w-full text-sm">
-							<thead class="sticky top-0 z-10 bg-(--ui-bg) text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-								<tr>
-									<SortableTh th-class="py-2 pl-3 pr-2 font-medium" :active="sortKey === 'number'" :dir="sortDir" @sort="toggleSort('number')">
-										Number
-									</SortableTh>
-									<SortableTh th-class="py-2 px-2 font-medium" :active="sortKey === 'client'" :dir="sortDir" @sort="toggleSort('client')">
-										Client
-									</SortableTh>
-									<SortableTh th-class="py-2 px-2 font-medium" :active="sortKey === 'issued'" :dir="sortDir" @sort="toggleSort('issued')">
-										Issued
-									</SortableTh>
-									<SortableTh th-class="py-2 px-2 font-medium text-right" :active="sortKey === 'total'" :dir="sortDir" @sort="toggleSort('total')">
-										Total
-									</SortableTh>
-									<SortableTh th-class="py-2 px-2 font-medium text-right" :active="sortKey === 'balance'" :dir="sortDir" @sort="toggleSort('balance')">
-										Balance
-									</SortableTh>
-									<SortableTh th-class="py-2 pl-2 pr-3 font-medium" :active="sortKey === 'status'" :dir="sortDir" @sort="toggleSort('status')">
-										Status
-									</SortableTh>
-								</tr>
-							</thead>
-							<tbody>
-								<tr
-									v-for="i in rows"
-									:key="i.id"
-									class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-									:class="{ 'bg-(--ui-primary)/10': i.id === modelValue }"
-									@click="pick(i.id)"
-								>
-									<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
-										{{ i.number }}
-									</td>
-									<td class="py-2 px-2 max-w-[12rem] truncate">
-										{{ clientName(i) }}
-									</td>
-									<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-										{{ i.issue_date }}
-									</td>
-									<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap">
-										{{ formatLKR(i.total_cents) }}
-									</td>
-									<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap">
-										{{ formatLKR(invoicesStore.balanceCentsFor(i)) }}
-									</td>
-									<td class="py-2 pl-2 pr-3">
-										<StatusBadge :status="invoicesStore.derivedStatus(i)" />
-									</td>
-								</tr>
-							</tbody>
-						</table>
-						<div v-if="rows.length === 0" class="py-10 text-center text-sm text-(--ui-text-muted)">
-							<UIcon name="i-lucide-receipt" class="size-8 mx-auto mb-2 opacity-50" />
-							No invoices match your search.
-						</div>
-					</div>
+					<ResizableDataTable
+						:rows="rows"
+						state-key="voucher-link-invoice"
+						default-sort-field="issue_date"
+						:default-sort-order="-1"
+						@row-click="(row: PickerRow) => pick(row.id)"
+					>
+						<Column field="number" header="Number" sortable>
+							<template #body="{ data }">
+								<div class="truncate font-medium tabular-nums">
+									{{ data.number }}
+								</div>
+							</template>
+						</Column>
+						<Column field="_client" header="Client" sortable>
+							<template #body="{ data }">
+								<div class="truncate">
+									{{ data._client }}
+								</div>
+							</template>
+						</Column>
+						<Column field="issue_date" header="Issued" sortable>
+							<template #body="{ data }">
+								<div class="truncate text-(--ui-text-muted) tabular-nums">
+									{{ data.issue_date }}
+								</div>
+							</template>
+						</Column>
+						<Column field="total_cents" header="Total" sortable :style="{ textAlign: 'right' }">
+							<template #body="{ data }">
+								<div class="truncate text-right tabular-nums">
+									{{ formatLKR(data.total_cents) }}
+								</div>
+							</template>
+						</Column>
+						<Column field="_balance" header="Balance" sortable :style="{ textAlign: 'right' }">
+							<template #body="{ data }">
+								<div class="truncate text-right tabular-nums">
+									<span v-if="data._balance === 0" class="text-(--ui-text-muted)">—</span>
+									<span v-else>{{ formatLKR(data._balance) }}</span>
+								</div>
+							</template>
+						</Column>
+						<Column field="_status" header="Status" sortable>
+							<template #body="{ data }">
+								<StatusBadge :status="data._status" />
+							</template>
+						</Column>
+					</ResizableDataTable>
 
 					<p class="text-xs text-(--ui-text-muted)">
-						{{ rows.length }} invoice{{ rows.length === 1 ? "" : "s" }} · cancelled invoices are hidden
+						{{ rows.length }} invoice{{ rows.length === 1 ? "" : "s" }} · cancelled invoices are hidden · click the Number to link
 					</p>
 				</div>
 			</template>
@@ -142,21 +135,23 @@
 </template>
 
 <script setup lang="ts">
-// Linked-invoice picker field. Replaces a flat dropdown — with hundreds
-// of invoices a searchable table is far easier to navigate. v-model is
-// the invoice id (or null when unlinked). The field shows a compact
-// summary of the chosen invoice; clicking Change / "Link an invoice"
-// opens a modal with a search box, status-filter chips, and a clickable
-// table. Mirrors LinkedBillField.
+// Linked-invoice picker field. Mirrors LinkedBillField — see that file
+// for the design notes on why we use ResizableDataTable for the picker.
+// v-model is the invoice id (or null when unlinked).
 //
 // Cancelled invoices are excluded from the picker — you wouldn't link a
 // receipt to a voided invoice — but an invoice already linked before it
 // was cancelled still renders in the summary box.
 
-	import type { SortDir } from "~/composables/useListView";
 	import type { InvoiceRow, InvoiceStatus } from "~/stores/invoices";
 	import { formatLKR } from "~/lib/money";
 	import { useInvoicesStore } from "~/stores/invoices";
+
+	interface PickerRow extends InvoiceRow {
+		_client: string
+		_balance: number
+		_status: InvoiceStatus
+	}
 
 	interface Props {
 		modelValue: number | null
@@ -211,56 +206,27 @@
 		props.modelValue ? invoicesStore.invoices.find((i) => i.id === props.modelValue) ?? null : null
 	);
 
-	// Click-to-sort on the table headers. Starts on issue date, newest
-	// first; clicking the active column flips direction, clicking a new
-	// column starts it ascending.
-	type SortKey = "number" | "client" | "issued" | "total" | "balance" | "status";
-	const sortKey = ref<SortKey>("issued");
-	const sortDir = ref<SortDir>("desc");
-	const toggleSort = (key: SortKey) => {
-		if (sortKey.value === key) {
-			sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
-		} else {
-			sortKey.value = key;
-			sortDir.value = "asc";
-		}
-	};
-	const sortValue = (i: InvoiceRow): string | number => {
-		switch (sortKey.value) {
-		case "number": return i.number;
-		case "client": return clientName(i).toLowerCase();
-		case "issued": return i.issue_date;
-		case "total": return i.total_cents;
-		case "balance": return invoicesStore.balanceCentsFor(i);
-		case "status": return invoicesStore.derivedStatus(i);
-		}
-	};
-
-	// Non-cancelled invoices, narrowed by the search box and the status
-	// chips, then ordered by the active sort column.
-	const rows = computed<InvoiceRow[]>(() => {
+	const rows = computed<PickerRow[]>(() => {
 		const q = search.value.trim().toLowerCase();
-		const matched = invoicesStore.invoices.filter((i) => {
-			if (i.status === "cancelled") return false;
-			if (statusFilters.value.length > 0
-				&& !statusFilters.value.includes(invoicesStore.derivedStatus(i))) {
-				return false;
-			}
-			if (!q) return true;
-			return (
-				i.number.toLowerCase().includes(q)
-				|| clientName(i).toLowerCase().includes(q)
-			);
-		});
-		return matched.sort((a, b) => {
-			const va = sortValue(a);
-			const vb = sortValue(b);
-			let cmp = typeof va === "number" && typeof vb === "number"
-				? va - vb
-				: String(va).localeCompare(String(vb));
-			if (cmp === 0) cmp = a.id - b.id;
-			return sortDir.value === "asc" ? cmp : -cmp;
-		});
+		return invoicesStore.invoices
+			.filter((i) => {
+				if (i.status === "cancelled") return false;
+				if (statusFilters.value.length > 0
+					&& !statusFilters.value.includes(invoicesStore.derivedStatus(i))) {
+					return false;
+				}
+				if (!q) return true;
+				return (
+					i.number.toLowerCase().includes(q)
+					|| clientName(i).toLowerCase().includes(q)
+				);
+			})
+			.map((i) => ({
+				...i,
+				_client: clientName(i),
+				_balance: invoicesStore.balanceCentsFor(i),
+				_status: invoicesStore.derivedStatus(i)
+			}));
 	});
 
 	const pick = (id: number) => {
