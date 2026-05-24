@@ -29,7 +29,7 @@
 </template>
 
 <script setup lang="ts">
-	type StatChipColor = "primary" | "success" | "error" | "warning" | "info";
+	type StatChipColor = "primary" | "success" | "error" | "warning" | "info" | "neutral";
 
 	interface Props {
 		label: string
@@ -51,6 +51,7 @@
 		case "error": return "bg-(--ui-error)";
 		case "warning": return "bg-(--ui-warning)";
 		case "info": return "bg-(--ui-info)";
+		case "neutral": return "bg-(--ui-text-muted)";
 		default: return "bg-(--ui-primary)";
 		}
 	});
@@ -61,6 +62,7 @@
 		case "error": return "border-(--ui-error)";
 		case "warning": return "border-(--ui-warning)";
 		case "info": return "border-(--ui-info)";
+		case "neutral": return "border-(--ui-text-muted)";
 		default: return "border-(--ui-primary)";
 		}
 	});
