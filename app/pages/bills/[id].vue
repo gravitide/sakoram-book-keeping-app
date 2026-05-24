@@ -435,8 +435,8 @@
 	import type { PricingMode } from "~/stores/quotes";
 	import type { VendorRow } from "~/stores/vendors";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
-	import { computeLineTotals, formatLKR, formatQty, formatRate, sumCents } from "~/lib/money";
-	import { themeHex } from "~/lib/theme";
+	import { buildBillPdfPayload } from "~/lib/bill-pdf";
+	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
 	import { buildCategorySnapshot, useBillCategoriesStore } from "~/stores/bill_categories";
 	import { useBillsStore } from "~/stores/bills";
 	import { useSettingsStore } from "~/stores/settings";
@@ -595,15 +595,6 @@
 		if (formCategoryId.value === null) return null;
 		const c = categoriesStore.categories.find((row) => row.id === formCategoryId.value);
 		return c ? buildCategorySnapshot(c) : null;
-	}
-
-	function categoryNameFromSnapshot(json: string | null): string {
-		if (!json) return "";
-		try {
-			return (JSON.parse(json) as { name?: string }).name ?? "";
-		} catch {
-			return "";
-		}
 	}
 
 	const computedTotals = computed(() => {
@@ -802,83 +793,17 @@
 	};
 
 	// ---- PDF export ----------------------------------------------------------
-	// Bills are an internal record of vendor invoices we received. The PDF is
-	// for our own filing — the vendor block becomes the "Bill from" party.
-	// We don't render bank details or a "Prepared by" sign-off here (those
-	// belong on outbound documents).
-	const buildPdfPayload = (lineRows: BillLineRow[]) => {
-		const b = bill.value!;
-		const snap = vendorSnapshot.value;
-		const cityLine = [snap?.city, snap?.postal_code].filter(Boolean).join(" ").trim();
-		const addressLines = [snap?.address_line1, snap?.address_line2, cityLine || null, snap?.country]
-			.filter((s): s is string => Boolean(s && s.trim()));
-		const hasVat = (b.tax_cents ?? 0) !== 0;
-
-		const fmt = (cents: number) => formatLKR(cents);
-		const fmtNoSym = (cents: number) => formatLKR(cents, { withSymbol: false });
-
-		const paid = store.paidCentsFor(b.id);
-		const balanceCentsValue = Math.max(0, b.total_cents - paid);
-
-		return {
-			kind: "bill",
-			number: b.number,
-			title: "BILL",
-			theme_color: themeHex(settingsStore.settings?.theme_color),
-			font_family: settingsStore.settings?.pdf_font ?? "Akt",
-			currency_code: currency.value.code,
-			currency_symbol: currency.value.symbol,
-			primary_label: "Bill",
-			date_label: "Date",
-			date_value: b.issue_date,
-			secondary_label: "Due date",
-			secondary_value: b.due_date,
-			vendor_invoice_label: b.vendor_invoice_number ? "Vendor inv #" : null,
-			vendor_invoice_value: b.vendor_invoice_number ?? null,
-			party_label: "Bill from",
-			party: snap
-				? {
-					name: snap.name,
-					tax_id: snap.tax_id ?? null,
-					address_lines: addressLines
-				}
-				: { name: "(no vendor)", tax_id: null, address_lines: [] },
-			project_title: categoryNameFromSnapshot(b.category_snapshot)
-				? `Category: ${categoryNameFromSnapshot(b.category_snapshot)}`
-				: "",
-			pricing_mode: b.pricing_mode,
-			has_vat: hasVat,
-			notes: b.notes ?? "",
-			notes_paragraphs: (b.notes ?? "").split(/\n\s*\n/).filter((p) => p.trim().length > 0),
-			prepared_by: "",
-			paid_cents: paid > 0 ? paid : null,
-			paid_display: paid > 0 ? fmtNoSym(paid) : null,
-			balance_display: paid > 0 ? fmtNoSym(balanceCentsValue) : null,
-			business_name: settingsStore.settings?.business_name ?? null,
-			website: settingsStore.settings?.website ?? null,
-			phone: settingsStore.settings?.phone ?? null,
-			address_line1: settingsStore.settings?.address_line1 ?? null,
-			city: settingsStore.settings?.city ?? null,
-			logo_path: settingsStore.settings?.pdf_header_logo_path ?? null,
-			bank: null,
-			lines: lineRows.map((l) => ({
-				item_label: l.item_label,
-				description: l.description,
-				qty_display: formatQty(l.quantity_milli) + (l.unit ? ` ${l.unit}` : ""),
-				unit_price_display: fmtNoSym(l.unit_price_cents),
-				vat_display: formatRate(l.tax_rate_basis_points),
-				total_display: fmtNoSym(l.line_total_cents)
-			})),
-			formatted: {
-				subtotal: fmt(b.subtotal_cents),
-				subtotal_no_symbol: fmtNoSym(b.subtotal_cents),
-				tax: fmt(b.tax_cents),
-				tax_no_symbol: fmtNoSym(b.tax_cents),
-				total: fmt(b.total_cents),
-				total_no_symbol: fmtNoSym(b.total_cents)
-			}
-		};
-	};
+	// Bills are an internal record of vendor invoices we received. Payload
+	// shape lives in `app/lib/bill-pdf.ts` so the list page can render
+	// from the same builder for its row action + bulk export.
+	const buildPdfPayload = (lineRows: BillLineRow[]) =>
+		buildBillPdfPayload({
+			row: bill.value!,
+			lines: lineRows,
+			settings: settingsStore.settings,
+			currency: currency.value,
+			paidCents: store.paidCentsFor(bill.value!.id)
+		});
 
 	const linesForPreview = ref<BillLineRow[]>([]);
 	watch([() => billId, () => bill.value?.updated_at], async () => {

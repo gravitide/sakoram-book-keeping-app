@@ -198,19 +198,46 @@
 				</div>
 			</div>
 
-			<!-- No `:row-actions` here — the original bills list page had
-				no overflow / right-click menu, so the migration preserves
-				that. First-cell click still opens the bill detail.
-				A follow-up could add common actions (record payment,
-				generate PDF) once buildBillPdfPayload moves into a shared
-				lib file. -->
+			<!-- Selection action bar — renders above the table whenever any
+				row is ticked. Surfaces a count + Clear + Generate PDFs. -->
+			<div
+				v-if="selectedRows.length > 0 && !store.loading && !store.error"
+				class="mb-3 flex items-center justify-between gap-3 px-3 py-2 rounded-md border border-(--ui-primary)/30 bg-(--ui-primary)/10 text-sm"
+			>
+				<div>
+					<span class="font-medium">{{ selectedRows.length }} selected</span>
+					<span class="text-(--ui-text-muted)"> · across all filters / pages</span>
+				</div>
+				<div class="flex items-center gap-2">
+					<UButton
+						size="xs"
+						color="neutral"
+						variant="ghost"
+						@click="selectedRows = []"
+					>
+						Clear
+					</UButton>
+					<UButton
+						size="xs"
+						icon="i-lucide-file-down"
+						:loading="bulkPdf.running"
+						@click="generateBulkPdfs"
+					>
+						Generate PDFs
+					</UButton>
+				</div>
+			</div>
+
 			<ResizableDataTable
-				v-else
+				v-if="!store.loading && !store.error && store.filtered.length > 0"
 				ref="tableRef"
+				v-model:selection="selectedRows"
 				:rows="rows"
 				state-key="bills-table"
+				:row-actions="itemsFor"
 				default-sort-field="issue_date"
 				:default-sort-order="-1"
+				selectable
 				@row-click="(row) => router.push(`/bills/${row.id}`)"
 			>
 				<Column field="number" header="Number" sortable>
@@ -304,24 +331,110 @@
 
 		<!-- New-bill creation lives as a modal (was a standalone page). -->
 		<NewBillModal v-model:open="newBillOpen" :issue-date="newBillIssueDate" />
+
+		<PdfPreviewModal
+			v-model:open="pdf.state.open"
+			:asset-url="pdf.state.assetUrl"
+			:temp-path="pdf.state.tempPath"
+			:suggested-file-name="pdf.state.suggestedFileName"
+			:saving="pdf.state.saving"
+			title="Bill PDF preview"
+			@save="pdf.onSave"
+			@cancel="pdf.onCancel"
+		/>
+
+		<!-- Bulk PDF progress modal. Mirrors the payslips list page —
+			progress bar, current filename, error list, Cancel /
+			Open folder / Done. Dismiss is blocked while running so
+			the file IO doesn't get yanked mid-iteration. -->
+		<UModal
+			:open="bulkPdf.modalOpen"
+			:dismissible="false"
+			:close="false"
+			title="Generating bill PDFs"
+		>
+			<template #body>
+				<div class="space-y-3">
+					<div class="text-sm">
+						<div class="flex justify-between tabular-nums">
+							<span>{{ bulkPdf.progress }} of {{ bulkPdf.total }}</span>
+							<span class="text-(--ui-text-muted)">{{ bulkPdf.errors.length }} error{{ bulkPdf.errors.length === 1 ? "" : "s" }}</span>
+						</div>
+						<div class="mt-2 h-2 rounded-full bg-(--ui-bg-muted) overflow-hidden">
+							<div
+								class="h-full bg-(--ui-primary) transition-all duration-150"
+								:style="{ width: bulkPdf.total === 0 ? '0%' : `${Math.round((bulkPdf.progress / bulkPdf.total) * 100)}%` }"
+							/>
+						</div>
+					</div>
+					<div v-if="bulkPdf.currentName" class="text-xs text-(--ui-text-muted) truncate">
+						Rendering <span class="font-medium">{{ bulkPdf.currentName }}</span>…
+					</div>
+					<div v-if="bulkPdf.errors.length > 0" class="max-h-32 overflow-auto text-xs space-y-1 rounded-md border border-(--ui-error)/30 bg-(--ui-error)/5 p-2">
+						<div v-for="(e, i) in bulkPdf.errors" :key="i">
+							<span class="font-medium">{{ e.name }}:</span>
+							<span class="text-(--ui-text-muted)"> {{ e.message }}</span>
+						</div>
+					</div>
+				</div>
+			</template>
+			<template #footer>
+				<div class="flex justify-end gap-2 w-full">
+					<UButton
+						v-if="bulkPdf.running"
+						color="neutral"
+						variant="outline"
+						@click="bulkPdf.cancelled = true"
+					>
+						{{ bulkPdf.cancelled ? "Cancelling…" : "Cancel" }}
+					</UButton>
+					<UButton
+						v-else-if="bulkPdf.outputDir"
+						color="neutral"
+						variant="outline"
+						icon="i-lucide-folder-open"
+						@click="openOutputFolder"
+					>
+						Open folder
+					</UButton>
+					<UButton
+						v-if="!bulkPdf.running"
+						@click="bulkPdf.modalOpen = false"
+					>
+						Done
+					</UButton>
+				</div>
+			</template>
+		</UModal>
 	</div>
 </template>
 
 <script setup lang="ts">
-	import type { BillRow, BillStatus, VendorSnapshot } from "~/stores/bills";
+	import type { BillLineRow, BillRow, BillStatus, VendorSnapshot } from "~/stores/bills";
+	import { invoke } from "@tauri-apps/api/core";
+	import { join } from "@tauri-apps/api/path";
+	import { open as openDialog } from "@tauri-apps/plugin-dialog";
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
+	import { usePdfPreview } from "~/composables/usePdfPreview";
+	import { buildBillPdfPayload } from "~/lib/bill-pdf";
 	import { formatLKR } from "~/lib/money";
+	import { resolveProtectPassword } from "~/lib/pdf";
 	import { themeHex } from "~/lib/theme";
 	import { useBillCategoriesStore } from "~/stores/bill_categories";
 	import { useBillsStore } from "~/stores/bills";
+	import { useSettingsStore } from "~/stores/settings";
 	import { useVendorsStore } from "~/stores/vendors";
 	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Bills" });
 
 	const router = useRouter();
+	const toast = useToast();
 	const store = useBillsStore();
 	const vendorsStore = useVendorsStore();
 	const categoriesStore = useBillCategoriesStore();
+	const settingsStore = useSettingsStore();
+	const currency = useActiveCurrency();
 
 	// Load every store the list / filter dropdowns / derived status
 	// reach into, in parallel. Vouchers are essential because bill
@@ -331,7 +444,8 @@
 		store.load(),
 		vendorsStore.load(),
 		categoriesStore.load(),
-		vouchersStore.load()
+		vouchersStore.load(),
+		settingsStore.ensureLoaded()
 	]);
 
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
@@ -535,4 +649,193 @@
 		isDatePresetActive(key)
 			? "bg-(--ui-info)/15 border-(--ui-info)/40 text-(--ui-info)"
 			: inactiveChip;
+
+	// --- Row selection (for bulk PDF) -------------------------------------
+	// `data-key="id"` on ResizableDataTable means selection survives sort /
+	// page / filter changes by id, not by row reference. Selection persists
+	// across pagination, matching the payslips list page.
+	const selectedRows = ref<BillRowVM[]>([]);
+
+	// --- Single-row PDF preview ------------------------------------------
+	// usePdfPreview holds a temp file and exposes open/save/cancel hooks.
+	// The builder closes over `currentBill` + `currentLines`, both set just
+	// before opening so the preview matches the row the user clicked from.
+	const currentBill = ref<BillRow | null>(null);
+	const currentLines = ref<BillLineRow[]>([]);
+	const pdf = usePdfPreview({
+		command: "export_bill_pdf",
+		buildPayload: () => {
+			if (!currentBill.value) return {};
+			return buildBillPdfPayload({
+				row: currentBill.value,
+				lines: currentLines.value,
+				settings: settingsStore.settings,
+				currency: currency.value,
+				paidCents: store.paidCentsFor(currentBill.value.id)
+			});
+		},
+		fileName: () => `${currentBill.value?.number ?? "bill"}.pdf`,
+		title: "Bill PDF preview"
+	});
+
+	const onPdfClick = async (b: BillRow) => {
+		currentBill.value = b;
+		try {
+			currentLines.value = await store.getLines(b.id);
+		} catch (err) {
+			toast.add({
+				title: "Could not load lines",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+			return;
+		}
+		pdf.open();
+	};
+
+	// --- Row actions ------------------------------------------------------
+	// Three-group menu: Open + lifecycle (Record payment when something's
+	// owed, Cancel/Reopen), Generate PDF. ResizableDataTable draws a
+	// separator between groups.
+	function itemsFor(b: BillRowVM) {
+		const lifecycle: { label: string, icon: string, onSelect: () => void }[] = [
+			{ label: "Open", icon: "i-lucide-pencil", onSelect: () => router.push(`/bills/${b.id}`) }
+		];
+		if (b.status === "open" && b._balance > 0) {
+			lifecycle.push({
+				label: "Record payment",
+				icon: "i-lucide-banknote",
+				onSelect: () => router.push(`/vouchers/new?bill=${b.id}`)
+			});
+		}
+		const exports = [{
+			label: "Generate PDF & Print",
+			icon: "i-lucide-file-down",
+			onSelect: () => {
+				void onPdfClick(b);
+			}
+		}];
+		return [lifecycle, exports];
+	}
+
+	// --- Bulk PDF generation ---------------------------------------------
+	// Mirrors the payslips list page. `modalOpen` drives the progress
+	// dialog; `running` gates the action bar's spinner; `cancelled` is
+	// checked between iterations so the user can abort. Filenames are
+	// the bill number — already filesystem-safe ("BIL-2026-0001") but
+	// defensive sanitising stays in case a future numbering format
+	// includes punctuation.
+	const bulkPdf = reactive({
+		modalOpen: false,
+		running: false,
+		cancelled: false,
+		progress: 0,
+		total: 0,
+		currentName: "",
+		outputDir: "" as string,
+		errors: [] as { name: string, message: string }[]
+	});
+
+	const openOutputFolder = async () => {
+		if (!bulkPdf.outputDir) return;
+		try {
+			await invoke("open_path", { path: bulkPdf.outputDir });
+		} catch (err) {
+			toast.add({
+				title: "Could not open folder",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	const safeName = (s: string): string => s.replace(/[^\w.-]+/g, "_");
+
+	const generateBulkPdfs = async () => {
+		if (bulkPdf.running) return;
+		if (selectedRows.value.length === 0) return;
+
+		let folder: string | null = null;
+		try {
+			const picked = await openDialog({ directory: true, multiple: false });
+			folder = Array.isArray(picked) ? picked[0] ?? null : picked;
+		} catch (err) {
+			toast.add({
+				title: "Could not open folder picker",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+			return;
+		}
+		if (!folder) return; // cancelled
+
+		// Snapshot the selection — if the user keeps clicking around while
+		// it runs, we still process exactly what they kicked off. Resolve
+		// from store.bills by id for the canonical row reference.
+		const selectedIds = new Set(selectedRows.value.map((r) => r.id));
+		const targets: BillRow[] = [];
+		for (const b of store.bills) {
+			if (selectedIds.has(b.id)) targets.push(b);
+		}
+		targets.sort((a, b) => a.number.localeCompare(b.number));
+
+		bulkPdf.modalOpen = true;
+		bulkPdf.running = true;
+		bulkPdf.cancelled = false;
+		bulkPdf.progress = 0;
+		bulkPdf.total = targets.length;
+		bulkPdf.currentName = "";
+		bulkPdf.outputDir = folder;
+		bulkPdf.errors = [];
+
+		// Resolve owner-password protection once for the whole run — the
+		// preview flow gets this automatically, but the bulk loop invokes
+		// the export command directly so it must thread the password too.
+		const protectPassword = await resolveProtectPassword("export_bill_pdf");
+
+		for (const row of targets) {
+			if (bulkPdf.cancelled) break;
+			bulkPdf.currentName = row.number;
+
+			try {
+				const lineRows = await store.getLines(row.id);
+				const payload = buildBillPdfPayload({
+					row,
+					lines: lineRows,
+					settings: settingsStore.settings,
+					currency: currency.value,
+					paidCents: store.paidCentsFor(row.id)
+				});
+
+				const outputPath = await join(folder, `${safeName(row.number)}.pdf`);
+				await invoke("export_bill_pdf", { data: payload, outputPath, protectPassword });
+			} catch (err) {
+				bulkPdf.errors.push({
+					name: row.number,
+					message: err instanceof Error ? err.message : String(err)
+				});
+			} finally {
+				bulkPdf.progress += 1;
+			}
+		}
+
+		bulkPdf.running = false;
+		bulkPdf.currentName = "";
+
+		const successCount = bulkPdf.progress - bulkPdf.errors.length;
+		const cancelledTail = bulkPdf.cancelled ? ` · ${bulkPdf.total - bulkPdf.progress} skipped` : "";
+		toast.add({
+			title: bulkPdf.cancelled
+				? `Cancelled — ${successCount} of ${bulkPdf.total} done${cancelledTail}`
+				: `Generated ${successCount} of ${bulkPdf.total} PDFs`,
+			description: bulkPdf.errors.length > 0
+				? `${bulkPdf.errors.length} error${bulkPdf.errors.length === 1 ? "" : "s"} — see modal for details.`
+				: undefined,
+			color: bulkPdf.errors.length === 0 && !bulkPdf.cancelled ? "success" : "warning",
+			icon: bulkPdf.errors.length === 0 && !bulkPdf.cancelled ? "i-lucide-check" : "i-lucide-triangle-alert"
+		});
+	};
 </script>
