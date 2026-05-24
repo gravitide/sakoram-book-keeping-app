@@ -143,26 +143,32 @@
 							</div>
 						</div>
 					</div>
-					<div class="space-y-3">
-						<UFormField label="PDF header" hint="Big header at the top of the PDF. Leave blank for the default (INVOICE).">
+					<!-- Right column uses a 2-col inner grid — see quote
+						detail page for the rationale. -->
+					<div class="grid grid-cols-2 gap-3">
+						<UFormField label="PDF header">
 							<UInput
 								v-model="formTitleOverride"
 								:disabled="!editable"
 								placeholder="INVOICE"
 							/>
+							<template #help>
+								Big PDF header. Blank = INVOICE.
+							</template>
 						</UFormField>
-						<UFormField label="Project title" hint="Centered subtitle on the PDF">
+						<UFormField label="Project title">
 							<UInput v-model="formProjectTitle" :disabled="!editable" />
+							<template #help>
+								Centered subtitle on the PDF.
+							</template>
 						</UFormField>
-						<div class="grid grid-cols-2 gap-3">
-							<UFormField label="Issue date">
-								<DateField v-model="formIssueDate" :disabled="!editable" />
-							</UFormField>
-							<UFormField label="Due date">
-								<DateField v-model="formDueDate" :min-value="formIssueDate || undefined" :disabled="!editable" />
-							</UFormField>
-						</div>
-						<UFormField label="Bank account" hint="Printed on the PDF so the client knows where to pay.">
+						<UFormField label="Issue date">
+							<DateField v-model="formIssueDate" :disabled="!editable" />
+						</UFormField>
+						<UFormField label="Due date">
+							<DateField v-model="formDueDate" :min-value="formIssueDate || undefined" :disabled="!editable" />
+						</UFormField>
+						<UFormField label="Bank account" class="col-span-2">
 							<USelect
 								v-model="formBankId"
 								:items="bankPickerOptions"
@@ -170,6 +176,9 @@
 								class="w-full"
 								:disabled="!editable"
 							/>
+							<template #help>
+								Printed on the PDF so the client knows where to pay.
+							</template>
 						</UFormField>
 					</div>
 				</div>

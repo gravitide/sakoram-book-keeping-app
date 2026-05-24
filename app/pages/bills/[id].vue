@@ -131,28 +131,37 @@
 							</div>
 						</div>
 					</div>
-					<div class="space-y-3">
-						<UFormField label="PDF header" hint="Big header at the top of the PDF. Leave blank for the default (BILL).">
+					<!-- Right column uses a 2-col inner grid — see quote
+						detail page for the rationale. -->
+					<div class="grid grid-cols-2 gap-3">
+						<UFormField label="PDF header">
 							<UInput
 								v-model="formTitleOverride"
 								:disabled="!editable"
 								placeholder="BILL"
 							/>
+							<template #help>
+								Big PDF header. Blank = BILL.
+							</template>
 						</UFormField>
-						<UFormField label="Vendor invoice #" hint="The number on THEIR invoice (e.g. INV-2024-9821).">
+						<UFormField label="Vendor invoice #">
 							<UInput v-model="formVendorInvoiceNumber" :disabled="!editable" />
+							<template #help>
+								The number on THEIR invoice.
+							</template>
 						</UFormField>
-						<UFormField label="Category" hint="Manage the list under Contacts → Bill categories.">
+						<UFormField label="Category" class="col-span-2">
 							<CategoryPicker v-model="formCategoryId" :disabled="!editable" />
+							<template #help>
+								Manage the list under Contacts → Bill categories.
+							</template>
 						</UFormField>
-						<div class="grid grid-cols-2 gap-3">
-							<UFormField label="Issue date">
-								<DateField v-model="formIssueDate" :disabled="!editable" />
-							</UFormField>
-							<UFormField label="Due date">
-								<DateField v-model="formDueDate" :min-value="formIssueDate || undefined" :disabled="!editable" />
-							</UFormField>
-						</div>
+						<UFormField label="Issue date">
+							<DateField v-model="formIssueDate" :disabled="!editable" />
+						</UFormField>
+						<UFormField label="Due date">
+							<DateField v-model="formDueDate" :min-value="formIssueDate || undefined" :disabled="!editable" />
+						</UFormField>
 					</div>
 				</div>
 			</UCard>

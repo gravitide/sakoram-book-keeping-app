@@ -142,26 +142,36 @@
 							</div>
 						</div>
 					</div>
-					<div class="space-y-3">
-						<UFormField label="PDF header" hint="Big header at the top of the PDF. Leave blank for the default (QUOTATION).">
+					<!-- Right column uses a 2-col inner grid so single-line
+						inputs (PDF header / Project title) pair up rather
+						than stacking — keeps the column height close to the
+						snapshot on the left instead of leaving a big gap.
+						Hints move to the #help slot (rendered below the
+						field) so they fit cleanly at half-width. -->
+					<div class="grid grid-cols-2 gap-3">
+						<UFormField label="PDF header">
 							<UInput
 								v-model="formTitleOverride"
 								:disabled="!editable"
 								placeholder="QUOTATION"
 							/>
+							<template #help>
+								Big PDF header. Blank = QUOTATION.
+							</template>
 						</UFormField>
-						<UFormField label="Project title" hint="Centered subtitle on the PDF">
+						<UFormField label="Project title">
 							<UInput v-model="formProjectTitle" :disabled="!editable" />
+							<template #help>
+								Centered subtitle on the PDF.
+							</template>
 						</UFormField>
-						<div class="grid grid-cols-2 gap-3">
-							<UFormField label="Issue date">
-								<DateField v-model="formIssueDate" :disabled="!editable" />
-							</UFormField>
-							<UFormField label="Valid until">
-								<DateField v-model="formValidUntil" :min-value="formIssueDate || undefined" :disabled="!editable" />
-							</UFormField>
-						</div>
-						<UFormField label="Bank account" hint="Printed on the PDF so the client knows where to pay.">
+						<UFormField label="Issue date">
+							<DateField v-model="formIssueDate" :disabled="!editable" />
+						</UFormField>
+						<UFormField label="Valid until">
+							<DateField v-model="formValidUntil" :min-value="formIssueDate || undefined" :disabled="!editable" />
+						</UFormField>
+						<UFormField label="Bank account" class="col-span-2">
 							<USelect
 								v-model="formBankId"
 								:items="bankPickerOptions"
@@ -169,6 +179,9 @@
 								class="w-full"
 								:disabled="!editable"
 							/>
+							<template #help>
+								Printed on the PDF so the client knows where to pay.
+							</template>
 						</UFormField>
 					</div>
 				</div>
