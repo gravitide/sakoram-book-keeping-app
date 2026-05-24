@@ -26,12 +26,11 @@
 								Will be saved as <span class="font-medium">{{ docNum.numberFormatted.value }}</span>
 							</span>
 						</template>
-						<UInput
-							v-model.number="docNum.sequence.value"
-							type="number"
-							min="1"
-							step="1"
-							placeholder="e.g. 1"
+						<UInputNumber
+							v-model="docNum.sequence.value"
+							:min="1"
+							:step="1"
+							class="w-full"
 						/>
 					</UFormField>
 
