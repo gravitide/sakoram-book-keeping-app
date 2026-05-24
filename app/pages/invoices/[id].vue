@@ -120,8 +120,9 @@
 						</UButton>
 					</div>
 				</template>
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-					<div>
+				<!-- 1:3 split at md+: see quote detail page for rationale. -->
+				<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+					<div class="md:col-span-1">
 						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) mb-1">
 							Bill to
 						</div>
@@ -143,19 +144,28 @@
 							</div>
 						</div>
 					</div>
-					<div class="space-y-3">
-						<UFormField label="Project title" hint="Centered subtitle on the PDF">
-							<UInput v-model="formProjectTitle" :disabled="!editable" />
+					<!-- Right column uses a 2-col inner grid — see quote
+						detail page for the rationale. md:col-span-3 ties
+						to the 1:3 outer split; max-w-3xl keeps inputs
+						from stretching to ~540px on wide xl/2xl cards. -->
+					<div class="md:col-span-3 grid grid-cols-2 gap-3 max-w-3xl">
+						<UFormField label="PDF header">
+							<UInput
+								v-model="formTitleOverride"
+								:disabled="!editable"
+								placeholder="INVOICE"
+							/>
 						</UFormField>
-						<div class="grid grid-cols-2 gap-3">
-							<UFormField label="Issue date">
-								<DateField v-model="formIssueDate" :disabled="!editable" />
-							</UFormField>
-							<UFormField label="Due date">
-								<DateField v-model="formDueDate" :min-value="formIssueDate || undefined" :disabled="!editable" />
-							</UFormField>
-						</div>
-						<UFormField label="Bank account" hint="Printed on the PDF so the client knows where to pay.">
+						<UFormField label="Project title">
+							<UInput v-model="formProjectTitle" :disabled="!editable" placeholder="Subtitle on the PDF (optional)" />
+						</UFormField>
+						<UFormField label="Issue date">
+							<DateField v-model="formIssueDate" :disabled="!editable" />
+						</UFormField>
+						<UFormField label="Due date">
+							<DateField v-model="formDueDate" :min-value="formIssueDate || undefined" :disabled="!editable" />
+						</UFormField>
+						<UFormField label="Bank account" class="col-span-2">
 							<USelect
 								v-model="formBankId"
 								:items="bankPickerOptions"
@@ -163,6 +173,9 @@
 								class="w-full"
 								:disabled="!editable"
 							/>
+							<template #help>
+								Printed on the PDF so the client knows where to pay.
+							</template>
 						</UFormField>
 					</div>
 				</div>
@@ -514,6 +527,10 @@
 	const formTerms = ref("");
 	const formPreparedBy = ref("");
 	const formBankId = ref<number | null>(null);
+	// PDF big-header override. Empty = "INVOICE" default in the PDF
+	// builder (see app/lib/invoice-pdf.ts). Stored as-is; the builder
+	// upper-cases at render time.
+	const formTitleOverride = ref("");
 
 	// Bank picker options: every active bank plus a "no bank" entry so the
 	// user can deliberately render an invoice without a bank block on the
@@ -610,6 +627,7 @@
 		formTerms.value = row.terms ?? "";
 		formPreparedBy.value = row.prepared_by ?? "";
 		formBankId.value = row.business_bank_id;
+		formTitleOverride.value = row.title_override ?? "";
 		vatRatePct.value = row.vat_rate_basis_points / 100;
 		bundleSubtotalCents.value = row.subtotal_cents;
 
@@ -639,7 +657,7 @@
 	// it. Re-runs of hydrate() reset dirty to false at the end, so the watcher
 	// firing during a re-hydrate is harmless.
 	watch(
-		[formProjectTitle, formIssueDate, formDueDate, formNotes, formTerms, formPreparedBy, formBankId, vatRatePct, bundleSubtotalCents],
+		[formProjectTitle, formIssueDate, formDueDate, formNotes, formTerms, formPreparedBy, formBankId, formTitleOverride, vatRatePct, bundleSubtotalCents],
 		() => {
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
@@ -737,7 +755,8 @@
 				prepared_by: formPreparedBy.value || null,
 				client_snapshot: invoice.value.client_snapshot,
 				business_bank_id: formBankId.value,
-				bank_details_snapshot: bankSnapshot
+				bank_details_snapshot: bankSnapshot,
+				title_override: formTitleOverride.value.trim() || null
 			});
 			await invoicesStore.load();
 			await hydrate();

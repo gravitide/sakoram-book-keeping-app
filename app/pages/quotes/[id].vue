@@ -119,8 +119,12 @@
 						</UButton>
 					</div>
 				</template>
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-					<div>
+				<!-- 1:3 split at md+: the Quote-to snapshot is only ~3 short
+					lines, so a 1:1 split left the right column cramped
+					and the left column with a tall empty gap. Stays
+					stacked at sm. -->
+				<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+					<div class="md:col-span-1">
 						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) mb-1">
 							Quote to
 						</div>
@@ -142,19 +146,43 @@
 							</div>
 						</div>
 					</div>
-					<div class="space-y-3">
-						<UFormField label="Project title" hint="Centered subtitle on the PDF">
-							<UInput v-model="formProjectTitle" :disabled="!editable" />
+					<!-- Right column uses a 2-col inner grid so single-line
+						inputs (PDF header / Project title) pair up rather
+						than stacking — keeps the column height close to the
+						snapshot on the left instead of leaving a big gap.
+						md:col-span-3 ties to the 1:3 outer split.
+
+						max-w-3xl caps the form so a wide xl/2xl card
+						doesn't stretch each input to ~540px (which makes
+						the form feel sparse and the dates row read as
+						tiny pickers stranded in a sea of whitespace).
+						At md / lg the cap isn't reached.
+
+						No #help on the short fields: helper text wraps
+						unevenly across the pair (long vs short string)
+						and the grid stretches the row to the taller
+						helper, making the gap to the next row look
+						uneven. Label + placeholder already convey the
+						default; bank-account keeps its helper because
+						it's spanning the row and adding non-obvious info. -->
+					<div class="md:col-span-3 grid grid-cols-2 gap-3 max-w-3xl">
+						<UFormField label="PDF header">
+							<UInput
+								v-model="formTitleOverride"
+								:disabled="!editable"
+								placeholder="QUOTATION"
+							/>
 						</UFormField>
-						<div class="grid grid-cols-2 gap-3">
-							<UFormField label="Issue date">
-								<DateField v-model="formIssueDate" :disabled="!editable" />
-							</UFormField>
-							<UFormField label="Valid until">
-								<DateField v-model="formValidUntil" :min-value="formIssueDate || undefined" :disabled="!editable" />
-							</UFormField>
-						</div>
-						<UFormField label="Bank account" hint="Printed on the PDF so the client knows where to pay.">
+						<UFormField label="Project title">
+							<UInput v-model="formProjectTitle" :disabled="!editable" placeholder="Subtitle on the PDF (optional)" />
+						</UFormField>
+						<UFormField label="Issue date">
+							<DateField v-model="formIssueDate" :disabled="!editable" />
+						</UFormField>
+						<UFormField label="Valid until">
+							<DateField v-model="formValidUntil" :min-value="formIssueDate || undefined" :disabled="!editable" />
+						</UFormField>
+						<UFormField label="Bank account" class="col-span-2">
 							<USelect
 								v-model="formBankId"
 								:items="bankPickerOptions"
@@ -162,6 +190,9 @@
 								class="w-full"
 								:disabled="!editable"
 							/>
+							<template #help>
+								Printed on the PDF so the client knows where to pay.
+							</template>
 						</UFormField>
 					</div>
 				</div>
@@ -463,6 +494,10 @@
 	const formTerms = ref("");
 	const formPreparedBy = ref("");
 	const formBankId = ref<number | null>(null);
+	// PDF big-header override. Empty = "QUOTATION" default in the PDF
+	// builder (see app/lib/quote-pdf.ts). Stored as-is; the builder
+	// upper-cases at render time.
+	const formTitleOverride = ref("");
 
 	// Bank picker options: every active bank plus a "no bank" entry so the
 	// user can deliberately render a quote without a bank block on the PDF.
@@ -508,6 +543,7 @@
 		formTerms.value = row.terms ?? "";
 		formPreparedBy.value = row.prepared_by ?? "";
 		formBankId.value = row.business_bank_id;
+		formTitleOverride.value = row.title_override ?? "";
 		vatRatePct.value = row.vat_rate_basis_points / 100;
 		bundleSubtotalCents.value = row.subtotal_cents;
 
@@ -530,7 +566,7 @@
 	// Mark dirty when any directly v-model'd form field changes. Registered
 	// after the initial hydrate; hydrating-flag guards re-hydrate paths.
 	watch(
-		[formProjectTitle, formIssueDate, formValidUntil, formNotes, formTerms, formPreparedBy, formBankId, vatRatePct, bundleSubtotalCents],
+		[formProjectTitle, formIssueDate, formValidUntil, formNotes, formTerms, formPreparedBy, formBankId, formTitleOverride, vatRatePct, bundleSubtotalCents],
 		() => {
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
@@ -636,7 +672,8 @@
 				prepared_by: formPreparedBy.value || null,
 				client_snapshot: quote.value.client_snapshot,
 				business_bank_id: formBankId.value,
-				bank_details_snapshot: bankSnapshot
+				bank_details_snapshot: bankSnapshot,
+				title_override: formTitleOverride.value.trim() || null
 			});
 			await quotesStore.load();
 			await hydrate();

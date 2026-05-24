@@ -69,6 +69,7 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(24, "default font akt", include_str!("../migrations/0024_default_font_akt.sql")),
 	(25, "currency symbol override", include_str!("../migrations/0025_currency_symbol_override.sql")),
 	(26, "drop attachment_path", include_str!("../migrations/0026_drop_attachment_path.sql")),
+	(27, "title override", include_str!("../migrations/0027_title_override.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

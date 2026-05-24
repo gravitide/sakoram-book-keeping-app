@@ -41,6 +41,12 @@ export interface QuoteRow {
 	prepared_by: string | null
 	bank_details_snapshot: string | null
 	business_bank_id: number | null
+	/**
+	 * Per-document override of the PDF's big header. Null/empty = the
+	 * hardcoded default ("QUOTATION"); when set, the PDF builder
+	 * upper-cases this verbatim for the header.
+	 */
+	title_override: string | null
 	converted_invoice_id: number | null
 	created_at: string
 	updated_at: string
@@ -398,7 +404,8 @@ export const useQuotesStore = defineStore("quotes", () => {
 		| "pricing_mode" | "project_title"
 		| "vat_rate_basis_points"
 		| "subtotal_cents" | "tax_cents" | "total_cents"
-		| "notes" | "terms" | "prepared_by" | "bank_details_snapshot" | "business_bank_id">>;
+		| "notes" | "terms" | "prepared_by" | "bank_details_snapshot" | "business_bank_id"
+		| "title_override">>;
 
 	const UPDATABLE: ReadonlyArray<keyof QuoteUpdate> = [
 		"client_id",
@@ -415,7 +422,8 @@ export const useQuotesStore = defineStore("quotes", () => {
 		"terms",
 		"prepared_by",
 		"bank_details_snapshot",
-		"business_bank_id"
+		"business_bank_id",
+		"title_override"
 	];
 
 	const update = async (id: number, patch: QuoteUpdate): Promise<void> => {

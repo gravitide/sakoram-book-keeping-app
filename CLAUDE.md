@@ -916,6 +916,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0024_default_font_akt.sql               ← flip default ui_font / pdf_font Inter → Akt
 0025_currency_symbol_override.sql       ← allow custom (non-curated) currency_code by persisting a user-supplied symbol
 0026_drop_attachment_path.sql           ← drop the dead bills.attachment_path / vouchers.attachment_path columns (the polymorphic document_attachments table from 0022 has owned attachments for a while)
+0027_title_override.sql                 ← optional `title_override` text column on quotes / invoices / bills so the PDF big-header can be customised per document ("Development quote" instead of "QUOTATION")
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,
@@ -1457,6 +1458,15 @@ persisted to localStorage).
   per-document detail pages now delegate their PDF payload building
   to two new shared libs: `bill-pdf.ts` and `voucher-pdf.ts`
   (matching the quote / invoice / payslip pattern).
+- ✅ **Per-document PDF header override** — quotes / invoices / bills
+  gain an optional `title_override` column (migration 0027). A small
+  "PDF header" input on each detail page lets the user replace the
+  default big header (QUOTATION / INVOICE / BILL) with anything they
+  type — "Development quote", "Pro-forma invoice", "Recurring bill".
+  The PDF builder upper-cases the value at render time; leaving the
+  field blank falls through to the hardcoded default. Vouchers and
+  payslips are left as-is — voucher meaning is Receipt/Payment, and
+  PAYSLIP is legally constrained.
 
 ### Deferred / open items
 
@@ -1475,8 +1485,6 @@ persisted to localStorage).
   list loads all rows; sort/filter/page is in-memory. Acceptable up
   to a few thousand rows per table; revisit if a real tenant feels
   slow.
-- **Per-document custom title** (e.g. "DEVELOPMENT QUOTE" instead of
-  "QUOTATION") — currently `data.title` is hardcoded per doc type.
 - **Drag-drop reorder for line items** — currently up/down arrow
   buttons in `DocumentLineEditor` / `PayslipLineEditor`.
 - **Localised dates in list pages** — list tables show raw

@@ -41,10 +41,17 @@ export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, pa
 
 	const balanceCents = Math.max(0, inv.total_cents - paidCents);
 
+	// Allow per-document override of the big PDF header. Empty / null
+	// falls back to the hardcoded type label; otherwise we upper-case
+	// the user string. See migration 0027 + `title_override` column.
+	const title = inv.title_override?.trim()
+		? inv.title_override.trim().toUpperCase()
+		: "INVOICE";
+
 	return {
 		kind: "invoice",
 		number: inv.number,
-		title: "INVOICE",
+		title,
 		theme_color: themeHex(settings?.theme_color),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,

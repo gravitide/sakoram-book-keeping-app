@@ -100,8 +100,15 @@
 						</UButton>
 					</div>
 				</template>
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-					<div class="space-y-3">
+				<!-- 1:3 split at md+: see quote detail page for rationale.
+					The bill variant keeps the VendorPicker on the left
+					because the picker is part of the bill's identity (a
+					bill can be re-linked to a different vendor before
+					payment is recorded). It does mean the picker is
+					narrower at md (~200px) than at lg+ — acceptable
+					trade-off for the consistency. -->
+				<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+					<div class="md:col-span-1 space-y-3">
 						<UFormField label="Vendor" required>
 							<VendorPicker
 								v-model="formVendorId"
@@ -131,21 +138,33 @@
 							</div>
 						</div>
 					</div>
-					<div class="space-y-3">
-						<UFormField label="Vendor invoice #" hint="The number on THEIR invoice (e.g. INV-2024-9821).">
-							<UInput v-model="formVendorInvoiceNumber" :disabled="!editable" />
+					<!-- Right column uses a 2-col inner grid — see quote
+						detail page for the rationale. md:col-span-3 ties
+						to the 1:3 outer split; max-w-3xl keeps inputs
+						from stretching to ~540px on wide xl/2xl cards. -->
+					<div class="md:col-span-3 grid grid-cols-2 gap-3 max-w-3xl">
+						<UFormField label="PDF header">
+							<UInput
+								v-model="formTitleOverride"
+								:disabled="!editable"
+								placeholder="BILL"
+							/>
 						</UFormField>
-						<UFormField label="Category" hint="Manage the list under Contacts → Bill categories.">
+						<UFormField label="Vendor invoice #">
+							<UInput v-model="formVendorInvoiceNumber" :disabled="!editable" placeholder="The number on THEIR invoice" />
+						</UFormField>
+						<UFormField label="Category" class="col-span-2">
 							<CategoryPicker v-model="formCategoryId" :disabled="!editable" />
+							<template #help>
+								Manage the list under Contacts → Bill categories.
+							</template>
 						</UFormField>
-						<div class="grid grid-cols-2 gap-3">
-							<UFormField label="Issue date">
-								<DateField v-model="formIssueDate" :disabled="!editable" />
-							</UFormField>
-							<UFormField label="Due date">
-								<DateField v-model="formDueDate" :min-value="formIssueDate || undefined" :disabled="!editable" />
-							</UFormField>
-						</div>
+						<UFormField label="Issue date">
+							<DateField v-model="formIssueDate" :disabled="!editable" />
+						</UFormField>
+						<UFormField label="Due date">
+							<DateField v-model="formDueDate" :min-value="formIssueDate || undefined" :disabled="!editable" />
+						</UFormField>
 					</div>
 				</div>
 			</UCard>
@@ -490,6 +509,10 @@
 	const formDueDate = ref("");
 	const formCategoryId = ref<number | null>(null);
 	const formNotes = ref("");
+	// PDF big-header override. Empty = "BILL" default in the PDF
+	// builder (see app/lib/bill-pdf.ts). Stored as-is; the builder
+	// upper-cases at render time.
+	const formTitleOverride = ref("");
 
 	// The frozen-at-creation snapshot. Edited indirectly: picking a different
 	// vendor swaps in a fresh copy, the "Refresh vendor snapshot" button
@@ -553,6 +576,7 @@
 		formDueDate.value = row.due_date;
 		formCategoryId.value = row.category_id;
 		formNotes.value = row.notes ?? "";
+		formTitleOverride.value = row.title_override ?? "";
 		vatRatePct.value = row.vat_rate_basis_points / 100;
 		bundleSubtotalCents.value = row.subtotal_cents;
 
@@ -575,7 +599,7 @@
 	// Mark dirty when any directly v-model'd form field changes. Registered
 	// after the initial hydrate; hydrating-flag guards re-hydrate paths.
 	watch(
-		[formVendorInvoiceNumber, formIssueDate, formDueDate, formCategoryId, formNotes, vatRatePct, bundleSubtotalCents],
+		[formVendorInvoiceNumber, formIssueDate, formDueDate, formCategoryId, formNotes, formTitleOverride, vatRatePct, bundleSubtotalCents],
 		() => {
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
@@ -689,7 +713,8 @@
 				total_cents: total,
 				category_id: formCategoryId.value,
 				category_snapshot: snapshotForSelectedCategory(),
-				notes: formNotes.value || null
+				notes: formNotes.value || null,
+				title_override: formTitleOverride.value.trim() || null
 			});
 			await store.load();
 			await hydrate();

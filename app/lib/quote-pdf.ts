@@ -37,10 +37,18 @@ export const buildQuotePdfPayload = ({ row: q, lines, settings, currency }: Quot
 	const fmt = (cents: number) => formatLKR(cents);
 	const fmtNoSym = (cents: number) => formatLKR(cents, { withSymbol: false });
 
+	// Allow per-document override of the big PDF header. Empty / null
+	// trim() falls back to the hardcoded type label; otherwise we
+	// upper-case the user string so it matches the visual weight of
+	// the default. See migration 0027 + `title_override` column.
+	const title = q.title_override?.trim()
+		? q.title_override.trim().toUpperCase()
+		: "QUOTATION";
+
 	return {
 		kind: "quote",
 		number: q.number,
-		title: "QUOTATION",
+		title,
 		theme_color: themeHex(settings?.theme_color),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,
