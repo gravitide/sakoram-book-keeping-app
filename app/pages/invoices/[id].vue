@@ -146,23 +146,18 @@
 					</div>
 					<!-- Right column uses a 2-col inner grid — see quote
 						detail page for the rationale. md:col-span-3 ties
-						to the 1:3 outer split. -->
-					<div class="md:col-span-3 grid grid-cols-2 gap-3">
+						to the 1:3 outer split; max-w-3xl keeps inputs
+						from stretching to ~540px on wide xl/2xl cards. -->
+					<div class="md:col-span-3 grid grid-cols-2 gap-3 max-w-3xl">
 						<UFormField label="PDF header">
 							<UInput
 								v-model="formTitleOverride"
 								:disabled="!editable"
 								placeholder="INVOICE"
 							/>
-							<template #help>
-								Big PDF header. Blank = INVOICE.
-							</template>
 						</UFormField>
 						<UFormField label="Project title">
-							<UInput v-model="formProjectTitle" :disabled="!editable" />
-							<template #help>
-								Centered subtitle on the PDF.
-							</template>
+							<UInput v-model="formProjectTitle" :disabled="!editable" placeholder="Subtitle on the PDF (optional)" />
 						</UFormField>
 						<UFormField label="Issue date">
 							<DateField v-model="formIssueDate" :disabled="!editable" />

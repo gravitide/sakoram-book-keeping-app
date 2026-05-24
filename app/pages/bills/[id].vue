@@ -140,23 +140,18 @@
 					</div>
 					<!-- Right column uses a 2-col inner grid — see quote
 						detail page for the rationale. md:col-span-3 ties
-						to the 1:3 outer split. -->
-					<div class="md:col-span-3 grid grid-cols-2 gap-3">
+						to the 1:3 outer split; max-w-3xl keeps inputs
+						from stretching to ~540px on wide xl/2xl cards. -->
+					<div class="md:col-span-3 grid grid-cols-2 gap-3 max-w-3xl">
 						<UFormField label="PDF header">
 							<UInput
 								v-model="formTitleOverride"
 								:disabled="!editable"
 								placeholder="BILL"
 							/>
-							<template #help>
-								Big PDF header. Blank = BILL.
-							</template>
 						</UFormField>
 						<UFormField label="Vendor invoice #">
-							<UInput v-model="formVendorInvoiceNumber" :disabled="!editable" />
-							<template #help>
-								The number on THEIR invoice.
-							</template>
+							<UInput v-model="formVendorInvoiceNumber" :disabled="!editable" placeholder="The number on THEIR invoice" />
 						</UFormField>
 						<UFormField label="Category" class="col-span-2">
 							<CategoryPicker v-model="formCategoryId" :disabled="!editable" />

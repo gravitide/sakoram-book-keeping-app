@@ -150,25 +150,31 @@
 						inputs (PDF header / Project title) pair up rather
 						than stacking — keeps the column height close to the
 						snapshot on the left instead of leaving a big gap.
-						Hints move to the #help slot (rendered below the
-						field) so they fit cleanly at half-width. The
-						md:col-span-3 ties to the 1:3 outer split. -->
-					<div class="md:col-span-3 grid grid-cols-2 gap-3">
+						md:col-span-3 ties to the 1:3 outer split.
+
+						max-w-3xl caps the form so a wide xl/2xl card
+						doesn't stretch each input to ~540px (which makes
+						the form feel sparse and the dates row read as
+						tiny pickers stranded in a sea of whitespace).
+						At md / lg the cap isn't reached.
+
+						No #help on the short fields: helper text wraps
+						unevenly across the pair (long vs short string)
+						and the grid stretches the row to the taller
+						helper, making the gap to the next row look
+						uneven. Label + placeholder already convey the
+						default; bank-account keeps its helper because
+						it's spanning the row and adding non-obvious info. -->
+					<div class="md:col-span-3 grid grid-cols-2 gap-3 max-w-3xl">
 						<UFormField label="PDF header">
 							<UInput
 								v-model="formTitleOverride"
 								:disabled="!editable"
 								placeholder="QUOTATION"
 							/>
-							<template #help>
-								Big PDF header. Blank = QUOTATION.
-							</template>
 						</UFormField>
 						<UFormField label="Project title">
-							<UInput v-model="formProjectTitle" :disabled="!editable" />
-							<template #help>
-								Centered subtitle on the PDF.
-							</template>
+							<UInput v-model="formProjectTitle" :disabled="!editable" placeholder="Subtitle on the PDF (optional)" />
 						</UFormField>
 						<UFormField label="Issue date">
 							<DateField v-model="formIssueDate" :disabled="!editable" />
