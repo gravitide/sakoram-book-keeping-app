@@ -569,8 +569,7 @@
 						description: description.value.trim() || defaultDescription.value,
 						related_invoice_id: null,
 						related_bill_id: null,
-						related_payslip_id: payslipId,
-						attachment_path: null
+						related_payslip_id: payslipId
 					});
 					paidCount += 1;
 				} catch (err) {
