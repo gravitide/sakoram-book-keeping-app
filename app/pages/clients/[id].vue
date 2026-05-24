@@ -4,16 +4,69 @@
 			selectable; form inputs stay selectable via the rule in
 			main.css that puts user-select:text back on input / textarea
 			/ [contenteditable] inside select-none containers. -->
-		<!-- Crumb / back link --------------------------------------------- -->
-		<NuxtLink to="/clients" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1 mb-4">
-			<UIcon name="i-lucide-arrow-left" class="size-4" />
-			Back to clients
-		</NuxtLink>
+		<!-- Top toolbar row: back link on the left, action cluster on the
+			right. Pinned above the hero so the buttons can't collide
+			with the name / chip strip below as the viewport narrows.
+			flex-wrap on the row lets the cluster spill onto a second
+			toolbar row at very narrow widths instead of crashing into
+			the title; the cluster itself stays inline (no dropdown
+			collapse — the set of actions is small enough to fit). -->
+		<div class="mb-4 flex items-center justify-between gap-x-4 gap-y-2 flex-wrap">
+			<NuxtLink to="/clients" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
+				<UIcon name="i-lucide-arrow-left" class="size-4" />
+				Back to clients
+			</NuxtLink>
 
-		<!-- Identity hero. Same shape as the employee detail header:
-			small circular avatar on the left, name + chips in the
-			middle, header-level actions cluster top-right (collapses
-			into a ⋯ dropdown below lg). -->
+			<!-- Hidden for new clients since there's nothing to act on.
+				Delete is blocked by the DB once any quote / invoice
+				references the client — the handler catches the FK error
+				and surfaces a friendly nudge toward Archive. -->
+			<div v-if="!isNew" class="flex items-center gap-2 flex-wrap shrink-0">
+				<UButton
+					size="sm"
+					icon="i-lucide-file-text"
+					variant="soft"
+					color="neutral"
+					@click="viewQuotes"
+				>
+					View quotes
+				</UButton>
+				<UButton
+					size="sm"
+					icon="i-lucide-receipt"
+					variant="soft"
+					color="neutral"
+					@click="viewInvoices"
+				>
+					View invoices
+				</UButton>
+				<UButton
+					size="sm"
+					:icon="isArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
+					variant="soft"
+					color="neutral"
+					@click="toggleArchive"
+				>
+					{{ isArchived ? "Restore client" : "Archive client" }}
+				</UButton>
+				<!-- Visual separator before the destructive action so a stray
+					click on Archive doesn't land on Delete. -->
+				<div class="h-6 w-px bg-(--ui-border-accented) mx-1" />
+				<UButton
+					size="sm"
+					icon="i-lucide-trash-2"
+					variant="soft"
+					color="error"
+					@click="confirmDelete = true"
+				>
+					Delete
+				</UButton>
+			</div>
+		</div>
+
+		<!-- Identity hero. Avatar + name + chips only — actions moved
+			to the top row above so they can't crash into this content
+			as the viewport narrows. -->
 		<section class="mb-10">
 			<div class="flex items-start gap-5 flex-wrap">
 				<!-- Avatar — circular, primary-tinted background with the
@@ -60,65 +113,6 @@
 								: "No contact details captured yet — add some below." }}
 						</div>
 					</dl>
-				</div>
-
-				<!-- Right cluster. lg+: inline buttons; below lg: ⋯
-					dropdown with the same actions grouped (View
-					quotes/invoices, Archive, Delete). Hidden for new
-					clients since there's nothing to act on. Delete is
-					blocked by the DB once any quote / invoice references
-					the client — the handler catches the FK error and
-					surfaces a friendly nudge toward Archive. -->
-				<div v-if="!isNew" class="hidden lg:flex items-center gap-2 shrink-0 ml-auto">
-					<UButton
-						size="sm"
-						icon="i-lucide-file-text"
-						variant="soft"
-						color="neutral"
-						@click="viewQuotes"
-					>
-						View quotes
-					</UButton>
-					<UButton
-						size="sm"
-						icon="i-lucide-receipt"
-						variant="soft"
-						color="neutral"
-						@click="viewInvoices"
-					>
-						View invoices
-					</UButton>
-					<UButton
-						size="sm"
-						:icon="isArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
-						variant="soft"
-						color="neutral"
-						@click="toggleArchive"
-					>
-						{{ isArchived ? "Restore client" : "Archive client" }}
-					</UButton>
-					<UButton
-						size="sm"
-						icon="i-lucide-trash-2"
-						variant="soft"
-						color="error"
-						@click="confirmDelete = true"
-					>
-						Delete
-					</UButton>
-				</div>
-
-				<div v-if="!isNew" class="lg:hidden shrink-0 ml-auto">
-					<UDropdownMenu :items="actionMenuItems">
-						<UButton
-							size="sm"
-							variant="outline"
-							color="neutral"
-							icon="i-lucide-ellipsis-vertical"
-							title="Actions"
-							aria-label="Actions"
-						/>
-					</UDropdownMenu>
 				</div>
 			</div>
 		</section>
@@ -480,35 +474,4 @@
 		}
 	};
 
-	// Items rendered into the responsive UDropdownMenu shown below lg
-	// (the inline cluster above is hidden at that width). Two groups so
-	// the dropdown draws a separator between View+Archive and Delete.
-	// Declared at the end so the handlers it references are already in
-	// scope.
-	const actionMenuItems = computed(() => [[
-		{
-			label: "View quotes",
-			icon: "i-lucide-file-text",
-			onSelect: viewQuotes
-		},
-		{
-			label: "View invoices",
-			icon: "i-lucide-receipt",
-			onSelect: viewInvoices
-		},
-		{
-			label: isArchived.value ? "Restore client" : "Archive client",
-			icon: isArchived.value ? "i-lucide-archive-restore" : "i-lucide-archive",
-			onSelect: toggleArchive
-		}
-	], [
-		{
-			label: "Delete",
-			icon: "i-lucide-trash-2",
-			class: "text-(--ui-error) hover:bg-(--ui-error)/10 [&>span>span:first-child]:text-(--ui-error)",
-			onSelect: () => {
-				confirmDelete.value = true;
-			}
-		}
-	]]);
 </script>

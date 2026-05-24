@@ -67,6 +67,9 @@
 				>
 					Cancel
 				</UButton>
+				<!-- Visual separator before the destructive action so a stray
+					click on Cancel / Record payment doesn't land on Delete. -->
+				<div class="h-6 w-px bg-(--ui-border-accented) mx-1" />
 				<UButton
 					size="sm"
 					icon="i-lucide-trash-2"

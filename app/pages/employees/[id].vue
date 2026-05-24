@@ -4,15 +4,63 @@
 			editing fields, not copying chrome / labels. Inputs stay
 			selectable via the rule in main.css that puts user-select:text
 			back on input / textarea / [contenteditable]. -->
-		<NuxtLink to="/employees" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1 mb-4">
-			<UIcon name="i-lucide-arrow-left" class="size-4" />
-			Back to employees
-		</NuxtLink>
+		<!-- Top toolbar row: back link on the left, action cluster on the
+			right. Pinned above the hero so the buttons can't collide
+			with the name / chip strip below as the viewport narrows.
+			flex-wrap on the row lets the cluster spill onto a second
+			toolbar row at very narrow widths instead of crashing into
+			the title; the cluster itself stays inline (no dropdown
+			collapse — the set of actions is small enough to fit). -->
+		<div class="mb-4 flex items-center justify-between gap-x-4 gap-y-2 flex-wrap">
+			<NuxtLink to="/employees" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
+				<UIcon name="i-lucide-arrow-left" class="size-4" />
+				Back to employees
+			</NuxtLink>
 
-		<!-- Identity hero. Layout: avatar + name/chips on the left,
-			action buttons cluster top-right. items-start so the buttons
-			pin to the top edge of the row regardless of how the chips
-			wrap underneath the name. -->
+			<!-- Header-level actions: View payslips / Archive / Delete.
+				Hidden for new employees since there's nothing to act on
+				yet. Delete is for the "accidentally created an employee"
+				case — the payslips FK has ON DELETE RESTRICT, so the DB
+				blocks the hard-delete once any payslip is issued; the
+				error surfaces as a friendly toast pointing the user at
+				Archive instead. -->
+			<div v-if="!isNew" class="flex items-center gap-2 flex-wrap shrink-0">
+				<UButton
+					icon="i-lucide-file-spreadsheet"
+					size="sm"
+					variant="soft"
+					color="neutral"
+					@click="viewPayslips"
+				>
+					View payslips
+				</UButton>
+				<UButton
+					:icon="isArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
+					size="sm"
+					variant="soft"
+					color="neutral"
+					@click="toggleArchive"
+				>
+					{{ isArchived ? "Restore employee" : "Archive employee" }}
+				</UButton>
+				<!-- Visual separator before the destructive action so a stray
+					click on Archive doesn't land on Delete. -->
+				<div class="h-6 w-px bg-(--ui-border-accented) mx-1" />
+				<UButton
+					icon="i-lucide-trash-2"
+					size="sm"
+					variant="soft"
+					color="error"
+					@click="confirmDelete = true"
+				>
+					Delete
+				</UButton>
+			</div>
+		</div>
+
+		<!-- Identity hero. Avatar + name + chips only — actions moved
+			to the top row above so they can't crash into this content
+			as the viewport narrows. -->
 		<section class="mb-10">
 			<div class="flex items-start gap-5 flex-wrap">
 				<!-- Avatar — circular, primary-tinted background with the
@@ -65,60 +113,6 @@
 								: "No details captured yet — add some below." }}
 						</div>
 					</dl>
-				</div>
-
-				<!-- Right cluster: header-level actions (Archive / Delete).
-					Hidden for new employees since there's nothing to act
-					on yet. Delete is for the "accidentally created an
-					employee" case — the payslips FK has ON DELETE
-					RESTRICT, so the DB blocks the hard-delete once any
-					payslip is issued; the error surfaces as a friendly
-					toast pointing the user at Archive instead. -->
-				<!-- xl+ shows the three actions inline; below xl they
-					collapse into a dropdown so the header name doesn't
-					clip on narrower windows. Both paths feed off the
-					same handlers. -->
-				<div v-if="!isNew" class="hidden xl:flex items-center gap-2 shrink-0 ml-auto">
-					<UButton
-						icon="i-lucide-file-spreadsheet"
-						size="sm"
-						variant="soft"
-						color="neutral"
-						@click="viewPayslips"
-					>
-						View payslips
-					</UButton>
-					<UButton
-						:icon="isArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
-						size="sm"
-						variant="soft"
-						color="neutral"
-						@click="toggleArchive"
-					>
-						{{ isArchived ? "Restore employee" : "Archive employee" }}
-					</UButton>
-					<UButton
-						icon="i-lucide-trash-2"
-						size="sm"
-						variant="soft"
-						color="error"
-						@click="confirmDelete = true"
-					>
-						Delete
-					</UButton>
-				</div>
-
-				<div v-if="!isNew" class="xl:hidden shrink-0 ml-auto">
-					<UDropdownMenu :items="actionMenuItems">
-						<UButton
-							size="sm"
-							variant="soft"
-							color="neutral"
-							icon="i-lucide-ellipsis-vertical"
-							title="Actions"
-							aria-label="Actions"
-						/>
-					</UDropdownMenu>
 				</div>
 			</div>
 		</section>
@@ -511,34 +505,4 @@
 		}
 	};
 
-	// Items rendered into the responsive UDropdownMenu shown below xl
-	// (the inline button cluster is hidden at that width). Two groups
-	// so UDropdownMenu draws a separator between Archive and Delete.
-	// Declared at the end so the handlers it references are already
-	// in scope.
-	const actionMenuItems = computed(() => [[
-		{
-			label: "View payslips",
-			icon: "i-lucide-file-spreadsheet",
-			onSelect: viewPayslips
-		},
-		{
-			label: isArchived.value ? "Restore employee" : "Archive employee",
-			icon: isArchived.value ? "i-lucide-archive-restore" : "i-lucide-archive",
-			onSelect: toggleArchive
-		}
-	], [
-		{
-			label: "Delete",
-			icon: "i-lucide-trash-2",
-			// Destructive item in the dropdown reads in the error tone
-			// to match the inline Delete button at xl+ (color="error").
-			// Targets both the row + the icon so the leading icon picks
-			// up the tint instead of staying muted-grey.
-			class: "text-(--ui-error) hover:bg-(--ui-error)/10 [&>span>span:first-child]:text-(--ui-error)",
-			onSelect: () => {
-				confirmDelete.value = true;
-			}
-		}
-	]]);
 </script>
