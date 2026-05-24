@@ -50,7 +50,28 @@
 							icon="i-lucide-tag"
 							class="w-48"
 							:search-input="{ placeholder: 'Filter categories…' }"
-						/>
+						>
+							<!-- Coloured-chip + icon prefix per item, mirroring
+								the Category cell on the table below so the
+								dropdown reads as a glanceable list of the
+								same badges. Sentinel rows (All / Uncategorised)
+								have `colorHex: null` and fall through to a
+								plain muted UIcon. -->
+							<template #item-leading="{ item }">
+								<span
+									v-if="item.colorHex"
+									class="inline-flex size-4 rounded items-center justify-center text-white shrink-0"
+									:style="{ backgroundColor: item.colorHex }"
+								>
+									<UIcon :name="item.icon" class="size-2.5" />
+								</span>
+								<UIcon
+									v-else
+									:name="item.icon"
+									class="size-4 text-(--ui-text-muted) shrink-0"
+								/>
+							</template>
+						</USelectMenu>
 						<UPopover>
 							<UButton color="neutral" variant="outline" icon="i-lucide-sliders-horizontal" class="relative">
 								Advanced
@@ -394,13 +415,30 @@
 	// Categories: include an "Uncategorised" sentinel for bills without a
 	// category_id (otherwise the user can't surface those rows in
 	// isolation).
-	const categoryOptions = computed<{ label: string, value: number | "all" | "uncategorised" }[]>(() => [
-		{ label: "All categories", value: "all" },
-		{ label: "Uncategorised", value: "uncategorised" },
+	//
+	// Each item carries `icon` + `colorHex` so the #item-leading slot
+	// below can render the same coloured chip the table cell uses —
+	// quicker to spot the right category in a long list than reading
+	// names alone. Sentinels (All / Uncategorised) use neutral icons
+	// with `colorHex: null` so the slot falls back to a plain UIcon.
+	interface CategoryOption {
+		label: string
+		value: number | "all" | "uncategorised"
+		icon: string
+		colorHex: string | null
+	}
+	const categoryOptions = computed<CategoryOption[]>(() => [
+		{ label: "All categories", value: "all", icon: "i-lucide-tag", colorHex: null },
+		{ label: "Uncategorised", value: "uncategorised", icon: "i-lucide-tag-x", colorHex: null },
 		...[...categoriesStore.categories]
 			.filter((c) => c.is_archived === 0)
 			.sort((a, b) => a.name.localeCompare(b.name))
-			.map((c) => ({ label: c.name, value: c.id }))
+			.map((c) => ({
+				label: c.name,
+				value: c.id,
+				icon: c.icon,
+				colorHex: themeHex(c.color)
+			}))
 	]);
 
 	const hasAnyFilter = computed(() =>
