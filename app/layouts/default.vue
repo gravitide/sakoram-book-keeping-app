@@ -23,7 +23,7 @@
 								{{ tenants.activeTenant?.name ?? settings.businessName }}
 							</div>
 							<div class="text-xs text-(--ui-text-muted)">
-								{{ tenants.tenants.length > 1 ? "Switch business" : "Sakoram Bookkeeping" }}
+								{{ tenants.tenants.length > 1 ? "Switch business" : "Sakoram - The desktop bookkeeper!" }}
 							</div>
 						</div>
 						<UIcon name="i-lucide-chevrons-up-down" class="size-4 text-(--ui-text-muted) shrink-0" />
@@ -100,7 +100,7 @@
 					<img
 						:src="sakoramLogo"
 						alt="Sakoram"
-						:title="`Sakoram Bookkeeping · v${appVersion}`"
+						:title="`Sakoram - The desktop bookkeeper! · v${appVersion}`"
 						class="h-5 w-auto select-none dark:invert dark:hue-rotate-180"
 						draggable="false"
 					>
@@ -129,7 +129,7 @@
 									class="h-14 w-auto dark:invert dark:hue-rotate-180"
 								>
 								<div class="text-sm text-(--ui-text-muted) tabular-nums">
-									Bookkeeping · Version {{ appVersion }}
+									The desktop bookkeeper! · Version {{ appVersion }}
 								</div>
 							</div>
 
