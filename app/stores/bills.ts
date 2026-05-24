@@ -20,7 +20,7 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { computeLineTotals, sumCents } from "~/lib/money";
-import { allocateDocumentNumber } from "~/lib/numbering";
+import { allocateDocumentNumber, allocateSpecificDocumentNumber } from "~/lib/numbering";
 import { purgeDocumentAttachments } from "~/stores/document_attachments";
 import { useVouchersStore } from "~/stores/vouchers";
 
@@ -94,8 +94,7 @@ export interface BillLineRow {
 // sort_order is omitted from the draft because `replaceLines` always
 // derives it from the array index at write time — passing it in would
 // have no effect, so the type contract shouldn't pretend it's an input.
-export type BillLineDraft = Omit<BillLineRow,
-	| "id" | "bill_id" | "sort_order"
+export type BillLineDraft = Omit<BillLineRow,	| "id" | "bill_id" | "sort_order"
 	| "line_subtotal_cents" | "line_tax_cents" | "line_total_cents">;
 
 const todayISO = (): string => {
@@ -273,15 +272,25 @@ export const useBillsStore = defineStore("bills", () => {
 
 	const createBill = async (input: {
 		vendor: VendorSnapshot & { id: number }
-		/** Override `issue_date` (e.g. when launched from the calendar
+		/**
+			 Override `issue_date` (e.g. when launched from the calendar
 			with a specific day in mind). Defaults to today. `due_date`
 			matches `issue_date` on create — the user typically adjusts
-			it on the editor based on the vendor's terms. */
+			it on the editor based on the vendor's terms.
+			*/
 		issue_date?: string
+		/**
+			 Override the auto-allocated sequence number. Used by the New
+			modal's editable Number field so the user can fill a gap left
+			by an earlier deletion. Validates uniqueness before insert.
+			*/
+		sequence?: number
 	}): Promise<number> => {
 		const issue = input.issue_date ?? todayISO();
 		const due = issue;
-		const allocation = await allocateDocumentNumber("bill", issue);
+		const allocation = input.sequence !== undefined
+			? await allocateSpecificDocumentNumber("bill", issue, input.sequence)
+			: await allocateDocumentNumber("bill", issue);
 		const snap = buildVendorSnapshot(input.vendor);
 		// Default due_date = today (vendor probably wants payment "now"); user
 		// can change it on the editor. We don't depend on company_settings here

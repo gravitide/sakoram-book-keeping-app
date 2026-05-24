@@ -14,6 +14,26 @@
 						<ClientPicker v-model="clientId" />
 					</UFormField>
 
+					<!-- Number is editable so the user can fill a gap left by
+						an earlier deletion. See NewQuoteModal for the
+						rationale. -->
+					<UFormField label="Number" required>
+						<template #help>
+							<span v-if="docNum.numberTaken.value" class="text-(--ui-error)">
+								{{ docNum.numberFormatted.value }} is already in use — pick another sequence.
+							</span>
+							<span v-else-if="docNum.numberFormatted.value">
+								Will be saved as <span class="font-medium">{{ docNum.numberFormatted.value }}</span>
+							</span>
+						</template>
+						<UInputNumber
+							v-model="docNum.sequence.value"
+							:min="1"
+							:step="1"
+							class="w-1/2"
+						/>
+					</UFormField>
+
 					<UFormField label="Project title" hint="The centred subtitle on the PDF (optional)">
 						<UInput v-model="projectTitle" placeholder="e.g. Q3 retainer" />
 					</UFormField>
@@ -29,7 +49,7 @@
 					type="submit"
 					form="new-invoice-form"
 					:loading="creating"
-					:disabled="clientId === null"
+					:disabled="clientId === null || !docNum.numberValid.value"
 					icon="i-lucide-plus"
 				>
 					Create draft
@@ -56,8 +76,6 @@
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { useSettingsStore } from "~/stores/settings";
 
-	const openModel = defineModel<boolean>("open", { default: false });
-
 	// Optional initial issue_date — set by the list page when the user
 	// arrived via "Create on this day" from the calendar. Plumbed
 	// straight through to createDraft so the picked date becomes the
@@ -66,6 +84,8 @@
 	const props = defineProps<{
 		issueDate?: string | null
 	}>();
+
+	const openModel = defineModel<boolean>("open", { default: false });
 
 	const router = useRouter();
 	const toast = useToast();
@@ -77,6 +97,14 @@
 	const projectTitle = ref("");
 	const creating = ref(false);
 
+	// Editable number with live uniqueness check — see NewQuoteModal.
+	const issueDateRef = computed(() => props.issueDate ?? null);
+	const docNum = useDocumentNumber({
+		type: "invoice",
+		issueDate: issueDateRef,
+		enabled: openModel
+	});
+
 	// Reset form whenever the modal closes so reopening starts from a
 	// clean slate. Lazy-load the stores the form needs on first open so
 	// we don't pay for them when the modal never appears.
@@ -87,6 +115,7 @@
 			clientId.value = null;
 			projectTitle.value = "";
 			creating.value = false;
+			docNum.reset();
 		}
 	});
 
@@ -99,6 +128,10 @@
 			toast.add({ title: "Pick a client first", color: "warning", icon: "i-lucide-circle-alert" });
 			return;
 		}
+		if (!docNum.numberValid.value) {
+			toast.add({ title: "Pick an unused invoice number", color: "warning", icon: "i-lucide-circle-alert" });
+			return;
+		}
 		const client: ClientRow | undefined = clients.clients.find((c) => c.id === clientId.value);
 		if (!client) {
 			toast.add({ title: "Client not found", color: "error", icon: "i-lucide-circle-alert" });
@@ -109,7 +142,8 @@
 			const id = await invoices.createDraft({
 				client: { ...client, id: client.id },
 				project_title: projectTitle.value.trim(),
-				issue_date: props.issueDate ?? undefined
+				issue_date: props.issueDate ?? undefined,
+				sequence: docNum.sequence.value ?? undefined
 			});
 			toast.add({ title: "Draft invoice created", color: "success", icon: "i-lucide-check" });
 			openModel.value = false;

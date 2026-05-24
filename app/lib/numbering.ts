@@ -8,7 +8,7 @@
 // `allocateDocumentNumber` is the ONLY path that mints a number. Once a
 // document is issued the number is immutable.
 
-import { select, selectOne } from "./db";
+import { execute, select, selectOne } from "./db";
 
 export type DocumentType = "quote" | "invoice" | "bill" | "voucher" | "payslip";
 
@@ -18,6 +18,18 @@ const PREFIX: Record<DocumentType, string> = {
 	bill: "BIL",
 	voucher: "VCH",
 	payslip: "PSL"
+};
+
+// Which document table holds the visible (formatted) number for each type.
+// Used by peekNextSequence / allocateSpecificDocumentNumber to verify a
+// user-picked sequence isn't already taken — covers the "delete leaves a
+// gap, then user wants to reuse that gap" workflow.
+const TABLE_FOR_TYPE: Record<DocumentType, string> = {
+	quote: "quotes",
+	invoice: "invoices",
+	bill: "bills",
+	voucher: "vouchers",
+	payslip: "payslips"
 };
 
 // Compute the fiscal year for a given ISO date string and the configured
@@ -94,5 +106,102 @@ export const allocateDocumentNumber = async (
 		number: formatDocumentNumber(type, fy, row.last_number),
 		fiscalYear: fy,
 		sequence: row.last_number
+	};
+};
+
+// Read-only — returns what the next auto-allocated number would be for
+// (type, fy). Doesn't touch the counter. Used by the New modals to
+// preview the default number so the user can either accept it or
+// override it to fill a gap left by a deletion.
+export const peekNextSequence = async (
+	type: DocumentType,
+	issueDate: string
+): Promise<AllocationResult> => {
+	const settings = await selectOne<{ fiscal_year_start_month: number }>(
+		"SELECT fiscal_year_start_month FROM company_settings WHERE id = 1"
+	);
+	const startMonth = settings?.fiscal_year_start_month ?? 1;
+	const fy = computeFiscalYear(issueDate, startMonth);
+	const row = await selectOne<{ last_number: number }>(
+		"SELECT last_number FROM document_counters WHERE document_type = ? AND fiscal_year = ?",
+		[type, fy]
+	);
+	const next = (row?.last_number ?? 0) + 1;
+	return {
+		number: formatDocumentNumber(type, fy, next),
+		fiscalYear: fy,
+		sequence: next
+	};
+};
+
+// Is the (type, fy, sequence) free of any existing document?
+//
+// Numbers are stored on the document tables as the full formatted
+// string ("QUO-2026-0003"), so we compose the candidate and look it up
+// directly. Used as a pre-flight check from modal inputs so the user
+// gets a "this number is already in use" warning before submit.
+export const isDocumentNumberAvailable = async (
+	type: DocumentType,
+	issueDate: string,
+	sequence: number
+): Promise<boolean> => {
+	if (!Number.isInteger(sequence) || sequence < 1) return false;
+	const settings = await selectOne<{ fiscal_year_start_month: number }>(
+		"SELECT fiscal_year_start_month FROM company_settings WHERE id = 1"
+	);
+	const startMonth = settings?.fiscal_year_start_month ?? 1;
+	const fy = computeFiscalYear(issueDate, startMonth);
+	const formatted = formatDocumentNumber(type, fy, sequence);
+	const table = TABLE_FOR_TYPE[type];
+	const existing = await selectOne<{ id: number }>(
+		`SELECT id FROM ${table} WHERE number = ? LIMIT 1`,
+		[formatted]
+	);
+	return existing === null;
+};
+
+// User-picked number variant of allocateDocumentNumber. Validates the
+// requested sequence isn't already in the corresponding document table
+// (so two clicks of the same modal can't both land on the same number),
+// then bumps the counter to MAX(current, requested) so subsequent
+// auto-allocations stay ahead. If the user picked a gap below current
+// (e.g. requested 3 when counter is 7), the counter stays at 7.
+//
+// NOT atomic across the SELECT-then-UPSERT — acceptable for a
+// single-user offline app where the user can't collide with themselves.
+// If that changes, fold the uniqueness check into a single statement.
+export const allocateSpecificDocumentNumber = async (
+	type: DocumentType,
+	issueDate: string,
+	sequence: number
+): Promise<AllocationResult> => {
+	if (!Number.isInteger(sequence) || sequence < 1) {
+		throw new Error(`allocateSpecificDocumentNumber: bad sequence ${sequence}`);
+	}
+	const settings = await selectOne<{ fiscal_year_start_month: number }>(
+		"SELECT fiscal_year_start_month FROM company_settings WHERE id = 1"
+	);
+	const startMonth = settings?.fiscal_year_start_month ?? 1;
+	const fy = computeFiscalYear(issueDate, startMonth);
+	const formatted = formatDocumentNumber(type, fy, sequence);
+	const table = TABLE_FOR_TYPE[type];
+	const existing = await selectOne<{ id: number }>(
+		`SELECT id FROM ${table} WHERE number = ? LIMIT 1`,
+		[formatted]
+	);
+	if (existing) {
+		throw new Error(`Number ${formatted} is already in use`);
+	}
+	await execute(
+		`INSERT INTO document_counters (document_type, fiscal_year, last_number)
+		 VALUES (?, ?, ?)
+		 ON CONFLICT(document_type, fiscal_year)
+		 DO UPDATE SET last_number = MAX(document_counters.last_number, excluded.last_number)`,
+		[type, fy, sequence]
+	);
+	return {
+		number: formatted,
+		fiscalYear: fy,
+		sequence
 	};
 };

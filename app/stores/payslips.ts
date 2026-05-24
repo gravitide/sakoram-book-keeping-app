@@ -17,7 +17,7 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { sumCents } from "~/lib/money";
-import { allocateDocumentNumber } from "~/lib/numbering";
+import { allocateDocumentNumber, allocateSpecificDocumentNumber } from "~/lib/numbering";
 import { useVouchersStore } from "~/stores/vouchers";
 
 export type PayslipPersistedStatus = "draft" | "issued" | "cancelled";
@@ -234,8 +234,16 @@ export const usePayslipsStore = defineStore("payslips", () => {
 		periodStart: string
 		periodEnd: string
 		payDate: string
+		/**
+			 Override the auto-allocated sequence number. Used by the New
+			modal's editable Number field so the user can fill a gap left
+			by an earlier deletion. Validates uniqueness before insert.
+			*/
+		sequence?: number
 	}): Promise<number> => {
-		const allocation = await allocateDocumentNumber("payslip", input.payDate);
+		const allocation = input.sequence !== undefined
+			? await allocateSpecificDocumentNumber("payslip", input.payDate, input.sequence)
+			: await allocateDocumentNumber("payslip", input.payDate);
 		const snap = buildEmployeeSnapshot(input.employee);
 		// Seed the draft with a single Basic earning line equal to the
 		// employee's basic_salary_cents so the user has something concrete
