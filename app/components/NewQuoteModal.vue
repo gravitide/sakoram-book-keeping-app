@@ -1,25 +1,40 @@
 <template>
 	<UModal v-model:open="openModel" title="New quote">
 		<template #body>
-			<p class="text-sm text-(--ui-text-muted) mb-4">
-				A draft will be created with a number allocated. Edit details and add line items on the next screen.
-			</p>
-			<div class="space-y-4">
-				<UFormField label="Client" required>
-					<ClientPicker v-model="clientId" />
-				</UFormField>
+			<!-- The body content is wrapped in a <form> so pressing Enter
+				inside any input submits the draft. The Create draft button
+				lives in the footer slot (rendered outside this form by
+				UModal's portal), so it references the form via the `form`
+				attribute + type="submit" to participate in the same submit
+				flow. Cancel keeps type="button" so Enter never accidentally
+				dismisses. -->
+			<form id="new-quote-form" @submit.prevent="create">
+				<p class="text-sm text-(--ui-text-muted) mb-4">
+					A draft will be created with a number allocated. Edit details and add line items on the next screen.
+				</p>
+				<div class="space-y-4">
+					<UFormField label="Client" required>
+						<ClientPicker v-model="clientId" />
+					</UFormField>
 
-				<UFormField label="Project title" hint="The centred subtitle on the PDF (optional)">
-					<UInput v-model="projectTitle" placeholder="e.g. Website redesign — Phase 1" />
-				</UFormField>
-			</div>
+					<UFormField label="Project title" hint="The centred subtitle on the PDF (optional)">
+						<UInput v-model="projectTitle" placeholder="e.g. Website redesign — Phase 1" />
+					</UFormField>
+				</div>
+			</form>
 		</template>
 		<template #footer>
 			<div class="flex justify-end gap-2 w-full">
 				<UButton type="button" color="neutral" variant="outline" :disabled="creating" @click="cancel">
 					Cancel
 				</UButton>
-				<UButton :loading="creating" :disabled="clientId === null" icon="i-lucide-plus" @click="create">
+				<UButton
+					type="submit"
+					form="new-quote-form"
+					:loading="creating"
+					:disabled="clientId === null"
+					icon="i-lucide-plus"
+				>
 					Create draft
 				</UButton>
 			</div>
