@@ -1,7 +1,8 @@
 // Keep the OS window title in sync with the active business.
 //
 // Tauri sets the initial title from `productName` in tauri.conf.json
-// ("Sakoram Bookkeeping"). Here we prepend the active tenant's name so
+// ("Sakoram - The desktop bookkeeper!"). Here we prepend the active
+// tenant's name so
 // the taskbar / Alt-Tab list shows which business is currently open —
 // handy when the user has more than one business and runs multiple
 // windows (or just glances at the taskbar).
@@ -19,7 +20,7 @@ export default defineNuxtPlugin(() => {
 	watch(
 		() => tenants.activeTenant?.name,
 		(name) => {
-			const title = name ? `${name} · Sakoram Bookkeeping` : "Sakoram Bookkeeping";
+			const title = name ? `${name} · Sakoram - The desktop bookkeeper!` : "Sakoram - The desktop bookkeeper!";
 			win.setTitle(title).catch(() => { /* setTitle is best-effort */ });
 		},
 		{ immediate: true }

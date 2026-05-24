@@ -23,7 +23,7 @@
 								{{ tenants.activeTenant?.name ?? settings.businessName }}
 							</div>
 							<div class="text-xs text-(--ui-text-muted)">
-								{{ tenants.tenants.length > 1 ? "Switch business" : "Sakoram Bookkeeping" }}
+								{{ tenants.tenants.length > 1 ? "Switch business" : "Sakoram - The desktop bookkeeper!" }}
 							</div>
 						</div>
 						<UIcon name="i-lucide-chevrons-up-down" class="size-4 text-(--ui-text-muted) shrink-0" />
@@ -90,8 +90,20 @@
 					</template>
 				</nav>
 
-				<div class="px-4 py-3 border-t border-(--ui-border) text-xs text-(--ui-text-muted) flex items-center justify-between">
-					<span>v{{ appVersion }}</span>
+				<div class="px-4 py-3 border-t border-(--ui-border) flex items-center justify-between gap-2">
+					<!-- Wordmark replaces the version label as the footer
+						identity. The PNG/SVG is drawn for a light background;
+						in dark mode we invert + hue-rotate 180° so the dark
+						strokes read as light while the coloured glyph flips
+						back to its original hue. `title` keeps the version
+						readable on hover for the user who wants it. -->
+					<img
+						:src="sakoramLogo"
+						alt="Sakoram"
+						:title="`Sakoram - The desktop bookkeeper! · v${appVersion}`"
+						class="h-5 w-auto select-none dark:invert dark:hue-rotate-180"
+						draggable="false"
+					>
 					<UButton
 						icon="i-lucide-info"
 						size="xs"
@@ -117,7 +129,7 @@
 									class="h-14 w-auto dark:invert dark:hue-rotate-180"
 								>
 								<div class="text-sm text-(--ui-text-muted) tabular-nums">
-									Bookkeeping · Version {{ appVersion }}
+									The desktop bookkeeper! · Version {{ appVersion }}
 								</div>
 							</div>
 
@@ -143,10 +155,31 @@
 								</dd>
 
 								<dt class="text-(--ui-text-muted)">
+									Website
+								</dt>
+								<dd>
+									<button
+										type="button"
+										class="text-(--ui-primary) hover:underline inline-flex items-center gap-1 cursor-pointer"
+										@click="openLink('https://sakoram.gravitide.dev')"
+									>
+										sakoram.gravitide.dev
+										<UIcon name="i-lucide-external-link" class="size-3.5" />
+									</button>
+								</dd>
+
+								<dt class="text-(--ui-text-muted)">
 									Made by
 								</dt>
 								<dd>
-									Gravitide
+									<button
+										type="button"
+										class="text-(--ui-primary) hover:underline inline-flex items-center gap-1 cursor-pointer"
+										@click="openLink('https://gravitide.dev')"
+									>
+										Gravitide
+										<UIcon name="i-lucide-external-link" class="size-3.5" />
+									</button>
 								</dd>
 							</dl>
 
@@ -190,6 +223,7 @@
 // Layout mounts before any page; ensure the singleton settings row is loaded
 // once for the whole app. Subsequent calls from pages no-op.
 
+	import { open as openExternal } from "@tauri-apps/plugin-shell";
 	import pkg from "~~/package.json";
 	// Sakoram brand wordmark — bundled into the build by Vite (resolves at
 	// compile time, no runtime fetch). Wide PNG, rendered in the About modal.
@@ -202,6 +236,14 @@
 	// label when bumping the app version.
 	const appVersion = pkg.version;
 	const copyrightYear = new Date().getFullYear();
+
+	// Hand external URLs to the OS default browser. A plain `<a href>` in
+	// a Tauri webview would navigate the in-app window (no chrome to come
+	// back from) — `@tauri-apps/plugin-shell`'s `open()` shells out
+	// instead. Capability is already granted in capabilities/main.json.
+	const openLink = (url: string) => {
+		openExternal(url).catch(() => { /* best-effort */ });
+	};
 
 	// Sidebar-footer About modal. Lives at the layout level so any page
 	// gets it for free; the toggle is the small info button next to the

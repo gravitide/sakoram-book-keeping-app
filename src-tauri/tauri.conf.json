@@ -32,14 +32,14 @@
 		"devUrl": "http://localhost:3000"
 	},
 	"productName": "Sakoram Bookkeeping",
-	"version": "0.76.1",
+	"version": "0.76.2",
 	"identifier": "com.sakoram.billing",
 	"plugins": {},
 	"app": {
 		"windows": [
 			{
 				"label": "main",
-				"title": "Sakoram Bookkeeping",
+				"title": "Sakoram - The desktop bookkeeper!",
 				"width": 1280,
 				"height": 800,
 				"minWidth": 1024,
