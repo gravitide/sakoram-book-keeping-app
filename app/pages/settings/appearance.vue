@@ -261,14 +261,15 @@
 	// --font-path arg (PDF) — guaranteed to render regardless of what's
 	// installed locally. System fonts are common picks but only render
 	// when present on the user's machine; the cascade falls back to the
-	// bundled Inter if not.
+	// bundled Akt (the current default — see migration 0024) and then
+	// Inter as a secondary fallback if not.
 	const bundledFonts = [
+		"Akt",
 		"Inter",
 		"Inter Tight",
 		"Stack Sans Text",
 		"Miriam Libre",
-		"Amarna",
-		"Akt"
+		"Amarna"
 	];
 	const systemFonts = [
 		"system-ui",
@@ -277,7 +278,7 @@
 		"Courier New"
 	];
 
-	const uiFont = ref<string>(store.settings?.ui_font ?? "Inter");
+	const uiFont = ref<string>(store.settings?.ui_font ?? "Akt");
 	const themeColor = ref<ThemeColor>(
 		isValidThemeColor(store.settings?.theme_color) ? store.settings!.theme_color : "red"
 	);
@@ -294,7 +295,7 @@
 	// so they don't have to save to see the effect. We snap back to the
 	// last-saved values if they cancel.
 	const previewFontStack = computed(() =>
-		`'${uiFont.value || "Inter"}', 'Inter', system-ui, sans-serif`
+		`'${uiFont.value || "Akt"}', 'Akt', 'Inter', system-ui, sans-serif`
 	);
 
 	// Live preview: override Tailwind's --font-sans on :root + flip the
@@ -312,7 +313,7 @@
 	const onSave = async () => {
 		saving.value = true;
 		try {
-			const u = uiFont.value.trim() || "Inter";
+			const u = uiFont.value.trim() || "Akt";
 			await store.save({
 				ui_font: u,
 				theme_color: themeColor.value

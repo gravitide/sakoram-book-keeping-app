@@ -285,7 +285,7 @@
 		invoice_footer_notes: "",
 		quote_footer_notes: "",
 		pdf_header_logo_path: null,
-		pdf_font: "Inter",
+		pdf_font: "Akt",
 		pdf_protect_password: "",
 		protect_quote: false,
 		protect_invoice: false,
@@ -306,10 +306,10 @@
 	// through these for any missing glyph; free-text input lets the user pick
 	// any face installed on their machine, but only the bundled five are
 	// guaranteed to render identically across machines.
-	const bundledFonts = ["Inter", "Inter Tight", "Stack Sans Text", "Miriam Libre", "Amarna", "Akt"];
+	const bundledFonts = ["Akt", "Inter", "Inter Tight", "Stack Sans Text", "Miriam Libre", "Amarna"];
 
 	const pdfPreviewFontStack = computed(() =>
-		`'${form.pdf_font || "Inter"}', 'Inter', serif`
+		`'${form.pdf_font || "Akt"}', 'Akt', 'Inter', serif`
 	);
 
 	const hydrate = () => {
@@ -318,7 +318,7 @@
 		form.invoice_footer_notes = s.invoice_footer_notes ?? "";
 		form.quote_footer_notes = s.quote_footer_notes ?? "";
 		form.pdf_header_logo_path = s.pdf_header_logo_path;
-		form.pdf_font = s.pdf_font || "Inter";
+		form.pdf_font = s.pdf_font || "Akt";
 		form.pdf_protect_password = s.pdf_protect_password ?? "";
 		form.protect_quote = !!s.pdf_protect_quote;
 		form.protect_invoice = !!s.pdf_protect_invoice;
@@ -343,7 +343,7 @@
 			await store.save({
 				invoice_footer_notes: form.invoice_footer_notes,
 				quote_footer_notes: form.quote_footer_notes,
-				pdf_font: form.pdf_font.trim() || "Inter",
+				pdf_font: form.pdf_font.trim() || "Akt",
 				pdf_protect_password: form.pdf_protect_password.trim() || null,
 				pdf_protect_quote: form.protect_quote ? 1 : 0,
 				pdf_protect_invoice: form.protect_invoice ? 1 : 0,

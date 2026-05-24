@@ -42,7 +42,7 @@ export const buildQuotePdfPayload = ({ row: q, lines, settings, currency }: Quot
 		number: q.number,
 		title: "QUOTATION",
 		theme_color: themeHex(settings?.theme_color),
-		font_family: settings?.pdf_font ?? "Inter",
+		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,
 		currency_symbol: currency.symbol,
 		primary_label: "Quote",
