@@ -53,7 +53,7 @@
 							v-model="docNum.sequence.value"
 							:min="1"
 							:step="1"
-							class="w-full"
+							class="w-1/2"
 						/>
 					</UFormField>
 
