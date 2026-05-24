@@ -14,6 +14,22 @@
 				Back to bills
 			</NuxtLink>
 			<div class="flex gap-2 items-center flex-wrap shrink-0">
+				<!-- Paid bills go read-only by default (mirrors the
+					voucher detail page) — a fully-paid bill is essentially
+					a settled record, so a stray click shouldn't introduce
+					unintended changes. Click Edit to flip into mutate
+					mode; Discard re-hydrates and snaps back to
+					read-only. -->
+				<UButton
+					v-if="isPaid && !isCancelled && !editing"
+					size="sm"
+					icon="i-lucide-pencil"
+					variant="soft"
+					color="neutral"
+					@click="editing = true"
+				>
+					Edit
+				</UButton>
 				<UButton
 					v-if="balanceCents > 0 && !isCancelled"
 					size="sm"
@@ -82,67 +98,73 @@
 		</header>
 
 		<div class="space-y-6">
-			<UCard>
-				<template #header>
-					<div class="app-chrome flex items-center justify-between">
-						<div class="app-chrome font-medium">
-							Vendor &amp; reference
-						</div>
-						<UButton
-							v-if="editable"
-							size="xs"
-							variant="ghost"
-							color="neutral"
-							icon="i-lucide-refresh-ccw"
-							@click="refreshVendorSnapshot"
-						>
-							Refresh vendor snapshot
-						</UButton>
-					</div>
-				</template>
-				<!-- 1:3 split at md+: see quote detail page for rationale.
-					The bill variant keeps the VendorPicker on the left
-					because the picker is part of the bill's identity (a
-					bill can be re-linked to a different vendor before
-					payment is recorded). It does mean the picker is
-					narrower at md (~200px) than at lg+ — acceptable
-					trade-off for the consistency. -->
-				<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-					<div class="md:col-span-1 space-y-3">
-						<UFormField label="Vendor" required>
-							<VendorPicker
-								v-model="formVendorId"
-								:disabled="!editable"
-								required
-								@select="onVendorPicked"
+			<!-- Two cards side-by-side at lg+: Reference (form fields) on
+				the left wider, Bill-from snapshot on the right narrower.
+				At md they stack with Bill from on TOP — the snapshot
+				identifies who the bill is from, so it leads the page
+				when there's only one column. DOM order matches that
+				(Bill from first); at lg+ we explicitly place Bill from
+				in col 3 via `lg:col-start-3` so it visually moves to
+				the right while Reference auto-flows into cols 1-2.
+
+				We're trialling this split on bills first — if it reads
+				well, we'll mirror it on quote / invoice detail pages too. -->
+			<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+				<UCard class="lg:col-span-1 lg:col-start-3">
+					<template #header>
+						<div class="app-chrome flex items-center justify-between gap-2">
+							<div class="app-chrome font-medium">
+								Bill from
+							</div>
+							<!-- Re-snapshot the vendor's current row data
+								(address moved, tax ID updated, etc.).
+								Editable-state only; sent / paid bills
+								keep their frozen snapshot. -->
+							<!-- Icon-only because the Bill-from card sits at
+								col-span-1 (~340px wide) at lg+ and the
+								full "Refresh vendor snapshot" label wraps
+								and squeezes the card title. Hover gives
+								the full description via title. -->
+							<UButton
+								v-if="editable"
+								size="xs"
+								variant="ghost"
+								color="neutral"
+								icon="i-lucide-refresh-ccw"
+								title="Refresh vendor snapshot — pull the latest details from the vendor record"
+								aria-label="Refresh vendor snapshot"
+								@click="refreshVendorSnapshot"
 							/>
-						</UFormField>
-						<div class="text-sm">
-							<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) mb-1">
-								Bill from (snapshot)
-							</div>
-							<div class="font-medium">
-								{{ vendorSnapshot?.name || "(no vendor)" }}
-							</div>
-							<div v-if="vendorSnapshot?.address_line1" class="text-(--ui-text-muted)">
-								{{ vendorSnapshot.address_line1 }}
-							</div>
-							<div v-if="vendorSnapshot?.address_line2" class="text-(--ui-text-muted)">
-								{{ vendorSnapshot.address_line2 }}
-							</div>
-							<div v-if="vendorSnapshot?.city || vendorSnapshot?.country" class="text-(--ui-text-muted)">
-								{{ [vendorSnapshot.city, vendorSnapshot.postal_code, vendorSnapshot.country].filter(Boolean).join(", ") }}
-							</div>
-							<div v-if="vendorSnapshot?.tax_id" class="text-(--ui-text-muted) mt-1 text-xs">
-								Tax ID: {{ vendorSnapshot.tax_id }}
-							</div>
+						</div>
+					</template>
+					<div class="text-sm">
+						<div class="font-medium">
+							{{ vendorSnapshot?.name || "(no vendor)" }}
+						</div>
+						<div v-if="vendorSnapshot?.address_line1" class="text-(--ui-text-muted)">
+							{{ vendorSnapshot.address_line1 }}
+						</div>
+						<div v-if="vendorSnapshot?.address_line2" class="text-(--ui-text-muted)">
+							{{ vendorSnapshot.address_line2 }}
+						</div>
+						<div v-if="vendorSnapshot?.city || vendorSnapshot?.country" class="text-(--ui-text-muted)">
+							{{ [vendorSnapshot.city, vendorSnapshot.postal_code, vendorSnapshot.country].filter(Boolean).join(", ") }}
+						</div>
+						<div v-if="vendorSnapshot?.tax_id" class="text-(--ui-text-muted) mt-1 text-xs">
+							Tax ID: {{ vendorSnapshot.tax_id }}
 						</div>
 					</div>
-					<!-- Right column uses a 2-col inner grid — see quote
-						detail page for the rationale. md:col-span-3 ties
-						to the 1:3 outer split; max-w-3xl keeps inputs
-						from stretching to ~540px on wide xl/2xl cards. -->
-					<div class="md:col-span-3 grid grid-cols-2 gap-3 max-w-3xl">
+				</UCard>
+
+				<UCard class="lg:col-span-2 lg:row-start-1">
+					<template #header>
+						<div class="app-chrome font-medium">
+							Reference
+						</div>
+					</template>
+					<!-- 2-col inner grid; max-w-3xl keeps inputs from
+						stretching when the card is wide. -->
+					<div class="grid grid-cols-2 gap-3 max-w-3xl">
 						<UFormField label="PDF header">
 							<UInput
 								v-model="formTitleOverride"
@@ -153,12 +175,16 @@
 						<UFormField label="Vendor invoice #">
 							<UInput v-model="formVendorInvoiceNumber" :disabled="!editable" placeholder="The number on THEIR invoice" />
 						</UFormField>
-						<UFormField label="Category" class="col-span-2">
+						<UFormField label="Category">
 							<CategoryPicker v-model="formCategoryId" :disabled="!editable" />
 							<template #help>
 								Manage the list under Contacts → Bill categories.
 							</template>
 						</UFormField>
+						<!-- Empty cell: keeps Issue+Due paired on the next
+							row instead of Issue auto-flowing next to
+							Category. -->
+						<div />
 						<UFormField label="Issue date">
 							<DateField v-model="formIssueDate" :disabled="!editable" />
 						</UFormField>
@@ -166,8 +192,8 @@
 							<DateField v-model="formDueDate" :min-value="formIssueDate || undefined" :disabled="!editable" />
 						</UFormField>
 					</div>
-				</div>
-			</UCard>
+				</UCard>
+			</div>
 
 			<UCard>
 				<template #header>
@@ -452,7 +478,6 @@
 	import type { LineDraft } from "~/components/DocumentLineEditor.vue";
 	import type { BillLineRow, BillPersistedStatus, BillRow, BillStatus, VendorSnapshot } from "~/stores/bills";
 	import type { PricingMode } from "~/stores/quotes";
-	import type { VendorRow } from "~/stores/vendors";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { buildBillPdfPayload } from "~/lib/bill-pdf";
 	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
@@ -470,17 +495,18 @@
 
 	const store = useBillsStore();
 	const settingsStore = useSettingsStore();
-	const vendorsStore = useVendorsStore();
 	const categoriesStore = useBillCategoriesStore();
+	const vendorsStore = useVendorsStore();
 	const vouchersStore = useVouchersStore();
 	const currency = useActiveCurrency();
 	settingsStore.ensureLoaded().catch(() => { /* surfaced elsewhere */ });
-	// Vendors / categories / vouchers might not be loaded yet if the user
-	// lands here via deep link. Vouchers are essential — the Payments
-	// panel reads them and the derived "paid" / "balance" / status all
-	// fall out of the voucher ledger.
+	// Vendors / categories / vouchers might not be loaded yet if the
+	// user lands here via deep link. Vouchers are essential — the
+	// Payments panel reads them and the derived "paid" / "balance" /
+	// status all fall out of the voucher ledger. Vendors backs the
+	// Refresh-snapshot button on the Bill-from card.
 	if (vendorsStore.vendors.length === 0) {
-		vendorsStore.load().catch(() => { /* surfaced via picker empty state */ });
+		vendorsStore.load().catch(() => { /* surfaced elsewhere */ });
 	}
 	if (categoriesStore.categories.length === 0) {
 		categoriesStore.load().catch(() => { /* surfaced via picker empty state */ });
@@ -503,7 +529,6 @@
 	const bundleSubtotalCents = ref<number>(0);
 	const vatRatePct = ref<number>(0);
 
-	const formVendorId = ref<number | null>(null);
 	const formVendorInvoiceNumber = ref("");
 	const formIssueDate = ref("");
 	const formDueDate = ref("");
@@ -529,7 +554,19 @@
 		bill.value ? store.derivedStatus(bill.value) : "unpaid"
 	);
 	const isCancelled = computed(() => bill.value?.status === "cancelled");
-	const editable = computed(() => !isCancelled.value);
+	// `editing` is the user's explicit "I want to edit a paid bill" toggle.
+	// Cancelled bills are terminal — no override. Other persisted-open
+	// bills are editable as usual unless they're fully paid; once paid,
+	// the page goes read-only by default and shows an Edit button that
+	// flips this ref. Mirrors the voucher detail page's pattern.
+	const editing = ref(false);
+	const isPaid = computed(() => bill.value ? store.derivedStatus(bill.value) === "paid" : false);
+	const editable = computed(() => {
+		if (!bill.value) return false;
+		if (isCancelled.value) return false;
+		if (isPaid.value && !editing.value) return false;
+		return true;
+	});
 	const totalCents = computed(() => bill.value?.total_cents ?? 0);
 	const paidCents = computed(() => (bill.value ? store.paidCentsFor(bill.value.id) : 0));
 	const balanceCents = computed(() => Math.max(0, totalCents.value - paidCents.value));
@@ -565,7 +602,6 @@
 			throw createError({ statusCode: 404, statusMessage: "Bill not found" });
 		}
 		bill.value = row;
-		formVendorId.value = row.vendor_id;
 		try {
 			vendorSnapshot.value = JSON.parse(row.vendor_snapshot) as VendorSnapshot;
 		} catch {
@@ -646,11 +682,23 @@
 		dirty.value = true;
 	};
 
-	// VendorPicker emits the freshly-picked row — snapshot it on the spot
-	// so the displayed "Bill from" block updates immediately. Persisted
-	// when the user clicks Save.
-	const onVendorPicked = (v: VendorRow) => {
-		if (!editable.value) return;
+	// Vendor on a bill is locked at create time (matches the
+	// client-on-quote / client-on-invoice pattern) — there's no picker
+	// on the detail page so the user can't re-link a bill to a
+	// different vendor. To fix a mis-tagged bill, delete + re-create.
+	//
+	// The snapshot, however, IS user-refreshable while the bill is
+	// editable. When the vendor's row changes (they moved, new tax ID,
+	// etc.), the Refresh button on the Bill-from card pulls the
+	// current vendor row into the bill's frozen snapshot. Sent / paid
+	// bills (non-editable) stay frozen as before.
+	const refreshVendorSnapshot = () => {
+		if (!editable.value || !bill.value) return;
+		const v = vendorsStore.vendors.find((x) => x.id === bill.value!.vendor_id);
+		if (!v) {
+			toast.add({ title: "Vendor not found", color: "warning", icon: "i-lucide-circle-alert" });
+			return;
+		}
 		vendorSnapshot.value = {
 			name: v.name,
 			contact_person: v.contact_person,
@@ -664,20 +712,6 @@
 			tax_id: v.tax_id
 		};
 		dirty.value = true;
-	};
-
-	// If the user has updated the linked vendor record (address change,
-	// new tax ID, etc.), this refreshes the snapshot from the current
-	// vendors row. Doesn't run automatically — historical bills should
-	// keep their original snapshot unless the user explicitly opts in.
-	const refreshVendorSnapshot = () => {
-		if (!editable.value || formVendorId.value === null) return;
-		const v = vendorsStore.vendors.find((x) => x.id === formVendorId.value);
-		if (!v) {
-			toast.add({ title: "Vendor not found", color: "warning", icon: "i-lucide-circle-alert" });
-			return;
-		}
-		onVendorPicked(v);
 		toast.add({ title: "Vendor snapshot refreshed", color: "info", icon: "i-lucide-refresh-ccw" });
 	};
 
@@ -697,12 +731,11 @@
 				? totalsFromLines.total_cents
 				: subtotal + tax;
 
-			if (formVendorId.value === null) {
-				throw new Error("A vendor is required");
-			}
+			// vendor_id stays locked (no picker on the detail page);
+			// vendor_snapshot is updatable via the Refresh button on
+			// the Bill-from card, so we include it in the update.
 			await store.update(billId, {
 				pricing_mode: bill.value.pricing_mode,
-				vendor_id: formVendorId.value,
 				vendor_snapshot: vendorSnapshot.value ? JSON.stringify(vendorSnapshot.value) : bill.value.vendor_snapshot,
 				vendor_invoice_number: formVendorInvoiceNumber.value.trim() || null,
 				issue_date: formIssueDate.value,
@@ -732,10 +765,13 @@
 	};
 
 	// Sticky save bar's Discard action: re-hydrate from the DB which
-	// resets the form refs and clears `dirty`.
+	// resets the form refs and clears `dirty`. Also exits the
+	// paid-bill edit override — discarding a paid-bill edit should
+	// snap straight back to read-only, not leave the fields enabled.
 	const onDiscard = async () => {
 		if (saving.value) return;
 		await hydrate();
+		if (isPaid.value) editing.value = false;
 		toast.add({ title: "Changes discarded", color: "neutral", icon: "i-lucide-rotate-ccw" });
 	};
 
