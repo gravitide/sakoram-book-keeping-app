@@ -910,6 +910,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0022_document_attachments.sql           ← drop invoice_attachments; polymorphic document_attachments table
 0023_business_banks.sql                 ← multi-bank business accounts: business_banks table + business_bank_id FK on quotes/invoices; bank cols dropped from company_settings
 0024_default_font_akt.sql               ← flip default ui_font / pdf_font Inter → Akt
+0025_currency_symbol_override.sql       ← allow custom (non-curated) currency_code by persisting a user-supplied symbol
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,

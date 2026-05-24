@@ -32,6 +32,12 @@ export interface CurrencyMeta {
 }
 
 // Curated list. Extending this is cheap; just add a row.
+//
+// Businesses can also use a code that isn't here via the "Custom
+// currency" option in onboarding / Business details — the settings
+// store calls registerCurrency() on load to slot the user-supplied
+// symbol into this same map, so callers don't need to branch on
+// built-in vs custom.
 export const CURRENCIES: Record<string, CurrencyMeta> = {
 	LKR: { code: "LKR", label: "Sri Lankan Rupee", symbol: "Rs", locale: "en-LK" },
 	USD: { code: "USD", label: "US Dollar", symbol: "$", locale: "en-US" },
@@ -41,6 +47,23 @@ export const CURRENCIES: Record<string, CurrencyMeta> = {
 	AED: { code: "AED", label: "UAE Dirham", symbol: "AED", locale: "en-AE" },
 	AUD: { code: "AUD", label: "Australian Dollar", symbol: "A$", locale: "en-AU" },
 	SGD: { code: "SGD", label: "Singapore Dollar", symbol: "S$", locale: "en-SG" }
+};
+
+// Snapshot of which codes ship in the curated set, separate from
+// CURRENCIES (which can be mutated at runtime by registerCurrency).
+// Useful when the UI needs to ask "is this code a built-in or a user-
+// registered custom one?" without losing track once we've registered.
+const BUILTIN_CODES: ReadonlySet<string> = new Set(Object.keys(CURRENCIES));
+
+export const isBuiltinCurrency = (code: string): boolean => BUILTIN_CODES.has(code);
+
+// Slot a user-supplied currency into the in-memory map so the rest of
+// the app (formatMoney, getActiveCurrency, etc.) treats it identically
+// to a built-in. Idempotent — calling repeatedly with the same code
+// overwrites the prior registration, which is what we want when the
+// user edits the symbol in settings.
+export const registerCurrency = (meta: CurrencyMeta): void => {
+	CURRENCIES[meta.code] = meta;
 };
 
 // Module-level cache. The settings store calls setActiveCurrency() once

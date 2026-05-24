@@ -72,7 +72,10 @@
 						<UInput v-model="form.country" placeholder="Sri Lanka" />
 					</UFormField>
 					<UFormField label="Currency">
-						<USelect v-model="form.currency_code" :items="currencyOptions" value-key="value" class="w-full" />
+						<CurrencyPicker
+							v-model:code="form.currency_code"
+							v-model:symbol-override="form.currency_symbol_override"
+						/>
 					</UFormField>
 				</div>
 
@@ -321,7 +324,7 @@
 	import { appDataDir, join } from "@tauri-apps/api/path";
 	import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
-	import { CURRENCIES } from "~/lib/money";
+	import CurrencyPicker from "~/components/CurrencyPicker.vue";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -355,6 +358,7 @@
 		business_name: settingsStore.settings?.business_name ?? "",
 		country: settingsStore.settings?.country ?? "Sri Lanka",
 		currency_code: settingsStore.settings?.currency_code ?? "LKR",
+		currency_symbol_override: settingsStore.settings?.currency_symbol_override ?? null,
 		tax_id: settingsStore.settings?.tax_id ?? "",
 		email: settingsStore.settings?.email ?? "",
 		phone: settingsStore.settings?.phone ?? "",
@@ -376,11 +380,6 @@
 		bank_account_number: "",
 		bank_branch: ""
 	});
-
-	const currencyOptions = Object.values(CURRENCIES).map((c) => ({
-		label: `${c.code} — ${c.label}`,
-		value: c.code
-	}));
 
 	const monthOptions = [
 		{ label: "January", value: 1 },
@@ -418,6 +417,7 @@
 				business_name: form.business_name.trim() || "Untitled business",
 				country: form.country.trim() || null,
 				currency_code: form.currency_code,
+				currency_symbol_override: form.currency_symbol_override,
 				tax_id: form.tax_id.trim() || null
 			});
 		} else if (step === 2) {

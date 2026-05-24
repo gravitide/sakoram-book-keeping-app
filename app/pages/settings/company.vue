@@ -244,11 +244,9 @@
 						subtitle="Pre-fill values when creating new documents."
 					>
 					<UFormField label="Currency" name="currency_code" hint="Used everywhere money is displayed and on every PDF.">
-						<USelect
-							v-model="form.currency_code"
-							:items="currencyOptions"
-							value-key="value"
-							class="w-full"
+						<CurrencyPicker
+							v-model:code="form.currency_code"
+							v-model:symbol-override="form.currency_symbol_override"
 						/>
 					</UFormField>
 					<div class="grid grid-cols-2 gap-3">
@@ -384,7 +382,7 @@
 	import { appDataDir, join } from "@tauri-apps/api/path";
 	import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
 	import { z } from "zod";
-	import { CURRENCIES } from "~/lib/money";
+	import CurrencyPicker from "~/components/CurrencyPicker.vue";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -419,19 +417,13 @@
 		default_payment_terms_days: 30,
 		default_quote_validity_days: 30,
 		fiscal_year_start_month: 1,
-		currency_code: "LKR"
+		currency_code: "LKR",
+		currency_symbol_override: null
 	});
 
 	// Tax rate is stored in basis points (1800 = 18.00%) but the user types
 	// percent. Bind a separate ref and project on save.
 	const vatRatePct = ref<number>(18);
-
-	// Build the currency picker options off the curated CURRENCIES map so
-	// adding/removing a code there auto-updates the dropdown.
-	const currencyOptions = Object.values(CURRENCIES).map((c) => ({
-		label: `${c.code} — ${c.label}`,
-		value: c.code
-	}));
 
 	const months = [
 		{ label: "January", value: 1 },
@@ -467,6 +459,7 @@
 		form.default_quote_validity_days = s.default_quote_validity_days;
 		form.fiscal_year_start_month = s.fiscal_year_start_month;
 		form.currency_code = s.currency_code ?? "LKR";
+		form.currency_symbol_override = s.currency_symbol_override ?? null;
 		vatRatePct.value = s.default_vat_rate / 100;
 	};
 
