@@ -408,7 +408,8 @@
 			icon: "i-lucide-chart-pie",
 			divider: true,
 			children: [
-				{ to: "/reports/profit-loss", label: "Profit & Loss", icon: "i-lucide-trending-up" }
+				{ to: "/reports/profit-loss", label: "Profit & Loss", icon: "i-lucide-trending-up" },
+				{ to: "/reports/vat", label: "VAT", icon: "i-lucide-percent" }
 			]
 		},
 		{

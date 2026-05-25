@@ -83,6 +83,12 @@
 			label: "Profit & Loss",
 			icon: "i-lucide-trending-up",
 			description: "Income from issued invoices vs expenses from bills and payroll over a date range."
+		},
+		{
+			to: "/reports/vat",
+			label: "VAT report",
+			icon: "i-lucide-percent",
+			description: "Output VAT collected on issued invoices vs Input VAT paid on bills, net payable for the period."
 		}
 	];
 
@@ -90,11 +96,6 @@
 	// Keeping them visible (not hidden behind a doc) signals to the user
 	// that the section is still being built out.
 	const upcomingReports: { label: string, icon: string, description: string }[] = [
-		{
-			label: "VAT report",
-			icon: "i-lucide-percent",
-			description: "Output VAT collected vs input VAT paid, net payable for the period."
-		},
 		{
 			label: "Aged receivables",
 			icon: "i-lucide-clock",

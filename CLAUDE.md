@@ -214,7 +214,7 @@ sakoram_app/
 │  │  ├─ vouchers/                    ← list, new, [id] (money in/out; read-only by default → click Edit to mutate). Still uses a /new page — form is too heavy for a modal (8+ fields, prefill from ?bill=/?invoice=/?payslip=, overpayment guard).
 │  │  ├─ payroll/                     ← dashboard (upcoming-cycle hero, MoM chart, recent runs, outstanding)
 │  │  ├─ payslips/                    ← list w/ row context menu (multi-select bulk PDF), [id], bulk (auto-issue + auto-pay). "New payslip" opens NewPayslipModal.
-│  │  ├─ reports/                     ← aggregate views over date ranges. index.vue lists the available + upcoming reports; profit-loss.vue is the first one wired up. No DB writes.
+│  │  ├─ reports/                     ← aggregate views over date ranges. index.vue lists available + upcoming reports; profit-loss.vue (accrual P&L) and vat.vue (output VAT vs input VAT) are wired up. No DB writes.
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
 │  │     ├─ company.vue               ← business info, address, bank, defaults, logo
@@ -1117,7 +1117,8 @@ Payroll
   └─ Settings        ← /settings/payroll — cycle template (period_start_day / period_end_day / pay_day)
 ─── (divider)
 Reports               ← aggregate views over date ranges (no editing)
-  └─ Profit & Loss   ← /reports/profit-loss — income − bills − payroll, accrual
+  ├─ Profit & Loss   ← /reports/profit-loss — income − bills − payroll, accrual
+  └─ VAT             ← /reports/vat — output VAT − input VAT, net payable for the period
 ─── (divider)
 Lists
   ├─ Clients
@@ -1514,21 +1515,32 @@ persisted to localStorage).
   border-t so it reads as a footer action row.
 - ✅ **Reports module — Profit & Loss** (Tier 1, first cut). New
   `/reports` section under its own sidebar group with a landing card
-  grid (P&L live; VAT / aged receivables / aged payables / cash flow /
-  sales-by-client / payroll-register tiles shown as "Coming"). The
-  P&L page (`/reports/profit-loss`) is accrual-basis: income from
-  issued invoices, less expenses from open bills and issued payslips,
-  filtered by a date range. Six preset chips (This month / Last
-  month / This quarter / This year / Last year / Fiscal year — the
-  last reads `company_settings.fiscal_year_start_month` so SL gov FY
-  works without configuration). Amounts use `subtotal_cents` on
-  invoices / bills (VAT is a pass-through, not revenue / expense)
-  and `earnings_cents` (gross) on payslips. Three KPI tiles +
-  breakdown table with `% of income` column + per-source drill-down
-  tables (clickable rows route to the underlying document). All math
-  in-memory on already-loaded stores — fine at expected per-tenant
-  volumes; SQL-side aggregation is a future PR if a tenant ever
-  crosses ~10k rows.
+  grid. The P&L page (`/reports/profit-loss`) is accrual-basis:
+  income from issued invoices, less expenses from open bills and
+  issued payslips, filtered by a date range. Six preset chips (This
+  month / Last month / This quarter / This year / Last year /
+  Fiscal year — the last reads `company_settings.fiscal_year_start_month`
+  so SL gov FY works without configuration). Amounts use
+  `subtotal_cents` on invoices / bills (VAT is a pass-through, not
+  revenue / expense) and `earnings_cents` (gross) on payslips. Three
+  KPI tiles + breakdown table with `% of income` column + per-source
+  drill-down tables (clickable rows route to the underlying document).
+  All math in-memory on already-loaded stores — fine at expected
+  per-tenant volumes; SQL-side aggregation is a future PR if a tenant
+  ever crosses ~10k rows.
+- ✅ **Reports module — VAT report** (Tier 1, second cut). New
+  `/reports/vat` page mirroring the P&L's shape: same filter strip,
+  same six date presets, same three-tile layout (Output VAT / Input
+  VAT / Net VAT). The math is the VAT-only complement of the P&L:
+  Output VAT = sum of `invoices.tax_cents` for sent invoices in
+  range, Input VAT = sum of `bills.tax_cents` for non-cancelled bills
+  in range, Net = Output − Input. Negative net renders as an
+  Input-VAT credit carrying forward (Sri Lankan IRD treatment).
+  Drill-down tabs (Invoices / Bills) include a VAT column alongside
+  subtotal so users can verify line-by-line against tax-return source
+  data. The roadmap landing card grid now lists both P&L and VAT
+  live; aged receivables / payables / cash flow / sales-by-client /
+  payroll-register remain "Coming" tiles.
 
 ### Deferred / open items
 
@@ -1636,8 +1648,10 @@ P&L + VAT + aged receivables alone close 80% of the "is this real
 bookkeeping software" perception gap. Credit notes are the
 next-most-impactful add after that.
 
-**Status (2026-05-25):** P&L shipped — see the Done bullet above.
-Next on this track is the **VAT report**, then **aged receivables**.
+**Status (2026-05-25):** P&L + VAT shipped — see the Done bullets above.
+Next on this track is **PDF export** for the existing reports (both
+P&L and VAT need to be printable / archivable for tax-filing), then
+**aged receivables**.
 
 ---
 
