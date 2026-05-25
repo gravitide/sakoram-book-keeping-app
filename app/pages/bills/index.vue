@@ -4,14 +4,22 @@
 			bills, not copying cell text out of the table. -->
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
 			<div>
-				<h1 class="text-2xl font-semibold">
+				<h1 class="text-2xl font-semibold flex items-center gap-3">
 					Bills
+					<UIcon
+						v-if="isLoading"
+						name="i-lucide-loader-circle"
+						class="size-4 animate-spin text-(--ui-primary)"
+					/>
 				</h1>
 				<p class="text-sm text-(--ui-text-muted) tabular-nums">
-					{{ store.bills.length }} total · {{ formatLKR(store.outstandingTotal) }} outstanding
-					<span v-if="store.overdueCount > 0" class="text-(--ui-error)">
-						· {{ store.overdueCount }} overdue
-					</span>
+					<span v-if="isLoading">Loading…</span>
+					<template v-else>
+						{{ store.bills.length }} total · {{ formatLKR(store.outstandingTotal) }} outstanding
+						<span v-if="store.overdueCount > 0" class="text-(--ui-error)">
+							· {{ store.overdueCount }} overdue
+						</span>
+					</template>
 				</p>
 			</div>
 			<UButton icon="i-lucide-plus" @click="newBill">
@@ -436,17 +444,24 @@
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
 
-	// Load every store the list / filter dropdowns / derived status
-	// reach into, in parallel. Vouchers are essential because bill
-	// status and balance are derived from linked payment vouchers.
+	// Data load in onMounted (not top-level await) — see /invoices for
+	// the rationale. Keeps page transitions instant; user can navigate
+	// away mid-load instead of waiting for the SELECT to finish.
 	const vouchersStore = useVouchersStore();
-	await Promise.all([
-		store.load(),
-		vendorsStore.load(),
-		categoriesStore.load(),
-		vouchersStore.load(),
-		settingsStore.ensureLoaded()
-	]);
+	const isLoading = ref(true);
+	onMounted(async () => {
+		try {
+			await Promise.all([
+				store.ensureLoaded(),
+				vendorsStore.ensureLoaded(),
+				categoriesStore.ensureLoaded(),
+				vouchersStore.ensureLoaded(),
+				settingsStore.ensureLoaded()
+			]);
+		} finally {
+			isLoading.value = false;
+		}
+	});
 
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();

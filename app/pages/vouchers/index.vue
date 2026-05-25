@@ -4,15 +4,23 @@
 			vouchers, not copying cell text out of the table. -->
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
 			<div>
-				<h1 class="text-2xl font-semibold">
+				<h1 class="text-2xl font-semibold flex items-center gap-3">
 					Vouchers
+					<UIcon
+						v-if="isLoading"
+						name="i-lucide-loader-circle"
+						class="size-4 animate-spin text-(--ui-primary)"
+					/>
 				</h1>
 				<p class="text-sm text-(--ui-text-muted) tabular-nums">
-					{{ store.vouchers.length }} total ·
-					<span class="text-(--ui-success)">+ {{ formatLKR(store.totalReceipts) }}</span>
-					received ·
-					<span class="text-(--ui-error)">− {{ formatLKR(store.totalPayments) }}</span>
-					paid out
+					<span v-if="isLoading">Loading…</span>
+					<template v-else>
+						{{ store.vouchers.length }} total ·
+						<span class="text-(--ui-success)">+ {{ formatLKR(store.totalReceipts) }}</span>
+						received ·
+						<span class="text-(--ui-error)">− {{ formatLKR(store.totalPayments) }}</span>
+						paid out
+					</template>
 				</p>
 			</div>
 			<UButton icon="i-lucide-plus" @click="newVoucher">
@@ -368,16 +376,24 @@
 	const payslipsStore = usePayslipsStore();
 	const currency = useActiveCurrency();
 
-	// Vouchers load brings the linked-doc stores along too so the
-	// resolved "Invoice INV-2026-0001" / "Bill BIL-…" / "Payslip PSL-…"
-	// label on each PDF is available without an extra lookup per row.
-	await Promise.all([
-		store.load(),
-		invoicesStore.invoices.length === 0 ? invoicesStore.load() : Promise.resolve(),
-		billsStore.bills.length === 0 ? billsStore.load() : Promise.resolve(),
-		payslipsStore.payslips.length === 0 ? payslipsStore.load() : Promise.resolve(),
-		settingsStore.ensureLoaded()
-	]);
+	// Data load in onMounted (not top-level await) — page mounts
+	// instantly. ensureLoaded() handles the "already cached?" guard
+	// the old inline `length === 0 ? load : resolve` ternaries did,
+	// but with concurrent-safe shared pendingLoad inside each store.
+	const isLoading = ref(true);
+	onMounted(async () => {
+		try {
+			await Promise.all([
+				store.ensureLoaded(),
+				invoicesStore.ensureLoaded(),
+				billsStore.ensureLoaded(),
+				payslipsStore.ensureLoaded(),
+				settingsStore.ensureLoaded()
+			]);
+		} finally {
+			isLoading.value = false;
+		}
+	});
 
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();

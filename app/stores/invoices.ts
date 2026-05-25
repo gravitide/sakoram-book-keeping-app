@@ -281,6 +281,11 @@ export const useInvoicesStore = defineStore("invoices", () => {
 	// force a refresh — that path stays untouched.
 	const loaded = ref(false);
 
+	// Shared in-flight promise so concurrent callers (e.g. dashboard +
+	// /invoices both mounting at once) wait for the same load instead
+	// of triggering two parallel SELECTs.
+	let pendingLoad: Promise<void> | null = null;
+
 	const load = async () => {
 		loading.value = true;
 		error.value = null;
@@ -298,8 +303,13 @@ export const useInvoicesStore = defineStore("invoices", () => {
 	};
 
 	const ensureLoaded = async () => {
-		if (loaded.value || loading.value) return;
-		await load();
+		if (loaded.value) return;
+		if (!pendingLoad) {
+			pendingLoad = load().finally(() => {
+				pendingLoad = null;
+			});
+		}
+		await pendingLoad;
 	};
 
 	const get = async (id: number): Promise<InvoiceRow | null> =>
