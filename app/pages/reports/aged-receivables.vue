@@ -75,22 +75,20 @@
 				</div>
 			</UCard>
 
-			<UCard class="mb-6 animate-pulse">
-				<template #header>
-					<div class="h-3 w-44 rounded bg-(--ui-bg-muted)" />
-				</template>
-				<div class="space-y-3">
+			<div class="animate-pulse">
+				<div class="mb-2 h-3 w-44 rounded bg-(--ui-bg-muted)" />
+				<div class="rounded-lg border border-(--ui-border) p-3 space-y-3">
 					<div
 						v-for="r in 6"
 						:key="`cl-skel-${r}`"
-						class="grid gap-3 py-2 border-b border-(--ui-border)/40 last:border-0"
+						class="grid gap-3 py-1"
 						style="grid-template-columns: 1fr repeat(6, auto)"
 					>
 						<div class="h-3 w-32 rounded bg-(--ui-bg-muted)" />
 						<div v-for="c in 6" :key="`c-skel-${r}-${c}`" class="h-3 w-16 rounded bg-(--ui-bg-muted)" />
 					</div>
 				</div>
-			</UCard>
+			</div>
 		</template>
 
 		<template v-else>
@@ -232,100 +230,95 @@
 			</UCard>
 
 			<!-- Per-client breakdown — every client with outstanding
-				balances, with their bucket distribution + total. Sorted
-				by total descending so the worst-aged clients land at
-				the top. Click a row to jump to /invoices pre-filtered
-				to that client. -->
-			<UCard>
-				<template #header>
-					<div class="app-chrome flex items-center justify-between gap-2 flex-wrap">
-						<div>
-							<div class="app-chrome font-medium">
-								By client
-							</div>
-							<div class="text-xs text-(--ui-text-muted) mt-0.5">
-								Click a row to open that client's invoice list pre-filtered.
-							</div>
-						</div>
-						<div class="text-xs text-(--ui-text-muted)">
-							{{ clientRows.length }} client{{ clientRows.length === 1 ? "" : "s" }} with open balance
-						</div>
+				balances, with their bucket distribution + total.
+				Default-sorted by total descending so the worst-aged
+				clients land at the top. Click a row to jump to
+				/invoices pre-filtered to that client. Uses
+				ResizableDataTable for the same column-resize + drag-pan
+				+ sort + Fit page-size UX every other list page has. -->
+			<div class="mb-2 flex items-end justify-between gap-2 flex-wrap">
+				<div>
+					<div class="font-medium">
+						By client
 					</div>
-				</template>
-
-				<div v-if="clientRows.length === 0" class="py-10 text-center text-sm text-(--ui-text-muted)">
-					<UIcon name="i-lucide-check-circle-2" class="size-10 mx-auto mb-2 opacity-40 text-(--ui-success)" />
-					<div>Nothing outstanding — all invoices paid.</div>
+					<div class="text-xs text-(--ui-text-muted) mt-0.5">
+						Click a row to open that client's invoice list pre-filtered. Drag column edges to resize.
+					</div>
 				</div>
-
-				<!-- Horizontally scrollable wrapper: at lg the card is
-					narrower than 6 amount columns + a readable client
-					name, so we let the user pan rather than wrap-and-crush. -->
-				<div v-else class="overflow-x-auto">
-					<table class="w-full text-sm min-w-[760px]">
-						<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-							<tr>
-								<th class="py-2 pl-3 pr-2 font-medium">
-									Client
-								</th>
-								<th class="py-2 px-2 font-medium text-right tabular-nums whitespace-nowrap">
-									Current
-								</th>
-								<th class="py-2 px-2 font-medium text-right tabular-nums whitespace-nowrap">
-									1-30
-								</th>
-								<th class="py-2 px-2 font-medium text-right tabular-nums whitespace-nowrap">
-									31-60
-								</th>
-								<th class="py-2 px-2 font-medium text-right tabular-nums whitespace-nowrap">
-									61-90
-								</th>
-								<th class="py-2 px-2 font-medium text-right tabular-nums whitespace-nowrap">
-									90+
-								</th>
-								<th class="py-2 pl-2 pr-3 font-medium text-right tabular-nums whitespace-nowrap">
-									Total
-								</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr
-								v-for="row in clientRows"
-								:key="row.clientId ?? row.name"
-								class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-								@click="openClient(row.clientId)"
-							>
-								<td class="py-2 pl-3 pr-2 max-w-[220px]">
-									<div class="font-medium truncate">
-										{{ row.name }}
-									</div>
-									<div class="text-xs text-(--ui-text-muted) truncate">
-										{{ row.invoiceCount }} open invoice{{ row.invoiceCount === 1 ? "" : "s" }}
-									</div>
-								</td>
-								<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap" :class="amountClass(row.current, 'neutral')">
-									{{ amountOrDash(row.current) }}
-								</td>
-								<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap" :class="amountClass(row.b1to30, 'warning')">
-									{{ amountOrDash(row.b1to30) }}
-								</td>
-								<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap" :class="amountClass(row.b31to60, 'warning')">
-									{{ amountOrDash(row.b31to60) }}
-								</td>
-								<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap" :class="amountClass(row.b61to90, 'error')">
-									{{ amountOrDash(row.b61to90) }}
-								</td>
-								<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap" :class="amountClass(row.b90plus, 'error')">
-									{{ amountOrDash(row.b90plus) }}
-								</td>
-								<td class="py-2 pl-2 pr-3 text-right tabular-nums font-semibold whitespace-nowrap">
-									{{ formatLKR(row.total) }}
-								</td>
-							</tr>
-						</tbody>
-					</table>
+				<div class="text-xs text-(--ui-text-muted)">
+					{{ clientRows.length }} client{{ clientRows.length === 1 ? "" : "s" }} with open balance
 				</div>
-			</UCard>
+			</div>
+
+			<div v-if="clientRows.length === 0" class="py-10 text-center text-sm text-(--ui-text-muted) border border-dashed border-(--ui-border) rounded-lg">
+				<UIcon name="i-lucide-check-circle-2" class="size-10 mx-auto mb-2 opacity-40 text-(--ui-success)" />
+				<div>Nothing outstanding — all invoices paid.</div>
+			</div>
+
+			<ResizableDataTable
+				v-else
+				:rows="clientRows"
+				state-key="reports-aged-receivables-by-client"
+				data-key="rowKey"
+				default-sort-field="total"
+				:default-sort-order="-1"
+				@row-click="(row) => openClient(row.clientId)"
+			>
+				<Column field="name" header="Client" sortable>
+					<template #body="{ data }">
+						<div class="min-w-[140px] max-w-[260px]">
+							<div class="font-medium truncate">
+								{{ data.name }}
+							</div>
+							<div class="text-xs text-(--ui-text-muted) truncate">
+								{{ data.invoiceCount }} open invoice{{ data.invoiceCount === 1 ? "" : "s" }}
+							</div>
+						</div>
+					</template>
+				</Column>
+				<Column field="current" header="Current" sortable :style="{ textAlign: 'right' }">
+					<template #body="{ data }">
+						<div class="text-right tabular-nums whitespace-nowrap" :class="amountClass(data.current, 'neutral')">
+							{{ amountOrDash(data.current) }}
+						</div>
+					</template>
+				</Column>
+				<Column field="b1to30" header="1-30" sortable :style="{ textAlign: 'right' }">
+					<template #body="{ data }">
+						<div class="text-right tabular-nums whitespace-nowrap" :class="amountClass(data.b1to30, 'warning')">
+							{{ amountOrDash(data.b1to30) }}
+						</div>
+					</template>
+				</Column>
+				<Column field="b31to60" header="31-60" sortable :style="{ textAlign: 'right' }">
+					<template #body="{ data }">
+						<div class="text-right tabular-nums whitespace-nowrap" :class="amountClass(data.b31to60, 'warning')">
+							{{ amountOrDash(data.b31to60) }}
+						</div>
+					</template>
+				</Column>
+				<Column field="b61to90" header="61-90" sortable :style="{ textAlign: 'right' }">
+					<template #body="{ data }">
+						<div class="text-right tabular-nums whitespace-nowrap" :class="amountClass(data.b61to90, 'error')">
+							{{ amountOrDash(data.b61to90) }}
+						</div>
+					</template>
+				</Column>
+				<Column field="b90plus" header="90+" sortable :style="{ textAlign: 'right' }">
+					<template #body="{ data }">
+						<div class="text-right tabular-nums whitespace-nowrap" :class="amountClass(data.b90plus, 'error')">
+							{{ amountOrDash(data.b90plus) }}
+						</div>
+					</template>
+				</Column>
+				<Column field="total" header="Total" sortable :style="{ textAlign: 'right' }">
+					<template #body="{ data }">
+						<div class="text-right tabular-nums whitespace-nowrap font-semibold">
+							{{ formatLKR(data.total) }}
+						</div>
+					</template>
+				</Column>
+			</ResizableDataTable>
 		</template>
 
 		<PdfPreviewModal
@@ -483,6 +476,10 @@
 	// land at the top. Declared before `totals` because the KPI
 	// computed depends on its row count for the "clients" tally.
 	interface ClientAgingRow {
+		// Stable string key the DataTable uses as data-key. We can't use
+		// clientId alone because invoices with a null FK would all
+		// collapse onto the same row identity.
+		rowKey: string
 		clientId: number | null
 		name: string
 		invoiceCount: number
@@ -492,6 +489,9 @@
 		b61to90: number
 		b90plus: number
 		total: number
+		// Allow indexed access by bucket key for the accumulator below
+		// — keeps the inner loop typed instead of casting.
+		[k: string]: unknown
 	}
 	const clientRows = computed<ClientAgingRow[]>(() => {
 		const byClient = new Map<number, ClientAgingRow>();
@@ -500,6 +500,7 @@
 			let row = byClient.get(cid);
 			if (!row) {
 				row = {
+					rowKey: `client:${cid}`,
 					clientId: cid,
 					name: oi.invoice.client_name || "(no client)",
 					invoiceCount: 0,
