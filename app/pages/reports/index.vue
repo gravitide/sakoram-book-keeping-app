@@ -95,6 +95,12 @@
 			label: "Aged receivables",
 			icon: "i-lucide-clock",
 			description: "Outstanding invoices bucketed by days past due, per-client breakdown."
+		},
+		{
+			to: "/reports/aged-payables",
+			label: "Aged payables",
+			icon: "i-lucide-clock-alert",
+			description: "Outstanding bills bucketed by days past due, per-vendor breakdown."
 		}
 	];
 
@@ -102,11 +108,6 @@
 	// Keeping them visible (not hidden behind a doc) signals to the user
 	// that the section is still being built out.
 	const upcomingReports: { label: string, icon: string, description: string }[] = [
-		{
-			label: "Aged payables",
-			icon: "i-lucide-clock-alert",
-			description: "Outstanding bills bucketed by days past due, per-vendor breakdown."
-		},
 		{
 			label: "Cash flow",
 			icon: "i-lucide-arrow-left-right",
