@@ -275,9 +275,11 @@ export const useBillsStore = defineStore("bills", () => {
 			[billId]
 		);
 
-	// Pull the name field out of a stored vendor_snapshot JSON. Used at
-	// write time to keep the denormalised vendor_name column in lockstep
-	// with the snapshot — see migration 0028.
+	// Pull the name field out of a stored vendor_snapshot JSON. Only
+	// the `update()` path uses this — for the Refresh-vendor-snapshot
+	// button on the detail page, which is the one flow that mutates
+	// the snapshot post-create. createBill passes the vendor name
+	// directly from its input.
 	const nameFromVendorSnapshot = (snap: string): string => {
 		try {
 			return (JSON.parse(snap) as { name?: string }).name ?? "";
@@ -353,7 +355,7 @@ export const useBillsStore = defineStore("bills", () => {
 				issue_date, due_date, status, pricing_mode,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents
 			) VALUES (?, ?, ?, ?, ?, ?, 'open', 'bundle', 0, 0, 0, 0)`,
-			[allocation.number, input.vendor.id, snap, nameFromVendorSnapshot(snap), issue, due]
+			[allocation.number, input.vendor.id, snap, input.vendor.name, issue, due]
 		);
 		if (result.lastInsertId === undefined) throw new Error("createBill: no lastInsertId");
 		await load();

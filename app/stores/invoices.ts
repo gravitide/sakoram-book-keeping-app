@@ -126,10 +126,13 @@ const daysBetween = (fromISO: string, toISO: string): number => {
 };
 
 /// Extract the `name` field from a stored client-snapshot JSON string.
-/// Used at write time to keep the denormalised `client_name` column
-/// (see migration 0028) in lockstep with the snapshot. Falls back to
-/// empty string for malformed snapshots — the column has a NOT NULL
-/// DEFAULT '' so an empty value is still a legal write.
+/// Only used by `update()` to keep the denormalised `client_name` column
+/// in lockstep with the snapshot when the Refresh-client-snapshot button
+/// fires (the only flow that mutates client_snapshot post-create). All
+/// the create / duplicate / convert paths pass the name directly — they
+/// have it as a plain field on the input object or on the source row's
+/// `client_name` column. Falls back to empty string for malformed
+/// snapshots; the column has a NOT NULL DEFAULT '' so empty is legal.
 function nameFromClientSnapshot(snap: string): string {
 	try {
 		return (JSON.parse(snap) as { name?: string }).name ?? "";
@@ -384,7 +387,7 @@ export const useInvoicesStore = defineStore("invoices", () => {
 				allocation.number,
 				input.client.id,
 				clientSnap,
-				nameFromClientSnapshot(clientSnap),
+				input.client.name,
 				issue,
 				due,
 				input.project_title ?? "",
@@ -430,7 +433,7 @@ export const useInvoicesStore = defineStore("invoices", () => {
 				allocation.number,
 				quote.client_id,
 				quote.client_snapshot,
-				nameFromClientSnapshot(quote.client_snapshot),
+				quote.client_name,
 				quote.id,
 				issue,
 				due,
@@ -509,7 +512,7 @@ export const useInvoicesStore = defineStore("invoices", () => {
 				allocation.number,
 				src.client_id,
 				src.client_snapshot,
-				nameFromClientSnapshot(src.client_snapshot),
+				src.client_name,
 				issue,
 				due,
 				src.pricing_mode,

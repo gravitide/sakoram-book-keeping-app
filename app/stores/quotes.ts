@@ -220,9 +220,11 @@ export const useQuotesStore = defineStore("quotes", () => {
 			[quoteId]
 		);
 
-	// Pull the name field out of a stored client_snapshot JSON. Used at
-	// write time to keep the denormalised client_name column in lockstep
-	// with the snapshot — see migration 0028.
+	// Pull the name field out of a stored client_snapshot JSON. Only
+	// the `update()` path uses this — for the Refresh-client-snapshot
+	// button on the detail page, which is the one flow that mutates
+	// the snapshot post-create. createDraft / duplicate pass the name
+	// directly from their input / source row.
 	const nameFromClientSnapshot = (snap: string): string => {
 		try {
 			return (JSON.parse(snap) as { name?: string }).name ?? "";
@@ -341,7 +343,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 				allocation.number,
 				input.client.id,
 				clientSnap,
-				nameFromClientSnapshot(clientSnap),
+				input.client.name,
 				issue,
 				validUntil,
 				input.project_title ?? "",
@@ -389,7 +391,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 				allocation.number,
 				src.client_id,
 				src.client_snapshot,
-				nameFromClientSnapshot(src.client_snapshot),
+				src.client_name,
 				issue,
 				validUntil,
 				src.pricing_mode,

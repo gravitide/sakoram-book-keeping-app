@@ -215,17 +215,6 @@ export const usePayslipsStore = defineStore("payslips", () => {
 			[payslipId]
 		);
 
-	// Pull the full_name field out of a stored employee_snapshot JSON.
-	// Used at write time to keep the denormalised employee_name column
-	// in lockstep with the snapshot — see migration 0028.
-	const nameFromEmployeeSnapshot = (snap: string): string => {
-		try {
-			return (JSON.parse(snap) as { full_name?: string }).full_name ?? "";
-		} catch {
-			return "";
-		}
-	};
-
 	const buildEmployeeSnapshot = (e: {
 		full_name: string
 		employee_number?: string | null
@@ -292,7 +281,7 @@ export const usePayslipsStore = defineStore("payslips", () => {
 				allocation.fiscalYear,
 				input.employee.id,
 				snap,
-				nameFromEmployeeSnapshot(snap),
+				input.employee.full_name,
 				input.periodStart,
 				input.periodEnd,
 				input.payDate,
