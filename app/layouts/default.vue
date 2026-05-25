@@ -397,6 +397,15 @@
 			]
 		},
 		{
+			to: "/reports",
+			label: "Reports",
+			icon: "i-lucide-chart-pie",
+			divider: true,
+			children: [
+				{ to: "/reports/profit-loss", label: "Profit & Loss", icon: "i-lucide-trending-up" }
+			]
+		},
+		{
 			to: "/clients",
 			label: "Lists",
 			icon: "i-lucide-library",
