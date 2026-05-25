@@ -101,71 +101,71 @@
 		</header>
 
 		<div class="space-y-6">
-			<UCard>
-				<template #header>
-					<div class="flex items-center justify-between">
-						<div class="font-medium">
-							Client &amp; project
-						</div>
-						<UButton
-							v-if="editable"
-							size="xs"
-							variant="ghost"
-							color="neutral"
-							icon="i-lucide-refresh-ccw"
-							@click="refreshClientSnapshot"
-						>
-							Refresh client snapshot
-						</UButton>
-					</div>
-				</template>
-				<!-- 1:3 split at md+: the Quote-to snapshot is only ~3 short
-					lines, so a 1:1 split left the right column cramped
-					and the left column with a tall empty gap. Stays
-					stacked at sm. -->
-				<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-					<div class="md:col-span-1">
-						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) mb-1">
-							Quote to
-						</div>
-						<div class="text-sm">
+			<!-- Two cards side-by-side at lg+: Reference (form fields) on
+				the left wider, Quote-to snapshot on the right narrower.
+				At md they stack with Quote to on TOP — the snapshot
+				identifies who the quote is for, so it leads the page
+				when there's only one column. DOM order matches that
+				(Quote to first); at lg+ we explicitly place Quote to in
+				col 3 via `lg:col-start-3` so it visually moves to the
+				right while Reference auto-flows into cols 1-2. Mirrors
+				the bills detail page's split-card pattern. -->
+			<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+				<UCard class="lg:col-span-1 lg:col-start-3">
+					<template #header>
+						<div class="flex items-center justify-between gap-2">
 							<div class="font-medium">
-								{{ clientSnapshot?.name }}
+								Quote to
 							</div>
-							<div v-if="clientSnapshot?.address_line1" class="text-(--ui-text-muted)">
-								{{ clientSnapshot.address_line1 }}
-							</div>
-							<div v-if="clientSnapshot?.address_line2" class="text-(--ui-text-muted)">
-								{{ clientSnapshot.address_line2 }}
-							</div>
-							<div v-if="clientSnapshot?.city || clientSnapshot?.country" class="text-(--ui-text-muted)">
-								{{ [clientSnapshot.city, clientSnapshot.postal_code, clientSnapshot.country].filter(Boolean).join(", ") }}
-							</div>
-							<div v-if="clientSnapshot?.tax_id" class="text-(--ui-text-muted) mt-1 text-xs">
-								Tax ID: {{ clientSnapshot.tax_id }}
-							</div>
+							<!-- Re-snapshot the client's current row data
+								(address moved, tax ID updated, etc.).
+								Draft-only; sent quotes keep their frozen
+								snapshot. Icon-only because the Quote-to
+								card sits at col-span-1 (~340px wide) at
+								lg+ and the full label would wrap and
+								squeeze the card title. -->
+							<UButton
+								v-if="editable"
+								size="xs"
+								variant="ghost"
+								color="neutral"
+								icon="i-lucide-refresh-ccw"
+								title="Refresh client snapshot — pull the latest details from the client record"
+								aria-label="Refresh client snapshot"
+								@click="refreshClientSnapshot"
+							/>
+						</div>
+					</template>
+					<div class="text-sm">
+						<div class="font-medium">
+							{{ clientSnapshot?.name }}
+						</div>
+						<div v-if="clientSnapshot?.address_line1" class="text-(--ui-text-muted)">
+							{{ clientSnapshot.address_line1 }}
+						</div>
+						<div v-if="clientSnapshot?.address_line2" class="text-(--ui-text-muted)">
+							{{ clientSnapshot.address_line2 }}
+						</div>
+						<div v-if="clientSnapshot?.city || clientSnapshot?.country" class="text-(--ui-text-muted)">
+							{{ [clientSnapshot.city, clientSnapshot.postal_code, clientSnapshot.country].filter(Boolean).join(", ") }}
+						</div>
+						<div v-if="clientSnapshot?.tax_id" class="text-(--ui-text-muted) mt-1 text-xs">
+							Tax ID: {{ clientSnapshot.tax_id }}
 						</div>
 					</div>
-					<!-- Right column uses a 2-col inner grid so single-line
-						inputs (PDF header / Project title) pair up rather
-						than stacking — keeps the column height close to the
-						snapshot on the left instead of leaving a big gap.
-						md:col-span-3 ties to the 1:3 outer split.
+				</UCard>
 
-						max-w-3xl caps the form so a wide xl/2xl card
-						doesn't stretch each input to ~540px (which makes
-						the form feel sparse and the dates row read as
-						tiny pickers stranded in a sea of whitespace).
-						At md / lg the cap isn't reached.
-
-						No #help on the short fields: helper text wraps
-						unevenly across the pair (long vs short string)
-						and the grid stretches the row to the taller
-						helper, making the gap to the next row look
-						uneven. Label + placeholder already convey the
-						default; bank-account keeps its helper because
-						it's spanning the row and adding non-obvious info. -->
-					<div class="md:col-span-3 grid grid-cols-2 gap-3 max-w-3xl">
+				<UCard class="lg:col-span-2 lg:row-start-1">
+					<template #header>
+						<div class="font-medium">
+							Reference
+						</div>
+					</template>
+					<!-- 2-col inner grid; max-w-3xl keeps inputs from
+						stretching on wide xl/2xl cards. Bank account
+						spans both columns since it's the widest control
+						(displays bank name + account number). -->
+					<div class="grid grid-cols-2 gap-3 max-w-3xl">
 						<UFormField label="PDF header">
 							<UInput
 								v-model="formTitleOverride"
@@ -195,8 +195,8 @@
 							</template>
 						</UFormField>
 					</div>
-				</div>
-			</UCard>
+				</UCard>
+			</div>
 
 			<UCard>
 				<template #header>
