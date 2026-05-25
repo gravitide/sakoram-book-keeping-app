@@ -74,33 +74,163 @@
 
 		<!-- Charts / activity skeleton — visible until every store has
 			hydrated. With ~3400 rows total this can run a few seconds
-			on first load. -->
+			on first load. Each card carries a content-shaped placeholder
+			that hints at the upcoming layout (mini bars, donut, calendar
+			grid, list rows) instead of a flat rectangle — feels like a
+			page that's loading rather than a page that's broken. -->
 		<div
 			v-if="!dataReady && !loadError"
 			:class="kpis ? '' : 'mt-6'"
-			class="space-y-6"
+			class="space-y-4 animate-pulse"
 			aria-busy="true"
 			aria-live="polite"
 		>
-			<div class="text-sm text-(--ui-text-muted) flex items-center gap-2">
+			<div class="text-sm text-(--ui-text-muted) flex items-center gap-2 animate-none">
 				<UIcon name="i-lucide-loader-circle" class="size-4 animate-spin text-(--ui-primary)" />
 				Loading charts and activity…
 			</div>
 
-			<!-- Cashflow + Expenses-by-category row placeholder. -->
-			<div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
-				<UCard class="lg:col-span-3 h-full">
-					<div class="h-56 rounded bg-(--ui-bg-muted) animate-pulse" />
+			<!-- Row 1: Cash flow bars (col-span-4) + Expenses donut
+				(col-span-2). Mirrors the real lg:grid-cols-6 split. -->
+			<div class="grid grid-cols-1 lg:grid-cols-6 gap-4">
+				<UCard class="lg:col-span-4">
+					<template #header>
+						<div class="space-y-1.5">
+							<div class="h-3 w-32 rounded bg-(--ui-bg-muted)" />
+							<div class="h-2 w-48 rounded bg-(--ui-bg-muted)/60" />
+						</div>
+					</template>
+					<!-- Fake twin-bar chart: 12 month columns, two bars
+						each at deterministic varying heights so the
+						shape reads as a chart immediately. -->
+					<div class="flex items-end gap-1.5 h-44">
+						<div
+							v-for="n in 12"
+							:key="`cf-skel-${n}`"
+							class="flex gap-0.5 flex-1"
+						>
+							<div
+								class="flex-1 rounded-sm bg-(--ui-bg-muted)"
+								:style="{ height: `${30 + ((n * 17) % 55)}%` }"
+							/>
+							<div
+								class="flex-1 rounded-sm bg-(--ui-bg-muted)/70"
+								:style="{ height: `${20 + ((n * 23) % 60)}%` }"
+							/>
+						</div>
+					</div>
 				</UCard>
-				<UCard class="lg:col-span-2 h-full">
-					<div class="h-56 rounded bg-(--ui-bg-muted) animate-pulse" />
+
+				<UCard class="lg:col-span-2">
+					<template #header>
+						<div class="space-y-1.5">
+							<div class="h-3 w-28 rounded bg-(--ui-bg-muted)" />
+							<div class="h-2 w-36 rounded bg-(--ui-bg-muted)/60" />
+						</div>
+					</template>
+					<!-- Donut + legend rows. The donut is a thick-ring
+						circle (border trick — no SVG needed). -->
+					<div class="flex items-center gap-4">
+						<div class="size-28 shrink-0 rounded-full border-[14px] border-(--ui-bg-muted)" />
+						<div class="flex-1 space-y-2">
+							<div class="h-3 rounded bg-(--ui-bg-muted)" />
+							<div class="h-3 w-4/5 rounded bg-(--ui-bg-muted)" />
+							<div class="h-3 w-3/5 rounded bg-(--ui-bg-muted)" />
+							<div class="h-3 w-2/5 rounded bg-(--ui-bg-muted)/60" />
+						</div>
+					</div>
 				</UCard>
 			</div>
 
-			<!-- Calendar / aging / activity / overdue row placeholders. -->
+			<!-- Calendar — 6×7 grid of day cells. -->
+			<UCard>
+				<template #header>
+					<div class="space-y-1.5">
+						<div class="h-3 w-20 rounded bg-(--ui-bg-muted)" />
+						<div class="h-2 w-56 rounded bg-(--ui-bg-muted)/60" />
+					</div>
+				</template>
+				<div class="grid grid-cols-7 gap-1">
+					<div
+						v-for="n in 42"
+						:key="`cal-skel-${n}`"
+						class="aspect-square rounded-sm bg-(--ui-bg-muted)"
+						:class="(n + Math.floor((n - 1) / 7)) % 2 === 0 ? 'opacity-90' : 'opacity-60'"
+					/>
+				</div>
+			</UCard>
+
+			<!-- Receivables aging — 5 horizontal bars, decreasing width
+				(longest bar = 0-30 days bucket). -->
+			<UCard>
+				<template #header>
+					<div class="space-y-1.5">
+						<div class="h-3 w-32 rounded bg-(--ui-bg-muted)" />
+						<div class="h-2 w-44 rounded bg-(--ui-bg-muted)/60" />
+					</div>
+				</template>
+				<div class="space-y-2.5">
+					<div
+						v-for="(w, i) in [85, 70, 55, 40, 25]"
+						:key="`age-skel-${i}`"
+						class="flex items-center gap-3"
+					>
+						<div class="h-3 w-16 rounded bg-(--ui-bg-muted)" />
+						<div
+							class="h-6 rounded bg-(--ui-bg-muted)"
+							:style="{ width: `${w}%` }"
+						/>
+					</div>
+				</div>
+			</UCard>
+
+			<!-- Recent activity (col-span-2) + Overdue list (col-span-1).
+				Each is a list of avatar + two text lines + trailing
+				amount. -->
 			<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-				<UCard v-for="i in 3" :key="`block-skel-${i}`" class="h-full">
-					<div class="h-40 rounded bg-(--ui-bg-muted) animate-pulse" />
+				<UCard class="lg:col-span-2">
+					<template #header>
+						<div class="space-y-1.5">
+							<div class="h-3 w-28 rounded bg-(--ui-bg-muted)" />
+							<div class="h-2 w-44 rounded bg-(--ui-bg-muted)/60" />
+						</div>
+					</template>
+					<div class="space-y-3">
+						<div
+							v-for="n in 5"
+							:key="`act-skel-${n}`"
+							class="flex items-center gap-3"
+						>
+							<div class="size-8 shrink-0 rounded-md bg-(--ui-bg-muted)" />
+							<div class="flex-1 space-y-1.5">
+								<div class="h-3 w-3/5 rounded bg-(--ui-bg-muted)" />
+								<div class="h-2 w-2/5 rounded bg-(--ui-bg-muted)/60" />
+							</div>
+							<div class="h-3 w-16 rounded bg-(--ui-bg-muted)" />
+						</div>
+					</div>
+				</UCard>
+
+				<UCard>
+					<template #header>
+						<div class="space-y-1.5">
+							<div class="h-3 w-20 rounded bg-(--ui-bg-muted)" />
+							<div class="h-2 w-32 rounded bg-(--ui-bg-muted)/60" />
+						</div>
+					</template>
+					<div class="space-y-3">
+						<div
+							v-for="n in 4"
+							:key="`od-skel-${n}`"
+							class="flex items-center gap-3"
+						>
+							<div class="size-6 shrink-0 rounded-full bg-(--ui-bg-muted)" />
+							<div class="flex-1 space-y-1">
+								<div class="h-3 w-4/5 rounded bg-(--ui-bg-muted)" />
+								<div class="h-2 w-1/2 rounded bg-(--ui-bg-muted)/60" />
+							</div>
+						</div>
+					</div>
 				</UCard>
 			</div>
 		</div>
