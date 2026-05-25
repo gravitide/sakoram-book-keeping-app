@@ -393,7 +393,13 @@
 			children: [
 				{ to: "/payroll", label: "Dashboard", icon: "i-lucide-layout-dashboard" },
 				{ to: "/employees", label: "Employees", icon: "i-lucide-users-round" },
-				{ to: "/payslips", label: "Payslips", icon: "i-lucide-file-spreadsheet" }
+				{ to: "/payslips", label: "Payslips", icon: "i-lucide-file-spreadsheet" },
+				// Cycle template (period_start_day / period_end_day /
+				// pay_day) lives at /settings/payroll for historical
+				// reasons but its natural home in the nav is the Payroll
+				// group — the user is more likely to look for it there
+				// than under Settings.
+				{ to: "/settings/payroll", label: "Settings", icon: "i-lucide-calendar-clock" }
 			]
 		},
 		{
@@ -445,8 +451,7 @@
 						{ hash: "#footer-notes", label: "Footer notes", icon: "i-lucide-file-text" },
 						{ hash: "#document-protection", label: "Protection", icon: "i-lucide-shield-check" }
 					]
-				},
-				{ to: "/settings/payroll", label: "Payroll", icon: "i-lucide-calendar-clock" }
+				}
 			]
 		},
 		{
