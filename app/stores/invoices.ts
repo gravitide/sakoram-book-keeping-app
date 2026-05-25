@@ -272,6 +272,15 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		return invoices.value.filter((r) => derivedStatus(r, today) === "overdue").length;
 	});
 
+	// `loaded` flips true after the first successful load and stays true
+	// for the lifetime of the store — i.e. the active tenant session,
+	// since tenant switch hard-reloads. `ensureLoaded` lets callers skip
+	// re-fetching when the store is already populated (the dashboard
+	// uses this so navigating back to / doesn't re-issue the full
+	// SELECT every time). Mutations still call `load()` directly to
+	// force a refresh — that path stays untouched.
+	const loaded = ref(false);
+
 	const load = async () => {
 		loading.value = true;
 		error.value = null;
@@ -279,12 +288,18 @@ export const useInvoicesStore = defineStore("invoices", () => {
 			invoices.value = await select<InvoiceRow>(
 				"SELECT * FROM invoices ORDER BY datetime(created_at) DESC"
 			);
+			loaded.value = true;
 		} catch (err) {
 			error.value = err instanceof Error ? err.message : String(err);
 			throw err;
 		} finally {
 			loading.value = false;
 		}
+	};
+
+	const ensureLoaded = async () => {
+		if (loaded.value || loading.value) return;
+		await load();
 	};
 
 	const get = async (id: number): Promise<InvoiceRow | null> =>
@@ -672,7 +687,9 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		filtered,
 		outstandingTotal,
 		overdueCount,
+		loaded,
 		load,
+		ensureLoaded,
 		get,
 		getLines,
 		createDraft,

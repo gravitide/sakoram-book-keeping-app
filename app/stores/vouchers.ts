@@ -102,6 +102,10 @@ export const useVouchersStore = defineStore("vouchers", () => {
 			.reduce((s, v) => s + v.amount_cents, 0)
 	);
 
+	// See app/stores/invoices.ts for the `loaded` / `ensureLoaded`
+	// rationale — same pattern: skip refetching when already populated.
+	const loaded = ref(false);
+
 	const load = async () => {
 		loading.value = true;
 		error.value = null;
@@ -109,12 +113,18 @@ export const useVouchersStore = defineStore("vouchers", () => {
 			vouchers.value = await select<VoucherRow>(
 				"SELECT * FROM vouchers ORDER BY date(voucher_date) DESC, id DESC"
 			);
+			loaded.value = true;
 		} catch (err) {
 			error.value = err instanceof Error ? err.message : String(err);
 			throw err;
 		} finally {
 			loading.value = false;
 		}
+	};
+
+	const ensureLoaded = async () => {
+		if (loaded.value || loading.value) return;
+		await load();
 	};
 
 	const get = async (id: number): Promise<VoucherRow | null> =>
@@ -203,7 +213,9 @@ export const useVouchersStore = defineStore("vouchers", () => {
 		filtered,
 		totalPayments,
 		totalReceipts,
+		loaded,
 		load,
+		ensureLoaded,
 		get,
 		create,
 		update,

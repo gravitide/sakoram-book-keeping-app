@@ -44,111 +44,163 @@
 			/>
 		</div>
 
-		<!-- KPI tiles -->
-		<!-- Layout: 1 col (mobile) → 4 col (md+). The money figures
+		<!-- Loading skeleton — shown while the dashboard's five stores are
+			still hydrating from the DB. At heavy data volumes the first
+			SELECT pass can take a few seconds; without this the page
+			rendered zero-filled tiles + empty charts and looked broken.
+			Mirrors the same grid shape as the real content below so the
+			page doesn't visibly reflow when the data arrives. The
+			animate-pulse comes from Tailwind. -->
+		<div
+			v-if="!dataReady && !loadError"
+			class="space-y-6"
+			aria-busy="true"
+			aria-live="polite"
+		>
+			<div class="text-sm text-(--ui-text-muted) flex items-center gap-2">
+				<UIcon name="i-lucide-loader-circle" class="size-4 animate-spin text-(--ui-primary)" />
+				Loading dashboard data…
+			</div>
+
+			<!-- KPI tile placeholders -->
+			<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+				<UCard v-for="i in 4" :key="`kpi-skel-${i}`" class="h-full">
+					<div class="space-y-3 animate-pulse">
+						<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
+						<div class="h-7 w-32 rounded bg-(--ui-bg-muted)" />
+						<div class="h-3 w-20 rounded bg-(--ui-bg-muted)" />
+					</div>
+				</UCard>
+			</div>
+
+			<!-- Cashflow + Expenses-by-category row placeholder. Same
+				lg:grid-cols-5 / 3+2 split the real row uses. -->
+			<div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+				<UCard class="lg:col-span-3 h-full">
+					<div class="h-56 rounded bg-(--ui-bg-muted) animate-pulse" />
+				</UCard>
+				<UCard class="lg:col-span-2 h-full">
+					<div class="h-56 rounded bg-(--ui-bg-muted) animate-pulse" />
+				</UCard>
+			</div>
+
+			<!-- Calendar / aging / activity / overdue row placeholders. -->
+			<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+				<UCard v-for="i in 3" :key="`block-skel-${i}`" class="h-full">
+					<div class="h-40 rounded bg-(--ui-bg-muted) animate-pulse" />
+				</UCard>
+			</div>
+		</div>
+
+		<!-- Real content. v-else so we don't render KPI tiles before the
+			data lands (the tile computeds all return 0 for empty arrays,
+			which flashes "Rs 0" for a half-second otherwise). -->
+		<template v-else>
+			<!-- KPI tiles -->
+			<!-- Layout: 1 col (mobile) → 4 col (md+). The money figures
 			switch to compact form (K/M/B) at md and lg where tile width
 			is tightest — see `kpiMoney()` below. At xl the 4-up tiles
 			get enough room (~240px+) to fit the full "Rs 3,553,600.00"
 			string again. -->
-		<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-			<NuxtLink to="/invoices" class="block group h-full" @click="prefilterReceivables">
-				<UCard class="h-full transition group-hover:border-(--ui-primary)">
-					<div class="flex items-start justify-between gap-2">
-						<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight min-h-[2lh]">
-							Receivables outstanding
+			<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+				<NuxtLink to="/invoices" class="block group h-full" @click="prefilterReceivables">
+					<UCard class="h-full transition group-hover:border-(--ui-primary)">
+						<div class="flex items-start justify-between gap-2">
+							<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight min-h-[2lh]">
+								Receivables outstanding
+							</div>
+							<UIcon name="i-lucide-arrow-down-left" class="size-4 text-(--ui-success)" />
 						</div>
-						<UIcon name="i-lucide-arrow-down-left" class="size-4 text-(--ui-success)" />
-					</div>
-					<div
-						class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
-						:title="formatLKR(invoicesStore.outstandingTotal)"
-					>
-						{{ kpiMoney(invoicesStore.outstandingTotal) }}
-					</div>
-					<div class="mt-1 text-xs text-(--ui-text-muted) flex items-center gap-2">
-						<span>{{ openInvoiceCount }} open</span>
-						<UBadge
-							v-if="invoicesStore.overdueCount > 0"
-							color="error"
-							variant="subtle"
-							size="sm"
+						<div
+							class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
+							:title="formatLKR(invoicesStore.outstandingTotal)"
 						>
-							{{ invoicesStore.overdueCount }} overdue
-						</UBadge>
-					</div>
-				</UCard>
-			</NuxtLink>
-
-			<NuxtLink to="/bills" class="block group h-full" @click="prefilterPayables">
-				<UCard class="h-full transition group-hover:border-(--ui-primary)">
-					<div class="flex items-start justify-between gap-2">
-						<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight min-h-[2lh]">
-							Payables outstanding
+							{{ kpiMoney(invoicesStore.outstandingTotal) }}
 						</div>
-						<UIcon name="i-lucide-arrow-up-right" class="size-4 text-(--ui-error)" />
-					</div>
-					<div
-						class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
-						:title="formatLKR(billsStore.outstandingTotal)"
-					>
-						{{ kpiMoney(billsStore.outstandingTotal) }}
-					</div>
-					<div class="mt-1 text-xs text-(--ui-text-muted) flex items-center gap-2">
-						<span>{{ openBillCount }} open</span>
-						<UBadge
-							v-if="billsStore.overdueCount > 0"
-							color="error"
-							variant="subtle"
-							size="sm"
+						<div class="mt-1 text-xs text-(--ui-text-muted) flex items-center gap-2">
+							<span>{{ openInvoiceCount }} open</span>
+							<UBadge
+								v-if="invoicesStore.overdueCount > 0"
+								color="error"
+								variant="subtle"
+								size="sm"
+							>
+								{{ invoicesStore.overdueCount }} overdue
+							</UBadge>
+						</div>
+					</UCard>
+				</NuxtLink>
+
+				<NuxtLink to="/bills" class="block group h-full" @click="prefilterPayables">
+					<UCard class="h-full transition group-hover:border-(--ui-primary)">
+						<div class="flex items-start justify-between gap-2">
+							<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight min-h-[2lh]">
+								Payables outstanding
+							</div>
+							<UIcon name="i-lucide-arrow-up-right" class="size-4 text-(--ui-error)" />
+						</div>
+						<div
+							class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
+							:title="formatLKR(billsStore.outstandingTotal)"
 						>
-							{{ billsStore.overdueCount }} overdue
-						</UBadge>
-					</div>
-				</UCard>
-			</NuxtLink>
+							{{ kpiMoney(billsStore.outstandingTotal) }}
+						</div>
+						<div class="mt-1 text-xs text-(--ui-text-muted) flex items-center gap-2">
+							<span>{{ openBillCount }} open</span>
+							<UBadge
+								v-if="billsStore.overdueCount > 0"
+								color="error"
+								variant="subtle"
+								size="sm"
+							>
+								{{ billsStore.overdueCount }} overdue
+							</UBadge>
+						</div>
+					</UCard>
+				</NuxtLink>
 
-			<NuxtLink to="/quotes" class="block group h-full" @click="prefilterOpenQuotes">
-				<UCard class="h-full transition group-hover:border-(--ui-primary)">
+				<NuxtLink to="/quotes" class="block group h-full" @click="prefilterOpenQuotes">
+					<UCard class="h-full transition group-hover:border-(--ui-primary)">
+						<div class="flex items-start justify-between gap-2">
+							<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight min-h-[2lh]">
+								Open quotes
+							</div>
+							<UIcon name="i-lucide-file-text" class="size-4 text-(--ui-primary)" />
+						</div>
+						<div
+							class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
+							:title="formatLKR(openQuotesValue)"
+						>
+							{{ kpiMoney(openQuotesValue) }}
+						</div>
+						<div class="mt-1 text-xs text-(--ui-text-muted)">
+							{{ openQuotesCount }} active · {{ acceptedQuotesCount }} accepted
+						</div>
+					</UCard>
+				</NuxtLink>
+
+				<UCard class="h-full">
 					<div class="flex items-start justify-between gap-2">
 						<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight min-h-[2lh]">
-							Open quotes
+							Net cash · {{ monthLabel }}
 						</div>
-						<UIcon name="i-lucide-file-text" class="size-4 text-(--ui-primary)" />
+						<UIcon name="i-lucide-trending-up" class="size-4" :class="netCashThisMonth >= 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'" />
 					</div>
 					<div
 						class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
-						:title="formatLKR(openQuotesValue)"
+						:class="netCashThisMonth >= 0 ? 'text-(--ui-text)' : 'text-(--ui-error)'"
+						:title="`${netCashThisMonth >= 0 ? '+' : '−'}${formatLKR(Math.abs(netCashThisMonth))}`"
 					>
-						{{ kpiMoney(openQuotesValue) }}
+						{{ netCashThisMonth >= 0 ? '+' : '−' }}{{ kpiMoney(Math.abs(netCashThisMonth)) }}
 					</div>
-					<div class="mt-1 text-xs text-(--ui-text-muted)">
-						{{ openQuotesCount }} active · {{ acceptedQuotesCount }} accepted
+					<div class="mt-1 text-xs text-(--ui-text-muted) flex items-center gap-3">
+						<span class="text-(--ui-success)" :title="formatLKR(receiptsThisMonth)">+{{ kpiMoney(receiptsThisMonth) }}</span>
+						<span class="text-(--ui-error)" :title="formatLKR(paymentsThisMonth)">−{{ kpiMoney(paymentsThisMonth) }}</span>
 					</div>
 				</UCard>
-			</NuxtLink>
+			</div>
 
-			<UCard class="h-full">
-				<div class="flex items-start justify-between gap-2">
-					<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight min-h-[2lh]">
-						Net cash · {{ monthLabel }}
-					</div>
-					<UIcon name="i-lucide-trending-up" class="size-4" :class="netCashThisMonth >= 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'" />
-				</div>
-				<div
-					class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
-					:class="netCashThisMonth >= 0 ? 'text-(--ui-text)' : 'text-(--ui-error)'"
-					:title="`${netCashThisMonth >= 0 ? '+' : '−'}${formatLKR(Math.abs(netCashThisMonth))}`"
-				>
-					{{ netCashThisMonth >= 0 ? '+' : '−' }}{{ kpiMoney(Math.abs(netCashThisMonth)) }}
-				</div>
-				<div class="mt-1 text-xs text-(--ui-text-muted) flex items-center gap-3">
-					<span class="text-(--ui-success)" :title="formatLKR(receiptsThisMonth)">+{{ kpiMoney(receiptsThisMonth) }}</span>
-					<span class="text-(--ui-error)" :title="formatLKR(paymentsThisMonth)">−{{ kpiMoney(paymentsThisMonth) }}</span>
-				</div>
-			</UCard>
-		</div>
-
-		<!-- Insights row 1: monthly cash flow + expenses by category.
+			<!-- Insights row 1: monthly cash flow + expenses by category.
 			Stacks at sm/md. At lg-xl a 6-col grid lets the user toggle
 			the split: collapsed = 4/6 + 2/6 (donut hidden, legend only);
 			expanded = 3/6 + 3/6 (donut + legend; cashflow shrinks).
@@ -159,220 +211,221 @@
 			Calendar + receivables aging now live in their own rows
 			below this block — see the cards under the calendar
 			placement comment. -->
-		<div class="grid grid-cols-1 lg:grid-cols-6 2xl:grid-cols-5 gap-4 mb-4">
-			<UCard
-				style="view-transition-name: dashboard-cashflow"
-				class="2xl:col-span-3" :class="[
-					expensesExpanded ? 'lg:col-span-3' : 'lg:col-span-4'
-				]"
-			>
-				<template #header>
-					<div class="flex items-center justify-between gap-4 flex-wrap">
-						<div>
-							<div class="font-medium">
-								Monthly cash flow
+			<div class="grid grid-cols-1 lg:grid-cols-6 2xl:grid-cols-5 gap-4 mb-4">
+				<UCard
+					style="view-transition-name: dashboard-cashflow"
+					class="2xl:col-span-3" :class="[
+						expensesExpanded ? 'lg:col-span-3' : 'lg:col-span-4'
+					]"
+				>
+					<template #header>
+						<div class="flex items-center justify-between gap-4 flex-wrap">
+							<div>
+								<div class="font-medium">
+									Monthly cash flow
+								</div>
+								<div class="text-xs text-(--ui-text-muted) mt-0.5">
+									Receipts in, payments out — last {{ cashflowMonths }} months from the voucher ledger.
+								</div>
 							</div>
-							<div class="text-xs text-(--ui-text-muted) mt-0.5">
-								Receipts in, payments out — last {{ cashflowMonths }} months from the voucher ledger.
-							</div>
+							<UIcon name="i-lucide-bar-chart-3" class="size-4 text-(--ui-text-muted)" />
 						</div>
-						<UIcon name="i-lucide-bar-chart-3" class="size-4 text-(--ui-text-muted)" />
-					</div>
-				</template>
-				<MonthlyCashFlowChart :vouchers="vouchersStore.vouchers" :months-back="cashflowMonths" />
-			</UCard>
+					</template>
+					<MonthlyCashFlowChart :vouchers="vouchersStore.vouchers" :months-back="cashflowMonths" />
+				</UCard>
 
-			<UCard
-				style="view-transition-name: dashboard-expenses"
-				class="2xl:col-span-2" :class="[
-					expensesExpanded ? 'lg:col-span-3' : 'lg:col-span-2'
-				]"
-			>
+				<UCard
+					style="view-transition-name: dashboard-expenses"
+					class="2xl:col-span-2" :class="[
+						expensesExpanded ? 'lg:col-span-3' : 'lg:col-span-2'
+					]"
+				>
+					<template #header>
+						<div class="flex items-center justify-between gap-2">
+							<div>
+								<div class="font-medium">
+									Expenses by category
+								</div>
+								<div class="text-xs text-(--ui-text-muted) mt-0.5">
+									Where the money's going, last 90 days.
+								</div>
+							</div>
+							<!-- Toggle only renders at lg-xl (where it has
+							something to do). At 2xl the card is already
+							fully expanded; at sm/md it stacks full width. -->
+							<UButton
+								v-if="isLgRange"
+								size="xs"
+								variant="ghost"
+								color="neutral"
+								:icon="userExpanded
+									? 'i-lucide-chevrons-right'
+									: 'i-lucide-chevrons-left'"
+								:title="userExpanded ? 'Collapse chart' : 'Expand chart'"
+								@click="toggleExpenses"
+							/>
+							<UIcon
+								v-else
+								name="i-lucide-pie-chart"
+								class="size-4 text-(--ui-text-muted)"
+							/>
+						</div>
+					</template>
+					<ExpensesByCategoryChart :show-donut="showExpensesDonut" />
+				</UCard>
+			</div>
+
+			<!-- Upcoming due-dates calendar. Compact density so the
+			dashboard row stays roughly aligned in height with the
+			surrounding cards. "View calendar" link in the header jumps
+			to the full page for the fuller view + filter chips. -->
+			<UCard class="mb-4">
 				<template #header>
 					<div class="flex items-center justify-between gap-2">
 						<div>
 							<div class="font-medium">
-								Expenses by category
+								Upcoming
 							</div>
 							<div class="text-xs text-(--ui-text-muted) mt-0.5">
-								Where the money's going, last 90 days.
+								Due dates across receivables, payables, quote expiries and payslips.
 							</div>
 						</div>
-						<!-- Toggle only renders at lg-xl (where it has
-							something to do). At 2xl the card is already
-							fully expanded; at sm/md it stacks full width. -->
-						<UButton
-							v-if="isLgRange"
-							size="xs"
-							variant="ghost"
-							color="neutral"
-							:icon="userExpanded
-								? 'i-lucide-chevrons-right'
-								: 'i-lucide-chevrons-left'"
-							:title="userExpanded ? 'Collapse chart' : 'Expand chart'"
-							@click="toggleExpenses"
-						/>
-						<UIcon
-							v-else
-							name="i-lucide-pie-chart"
-							class="size-4 text-(--ui-text-muted)"
-						/>
+						<NuxtLink to="/calendar" class="text-xs text-(--ui-primary) hover:underline inline-flex items-center gap-1">
+							View calendar
+							<UIcon name="i-lucide-arrow-right" class="size-3.5" />
+						</NuxtLink>
 					</div>
 				</template>
-				<ExpensesByCategoryChart :show-donut="showExpensesDonut" />
+				<UpcomingCalendar density="compact" />
 			</UCard>
-		</div>
 
-		<!-- Upcoming due-dates calendar. Compact density so the
-			dashboard row stays roughly aligned in height with the
-			surrounding cards. "View calendar" link in the header jumps
-			to the full page for the fuller view + filter chips. -->
-		<UCard class="mb-4">
-			<template #header>
-				<div class="flex items-center justify-between gap-2">
-					<div>
-						<div class="font-medium">
-							Upcoming
-						</div>
-						<div class="text-xs text-(--ui-text-muted) mt-0.5">
-							Due dates across receivables, payables, quote expiries and payslips.
-						</div>
-					</div>
-					<NuxtLink to="/calendar" class="text-xs text-(--ui-primary) hover:underline inline-flex items-center gap-1">
-						View calendar
-						<UIcon name="i-lucide-arrow-right" class="size-3.5" />
-					</NuxtLink>
-				</div>
-			</template>
-			<UpcomingCalendar density="compact" />
-		</UCard>
-
-		<!-- Receivables aging — full-width row, sits below the calendar
+			<!-- Receivables aging — full-width row, sits below the calendar
 			so "what's coming due" reads first, then the past-due
 			breakdown for finer triage. -->
-		<UCard class="mb-4">
-			<template #header>
-				<div class="flex items-center justify-between gap-2">
-					<div>
-						<div class="font-medium">
-							Receivables aging
+			<UCard class="mb-4">
+				<template #header>
+					<div class="flex items-center justify-between gap-2">
+						<div>
+							<div class="font-medium">
+								Receivables aging
+							</div>
+							<div class="text-xs text-(--ui-text-muted) mt-0.5">
+								Outstanding invoice balances by days past due.
+							</div>
 						</div>
-						<div class="text-xs text-(--ui-text-muted) mt-0.5">
-							Outstanding invoice balances by days past due.
-						</div>
+						<UIcon name="i-lucide-alarm-clock" class="size-4 text-(--ui-text-muted)" />
 					</div>
-					<UIcon name="i-lucide-alarm-clock" class="size-4 text-(--ui-text-muted)" />
-				</div>
-			</template>
-			<ReceivablesAgingChart />
-		</UCard>
+				</template>
+				<ReceivablesAgingChart />
+			</UCard>
 
-		<!-- Recent activity + at-a-glance lists. Placed above Top clients
+			<!-- Recent activity + at-a-glance lists. Placed above Top clients
 			so the things that need attention (activity, overdue) come
 			first. -->
-		<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-			<UCard class="lg:col-span-2">
-				<template #header>
-					<div class="flex items-center justify-between">
-						<div class="font-medium">
-							Recent activity
+			<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+				<UCard class="lg:col-span-2">
+					<template #header>
+						<div class="flex items-center justify-between">
+							<div class="font-medium">
+								Recent activity
+							</div>
+							<div class="text-xs text-(--ui-text-muted)">
+								Across quotes, invoices, bills, vouchers
+							</div>
 						</div>
-						<div class="text-xs text-(--ui-text-muted)">
-							Across quotes, invoices, bills, vouchers
-						</div>
+					</template>
+
+					<div v-if="recentActivity.length === 0" class="text-sm text-(--ui-text-muted) py-6 text-center">
+						Nothing recorded yet. Create a quote, invoice or voucher to get started.
 					</div>
-				</template>
 
-				<div v-if="recentActivity.length === 0" class="text-sm text-(--ui-text-muted) py-6 text-center">
-					Nothing recorded yet. Create a quote, invoice or voucher to get started.
-				</div>
-
-				<ul v-else class="divide-y divide-(--ui-border)">
-					<li v-for="item in recentActivity" :key="`${item.kind}-${item.id}`">
-						<NuxtLink
-							:to="item.to"
-							class="flex items-center gap-3 py-2.5 hover:bg-(--ui-bg-elevated) -mx-2 px-2 rounded transition"
-						>
-							<UIcon :name="item.icon" class="size-4 shrink-0" :class="item.iconClass" />
-							<div class="min-w-0 flex-1">
-								<div class="flex items-center gap-2 flex-wrap">
-									<span class="font-medium text-sm tabular-nums">{{ item.number }}</span>
-									<UBadge :color="item.badgeColor" variant="subtle" size="sm">
-										{{ item.kindLabel }}
-									</UBadge>
-									<span class="text-xs text-(--ui-text-muted) truncate">
-										{{ item.subtitle }}
-									</span>
-								</div>
-								<div class="text-xs text-(--ui-text-muted) mt-0.5">
-									{{ item.dateLabel }}
-								</div>
-							</div>
-							<div
-								class="text-sm font-medium tabular-nums shrink-0"
-								:class="item.amountClass"
+					<ul v-else class="divide-y divide-(--ui-border)">
+						<li v-for="item in recentActivity" :key="`${item.kind}-${item.id}`">
+							<NuxtLink
+								:to="item.to"
+								class="flex items-center gap-3 py-2.5 hover:bg-(--ui-bg-elevated) -mx-2 px-2 rounded transition"
 							>
-								{{ item.amountPrefix }}{{ formatLKR(item.amountCents) }}
-							</div>
-						</NuxtLink>
-					</li>
-				</ul>
-			</UCard>
+								<UIcon :name="item.icon" class="size-4 shrink-0" :class="item.iconClass" />
+								<div class="min-w-0 flex-1">
+									<div class="flex items-center gap-2 flex-wrap">
+										<span class="font-medium text-sm tabular-nums">{{ item.number }}</span>
+										<UBadge :color="item.badgeColor" variant="subtle" size="sm">
+											{{ item.kindLabel }}
+										</UBadge>
+										<span class="text-xs text-(--ui-text-muted) truncate">
+											{{ item.subtitle }}
+										</span>
+									</div>
+									<div class="text-xs text-(--ui-text-muted) mt-0.5">
+										{{ item.dateLabel }}
+									</div>
+								</div>
+								<div
+									class="text-sm font-medium tabular-nums shrink-0"
+									:class="item.amountClass"
+								>
+									{{ item.amountPrefix }}{{ formatLKR(item.amountCents) }}
+								</div>
+							</NuxtLink>
+						</li>
+					</ul>
+				</UCard>
 
+				<UCard>
+					<template #header>
+						<div class="flex items-center justify-between">
+							<div class="font-medium">
+								Overdue
+							</div>
+							<UIcon name="i-lucide-alarm-clock" class="size-4 text-(--ui-error)" />
+						</div>
+					</template>
+
+					<div v-if="overdueItems.length === 0" class="text-sm text-(--ui-text-muted) py-3">
+						Nothing overdue. Nice.
+					</div>
+					<ul v-else class="space-y-2">
+						<li v-for="item in overdueItems" :key="`${item.kind}-${item.id}`">
+							<NuxtLink
+								:to="item.to"
+								class="flex items-center justify-between gap-2 hover:text-(--ui-primary) text-sm"
+							>
+								<div class="min-w-0">
+									<div class="font-medium tabular-nums truncate">
+										{{ item.number }}
+									</div>
+									<div class="text-xs text-(--ui-text-muted) truncate">
+										{{ item.subtitle }} · due {{ item.dueDate }}
+									</div>
+								</div>
+								<div class="text-sm font-medium tabular-nums shrink-0" :class="item.amountClass">
+									{{ formatLKR(item.amountCents) }}
+								</div>
+							</NuxtLink>
+						</li>
+					</ul>
+				</UCard>
+			</div>
+
+			<!-- Top clients — full-width (the list-with-bars reads better
+			with horizontal room). Sits below activity / overdue. -->
 			<UCard>
 				<template #header>
-					<div class="flex items-center justify-between">
-						<div class="font-medium">
-							Overdue
+					<div class="flex items-center justify-between gap-2">
+						<div>
+							<div class="font-medium">
+								Top clients
+							</div>
+							<div class="text-xs text-(--ui-text-muted) mt-0.5">
+								Invoiced revenue over the last 12 months — concentration check.
+							</div>
 						</div>
-						<UIcon name="i-lucide-alarm-clock" class="size-4 text-(--ui-error)" />
+						<UIcon name="i-lucide-users" class="size-4 text-(--ui-text-muted)" />
 					</div>
 				</template>
-
-				<div v-if="overdueItems.length === 0" class="text-sm text-(--ui-text-muted) py-3">
-					Nothing overdue. Nice.
-				</div>
-				<ul v-else class="space-y-2">
-					<li v-for="item in overdueItems" :key="`${item.kind}-${item.id}`">
-						<NuxtLink
-							:to="item.to"
-							class="flex items-center justify-between gap-2 hover:text-(--ui-primary) text-sm"
-						>
-							<div class="min-w-0">
-								<div class="font-medium tabular-nums truncate">
-									{{ item.number }}
-								</div>
-								<div class="text-xs text-(--ui-text-muted) truncate">
-									{{ item.subtitle }} · due {{ item.dueDate }}
-								</div>
-							</div>
-							<div class="text-sm font-medium tabular-nums shrink-0" :class="item.amountClass">
-								{{ formatLKR(item.amountCents) }}
-							</div>
-						</NuxtLink>
-					</li>
-				</ul>
+				<TopClientsChart />
 			</UCard>
-		</div>
-
-		<!-- Top clients — full-width (the list-with-bars reads better
-			with horizontal room). Sits below activity / overdue. -->
-		<UCard>
-			<template #header>
-				<div class="flex items-center justify-between gap-2">
-					<div>
-						<div class="font-medium">
-							Top clients
-						</div>
-						<div class="text-xs text-(--ui-text-muted) mt-0.5">
-							Invoiced revenue over the last 12 months — concentration check.
-						</div>
-					</div>
-					<UIcon name="i-lucide-users" class="size-4 text-(--ui-text-muted)" />
-				</div>
-			</template>
-			<TopClientsChart />
-		</UCard>
+		</template>
 	</div>
 </template>
 
@@ -475,17 +528,35 @@
 
 	const loadError = ref<string | null>(null);
 
+	// True until every store the dashboard reads from has hydrated at
+	// least once. Drives the skeleton overlay below — the dashboard
+	// renders zero-filled tiles + empty charts before this flips, which
+	// at heavy data volumes looked like the page was broken. With the
+	// `ensureLoaded` pattern on the stores, second visits during the
+	// same tenant session see `loaded` already true and skip the load
+	// + skeleton entirely.
+	const dataReady = computed(() =>
+		invoicesStore.loaded
+		&& billsStore.loaded
+		&& quotesStore.loaded
+		&& vouchersStore.loaded
+		&& payslipsStore.loaded
+	);
+
 	onMounted(async () => {
 		try {
-			// Load everything in parallel — they're independent reads.
+			// Stores stay populated for the tenant session, so revisits
+			// to / are instant — only the first hit pays the SELECT cost.
+			// Each ensureLoaded() is a no-op if the store has already
+			// loaded (e.g. user just came back from /invoices).
 			await Promise.all([
-				invoicesStore.load(),
-				billsStore.load(),
-				quotesStore.load(),
-				vouchersStore.load(),
-				// Calendar embed needs payslip due-dates too. Cheap to load
-				// here so the calendar paints fully on first dashboard hit.
-				payslipsStore.load()
+				invoicesStore.ensureLoaded(),
+				billsStore.ensureLoaded(),
+				quotesStore.ensureLoaded(),
+				vouchersStore.ensureLoaded(),
+				// Calendar embed needs payslip due-dates too. Cheap to
+				// load here so the calendar paints fully on first hit.
+				payslipsStore.ensureLoaded()
 			]);
 		} catch (err) {
 			loadError.value = err instanceof Error ? err.message : String(err);

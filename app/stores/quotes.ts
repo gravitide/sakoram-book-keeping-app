@@ -172,6 +172,10 @@ export const useQuotesStore = defineStore("quotes", () => {
 		});
 	});
 
+	// See app/stores/invoices.ts for the `loaded` / `ensureLoaded`
+	// rationale — same pattern: skip refetching when already populated.
+	const loaded = ref(false);
+
 	const load = async () => {
 		loading.value = true;
 		error.value = null;
@@ -179,12 +183,18 @@ export const useQuotesStore = defineStore("quotes", () => {
 			quotes.value = await select<QuoteRow>(
 				"SELECT * FROM quotes ORDER BY datetime(created_at) DESC"
 			);
+			loaded.value = true;
 		} catch (err) {
 			error.value = err instanceof Error ? err.message : String(err);
 			throw err;
 		} finally {
 			loading.value = false;
 		}
+	};
+
+	const ensureLoaded = async () => {
+		if (loaded.value || loading.value) return;
+		await load();
 	};
 
 	const get = async (id: number): Promise<QuoteRow | null> =>
@@ -575,7 +585,9 @@ export const useQuotesStore = defineStore("quotes", () => {
 		hasDateFilters,
 		clearDateFilters,
 		filtered,
+		loaded,
 		load,
+		ensureLoaded,
 		get,
 		getLines,
 		createDraft,
