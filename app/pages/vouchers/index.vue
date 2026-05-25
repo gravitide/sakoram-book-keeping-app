@@ -28,7 +28,11 @@
 			</UButton>
 		</header>
 
-		<UCard>
+		<!-- Content-shaped skeleton while the page hydrates. See
+			usePageLoading + ListPageSkeleton for the timing rationale. -->
+		<ListPageSkeleton v-if="isLoading" :chip-count="2" :column-count="7" />
+
+		<UCard v-else>
 			<template #header>
 				<!-- Filter strip — chip-style type filter + Advanced
 					popover for date range. Same pattern as the other
@@ -376,24 +380,21 @@
 	const payslipsStore = usePayslipsStore();
 	const currency = useActiveCurrency();
 
-	// Data load in onMounted (not top-level await) — page mounts
-	// instantly. ensureLoaded() handles the "already cached?" guard
-	// the old inline `length === 0 ? load : resolve` ternaries did,
-	// but with concurrent-safe shared pendingLoad inside each store.
-	const isLoading = ref(true);
-	onMounted(async () => {
-		try {
-			await Promise.all([
-				store.ensureLoaded(),
-				invoicesStore.ensureLoaded(),
-				billsStore.ensureLoaded(),
-				payslipsStore.ensureLoaded(),
-				settingsStore.ensureLoaded()
-			]);
-		} finally {
-			isLoading.value = false;
-		}
-	});
+	// Loading state owned by `usePageLoading` — see the composable for
+	// the rAF-yield trick that ensures the skeleton actually paints.
+	// ensureLoaded() handles the "already cached?" guard the old
+	// inline length-check ternaries did, with concurrent-safe shared
+	// pendingLoad inside each store.
+	const { isLoading, runLoad } = usePageLoading();
+	onMounted(() => runLoad(async () => {
+		await Promise.all([
+			store.ensureLoaded(),
+			invoicesStore.ensureLoaded(),
+			billsStore.ensureLoaded(),
+			payslipsStore.ensureLoaded(),
+			settingsStore.ensureLoaded()
+		]);
+	}));
 
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();

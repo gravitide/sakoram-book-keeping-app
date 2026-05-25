@@ -35,7 +35,11 @@
 			</div>
 		</header>
 
-		<UCard>
+		<!-- Content-shaped skeleton while the page hydrates. See
+			usePageLoading + ListPageSkeleton for the timing rationale. -->
+		<ListPageSkeleton v-if="isLoading" :chip-count="3" :column-count="6" />
+
+		<UCard v-else>
 			<template #header>
 				<!-- Filter strip — chips + month shortcut + Advanced popover
 					for custom date ranges. Month picker stays first-class
@@ -366,21 +370,17 @@
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
 
-	// Data load in onMounted (not top-level await) — page mounts
-	// instantly so the user can navigate away mid-load.
-	const isLoading = ref(true);
-	onMounted(async () => {
-		try {
-			await Promise.all([
-				store.ensureLoaded(),
-				employeesStore.ensureLoaded(),
-				vouchersStore.ensureLoaded(),
-				settingsStore.ensureLoaded()
-			]);
-		} finally {
-			isLoading.value = false;
-		}
-	});
+	// Loading state owned by `usePageLoading` — see the composable for
+	// the rAF-yield trick that ensures the skeleton actually paints.
+	const { isLoading, runLoad } = usePageLoading();
+	onMounted(() => runLoad(async () => {
+		await Promise.all([
+			store.ensureLoaded(),
+			employeesStore.ensureLoaded(),
+			vouchersStore.ensureLoaded(),
+			settingsStore.ensureLoaded()
+		]);
+	}));
 
 	// Optional ?employee=ID query — used by the "View payslips" action on
 	// the employees list to land here pre-filtered to that employee.

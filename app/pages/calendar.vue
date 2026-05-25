@@ -26,7 +26,52 @@
 			</div>
 		</header>
 
-		<UCard>
+		<!-- Loading skeleton — content-shaped placeholders that mirror
+			the real calendar's layout (filter chip strip + summary
+			pill + 6×7 day grid). Mirrors the dashboard's approach:
+			page reads as "loading" rather than "broken" while the
+			four stores hydrate. Drops the moment isLoading flips. -->
+		<UCard v-if="isLoading" class="animate-pulse">
+			<template #header>
+				<div class="flex items-center gap-2 flex-wrap">
+					<div class="size-4 rounded bg-(--ui-bg-muted)" />
+					<div class="h-3 w-10 rounded bg-(--ui-bg-muted)" />
+					<div
+						v-for="i in 4"
+						:key="`chip-skel-${i}`"
+						class="h-6 w-24 rounded-full bg-(--ui-bg-muted)"
+					/>
+				</div>
+			</template>
+
+			<!-- Summary placeholder. -->
+			<div class="flex justify-end items-center mb-3 gap-2">
+				<div class="h-6 w-28 rounded bg-(--ui-bg-muted)" />
+			</div>
+
+			<!-- Day-of-week header row -->
+			<div class="grid grid-cols-7 gap-1 mb-1">
+				<div
+					v-for="i in 7"
+					:key="`dow-skel-${i}`"
+					class="h-4 rounded bg-(--ui-bg-muted)"
+				/>
+			</div>
+
+			<!-- 6×7 month grid. Checker opacity gives the cells a tiny
+				bit of texture so the grid reads as a calendar rather
+				than a uniform slab. -->
+			<div class="grid grid-cols-7 gap-1">
+				<div
+					v-for="n in 42"
+					:key="`cell-skel-${n}`"
+					class="aspect-square rounded bg-(--ui-bg-muted)"
+					:class="(n + Math.floor((n - 1) / 7)) % 2 === 0 ? 'opacity-90' : 'opacity-60'"
+				/>
+			</div>
+		</UCard>
+
+		<UCard v-else>
 			<template #header>
 				<!-- Filter chips — toggle each event kind on/off. Default
 					= all kinds visible. The chip's coloured tone matches
@@ -104,19 +149,20 @@
 	const quotesStore = useQuotesStore();
 	const payslipsStore = usePayslipsStore();
 
-	const isLoading = ref(true);
-	onMounted(async () => {
-		try {
-			await Promise.all([
-				invoicesStore.ensureLoaded(),
-				billsStore.ensureLoaded(),
-				quotesStore.ensureLoaded(),
-				payslipsStore.ensureLoaded()
-			]);
-		} finally {
-			isLoading.value = false;
-		}
-	});
+	// Page loading is owned by `usePageLoading` — see the composable
+	// for the requestAnimationFrame-yield trick that ensures the
+	// skeleton paints before the data load fires AND stays painted
+	// while Vue prepares the real-content render (UpcomingCalendar's
+	// 42 cells of pills, etc).
+	const { isLoading, runLoad } = usePageLoading();
+	onMounted(() => runLoad(async () => {
+		await Promise.all([
+			invoicesStore.ensureLoaded(),
+			billsStore.ensureLoaded(),
+			quotesStore.ensureLoaded(),
+			payslipsStore.ensureLoaded()
+		]);
+	}));
 
 	// Filter set drives which kinds the calendar component renders.
 	// Empty = show all (matches the composable's contract). We seed it
