@@ -183,7 +183,11 @@
     let col-count = columns.len()
     // Build column-width tuple: first column auto, last 1-2 columns
     // right-aligned amounts, middle columns flex.
-    let col-widths = if col-count == 5 {
+    let col-widths = if col-count == 7 {
+      // Client / Current / 1-30 / 31-60 / 61-90 / 90+ / Total
+      // (Aged receivables per-client table)
+      (1fr, auto, auto, auto, auto, auto, auto)
+    } else if col-count == 5 {
       // Number / Date / Party / Subtotal / Tax (VAT report)
       (auto, auto, 1fr, auto, auto)
     } else if col-count == 4 {
@@ -193,8 +197,17 @@
       // Fallback — auto everywhere
       (..columns.map(_ => auto))
     }
+    // Per-column alignment: aged receivables right-aligns every column
+    // after the client name; other tables right-align just the last two
+    // (amount columns).
     let col-aligns = (..columns.enumerate().map(((i, _)) => {
-      if i >= col-count - 2 and col-count >= 4 { right } else { left }
+      if col-count == 7 {
+        if i == 0 { left } else { right }
+      } else if i >= col-count - 2 and col-count >= 4 {
+        right
+      } else {
+        left
+      }
     }))
 
     table(

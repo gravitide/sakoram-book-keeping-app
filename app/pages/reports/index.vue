@@ -89,6 +89,12 @@
 			label: "VAT report",
 			icon: "i-lucide-percent",
 			description: "Output VAT collected on issued invoices vs Input VAT paid on bills, net payable for the period."
+		},
+		{
+			to: "/reports/aged-receivables",
+			label: "Aged receivables",
+			icon: "i-lucide-clock",
+			description: "Outstanding invoices bucketed by days past due, per-client breakdown."
 		}
 	];
 
@@ -96,11 +102,6 @@
 	// Keeping them visible (not hidden behind a doc) signals to the user
 	// that the section is still being built out.
 	const upcomingReports: { label: string, icon: string, description: string }[] = [
-		{
-			label: "Aged receivables",
-			icon: "i-lucide-clock",
-			description: "Outstanding invoices bucketed by days past due, per-client breakdown."
-		},
 		{
 			label: "Aged payables",
 			icon: "i-lucide-clock-alert",
