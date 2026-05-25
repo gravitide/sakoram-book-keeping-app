@@ -8,244 +8,344 @@
 		</div>
 
 		<header class="mb-6">
-			<h1 class="text-2xl font-semibold">
+			<h1 class="text-2xl font-semibold flex items-center gap-3">
 				Profit &amp; Loss
+				<!-- Inline spinner mirrors the list pages — header stays
+					visible so the user knows where they are even while
+					the report's three stores hydrate. -->
+				<UIcon
+					v-if="isLoading"
+					name="i-lucide-loader-circle"
+					class="size-4 animate-spin text-(--ui-primary)"
+				/>
 			</h1>
 			<p class="text-sm text-(--ui-text-muted) mt-1">
-				<!-- Accrual basis: dates are when the document was issued
-					(invoice / bill issue_date, payslip period_end), not
-					when the money actually moved. The cash-flow report
-					(coming) will be the cash-basis cousin. -->
-				Income from issued invoices, minus expenses from bills and
-				payroll. Accrual basis — counted on issue / period-end
-				dates, not on when the money moved. Amounts exclude VAT.
+				<span v-if="isLoading">Loading…</span>
+				<template v-else>
+					<!-- Accrual basis: dates are when the document was issued
+						(invoice / bill issue_date, payslip period_end), not
+						when the money actually moved. The cash-flow report
+						(coming) will be the cash-basis cousin. -->
+					Income from issued invoices, minus expenses from bills and
+					payroll. Accrual basis — counted on issue / period-end
+					dates, not on when the money moved. Amounts exclude VAT.
+				</template>
 			</p>
 		</header>
 
-		<!-- Filter strip: from / to dates + preset chips. Default to the
+		<!-- Content-shaped skeleton while the three stores hydrate.
+			Mirrors the real page's structure: filter card with date
+			fields + preset chips, 3 KPI tile placeholders, a chart
+			card with mini bar-chart shape, breakdown table rows.
+			Uses the same animate-pulse + rAF-yield pattern as the
+			rest of the app (see usePageLoading). -->
+		<template v-if="isLoading">
+			<UCard class="mb-6 animate-pulse">
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+					<div class="grid grid-cols-2 gap-3">
+						<div class="space-y-2">
+							<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
+							<div class="h-9 rounded bg-(--ui-bg-muted)" />
+						</div>
+						<div class="space-y-2">
+							<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
+							<div class="h-9 rounded bg-(--ui-bg-muted)" />
+						</div>
+					</div>
+					<div class="flex flex-wrap gap-1.5 items-center justify-end">
+						<div
+							v-for="i in 6"
+							:key="`pset-skel-${i}`"
+							class="h-6 w-24 rounded-md bg-(--ui-bg-muted)"
+						/>
+					</div>
+				</div>
+			</UCard>
+
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 animate-pulse">
+				<UCard v-for="i in 3" :key="`kpi-skel-${i}`" class="h-full">
+					<div class="space-y-3">
+						<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
+						<div class="h-7 w-40 rounded bg-(--ui-bg-muted)" />
+						<div class="h-3 w-32 rounded bg-(--ui-bg-muted)" />
+					</div>
+				</UCard>
+			</div>
+
+			<UCard class="mb-6 animate-pulse">
+				<template #header>
+					<div class="space-y-1.5">
+						<div class="h-3 w-32 rounded bg-(--ui-bg-muted)" />
+						<div class="h-2 w-48 rounded bg-(--ui-bg-muted)/60" />
+					</div>
+				</template>
+				<!-- Mini bar-chart placeholder so the trend section reads
+					as "a chart is coming", not just an empty box. -->
+				<div class="flex items-end gap-1.5 h-44">
+					<div
+						v-for="n in 12"
+						:key="`cf-skel-${n}`"
+						class="flex gap-0.5 flex-1"
+					>
+						<div
+							class="flex-1 rounded-sm bg-(--ui-bg-muted)"
+							:style="{ height: `${30 + ((n * 17) % 55)}%` }"
+						/>
+						<div
+							class="flex-1 rounded-sm bg-(--ui-bg-muted)/70"
+							:style="{ height: `${20 + ((n * 23) % 60)}%` }"
+						/>
+					</div>
+				</div>
+			</UCard>
+
+			<UCard class="mb-6 animate-pulse">
+				<template #header>
+					<div class="h-3 w-28 rounded bg-(--ui-bg-muted)" />
+				</template>
+				<div class="space-y-3">
+					<div
+						v-for="r in 4"
+						:key="`brk-skel-${r}`"
+						class="grid gap-3 py-2 border-b border-(--ui-border)/40 last:border-0"
+						style="grid-template-columns: 1fr auto auto"
+					>
+						<div class="h-3 w-40 rounded bg-(--ui-bg-muted)" />
+						<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
+						<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
+					</div>
+				</div>
+			</UCard>
+		</template>
+
+		<!-- Real content. v-else gates everything below so the KPI tiles
+			don't briefly flash "Rs 0" between mount and the first data
+			compute. -->
+		<template v-else>
+			<!-- Filter strip: from / to dates + preset chips. Default to the
 			current fiscal year on first visit since that's the most
 			common P&L question; user can narrow / widen from there. -->
-		<UCard class="mb-6">
-			<div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-				<div class="grid grid-cols-2 gap-3">
-					<UFormField label="From">
-						<DateField v-model="dateFrom" />
-					</UFormField>
-					<UFormField label="To">
-						<DateField v-model="dateTo" :min-value="dateFrom || undefined" />
-					</UFormField>
+			<UCard class="mb-6">
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+					<div class="grid grid-cols-2 gap-3">
+						<UFormField label="From">
+							<DateField v-model="dateFrom" />
+						</UFormField>
+						<UFormField label="To">
+							<DateField v-model="dateTo" :min-value="dateFrom || undefined" />
+						</UFormField>
+					</div>
+					<div class="flex flex-wrap gap-1.5 items-center justify-end">
+						<button
+							v-for="p in DATE_PRESETS"
+							:key="p.key"
+							type="button"
+							class="px-2.5 py-1 text-xs rounded-md border transition cursor-pointer"
+							:class="presetClasses(p.key)"
+							@click="togglePreset(p.key)"
+						>
+							{{ p.label }}
+						</button>
+						<UButton
+							size="xs"
+							variant="ghost"
+							color="neutral"
+							icon="i-lucide-rotate-ccw"
+							@click="resetDates"
+						>
+							Reset
+						</UButton>
+					</div>
 				</div>
-				<div class="flex flex-wrap gap-1.5 items-center justify-end">
-					<button
-						v-for="p in DATE_PRESETS"
-						:key="p.key"
-						type="button"
-						class="px-2.5 py-1 text-xs rounded-md border transition cursor-pointer"
-						:class="presetClasses(p.key)"
-						@click="togglePreset(p.key)"
-					>
-						{{ p.label }}
-					</button>
-					<UButton
-						size="xs"
-						variant="ghost"
-						color="neutral"
-						icon="i-lucide-rotate-ccw"
-						@click="resetDates"
-					>
-						Reset
-					</UButton>
-				</div>
-			</div>
-		</UCard>
+			</UCard>
 
-		<!-- Three KPI tiles: Income, Expenses, Net. Same shape as the
+			<!-- Three KPI tiles: Income, Expenses, Net. Same shape as the
 			dashboard so the numbers feel familiar. -->
-		<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-			<UCard class="h-full">
-				<div class="flex items-start justify-between gap-2">
-					<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
-						Income
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+				<UCard class="h-full">
+					<div class="flex items-start justify-between gap-2">
+						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
+							Income
+						</div>
+						<UIcon name="i-lucide-arrow-down-left" class="size-4 text-(--ui-success)" />
 					</div>
-					<UIcon name="i-lucide-arrow-down-left" class="size-4 text-(--ui-success)" />
-				</div>
-				<div
-					class="mt-2 text-2xl font-semibold tabular-nums text-(--ui-success)"
-					:title="formatLKR(totals.income)"
-				>
-					{{ formatLKR(totals.income) }}
-				</div>
-				<div class="mt-1 text-xs text-(--ui-text-muted)">
-					{{ totals.invoiceCount }} invoice{{ totals.invoiceCount === 1 ? "" : "s" }} issued
-				</div>
-			</UCard>
+					<div
+						class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums text-(--ui-success)"
+						:title="formatLKR(totals.income)"
+					>
+						{{ formatLKR(totals.income) }}
+					</div>
+					<div class="mt-1 text-xs text-(--ui-text-muted)">
+						{{ totals.invoiceCount }} invoice{{ totals.invoiceCount === 1 ? "" : "s" }} issued
+					</div>
+				</UCard>
 
-			<UCard class="h-full">
-				<div class="flex items-start justify-between gap-2">
-					<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
-						Expenses
+				<UCard class="h-full">
+					<div class="flex items-start justify-between gap-2">
+						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
+							Expenses
+						</div>
+						<UIcon name="i-lucide-arrow-up-right" class="size-4 text-(--ui-error)" />
 					</div>
-					<UIcon name="i-lucide-arrow-up-right" class="size-4 text-(--ui-error)" />
-				</div>
-				<div
-					class="mt-2 text-2xl font-semibold tabular-nums text-(--ui-error)"
-					:title="formatLKR(totals.expenses)"
-				>
-					{{ formatLKR(totals.expenses) }}
-				</div>
-				<div class="mt-1 text-xs text-(--ui-text-muted) flex items-center gap-2 flex-wrap">
-					<span>{{ totals.billCount }} bill{{ totals.billCount === 1 ? "" : "s" }}</span>
-					<span class="text-(--ui-border-accented)">·</span>
-					<span>{{ totals.payslipCount }} payslip{{ totals.payslipCount === 1 ? "" : "s" }}</span>
-				</div>
-			</UCard>
+					<div
+						class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums text-(--ui-error)"
+						:title="formatLKR(totals.expenses)"
+					>
+						{{ formatLKR(totals.expenses) }}
+					</div>
+					<div class="mt-1 text-xs text-(--ui-text-muted) flex items-center gap-2 flex-wrap">
+						<span>{{ totals.billCount }} bill{{ totals.billCount === 1 ? "" : "s" }}</span>
+						<span class="text-(--ui-border-accented)">·</span>
+						<span>{{ totals.payslipCount }} payslip{{ totals.payslipCount === 1 ? "" : "s" }}</span>
+					</div>
+				</UCard>
 
-			<UCard class="h-full">
-				<div class="flex items-start justify-between gap-2">
-					<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
-						Net {{ totals.net >= 0 ? "profit" : "loss" }}
+				<UCard class="h-full">
+					<div class="flex items-start justify-between gap-2">
+						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
+							Net {{ totals.net >= 0 ? "profit" : "loss" }}
+						</div>
+						<UIcon
+							:name="totals.net >= 0 ? 'i-lucide-trending-up' : 'i-lucide-trending-down'"
+							class="size-4"
+							:class="totals.net >= 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'"
+						/>
 					</div>
-					<UIcon
-						:name="totals.net >= 0 ? 'i-lucide-trending-up' : 'i-lucide-trending-down'"
-						class="size-4"
+					<div
+						class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
 						:class="totals.net >= 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'"
-					/>
-				</div>
-				<div
-					class="mt-2 text-2xl font-semibold tabular-nums"
-					:class="totals.net >= 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'"
-					:title="`${totals.net >= 0 ? '+' : '−'}${formatLKR(Math.abs(totals.net))}`"
-				>
-					{{ totals.net >= 0 ? "+" : "−" }}{{ formatLKR(Math.abs(totals.net)) }}
-				</div>
-				<div class="mt-1 text-xs text-(--ui-text-muted)">
-					{{ marginLabel }}
-				</div>
-			</UCard>
-		</div>
+						:title="`${totals.net >= 0 ? '+' : '−'}${formatLKR(Math.abs(totals.net))}`"
+					>
+						{{ totals.net >= 0 ? "+" : "−" }}{{ formatLKR(Math.abs(totals.net)) }}
+					</div>
+					<div class="mt-1 text-xs text-(--ui-text-muted)">
+						{{ marginLabel }}
+					</div>
+				</UCard>
+			</div>
 
-		<!-- Monthly trend: twin bars per month (income vs expense) with a
+			<!-- Monthly trend: twin bars per month (income vs expense) with a
 			net trend line overlay. Reveals month-over-month patterns the
 			KPI tiles can't — a stable Net for the period might be hiding
 			a great Q1 + a terrible Q3, etc. Tied to the same filtered
 			row sets the breakdown uses, so totals line up exactly. -->
-		<UCard class="mb-6">
-			<template #header>
-				<div class="app-chrome flex items-center justify-between gap-2 flex-wrap">
-					<div class="app-chrome font-medium">
-						Monthly trend
+			<UCard class="mb-6">
+				<template #header>
+					<div class="app-chrome flex items-center justify-between gap-2 flex-wrap">
+						<div class="app-chrome font-medium">
+							Monthly trend
+						</div>
+						<div class="text-xs text-(--ui-text-muted)">
+							{{ rangeLabel }}
+						</div>
 					</div>
-					<div class="text-xs text-(--ui-text-muted)">
-						{{ rangeLabel }}
-					</div>
-				</div>
-			</template>
-			<PnlMonthlyChart
-				:invoices="filtered.invoices"
-				:bills="filtered.bills"
-				:payslips="filtered.payslips"
-				:date-from="dateFrom"
-				:date-to="dateTo"
-			/>
-		</UCard>
+				</template>
+				<PnlMonthlyChart
+					:invoices="filtered.invoices"
+					:bills="filtered.bills"
+					:payslips="filtered.payslips"
+					:date-from="dateFrom"
+					:date-to="dateTo"
+				/>
+			</UCard>
 
-		<!-- Breakdown table — the canonical P&L shape: income line(s),
+			<!-- Breakdown table — the canonical P&L shape: income line(s),
 			less expense line(s), final net. % column gives the user a
 			feel for which expense buckets dominate without needing to
 			eyeball the numbers. -->
-		<UCard class="mb-6">
-			<template #header>
-				<div class="app-chrome flex items-center justify-between gap-2 flex-wrap">
-					<div class="app-chrome font-medium">
-						Breakdown
+			<UCard class="mb-6">
+				<template #header>
+					<div class="app-chrome flex items-center justify-between gap-2 flex-wrap">
+						<div class="app-chrome font-medium">
+							Breakdown
+						</div>
+						<div class="text-xs text-(--ui-text-muted)">
+							{{ rangeLabel }}
+						</div>
 					</div>
-					<div class="text-xs text-(--ui-text-muted)">
-						{{ rangeLabel }}
-					</div>
-				</div>
-			</template>
+				</template>
 
-			<table class="w-full text-sm">
-				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-					<tr>
-						<th class="py-2 pl-3 pr-2 font-medium">
-							Line
-						</th>
-						<th class="py-2 px-2 font-medium text-right">
-							Amount
-						</th>
-						<th class="py-2 pl-2 pr-3 font-medium text-right w-20">
-							% of income
-						</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr class="border-b border-(--ui-border)/60">
-						<td class="py-2 pl-3 pr-2">
-							<div class="font-medium">
-								Income
-							</div>
-							<div class="text-xs text-(--ui-text-muted)">
-								Issued invoices, subtotal excluding VAT
-							</div>
-						</td>
-						<td class="py-2 px-2 text-right tabular-nums font-medium text-(--ui-success)">
-							{{ formatLKR(totals.income) }}
-						</td>
-						<td class="py-2 pl-2 pr-3 text-right tabular-nums text-(--ui-text-muted)">
-							100%
-						</td>
-					</tr>
-					<tr class="border-b border-(--ui-border)/60">
-						<td class="py-2 pl-3 pr-2">
-							<div>Bills (purchases)</div>
-							<div class="text-xs text-(--ui-text-muted)">
-								Open bills, subtotal excluding VAT
-							</div>
-						</td>
-						<td class="py-2 px-2 text-right tabular-nums text-(--ui-error)">
-							− {{ formatLKR(totals.bills) }}
-						</td>
-						<td class="py-2 pl-2 pr-3 text-right tabular-nums text-(--ui-text-muted)">
-							{{ pct(totals.bills, totals.income) }}
-						</td>
-					</tr>
-					<tr class="border-b border-(--ui-border)/60">
-						<td class="py-2 pl-3 pr-2">
-							<div>Payroll</div>
-							<div class="text-xs text-(--ui-text-muted)">
-								Issued payslips, gross earnings (before deductions)
-							</div>
-						</td>
-						<td class="py-2 px-2 text-right tabular-nums text-(--ui-error)">
-							− {{ formatLKR(totals.payroll) }}
-						</td>
-						<td class="py-2 pl-2 pr-3 text-right tabular-nums text-(--ui-text-muted)">
-							{{ pct(totals.payroll, totals.income) }}
-						</td>
-					</tr>
-					<tr class="bg-(--ui-bg-muted)/60">
-						<td class="py-3 pl-3 pr-2 font-semibold">
-							Net {{ totals.net >= 0 ? "profit" : "loss" }}
-						</td>
-						<td
-							class="py-3 px-2 text-right tabular-nums font-semibold"
-							:class="totals.net >= 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'"
-						>
-							{{ totals.net >= 0 ? "+" : "−" }}{{ formatLKR(Math.abs(totals.net)) }}
-						</td>
-						<td
-							class="py-3 pl-2 pr-3 text-right tabular-nums font-semibold"
-							:class="totals.net >= 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'"
-						>
-							{{ pct(Math.abs(totals.net), totals.income) }}
-						</td>
-					</tr>
-				</tbody>
-			</table>
-		</UCard>
+				<table class="w-full text-sm">
+					<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
+						<tr>
+							<th class="py-2 pl-3 pr-2 font-medium">
+								Line
+							</th>
+							<th class="py-2 px-2 font-medium text-right">
+								Amount
+							</th>
+							<th class="py-2 pl-2 pr-3 font-medium text-right w-20">
+								% of income
+							</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr class="border-b border-(--ui-border)/60">
+							<td class="py-2 pl-3 pr-2">
+								<div class="font-medium">
+									Income
+								</div>
+								<div class="text-xs text-(--ui-text-muted)">
+									Issued invoices, subtotal excluding VAT
+								</div>
+							</td>
+							<td class="py-2 px-2 text-right tabular-nums font-medium text-(--ui-success)">
+								{{ formatLKR(totals.income) }}
+							</td>
+							<td class="py-2 pl-2 pr-3 text-right tabular-nums text-(--ui-text-muted)">
+								100%
+							</td>
+						</tr>
+						<tr class="border-b border-(--ui-border)/60">
+							<td class="py-2 pl-3 pr-2">
+								<div>Bills (purchases)</div>
+								<div class="text-xs text-(--ui-text-muted)">
+									Open bills, subtotal excluding VAT
+								</div>
+							</td>
+							<td class="py-2 px-2 text-right tabular-nums text-(--ui-error)">
+								− {{ formatLKR(totals.bills) }}
+							</td>
+							<td class="py-2 pl-2 pr-3 text-right tabular-nums text-(--ui-text-muted)">
+								{{ pct(totals.bills, totals.income) }}
+							</td>
+						</tr>
+						<tr class="border-b border-(--ui-border)/60">
+							<td class="py-2 pl-3 pr-2">
+								<div>Payroll</div>
+								<div class="text-xs text-(--ui-text-muted)">
+									Issued payslips, gross earnings (before deductions)
+								</div>
+							</td>
+							<td class="py-2 px-2 text-right tabular-nums text-(--ui-error)">
+								− {{ formatLKR(totals.payroll) }}
+							</td>
+							<td class="py-2 pl-2 pr-3 text-right tabular-nums text-(--ui-text-muted)">
+								{{ pct(totals.payroll, totals.income) }}
+							</td>
+						</tr>
+						<tr class="bg-(--ui-bg-muted)/60">
+							<td class="py-3 pl-3 pr-2 font-semibold">
+								Net {{ totals.net >= 0 ? "profit" : "loss" }}
+							</td>
+							<td
+								class="py-3 px-2 text-right tabular-nums font-semibold"
+								:class="totals.net >= 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'"
+							>
+								{{ totals.net >= 0 ? "+" : "−" }}{{ formatLKR(Math.abs(totals.net)) }}
+							</td>
+							<td
+								class="py-3 pl-2 pr-3 text-right tabular-nums font-semibold"
+								:class="totals.net >= 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'"
+							>
+								{{ pct(Math.abs(totals.net), totals.income) }}
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</UCard>
 
-		<!-- Underlying document drill-downs. Single full-width card with
+			<!-- Underlying document drill-downs. Single full-width card with
 			a segmented tab control — at the earlier 3-column layout each
 			table got ~340px even at xl, which crushed Number / Date /
 			Subtotal into wrapped columns. Tabs give every table the
@@ -258,170 +358,171 @@
 			live inside each tab pill; the active tab's running total
 			shows on the right, so the user always sees both "how many
 			rows" and "how much" at a glance. -->
-		<UCard>
-			<template #header>
-				<div class="app-chrome flex items-center justify-between gap-3 flex-wrap">
-					<div class="flex border border-(--ui-border) rounded-md overflow-hidden text-xs">
-						<button
-							v-for="(t, i) in TABS"
-							:key="t.key"
-							type="button"
-							class="px-3 py-1.5 transition cursor-pointer inline-flex items-center gap-1.5"
-							:class="[
-								activeTab === t.key
-									? 'bg-(--ui-primary) text-(--ui-bg)'
-									: 'hover:bg-(--ui-bg-muted)',
-								i > 0 ? 'border-l border-(--ui-border)' : ''
-							]"
-							@click="activeTab = t.key"
-						>
-							<UIcon :name="t.icon" class="size-3.5" />
-							<span>{{ t.label }}</span>
-							<span
-								class="tabular-nums px-1.5 rounded-sm"
-								:class="activeTab === t.key
-									? 'bg-(--ui-bg)/20'
-									: 'bg-(--ui-bg-muted) text-(--ui-text-muted)'"
+			<UCard>
+				<template #header>
+					<div class="app-chrome flex items-center justify-between gap-3 flex-wrap">
+						<div class="flex border border-(--ui-border) rounded-md overflow-hidden text-xs">
+							<button
+								v-for="(t, i) in TABS"
+								:key="t.key"
+								type="button"
+								class="px-3 py-1.5 transition cursor-pointer inline-flex items-center gap-1.5"
+								:class="[
+									activeTab === t.key
+										? 'bg-(--ui-primary) text-(--ui-bg)'
+										: 'hover:bg-(--ui-bg-muted)',
+									i > 0 ? 'border-l border-(--ui-border)' : ''
+								]"
+								@click="activeTab = t.key"
 							>
-								{{ tabCounts[t.key] }}
-							</span>
-						</button>
+								<UIcon :name="t.icon" class="size-3.5" />
+								<span>{{ t.label }}</span>
+								<span
+									class="tabular-nums px-1.5 rounded-sm"
+									:class="activeTab === t.key
+										? 'bg-(--ui-bg)/20'
+										: 'bg-(--ui-bg-muted) text-(--ui-text-muted)'"
+								>
+									{{ tabCounts[t.key] }}
+								</span>
+							</button>
+						</div>
+						<div class="text-xs text-(--ui-text-muted) tabular-nums">
+							Total <span class="text-(--ui-text) font-medium ml-1">{{ formatLKR(activeTabTotal) }}</span>
+						</div>
 					</div>
-					<div class="text-xs text-(--ui-text-muted) tabular-nums">
-						Total <span class="text-(--ui-text) font-medium ml-1">{{ formatLKR(activeTabTotal) }}</span>
-					</div>
+				</template>
+
+				<!-- Empty states share one shell, swapping icon + label. -->
+				<div
+					v-if="tabCounts[activeTab] === 0"
+					class="py-10 text-center text-sm text-(--ui-text-muted)"
+				>
+					<UIcon :name="activeTabIcon" class="size-10 mx-auto mb-2 opacity-40" />
+					<div>{{ activeTabEmpty }}</div>
 				</div>
-			</template>
 
-			<!-- Empty states share one shell, swapping icon + label. -->
-			<div
-				v-if="tabCounts[activeTab] === 0"
-				class="py-10 text-center text-sm text-(--ui-text-muted)"
-			>
-				<UIcon :name="activeTabIcon" class="size-10 mx-auto mb-2 opacity-40" />
-				<div>{{ activeTabEmpty }}</div>
-			</div>
+				<table v-else-if="activeTab === 'invoices'" class="w-full text-sm">
+					<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
+						<tr>
+							<th class="py-2 pl-3 pr-2 font-medium w-40">
+								Number
+							</th>
+							<th class="py-2 px-2 font-medium w-28">
+								Date
+							</th>
+							<th class="py-2 px-2 font-medium">
+								Client
+							</th>
+							<th class="py-2 pl-2 pr-3 font-medium text-right w-40">
+								Subtotal
+							</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr
+							v-for="row in filtered.invoices"
+							:key="row.id"
+							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+							@click="router.push(`/invoices/${row.id}`)"
+						>
+							<td class="py-2 pl-3 pr-2 font-medium tabular-nums whitespace-nowrap">
+								{{ row.number }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums whitespace-nowrap">
+								{{ row.issue_date }}
+							</td>
+							<td class="py-2 px-2 truncate max-w-0">
+								{{ partyName(row.client_snapshot) }}
+							</td>
+							<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap">
+								{{ formatLKR(row.subtotal_cents) }}
+							</td>
+						</tr>
+					</tbody>
+				</table>
 
-			<table v-else-if="activeTab === 'invoices'" class="w-full text-sm">
-				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-					<tr>
-						<th class="py-2 pl-3 pr-2 font-medium w-40">
-							Number
-						</th>
-						<th class="py-2 px-2 font-medium w-28">
-							Date
-						</th>
-						<th class="py-2 px-2 font-medium">
-							Client
-						</th>
-						<th class="py-2 pl-2 pr-3 font-medium text-right w-40">
-							Subtotal
-						</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr
-						v-for="row in filtered.invoices"
-						:key="row.id"
-						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-						@click="router.push(`/invoices/${row.id}`)"
-					>
-						<td class="py-2 pl-3 pr-2 font-medium tabular-nums whitespace-nowrap">
-							{{ row.number }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums whitespace-nowrap">
-							{{ row.issue_date }}
-						</td>
-						<td class="py-2 px-2 truncate max-w-0">
-							{{ partyName(row.client_snapshot) }}
-						</td>
-						<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap">
-							{{ formatLKR(row.subtotal_cents) }}
-						</td>
-					</tr>
-				</tbody>
-			</table>
+				<table v-else-if="activeTab === 'bills'" class="w-full text-sm">
+					<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
+						<tr>
+							<th class="py-2 pl-3 pr-2 font-medium w-40">
+								Number
+							</th>
+							<th class="py-2 px-2 font-medium w-28">
+								Date
+							</th>
+							<th class="py-2 px-2 font-medium">
+								Vendor
+							</th>
+							<th class="py-2 pl-2 pr-3 font-medium text-right w-40">
+								Subtotal
+							</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr
+							v-for="row in filtered.bills"
+							:key="row.id"
+							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+							@click="router.push(`/bills/${row.id}`)"
+						>
+							<td class="py-2 pl-3 pr-2 font-medium tabular-nums whitespace-nowrap">
+								{{ row.number }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums whitespace-nowrap">
+								{{ row.issue_date }}
+							</td>
+							<td class="py-2 px-2 truncate max-w-0">
+								{{ partyName(row.vendor_snapshot) }}
+							</td>
+							<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap">
+								{{ formatLKR(row.subtotal_cents) }}
+							</td>
+						</tr>
+					</tbody>
+				</table>
 
-			<table v-else-if="activeTab === 'bills'" class="w-full text-sm">
-				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-					<tr>
-						<th class="py-2 pl-3 pr-2 font-medium w-40">
-							Number
-						</th>
-						<th class="py-2 px-2 font-medium w-28">
-							Date
-						</th>
-						<th class="py-2 px-2 font-medium">
-							Vendor
-						</th>
-						<th class="py-2 pl-2 pr-3 font-medium text-right w-40">
-							Subtotal
-						</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr
-						v-for="row in filtered.bills"
-						:key="row.id"
-						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-						@click="router.push(`/bills/${row.id}`)"
-					>
-						<td class="py-2 pl-3 pr-2 font-medium tabular-nums whitespace-nowrap">
-							{{ row.number }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums whitespace-nowrap">
-							{{ row.issue_date }}
-						</td>
-						<td class="py-2 px-2 truncate max-w-0">
-							{{ partyName(row.vendor_snapshot) }}
-						</td>
-						<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap">
-							{{ formatLKR(row.subtotal_cents) }}
-						</td>
-					</tr>
-				</tbody>
-			</table>
-
-			<table v-else class="w-full text-sm">
-				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-					<tr>
-						<th class="py-2 pl-3 pr-2 font-medium w-40">
-							Number
-						</th>
-						<th class="py-2 px-2 font-medium w-28">
-							Period end
-						</th>
-						<th class="py-2 px-2 font-medium">
-							Employee
-						</th>
-						<th class="py-2 pl-2 pr-3 font-medium text-right w-40">
-							Earnings
-						</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr
-						v-for="row in filtered.payslips"
-						:key="row.id"
-						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-						@click="router.push(`/payslips/${row.id}`)"
-					>
-						<td class="py-2 pl-3 pr-2 font-medium tabular-nums whitespace-nowrap">
-							{{ row.number }}
-						</td>
-						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums whitespace-nowrap">
-							{{ row.period_end }}
-						</td>
-						<td class="py-2 px-2 truncate max-w-0">
-							{{ partyName(row.employee_snapshot, "full_name") }}
-						</td>
-						<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap">
-							{{ formatLKR(row.earnings_cents) }}
-						</td>
-					</tr>
-				</tbody>
-			</table>
-		</UCard>
+				<table v-else class="w-full text-sm">
+					<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
+						<tr>
+							<th class="py-2 pl-3 pr-2 font-medium w-40">
+								Number
+							</th>
+							<th class="py-2 px-2 font-medium w-28">
+								Period end
+							</th>
+							<th class="py-2 px-2 font-medium">
+								Employee
+							</th>
+							<th class="py-2 pl-2 pr-3 font-medium text-right w-40">
+								Earnings
+							</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr
+							v-for="row in filtered.payslips"
+							:key="row.id"
+							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+							@click="router.push(`/payslips/${row.id}`)"
+						>
+							<td class="py-2 pl-3 pr-2 font-medium tabular-nums whitespace-nowrap">
+								{{ row.number }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums whitespace-nowrap">
+								{{ row.period_end }}
+							</td>
+							<td class="py-2 px-2 truncate max-w-0">
+								{{ partyName(row.employee_snapshot, "full_name") }}
+							</td>
+							<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap">
+								{{ formatLKR(row.earnings_cents) }}
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</UCard>
+		</template>
 	</div>
 </template>
 
@@ -459,14 +560,20 @@
 	const payslipsStore = usePayslipsStore();
 	const settingsStore = useSettingsStore();
 
-	// Eagerly load everything the report aggregates over. If the user
-	// deep-linked here, the stores might be empty.
-	await Promise.all([
-		settingsStore.ensureLoaded(),
-		invoicesStore.load(),
-		billsStore.load(),
-		payslipsStore.load()
-	]);
+	// Loading state owned by `usePageLoading` — see the composable for
+	// the rAF-yield trick that ensures the skeleton actually paints.
+	// Top-level await was blocking the route transition and hiding the
+	// skeleton at the same time (same pattern we fixed on calendar +
+	// every list page).
+	const { isLoading, runLoad } = usePageLoading();
+	onMounted(() => runLoad(async () => {
+		await Promise.all([
+			settingsStore.ensureLoaded(),
+			invoicesStore.ensureLoaded(),
+			billsStore.ensureLoaded(),
+			payslipsStore.ensureLoaded()
+		]);
+	}));
 
 	// Date range state. Default range = the current fiscal year per
 	// company_settings.fiscal_year_start_month. Sri Lankan gov FY is
