@@ -31,7 +31,11 @@
 			</UButton>
 		</header>
 
-		<UCard>
+		<!-- Content-shaped skeleton while the page hydrates. See
+			usePageLoading + ListPageSkeleton for the timing rationale. -->
+		<ListPageSkeleton v-if="isLoading" :chip-count="5" :column-count="7" />
+
+		<UCard v-else>
 			<template #header>
 				<!-- Filter strip — chip-style multi-select status + Advanced
 					popover for date ranges. Same pattern as Quotes. -->
@@ -320,27 +324,20 @@
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
 
-	// Data load lives in onMounted (not top-level await) so the page
-	// mounts instantly when the user clicks the sidebar link. Without
-	// this, Vue's <Suspense> blocks the whole transition on this
-	// Promise.all — the previous page stays frozen for the duration
-	// of the load and the user can't click another sidebar entry.
-	// ensureLoaded() variants are no-ops when the store is already
-	// hydrated, so revisits during the same tenant session don't
-	// re-fetch (Pinia keeps the rows in memory).
-	const isLoading = ref(true);
-	onMounted(async () => {
-		try {
-			await Promise.all([
-				store.ensureLoaded(),
-				clientsStore.ensureLoaded(),
-				vouchersStore.ensureLoaded(),
-				settingsStore.ensureLoaded()
-			]);
-		} finally {
-			isLoading.value = false;
-		}
-	});
+	// Loading state owned by `usePageLoading` — see the composable for
+	// the requestAnimationFrame-yield trick. Required so the skeleton
+	// actually paints to pixels on warm-store revisits + heavy first
+	// renders, instead of being committed and immediately replaced
+	// inside a single animation frame.
+	const { isLoading, runLoad } = usePageLoading();
+	onMounted(() => runLoad(async () => {
+		await Promise.all([
+			store.ensureLoaded(),
+			clientsStore.ensureLoaded(),
+			vouchersStore.ensureLoaded(),
+			settingsStore.ensureLoaded()
+		]);
+	}));
 
 	const balanceOf = (i: InvoiceRow) => store.balanceCentsFor(i);
 

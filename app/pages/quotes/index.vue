@@ -24,7 +24,11 @@
 			</UButton>
 		</header>
 
-		<UCard>
+		<!-- Content-shaped skeleton while the page hydrates. See
+			usePageLoading + ListPageSkeleton for the timing rationale. -->
+		<ListPageSkeleton v-if="isLoading" :chip-count="5" :column-count="6" />
+
+		<UCard v-else>
 			<template #header>
 				<!-- Filter strip: two coordinated rows. The first holds the
 					quick filters (search / client / status); the second
@@ -296,24 +300,20 @@
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
 
-	// Data load in onMounted (not top-level await) — see /invoices for
-	// the rationale. Page mounts instantly so the user can navigate
-	// away mid-load. expireOverdue() runs after the store hydrates.
-	const isLoading = ref(true);
-	onMounted(async () => {
-		try {
-			await Promise.all([
-				store.ensureLoaded(),
-				clientsStore.ensureLoaded(),
-				settingsStore.ensureLoaded()
-			]);
-			// Auto-expire any sent quotes past valid_until — silently
-			// non-fatal if it fails.
-			await store.expireOverdue().catch(() => { /* */ });
-		} finally {
-			isLoading.value = false;
-		}
-	});
+	// Loading state owned by `usePageLoading` — see the composable for
+	// the rAF-yield trick that ensures the skeleton actually paints.
+	// expireOverdue() runs after the stores hydrate.
+	const { isLoading, runLoad } = usePageLoading();
+	onMounted(() => runLoad(async () => {
+		await Promise.all([
+			store.ensureLoaded(),
+			clientsStore.ensureLoaded(),
+			settingsStore.ensureLoaded()
+		]);
+		// Auto-expire any sent quotes past valid_until — silently
+		// non-fatal if it fails.
+		await store.expireOverdue().catch(() => { /* */ });
+	}));
 
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();

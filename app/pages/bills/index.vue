@@ -27,7 +27,11 @@
 			</UButton>
 		</header>
 
-		<UCard>
+		<!-- Content-shaped skeleton while the page hydrates. See
+			usePageLoading + ListPageSkeleton for the timing rationale. -->
+		<ListPageSkeleton v-if="isLoading" :chip-count="5" :column-count="7" />
+
+		<UCard v-else>
 			<template #header>
 				<!-- Filter strip — chips + Advanced popover, matches the
 					quotes/invoices pattern. Vendor and category live in
@@ -444,24 +448,19 @@
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
 
-	// Data load in onMounted (not top-level await) — see /invoices for
-	// the rationale. Keeps page transitions instant; user can navigate
-	// away mid-load instead of waiting for the SELECT to finish.
+	// Loading state owned by `usePageLoading` — see the composable for
+	// the rAF-yield trick that ensures the skeleton actually paints.
 	const vouchersStore = useVouchersStore();
-	const isLoading = ref(true);
-	onMounted(async () => {
-		try {
-			await Promise.all([
-				store.ensureLoaded(),
-				vendorsStore.ensureLoaded(),
-				categoriesStore.ensureLoaded(),
-				vouchersStore.ensureLoaded(),
-				settingsStore.ensureLoaded()
-			]);
-		} finally {
-			isLoading.value = false;
-		}
-	});
+	const { isLoading, runLoad } = usePageLoading();
+	onMounted(() => runLoad(async () => {
+		await Promise.all([
+			store.ensureLoaded(),
+			vendorsStore.ensureLoaded(),
+			categoriesStore.ensureLoaded(),
+			vouchersStore.ensureLoaded(),
+			settingsStore.ensureLoaded()
+		]);
+	}));
 
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();
