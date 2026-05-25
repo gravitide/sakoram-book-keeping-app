@@ -13,17 +13,26 @@
 //     (window.location.assign) — same pattern the welcome page already
 //     uses for switching.
 //
-// The seed is intentionally modest: 4 clients, 3 vendors, 3 quotes,
-// 4 invoices, 3 bills, 4 vouchers. Enough to demo dashboard tiles,
-// status filters, list views, and PDF rendering — not so much that
-// scrolling the lists becomes a chore.
+// The seed builds a year+ of realistic activity at "real business"
+// volume — hundreds of clients / vendors / quotes / invoices / bills /
+// vouchers spread across ~18 months — so list pagination, filters,
+// dashboard charts, P&L date-range presets, and (eventually) DB-side
+// paging all get exercised at scale. ~10 sample image attachments are
+// scattered across documents so the AttachmentsCard has something to
+// render without a manual upload. Seed runtime can hit 2-3 minutes;
+// caller is expected to surface that via `onProgress`.
 
+import type { AttachmentFile, DocumentType } from "~/stores/document_attachments";
 import type { Tenant } from "~/stores/tenants";
 import type { VendorRow } from "~/stores/vendors";
+import { invoke } from "@tauri-apps/api/core";
+import { appLocalDataDir, join } from "@tauri-apps/api/path";
+import { BaseDirectory, writeFile } from "@tauri-apps/plugin-fs";
 import { buildCategorySnapshot, useBillCategoriesStore } from "~/stores/bill_categories";
 import { useBillsStore } from "~/stores/bills";
 import { useBusinessBanksStore } from "~/stores/business_banks";
 import { useClientsStore } from "~/stores/clients";
+import { useDocumentAttachmentsStore } from "~/stores/document_attachments";
 import { useEmployeesStore } from "~/stores/employees";
 import { useInvoicesStore } from "~/stores/invoices";
 import { usePayslipsStore } from "~/stores/payslips";
@@ -32,6 +41,23 @@ import { useSettingsStore } from "~/stores/settings";
 import { useTenantsStore } from "~/stores/tenants";
 import { useVendorsStore } from "~/stores/vendors";
 import { useVouchersStore } from "~/stores/vouchers";
+
+/// Per-stage progress reporter passed by callers (the welcome page +
+/// Settings → Businesses) so the seed's 2-3 minute runtime isn't
+/// experienced as a frozen spinner. `total` is 0 when the stage is a
+/// single atomic step (e.g. "Creating tenant") — UI can show just the
+/// stage label in that case.
+export interface SeedProgress {
+	stage: string
+	done: number
+	total: number
+}
+
+export type SeedProgressFn = (p: SeedProgress) => void;
+
+// No-op default so every internal helper can just call `report(...)`
+// without checking if a callback was passed.
+const noopProgress: SeedProgressFn = () => { /* */ };
 
 // Past/future date offsets used throughout the seed. Keeping these as
 // helpers (rather than scattering Date math around) makes the timeline
@@ -797,6 +823,79 @@ const DEMO_EMPLOYEES: DemoEmployee[] = [
 		basic_salary_cents: 6000000, // 60,000
 		bank_branch: "Anuradhapura",
 		bank_account_number: "0049-1000-0010"
+	},
+	// Five more hires extending the team into specialist + warehouse
+	// roles. Spreads joining dates further and gives the payroll
+	// dashboard a denser headcount across the chart range.
+	{
+		full_name: "Madhavi Gunawardena",
+		employee_number: "E011",
+		nic: "199712345670",
+		designation: "QA Engineer",
+		email: "madhavi@acme.example",
+		phone: "+94 77 232 4455",
+		address_line1: "27 Lily Avenue",
+		city: "Colombo",
+		joining_date: daysAgo(150),
+		basic_salary_cents: 14500000, // 145,000
+		bank_branch: "Colombo Main",
+		bank_account_number: "0049-1000-0011"
+	},
+	{
+		full_name: "Lahiru Wickramasinghe",
+		employee_number: "E012",
+		nic: "199234567801",
+		designation: "Warehouse Supervisor",
+		email: "lahiru@acme.example",
+		phone: "+94 77 343 5566",
+		address_line1: "5 Industrial Estate",
+		city: "Kurunegala",
+		joining_date: daysAgo(120),
+		basic_salary_cents: 9800000, // 98,000
+		bank_branch: "Kurunegala",
+		bank_account_number: "0049-1000-0012"
+	},
+	{
+		full_name: "Iresha Liyanage",
+		employee_number: "E013",
+		nic: "199456789012",
+		designation: "Customer Support Lead",
+		email: "iresha@acme.example",
+		phone: "+94 77 454 6677",
+		address_line1: "31 Sunset Crescent",
+		city: "Galle",
+		joining_date: daysAgo(90),
+		basic_salary_cents: 11500000, // 115,000
+		bank_branch: "Galle",
+		bank_account_number: "0049-1000-0013"
+	},
+	{
+		full_name: "Asanka Pathirana",
+		employee_number: "E014",
+		nic: "199567890123",
+		designation: "Field Technician",
+		email: "asanka@acme.example",
+		phone: "+94 77 565 7788",
+		address_line1: "76 River Lane",
+		city: "Matara",
+		joining_date: daysAgo(60),
+		basic_salary_cents: 8200000, // 82,000
+		bank_branch: "Matara",
+		bank_account_number: "0049-1000-0014"
+	},
+	{
+		full_name: "Nayomi Karunaratne",
+		employee_number: "E015",
+		nic: "199678901234",
+		designation: "Junior Accountant",
+		email: "nayomi@acme.example",
+		phone: "+94 77 676 8899",
+		address_line1: "14 Garden Place",
+		city: "Negombo",
+		joining_date: daysAgo(30),
+		basic_salary_cents: 9000000, // 90,000
+		bank_branch: "Negombo",
+		bank_account_number: "0049-1000-0015"
 	}
 ];
 
@@ -841,21 +940,28 @@ function monthBoundsFromOffset(offset: number): { start: string, end: string } {
 	return { start: iso(start), end: iso(end) };
 }
 
-// Seed three months of payslips for every employee so the dashboard /
-// recent-runs / chart have something to plot.
+// Seed PAYSLIP_MONTHS of payslips for every employee so the dashboard /
+// recent-runs / chart have something to plot across the full P&L
+// "Last year" / "Fiscal year" date-preset ranges.
 //
-// Timeline (offset = months from current):
-//   -2: every employee, issued + fully paid     ← "Complete" run
-//   -1: every employee, issued; one partial,
-//                       one unpaid; rest paid    ← "Pending" run
-//    0: half draft, half issued (some paid)     ← current cycle in progress
-const seedPayslips = async (employeeIds: number[]): Promise<void> => {
+// Timeline (offset = months from current, -PAYSLIP_MONTHS+1 … 0):
+//   oldest..−2 months: every employee, issued + fully paid (clean history)
+//   -1 month:          every employee issued; one partial, one unpaid;
+//                      rest paid     ("Pending" run on the dashboard)
+//    0 (current):      half draft, half issued (some paid) — current
+//                      cycle in progress
+const PAYSLIP_MONTHS = 14;
+
+const seedPayslips = async (employeeIds: number[], onProgress: SeedProgressFn = noopProgress): Promise<void> => {
 	const payslips = usePayslipsStore();
 	const vouchers = useVouchersStore();
 	const employees = useEmployeesStore();
 
-	for (let offsetIdx = 0; offsetIdx < 3; offsetIdx++) {
-		const offset = -2 + offsetIdx; // -2, -1, 0
+	const total = PAYSLIP_MONTHS * employeeIds.length;
+	let done = 0;
+
+	for (let offsetIdx = 0; offsetIdx < PAYSLIP_MONTHS; offsetIdx++) {
+		const offset = -(PAYSLIP_MONTHS - 1) + offsetIdx;
 		const bounds = monthBoundsFromOffset(offset);
 		const payDate = bounds.end;
 
@@ -896,8 +1002,8 @@ const seedPayslips = async (employeeIds: number[]): Promise<void> => {
 			const net = e.basic_salary_cents;
 			let issue = true;
 			let payAmount: number | null = null;
-			if (offset === -2) {
-				payAmount = net; // fully paid
+			if (offset <= -2) {
+				payAmount = net; // fully paid history
 			} else if (offset === -1) {
 				if (i === 0) payAmount = Math.round(net / 2); // partial
 				else if (i === 1) payAmount = null; // unpaid
@@ -927,6 +1033,12 @@ const seedPayslips = async (employeeIds: number[]): Promise<void> => {
 					related_payslip_id: payslipId
 				});
 			}
+			done++;
+			// Report every 5 to keep the UI updating without spamming
+			// the callback hundreds of times.
+			if (done % 5 === 0 || done === total) {
+				onProgress({ stage: "Seeding payslips", done, total });
+			}
 		}
 	}
 };
@@ -934,17 +1046,28 @@ const seedPayslips = async (employeeIds: number[]): Promise<void> => {
 // ---------- Bulk fill (for pagination / list-perf testing) ---------------
 
 // How many extra rows of each entity to add on top of the curated seed.
-// Tuned to push totals past the comfortable single-screen threshold so list
-// pages, filters, and (eventually) pagination get exercised.
-const BULK_COUNT = 22;
+// Tuned to push totals past hundreds-per-list so DB-side paging,
+// chip filters, sort persistence, the P&L chart at fiscal-year scale,
+// and the receivables / payables aging buckets all see real volume.
+//
+// Document seeds spread their issue dates across BULK_DATE_SPREAD_DAYS
+// (~18 months) so the "This year" / "Last year" / "Fiscal year"
+// date-preset chips all return meaningfully different slices.
+const BULK_CLIENTS = 200;
+const BULK_VENDORS = 150;
+const BULK_QUOTES = 600;
+const BULK_INVOICES = 800;
+const BULK_BILLS = 1000;
+const BULK_VOUCHERS = 400;
+const BULK_DATE_SPREAD_DAYS = 540;
 
 const CITIES = ["Colombo", "Kandy", "Galle", "Jaffna", "Negombo", "Matara", "Kurunegala", "Anuradhapura"] as const;
 
-const seedBulkClients = async (): Promise<number[]> => {
+const seedBulkClients = async (onProgress: SeedProgressFn = noopProgress): Promise<number[]> => {
 	const store = useClientsStore();
 	const ids: number[] = [];
-	for (let i = 1; i <= BULK_COUNT; i++) {
-		const tag = String(i).padStart(2, "0");
+	for (let i = 1; i <= BULK_CLIENTS; i++) {
+		const tag = String(i).padStart(3, "0");
 		ids.push(await store.create({
 			name: `Demo Client ${tag}`,
 			contact_person: `Contact ${tag}`,
@@ -958,15 +1081,18 @@ const seedBulkClients = async (): Promise<number[]> => {
 			tax_id: i % 3 === 0 ? `VAT-9${tag}00${tag}` : null,
 			notes: null
 		}));
+		if (i % 10 === 0 || i === BULK_CLIENTS) {
+			onProgress({ stage: "Seeding clients", done: i, total: BULK_CLIENTS });
+		}
 	}
 	return ids;
 };
 
-const seedBulkVendors = async (): Promise<number[]> => {
+const seedBulkVendors = async (onProgress: SeedProgressFn = noopProgress): Promise<number[]> => {
 	const store = useVendorsStore();
 	const ids: number[] = [];
-	for (let i = 1; i <= BULK_COUNT; i++) {
-		const tag = String(i).padStart(2, "0");
+	for (let i = 1; i <= BULK_VENDORS; i++) {
+		const tag = String(i).padStart(3, "0");
 		ids.push(await store.create({
 			name: `Demo Vendor ${tag}`,
 			contact_person: null,
@@ -980,28 +1106,34 @@ const seedBulkVendors = async (): Promise<number[]> => {
 			tax_id: null,
 			notes: null
 		}));
+		if (i % 10 === 0 || i === BULK_VENDORS) {
+			onProgress({ stage: "Seeding vendors", done: i, total: BULK_VENDORS });
+		}
 	}
 	return ids;
 };
 
-const seedBulkQuotes = async (clientIds: number[]) => {
+const seedBulkQuotes = async (clientIds: number[], onProgress: SeedProgressFn = noopProgress) => {
 	const quotes = useQuotesStore();
 	const clients = useClientsStore();
 	// Cycle through 4 status outcomes: draft → sent → accepted → rejected.
 	// Expired quotes happen automatically when sent ones with valid_until in
 	// the past hit `expireOverdue()` at the end of the seed.
 	const outcomes = ["draft", "sent", "accepted", "rejected", "sent-old"] as const;
-	for (let i = 1; i <= BULK_COUNT; i++) {
+	for (let i = 1; i <= BULK_QUOTES; i++) {
 		const cid = clientIds[i % clientIds.length]!;
 		const client = clients.clients.find((c) => c.id === cid);
 		if (!client) continue;
 		const id = await quotes.createDraft({
 			client: { ...client, id: client.id },
-			project_title: `Bulk project ${String(i).padStart(2, "0")}`
+			project_title: `Bulk project ${String(i).padStart(3, "0")}`
 		});
 		const subtotal = (5 + (i % 20)) * 1_000_000; // 5M..25M LKR
 		const tax = Math.round(subtotal * 0.18);
-		const issueDays = (i * 13) % 300; // spread across roughly the past 10 months
+		// Coprime stride with the spread bound so the dates don't visibly
+		// cluster on a regular interval. The result spreads issue dates
+		// roughly uniformly across the last 18 months.
+		const issueDays = (i * 17) % BULK_DATE_SPREAD_DAYS;
 		await quotes.update(id, {
 			pricing_mode: "bundle",
 			issue_date: daysAgo(issueDays),
@@ -1021,27 +1153,30 @@ const seedBulkQuotes = async (clientIds: number[]) => {
 		if (outcome === "rejected") await quotes.setStatus(id, "rejected");
 		// "sent-old" stays sent with a past valid_until — expireOverdue() at
 		// the end will flip it to expired, populating that filter bucket.
+		if (i % 25 === 0 || i === BULK_QUOTES) {
+			onProgress({ stage: "Seeding quotes", done: i, total: BULK_QUOTES });
+		}
 	}
 };
 
-const seedBulkInvoices = async (clientIds: number[]) => {
+const seedBulkInvoices = async (clientIds: number[], onProgress: SeedProgressFn = noopProgress) => {
 	const invoices = useInvoicesStore();
 	const clients = useClientsStore();
 	const vouchers = useVouchersStore();
 	// Mix: draft / sent / partial / paid / overdue / cancelled.
 	const outcomes = ["draft", "sent", "partial", "paid", "overdue", "cancelled"] as const;
-	for (let i = 1; i <= BULK_COUNT; i++) {
+	for (let i = 1; i <= BULK_INVOICES; i++) {
 		const cid = clientIds[(i + 5) % clientIds.length]!;
 		const client = clients.clients.find((c) => c.id === cid);
 		if (!client) continue;
 		const id = await invoices.createDraft({
 			client: { ...client, id: client.id },
-			project_title: `Bulk invoice ${String(i).padStart(2, "0")}`
+			project_title: `Bulk invoice ${String(i).padStart(3, "0")}`
 		});
 		const subtotal = (10 + (i % 30)) * 1_000_000; // 10M..40M LKR
 		const tax = Math.round(subtotal * 0.18);
 		const total = subtotal + tax;
-		const issueDays = (i * 11) % 320;
+		const issueDays = (i * 19) % BULK_DATE_SPREAD_DAYS;
 		const dueOffset = i % 5 === 0 ? -30 : 30; // every 5th: already overdue
 		await invoices.update(id, {
 			pricing_mode: "bundle",
@@ -1092,10 +1227,18 @@ const seedBulkInvoices = async (clientIds: number[]) => {
 		} else if (outcome === "cancelled") {
 			await invoices.setStatus(id, "cancelled");
 		}
+		if (i % 25 === 0 || i === BULK_INVOICES) {
+			onProgress({ stage: "Seeding invoices", done: i, total: BULK_INVOICES });
+		}
 	}
 };
 
-const seedBulkBills = async (vendorIds: number[], catIds: CategoryIds, allCats: number[]) => {
+const seedBulkBills = async (
+	vendorIds: number[],
+	catIds: CategoryIds,
+	allCats: number[],
+	onProgress: SeedProgressFn = noopProgress
+) => {
 	const bills = useBillsStore();
 	const vendors = useVendorsStore();
 	const vouchers = useVouchersStore();
@@ -1107,7 +1250,7 @@ const seedBulkBills = async (vendorIds: number[], catIds: CategoryIds, allCats: 
 	};
 	const outcomes = ["unpaid", "partial", "paid", "overdue", "cancelled"] as const;
 	void catIds; // kept for parity if a future variant wants the curated trio
-	for (let i = 1; i <= BULK_COUNT; i++) {
+	for (let i = 1; i <= BULK_BILLS; i++) {
 		const vid = vendorIds[i % vendorIds.length]!;
 		const vendor = vendors.vendors.find((v) => v.id === vid);
 		if (!vendor) continue;
@@ -1127,7 +1270,7 @@ const seedBulkBills = async (vendorIds: number[], catIds: CategoryIds, allCats: 
 		const subtotal = (2 + (i % 15)) * 500_000; // 1M..8.5M
 		const tax = Math.round(subtotal * 0.18);
 		const total = subtotal + tax;
-		const issueDays = (i * 9) % 300;
+		const issueDays = (i * 23) % BULK_DATE_SPREAD_DAYS;
 		const dueOffset = i % 4 === 0 ? -20 : 30;
 		const cid = allCats[i % allCats.length]!;
 		await bills.update(id, {
@@ -1178,15 +1321,22 @@ const seedBulkBills = async (vendorIds: number[], catIds: CategoryIds, allCats: 
 		} else if (outcome === "cancelled") {
 			await bills.setCancelled(id, true);
 		}
+		if (i % 25 === 0 || i === BULK_BILLS) {
+			onProgress({ stage: "Seeding bills", done: i, total: BULK_BILLS });
+		}
 	}
 };
 
-const seedBulkVouchers = async (clientIds: number[], vendorIds: number[]) => {
+const seedBulkVouchers = async (
+	clientIds: number[],
+	vendorIds: number[],
+	onProgress: SeedProgressFn = noopProgress
+) => {
 	const vouchers = useVouchersStore();
 	const clients = useClientsStore();
 	const vendors = useVendorsStore();
 	const methods = ["bank_transfer", "cash", "cheque", "card", "other"] as const;
-	for (let i = 1; i <= BULK_COUNT; i++) {
+	for (let i = 1; i <= BULK_VOUCHERS; i++) {
 		const isReceipt = i % 2 === 0;
 		const partyId = isReceipt
 			? clientIds[i % clientIds.length]!
@@ -1197,7 +1347,7 @@ const seedBulkVouchers = async (clientIds: number[], vendorIds: number[]) => {
 		const amount = (1 + (i % 12)) * 500_000;
 		await vouchers.create({
 			voucher_type: isReceipt ? "receipt" : "payment",
-			voucher_date: daysAgo((i * 7) % 280),
+			voucher_date: daysAgo((i * 13) % BULK_DATE_SPREAD_DAYS),
 			party_name: partyName,
 			amount_cents: amount,
 			payment_method: methods[i % methods.length] ?? "bank_transfer",
@@ -1209,6 +1359,74 @@ const seedBulkVouchers = async (clientIds: number[], vendorIds: number[]) => {
 			related_bill_id: null,
 			related_payslip_id: null
 		});
+		if (i % 25 === 0 || i === BULK_VOUCHERS) {
+			onProgress({ stage: "Seeding standalone vouchers", done: i, total: BULK_VOUCHERS });
+		}
+	}
+};
+
+// ---------- Attachment seeding ------------------------------------------
+
+// 1×1 transparent PNG. Tiny but a real PNG — passes the `infer` magic-
+// bytes check in import_document_attachment.
+const TINY_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
+function decodeBase64(b64: string): Uint8Array {
+	const bin = atob(b64);
+	const bytes = new Uint8Array(bin.length);
+	for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+	return bytes;
+}
+
+/// Scatter ~10 placeholder image attachments across a handful of
+/// invoices / bills / vouchers so the AttachmentsCard renders something
+/// without the user having to manually upload. The image is a 1×1 PNG —
+/// just enough to satisfy infer's image-magic-bytes check; the demo
+/// value is in exercising the attachment row + on-disk file plumbing,
+/// not in showing meaningful photo content.
+const seedSampleAttachments = async (
+	invoiceIds: number[],
+	billIds: number[],
+	voucherIds: number[],
+	onProgress: SeedProgressFn = noopProgress
+): Promise<void> => {
+	const attachments = useDocumentAttachmentsStore();
+
+	// Write the placeholder PNG once into AppLocalData. Every attachment
+	// imports from the same source path — import_document_attachment
+	// copies bytes into the per-document attachment dir so we end up
+	// with N independent on-disk files, all derived from this one
+	// source. The source itself is left in place (harmless ~70-byte
+	// file under AppLocalData).
+	const bytes = decodeBase64(TINY_PNG_BASE64);
+	const srcName = "demo-seed-placeholder.png";
+	await writeFile(srcName, bytes, { baseDir: BaseDirectory.AppLocalData });
+	const baseDir = await appLocalDataDir();
+	const srcPath = await join(baseDir, srcName);
+
+	const targets: { type: DocumentType, id: number }[] = [
+		...invoiceIds.slice(0, 4).map((id) => ({ type: "invoice" as const, id })),
+		...billIds.slice(0, 4).map((id) => ({ type: "bill" as const, id })),
+		...voucherIds.slice(0, 2).map((id) => ({ type: "voucher" as const, id }))
+	];
+
+	let done = 0;
+	for (const t of targets) {
+		try {
+			const file = await invoke<AttachmentFile>("import_document_attachment", {
+				documentType: t.type,
+				documentId: String(t.id),
+				srcPath
+			});
+			await attachments.add(t.type, t.id, file, "local");
+		} catch (e) {
+			// Don't blow up the whole seed if one attachment fails — the
+			// rest of the demo data is still useful. Log so it's visible
+			// in dev.
+			console.warn(`seed: attachment ${t.type}/${t.id} failed`, e);
+		}
+		done++;
+		onProgress({ stage: "Seeding attachments", done, total: targets.length });
 	}
 };
 
@@ -1222,42 +1440,55 @@ const seedBulkVouchers = async (clientIds: number[], vendorIds: number[]) => {
  *
  * `displayName` is what shows up in the sidebar / picker — defaults to
  * "Acme Trading Co (demo)" so it's unambiguous in the businesses list.
+ *
+ * `onProgress` is invoked through the seed with the current stage label
+ * and (where applicable) a done/total pair so the UI can render a
+ * meaningful progress message instead of a frozen spinner. The full
+ * seed can take 2-3 minutes at the configured volume.
  */
 export const createDemoBusiness = async (
-	displayName = "Acme Trading Co (demo)"
+	displayName = "Acme Trading Co (demo)",
+	onProgress: SeedProgressFn = noopProgress
 ): Promise<Tenant> => {
 	const tenants = useTenantsStore();
 
 	// 1. Create the tenant + 2. activate it. After activate(), getDb() in
 	// every other store will use this new DB.
+	onProgress({ stage: "Creating tenant", done: 0, total: 0 });
 	const t = await tenants.create(displayName);
 	await tenants.activate(t.id);
 
 	// 3. Seed — curated handcrafted set first, so the dashboard / detail
 	// pages have realistic content. Bulk fill afterwards adds enough volume
-	// to exercise list pages, filters, and (eventually) pagination.
+	// to exercise list pages, filters, and pagination at real scale.
+	onProgress({ stage: "Seeding settings", done: 0, total: 0 });
 	await seedSettings();
 	// Bank account is seeded before clients/quotes/invoices so the
 	// document seeders can pick it up via the default-bank lookup in
 	// quotes/invoices stores.
 	await seedBanks();
+	onProgress({ stage: "Seeding curated clients & vendors", done: 0, total: 0 });
 	const clients = await seedClients();
 	const vendors = await seedVendors();
 	const categories = await seedCategories();
+	onProgress({ stage: "Seeding curated documents", done: 0, total: 0 });
 	const quotes = await seedQuotes(clients);
 	const invoices = await seedInvoices(clients, quotes);
 	const bills = await seedBills(vendors, categories);
 	await seedVouchers(clients, vendors, bills, invoices);
 
-	// Payroll: 10 employees + 3 months of payslips with realistic status
-	// mix so the dashboard / chart / recent-runs all light up.
+	// Payroll: 15 employees + 14 months of payslips with realistic status
+	// mix so the dashboard / chart / recent-runs and the P&L "Last year"
+	// preset all light up across the full fiscal-year range.
+	onProgress({ stage: "Seeding employees", done: 0, total: 0 });
 	const employeeIds = await seedEmployees();
-	await seedPayslips(employeeIds);
+	await seedPayslips(employeeIds, onProgress);
 
-	// 4. Bulk fill. Adds ~22 more rows of each entity on top of the curated
-	// set so list pages have realistic volume to scroll/filter/paginate.
-	const bulkClientIds = await seedBulkClients();
-	const bulkVendorIds = await seedBulkVendors();
+	// 4. Bulk fill. Hundreds of rows of each entity spread across ~18
+	// months so DB-side paging, chip filters, date-preset slicing, and
+	// the P&L chart at fiscal-year scale all see real volume.
+	const bulkClientIds = await seedBulkClients(onProgress);
+	const bulkVendorIds = await seedBulkVendors(onProgress);
 	const allClientIds = [
 		...Object.values(clients),
 		...bulkClientIds
@@ -1267,14 +1498,25 @@ export const createDemoBusiness = async (
 		...bulkVendorIds
 	];
 	const allCategoryIds = useBillCategoriesStore().categories.map((c) => c.id);
-	await seedBulkQuotes(allClientIds);
-	await seedBulkInvoices(allClientIds);
-	await seedBulkBills(allVendorIds, categories, allCategoryIds);
-	await seedBulkVouchers(allClientIds, allVendorIds);
+	await seedBulkQuotes(allClientIds, onProgress);
+	await seedBulkInvoices(allClientIds, onProgress);
+	await seedBulkBills(allVendorIds, categories, allCategoryIds, onProgress);
+	await seedBulkVouchers(allClientIds, allVendorIds, onProgress);
+
+	// 5. Scatter a handful of placeholder attachments across documents
+	// so AttachmentsCard has something to render without a manual upload.
+	// Pull IDs from the stores' current state — every doc just got
+	// inserted, so the lists are fully hydrated.
+	onProgress({ stage: "Seeding attachments", done: 0, total: 0 });
+	const invoiceIds = useInvoicesStore().invoices.slice(0, 10).map((row) => row.id);
+	const billIds = useBillsStore().bills.slice(0, 10).map((row) => row.id);
+	const voucherIds = useVouchersStore().vouchers.slice(0, 10).map((row) => row.id);
+	await seedSampleAttachments(invoiceIds, billIds, voucherIds, onProgress);
 
 	// Both invoices and bills now derive their overdue presentation
 	// from due_date + linked-voucher sums every time it's read — no
 	// flagOverdue call needed at the end of the seed.
 
+	onProgress({ stage: "Done", done: 0, total: 0 });
 	return t;
 };
