@@ -185,8 +185,13 @@
     // right-aligned amounts, middle columns flex.
     let col-widths = if col-count == 7 {
       // Client / Current / 1-30 / 31-60 / 61-90 / 90+ / Total
-      // (Aged receivables per-client table)
-      (1fr, auto, auto, auto, auto, auto, auto)
+      // (Aged receivables per-client table). Explicit mm widths so
+      // the Client column doesn't get squeezed to nothing on
+      // portrait A4 — six amount columns + a readable name don't
+      // fit if everything claims its natural width. Currency prefix
+      // is stripped from per-cell amounts (see report-pdf.ts) so
+      // 18mm holds "1,368,800.00" at 8pt comfortably.
+      (1fr, 18mm, 18mm, 18mm, 18mm, 18mm, 22mm)
     } else if col-count == 5 {
       // Number / Date / Party / Subtotal / Tax (VAT report)
       (auto, auto, 1fr, auto, auto)
@@ -210,16 +215,22 @@
       }
     }))
 
+    // Wider 7-col aged-receivables table drops to 8pt so amount cells
+    // fit on one line without forcing the Client column into the
+    // gutter. Other detail tables stay at 9pt.
+    let cell-size = if col-count == 7 { 8pt } else { 9pt }
+
     table(
       columns: col-widths,
       align: col-aligns,
       stroke: none,
+      inset: (x: 4pt, y: 5pt),
       table.header(
         ..columns.map(c => table.cell(fill: rgb("#f3f4f6"))[#label(c)])
       ),
       ..section.rows.enumerate().map(((i, row)) => {
         let bg = if calc.rem(i, 2) == 0 { white } else { row-alt }
-        row.map(cell => table.cell(fill: bg)[#text(size: 9pt)[#cell]])
+        row.map(cell => table.cell(fill: bg)[#text(size: cell-size)[#cell]])
       }).flatten()
     )
   }

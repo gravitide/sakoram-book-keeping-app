@@ -404,7 +404,12 @@ export const buildAgedReceivablesPdfPayload = (
 	input: AgedReceivablesPdfInput
 ): ReportPdfPayload => {
 	const fmt = (cents: number) => formatMoney(cents, input.currency);
-	const dash = (cents: number) => (cents === 0 ? "—" : fmt(cents));
+	// Per-cell amount for the 7-column client table. Currency prefix
+	// stripped — the report-level currency code is already implicit and
+	// every column is the same currency. Saves ~5mm per cell × 6
+	// columns and lets the Client column actually breathe.
+	const fmtBare = (cents: number) => formatMoney(cents, input.currency).replace(/^[^\d\-−]+/, "").trim();
+	const dashBare = (cents: number) => (cents === 0 ? "—" : fmtBare(cents));
 	const pct = (part: number, whole: number): string => {
 		if (whole === 0) return "—";
 		const v = (part / whole) * 100;
@@ -474,16 +479,16 @@ export const buildAgedReceivablesPdfPayload = (
 			? null
 			: [
 				{
-					title: `By client (${input.clientRows.length})`,
+					title: `By client (${input.clientRows.length}) — amounts in ${input.currency.code}`,
 					columns: ["Client", "Current", "1-30", "31-60", "61-90", "90+", "Total"],
 					rows: input.clientRows.map((r) => [
 						`${r.name} (${r.invoiceCount} open)`,
-						dash(r.current),
-						dash(r.b1to30),
-						dash(r.b31to60),
-						dash(r.b61to90),
-						dash(r.b90plus),
-						fmt(r.total)
+						dashBare(r.current),
+						dashBare(r.b1to30),
+						dashBare(r.b31to60),
+						dashBare(r.b61to90),
+						dashBare(r.b90plus),
+						fmtBare(r.total)
 					])
 				}
 			]
