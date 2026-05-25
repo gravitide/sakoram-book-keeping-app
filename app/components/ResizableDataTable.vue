@@ -17,7 +17,7 @@
 			:rows="effectiveRows"
 			:rows-per-page-options="rowsPerPageOptions"
 			current-page-report-template="Showing {first} to {last} of {totalRecords}"
-			paginator-template="CurrentPageReport FirstPageLink PrevPageLink NextPageLink LastPageLink"
+			paginator-template="FirstPageLink PrevPageLink NextPageLink LastPageLink CurrentPageReport"
 			:sort-field="defaultSortField"
 			:sort-order="defaultSortOrder"
 			class="text-sm"
@@ -58,7 +58,17 @@
 				only takes a number[] — we want a "Fit" option that
 				auto-sizes the page to the viewport, so we drop the
 				built-in dropdown from paginator-template and render our
-				own here. -->
+				own here.
+
+				Paginator strip layout reads left → right as
+				`[<<] [<] [>] [>>] Showing N..M of T  /  Per page [Fit]`.
+
+				The buttons come first in `paginator-template` (above)
+				so the "Showing …" report — whose width changes as
+				the user pages through — grows / shrinks to the RIGHT
+				of the buttons rather than pushing them around. Was
+				the other way before; every page click visibly shifted
+				the nav buttons horizontally. -->
 			<template #paginatorend>
 				<div class="flex items-center gap-2 text-sm ml-2">
 					<span class="text-(--ui-text-muted)">Per page</span>
