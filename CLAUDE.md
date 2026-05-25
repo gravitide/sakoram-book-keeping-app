@@ -1112,7 +1112,8 @@ Vouchers
 Payroll
   ├─ Dashboard       ← /payroll — cycle / KPIs / MoM chart / recent runs
   ├─ Employees
-  └─ Payslips
+  ├─ Payslips
+  └─ Settings        ← /settings/payroll — cycle template (period_start_day / period_end_day / pay_day)
 ─── (divider)
 Reports               ← aggregate views over date ranges (no editing)
   └─ Profit & Loss   ← /reports/profit-loss — income − bills − payroll, accrual
@@ -1124,12 +1125,11 @@ Lists
 ─── (divider)
 Settings                ← per-tenant business config (exported in backups)
   ├─ Business details
-  ├─ PDF
-  │   ├─ Font                ← third-level in-page #anchors, shown only
-  │   ├─ Header logo            while /settings/pdf is the active route
-  │   ├─ Footer notes
-  │   └─ Protection
-  └─ Payroll          ← cycle template (period_start_day / period_end_day / pay_day)
+  └─ PDF
+      ├─ Font                ← third-level in-page #anchors, shown only
+      ├─ Header logo            while /settings/pdf is the active route
+      ├─ Footer notes
+      └─ Protection
 ─── (divider)
 App                     ← UI + multi-tenant administration
   ├─ Appearance

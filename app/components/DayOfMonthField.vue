@@ -1,5 +1,5 @@
 <template>
-	<UFormField :label="label" :hint="hint">
+	<UFormField :label="label" :help="help">
 		<div class="flex items-center gap-3">
 			<UInputNumber
 				:model-value="modelValue"
@@ -27,11 +27,17 @@
 // Used by the Payroll settings page. Keeping it as a standalone
 // component because the same pattern will likely repeat in any future
 // settings that take a day-of-month (e.g. invoice-due-day templates).
+//
+// Helper copy uses UFormField's `help` (below the input) rather than
+// `hint` (beside the label). The descriptions are full-sentence
+// explanations — they belong under the field where they read as
+// guidance, not crammed next to the label where they fight the
+// input for horizontal space.
 
 	interface Props {
 		modelValue: number
 		label: string
-		hint?: string
+		help?: string
 		// Show the "Last day of month" shortcut. Off for fields like
 		// period-start-day where snapping to the last day makes no
 		// semantic sense (no business starts a pay period on the 31st).
