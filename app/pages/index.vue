@@ -44,37 +44,50 @@
 			/>
 		</div>
 
-		<!-- Loading skeleton — shown while the dashboard's five stores are
-			still hydrating from the DB. At heavy data volumes the first
-			SELECT pass can take a few seconds; without this the page
-			rendered zero-filled tiles + empty charts and looked broken.
-			Mirrors the same grid shape as the real content below so the
-			page doesn't visibly reflow when the data arrives. The
-			animate-pulse comes from Tailwind. -->
+		<!-- Two-tier loading. The KPI tiles fall out of four small SQL
+			aggregates (`app/lib/dashboard-data.ts`) which complete in
+			~hundreds of ms even at heavy volume — so the top of the
+			page paints something useful almost immediately. The charts
+			and activity lists still drive off the Pinia stores, which
+			pull thousands of rows on first load — those sections show
+			their own skeleton until `dataReady` flips. Second visits
+			during the same tenant session skip both: stores are
+			already cached, KPIs re-run instantly. -->
+
+		<!-- KPI tile skeleton — only visible during the SQL-aggregate
+			round trip (typically <500ms). animate-pulse comes from
+			Tailwind. -->
+		<div
+			v-if="!kpis && !loadError"
+			class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6"
+			aria-busy="true"
+			aria-live="polite"
+		>
+			<UCard v-for="i in 4" :key="`kpi-skel-${i}`" class="h-full">
+				<div class="space-y-3 animate-pulse">
+					<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
+					<div class="h-7 w-32 rounded bg-(--ui-bg-muted)" />
+					<div class="h-3 w-20 rounded bg-(--ui-bg-muted)" />
+				</div>
+			</UCard>
+		</div>
+
+		<!-- Charts / activity skeleton — visible until every store has
+			hydrated. With ~3400 rows total this can run a few seconds
+			on first load. -->
 		<div
 			v-if="!dataReady && !loadError"
+			:class="kpis ? '' : 'mt-6'"
 			class="space-y-6"
 			aria-busy="true"
 			aria-live="polite"
 		>
 			<div class="text-sm text-(--ui-text-muted) flex items-center gap-2">
 				<UIcon name="i-lucide-loader-circle" class="size-4 animate-spin text-(--ui-primary)" />
-				Loading dashboard data…
+				Loading charts and activity…
 			</div>
 
-			<!-- KPI tile placeholders -->
-			<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-				<UCard v-for="i in 4" :key="`kpi-skel-${i}`" class="h-full">
-					<div class="space-y-3 animate-pulse">
-						<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
-						<div class="h-7 w-32 rounded bg-(--ui-bg-muted)" />
-						<div class="h-3 w-20 rounded bg-(--ui-bg-muted)" />
-					</div>
-				</UCard>
-			</div>
-
-			<!-- Cashflow + Expenses-by-category row placeholder. Same
-				lg:grid-cols-5 / 3+2 split the real row uses. -->
+			<!-- Cashflow + Expenses-by-category row placeholder. -->
 			<div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
 				<UCard class="lg:col-span-3 h-full">
 					<div class="h-56 rounded bg-(--ui-bg-muted) animate-pulse" />
@@ -92,10 +105,10 @@
 			</div>
 		</div>
 
-		<!-- Real content. v-else so we don't render KPI tiles before the
-			data lands (the tile computeds all return 0 for empty arrays,
-			which flashes "Rs 0" for a half-second otherwise). -->
-		<template v-else>
+		<!-- Real KPI tiles. Rendered as soon as `kpis` populates, even
+			if the stores below are still loading — that's the whole
+			point of the two-tier split. -->
+		<template v-if="kpis">
 			<!-- KPI tiles -->
 			<!-- Layout: 1 col (mobile) → 4 col (md+). The money figures
 			switch to compact form (K/M/B) at md and lg where tile width
@@ -113,19 +126,19 @@
 						</div>
 						<div
 							class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
-							:title="formatLKR(invoicesStore.outstandingTotal)"
+							:title="formatLKR(outstandingInvoices)"
 						>
-							{{ kpiMoney(invoicesStore.outstandingTotal) }}
+							{{ kpiMoney(outstandingInvoices) }}
 						</div>
 						<div class="mt-1 text-xs text-(--ui-text-muted) flex items-center gap-2">
 							<span>{{ openInvoiceCount }} open</span>
 							<UBadge
-								v-if="invoicesStore.overdueCount > 0"
+								v-if="overdueInvoiceCount > 0"
 								color="error"
 								variant="subtle"
 								size="sm"
 							>
-								{{ invoicesStore.overdueCount }} overdue
+								{{ overdueInvoiceCount }} overdue
 							</UBadge>
 						</div>
 					</UCard>
@@ -141,19 +154,19 @@
 						</div>
 						<div
 							class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
-							:title="formatLKR(billsStore.outstandingTotal)"
+							:title="formatLKR(outstandingBills)"
 						>
-							{{ kpiMoney(billsStore.outstandingTotal) }}
+							{{ kpiMoney(outstandingBills) }}
 						</div>
 						<div class="mt-1 text-xs text-(--ui-text-muted) flex items-center gap-2">
 							<span>{{ openBillCount }} open</span>
 							<UBadge
-								v-if="billsStore.overdueCount > 0"
+								v-if="overdueBillCount > 0"
 								color="error"
 								variant="subtle"
 								size="sm"
 							>
-								{{ billsStore.overdueCount }} overdue
+								{{ overdueBillCount }} overdue
 							</UBadge>
 						</div>
 					</UCard>
@@ -199,7 +212,12 @@
 					</div>
 				</UCard>
 			</div>
+		</template>
 
+		<!-- Real charts / activity. Gated on every store having hydrated,
+			so the chart components don't render with empty arrays
+			(which flashes incomplete-looking content for a beat). -->
+		<template v-if="dataReady">
 			<!-- Insights row 1: monthly cash flow + expenses by category.
 			Stacks at sm/md. At lg-xl a 6-col grid lets the user toggle
 			the split: collapsed = 4/6 + 2/6 (donut hidden, legend only);
@@ -436,8 +454,10 @@
 // invoices any more — both derive that state in JS from due_date and
 // linked vouchers, so no flagOverdue call is needed at mount time.
 
+	import type { DashboardKpis } from "~/lib/dashboard-data";
 	import type { ClientSnapshot } from "~/stores/quotes";
 	import { useMediaQuery } from "@vueuse/core";
+	import { loadDashboardKpis } from "~/lib/dashboard-data";
 	import { formatLKR, formatMoneyCompact } from "~/lib/money";
 	import { useBillsStore } from "~/stores/bills";
 	import { useInvoicesStore } from "~/stores/invoices";
@@ -528,13 +548,22 @@
 
 	const loadError = ref<string | null>(null);
 
-	// True until every store the dashboard reads from has hydrated at
-	// least once. Drives the skeleton overlay below — the dashboard
-	// renders zero-filled tiles + empty charts before this flips, which
-	// at heavy data volumes looked like the page was broken. With the
-	// `ensureLoaded` pattern on the stores, second visits during the
-	// same tenant session see `loaded` already true and skip the load
-	// + skeleton entirely.
+	// Two-tier loading. KPI tiles paint from focused SQL aggregates
+	// (`app/lib/dashboard-data.ts`) — sub-second on any volume because
+	// they're four small GROUP BYs, not full table scans. Charts +
+	// activity lists still drive off the Pinia stores (which need full
+	// rows for things like recent activity / overdue lists / monthly
+	// bucketing). So:
+	//
+	//   - `kpis` populates in <500ms; KPI section paints immediately.
+	//   - `dataReady` (all 5 stores hydrated) takes longer at heavy
+	//     volume; chart section keeps its skeleton until then.
+	//
+	// Both ride alongside the existing `ensureLoaded` cache — second
+	// visits within the same tenant session skip the store loads
+	// entirely, so only the SQL aggregates run.
+	const kpis = ref<DashboardKpis | null>(null);
+
 	const dataReady = computed(() =>
 		invoicesStore.loaded
 		&& billsStore.loaded
@@ -544,18 +573,25 @@
 	);
 
 	onMounted(async () => {
+		// KPI aggregates first — they're fast and the user sees a
+		// useful page within a fraction of a second.
 		try {
-			// Stores stay populated for the tenant session, so revisits
-			// to / are instant — only the first hit pays the SELECT cost.
-			// Each ensureLoaded() is a no-op if the store has already
-			// loaded (e.g. user just came back from /invoices).
+			kpis.value = await loadDashboardKpis();
+		} catch (err) {
+			loadError.value = err instanceof Error ? err.message : String(err);
+			return;
+		}
+
+		// Then the stores in the background — chart components subscribe
+		// to them and paint as they fill in. We don't `await` the
+		// outer onMounted on these; the dashboard renders KPI tiles +
+		// the chart skeleton meanwhile.
+		try {
 			await Promise.all([
 				invoicesStore.ensureLoaded(),
 				billsStore.ensureLoaded(),
 				quotesStore.ensureLoaded(),
 				vouchersStore.ensureLoaded(),
-				// Calendar embed needs payslip due-dates too. Cheap to
-				// load here so the calendar paints fully on first hit.
 				payslipsStore.ensureLoaded()
 			]);
 		} catch (err) {
@@ -621,60 +657,21 @@
 
 	// --- Counts that don't already exist on the stores ---
 
-	const openInvoiceCount = computed(() =>
-		invoicesStore.invoices.filter((i) => ["sent", "partial", "overdue"].includes(i.status)).length
-	);
-
-	const openBillCount = computed(() =>
-		billsStore.bills.filter((b) => ["unpaid", "partial", "overdue"].includes(b.status)).length
-	);
-
-	const openQuotesCount = computed(() =>
-		quotesStore.quotes.filter((q) => q.status === "draft" || q.status === "sent").length
-	);
-
-	const acceptedQuotesCount = computed(() =>
-		quotesStore.quotes.filter((q) => q.status === "accepted").length
-	);
-
-	const openQuotesValue = computed(() =>
-		quotesStore.quotes
-			.filter((q) => q.status === "draft" || q.status === "sent")
-			.reduce((s, q) => s + q.total_cents, 0)
-	);
-
-	// --- This-month cash flow from vouchers (the single source of truth for
-	// "actual money moved" — invoice/bill paid_cents are derived from these). ---
-
-	const monthBoundsISO = (): { start: string, end: string } => {
-		const d = new Date();
-		const y = d.getFullYear();
-		const m = d.getMonth();
-		const pad = (n: number) => String(n).padStart(2, "0");
-		const start = `${y}-${pad(m + 1)}-01`;
-		// end-exclusive: first day of next month
-		const next = new Date(y, m + 1, 1);
-		const end = `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
-		return { start, end };
-	};
-
-	const inThisMonth = (iso: string): boolean => {
-		const { start, end } = monthBoundsISO();
-		return iso >= start && iso < end;
-	};
-
-	const receiptsThisMonth = computed(() =>
-		vouchersStore.vouchers
-			.filter((v) => v.voucher_type === "receipt" && inThisMonth(v.voucher_date))
-			.reduce((s, v) => s + v.amount_cents, 0)
-	);
-
-	const paymentsThisMonth = computed(() =>
-		vouchersStore.vouchers
-			.filter((v) => v.voucher_type === "payment" && inThisMonth(v.voucher_date))
-			.reduce((s, v) => s + v.amount_cents, 0)
-	);
-
+	// KPI tile shortcuts — read off the SQL-aggregated `kpis` object so
+	// the tiles paint as soon as those four small queries finish,
+	// without waiting for the full store loads. All return 0 while
+	// `kpis` is still null (the loading skeleton is rendering instead).
+	const outstandingInvoices = computed(() => kpis.value?.invoices.outstanding_cents ?? 0);
+	const outstandingBills = computed(() => kpis.value?.bills.outstanding_cents ?? 0);
+	const overdueInvoiceCount = computed(() => kpis.value?.invoices.overdue_count ?? 0);
+	const overdueBillCount = computed(() => kpis.value?.bills.overdue_count ?? 0);
+	const openInvoiceCount = computed(() => kpis.value?.invoices.open_count ?? 0);
+	const openBillCount = computed(() => kpis.value?.bills.open_count ?? 0);
+	const openQuotesCount = computed(() => kpis.value?.quotes.open_count ?? 0);
+	const acceptedQuotesCount = computed(() => kpis.value?.quotes.accepted_count ?? 0);
+	const openQuotesValue = computed(() => kpis.value?.quotes.open_value_cents ?? 0);
+	const receiptsThisMonth = computed(() => kpis.value?.cash.receipts_cents ?? 0);
+	const paymentsThisMonth = computed(() => kpis.value?.cash.payments_cents ?? 0);
 	const netCashThisMonth = computed(() => receiptsThisMonth.value - paymentsThisMonth.value);
 
 	// --- Recent activity feed ---
