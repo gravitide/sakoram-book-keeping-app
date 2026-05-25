@@ -255,10 +255,10 @@
 						</div>
 					</template>
 				</Column>
-				<Column field="_vendor" header="Vendor" sortable>
+				<Column field="vendor_name" header="Vendor" sortable>
 					<template #body="{ data }">
 						<div class="truncate">
-							{{ data._vendor }}
+							{{ data.vendor_name || "(no vendor)" }}
 						</div>
 					</template>
 				</Column>
@@ -269,17 +269,17 @@
 						</div>
 					</template>
 				</Column>
-				<Column field="_category" header="Category" sortable>
+				<Column field="category_name" header="Category" sortable>
 					<template #body="{ data }">
 						<div class="truncate">
-							<span v-if="data._categoryMeta" class="inline-flex items-center gap-1.5">
+							<span v-if="data.category_name" class="inline-flex items-center gap-1.5">
 								<span
 									class="inline-flex size-5 rounded items-center justify-center text-white shrink-0"
-									:style="{ backgroundColor: themeHex(data._categoryMeta.color) }"
+									:style="{ backgroundColor: themeHex(data.category_color ?? '') }"
 								>
-									<UIcon :name="data._categoryMeta.icon" class="size-3" />
+									<UIcon :name="data.category_icon ?? 'i-lucide-tag'" class="size-3" />
 								</span>
-								<span>{{ data._categoryMeta.name }}</span>
+								<span>{{ data.category_name }}</span>
 							</span>
 							<span v-else class="text-(--ui-text-muted)">—</span>
 						</div>
@@ -418,7 +418,7 @@
 </template>
 
 <script setup lang="ts">
-	import type { BillLineRow, BillRow, BillStatus, VendorSnapshot } from "~/stores/bills";
+	import type { BillLineRow, BillRow, BillStatus } from "~/stores/bills";
 	import { invoke } from "@tauri-apps/api/core";
 	import { join } from "@tauri-apps/api/path";
 	import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -466,46 +466,23 @@
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();
 
-	// Hoisted helpers — referenced from the row view-model below.
-	function vendorNameOf(b: BillRow): string {
-		try {
-			return (JSON.parse(b.vendor_snapshot) as VendorSnapshot).name || "(no vendor)";
-		} catch {
-			return "(no vendor)";
-		}
-	}
-	function categoryMetaOf(b: BillRow): { name: string, color: string, icon: string } | null {
-		if (!b.category_snapshot) return null;
-		try {
-			return JSON.parse(b.category_snapshot) as { name: string, color: string, icon: string };
-		} catch {
-			return null;
-		}
-	}
-
-	// View-model: PrimeVue sorts by top-level fields, so snapshot-derived
-	// values (vendor name, category, balance, status) all get attached as
-	// `_…` fields. The full category meta is preserved on `_categoryMeta`
-	// so the Category cell can render its swatch + icon without re-parsing.
+	// `vendor_name` + `category_name/color/icon` are now real columns on
+	// `bills` (denormalised at write time — see migration 0028) so we
+	// read them straight off each row. No JSON.parse per row, which used
+	// to be the most expensive part of every filter change at heavy
+	// demo scale (1000+ bills × 2 snapshot parses each).
+	// Balance + derived status still need per-row computation; they
+	// stay on a view-model with `_…` field names.
 	interface BillRowVM extends BillRow {
-		_vendor: string
-		_category: string | null
-		_categoryMeta: { name: string, color: string, icon: string } | null
 		_balance: number
 		_status: BillStatus
 	}
 	const rows = computed<BillRowVM[]>(() =>
-		store.filtered.map((b) => {
-			const meta = categoryMetaOf(b);
-			return {
-				...b,
-				_vendor: vendorNameOf(b),
-				_category: meta?.name ?? null,
-				_categoryMeta: meta,
-				_balance: store.balanceCentsFor(b),
-				_status: store.derivedStatus(b)
-			};
-		})
+		store.filtered.map((b) => ({
+			...b,
+			_balance: store.balanceCentsFor(b),
+			_status: store.derivedStatus(b)
+		}))
 	);
 
 	// Sum of total_cents across the currently visible (filtered) rows.

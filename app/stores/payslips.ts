@@ -34,6 +34,11 @@ export interface PayslipRow {
 	fiscal_year: number
 	employee_id: number
 	employee_snapshot: string // JSON
+	/// Denormalised from `employee_snapshot.full_name` — set whenever the
+	/// snapshot is set so the list page can render + sort + search
+	/// without parsing the JSON blob. Migration 0028 added this column
+	/// and backfilled it from existing snapshots.
+	employee_name: string
 	period_start: string
 	period_end: string
 	pay_date: string
@@ -152,11 +157,10 @@ export const usePayslipsStore = defineStore("payslips", () => {
 			if (periodFrom.value && row.period_start < periodFrom.value) return false;
 			if (periodTo.value && row.period_end > periodTo.value) return false;
 			if (!q) return true;
-			let snapName = "";
-			try {
-				snapName = (JSON.parse(row.employee_snapshot) as EmployeeSnapshot).full_name?.toLowerCase() ?? "";
-			} catch { /* ignore */ }
-			return row.number.toLowerCase().includes(q) || snapName.includes(q);
+			// Search the denormalised employee_name column (migration
+			// 0028) so no JSON.parse runs per row.
+			return row.number.toLowerCase().includes(q)
+				|| row.employee_name.toLowerCase().includes(q);
 		});
 	});
 
@@ -268,15 +272,16 @@ export const usePayslipsStore = defineStore("payslips", () => {
 		// on the editor — they can edit/delete and add their own lines.
 		const result = await execute(
 			`INSERT INTO payslips (
-				number, fiscal_year, employee_id, employee_snapshot,
+				number, fiscal_year, employee_id, employee_snapshot, employee_name,
 				period_start, period_end, pay_date,
 				earnings_cents, deductions_cents, net_cents, status
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'draft')`,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'draft')`,
 			[
 				allocation.number,
 				allocation.fiscalYear,
 				input.employee.id,
 				snap,
+				input.employee.full_name,
 				input.periodStart,
 				input.periodEnd,
 				input.payDate,

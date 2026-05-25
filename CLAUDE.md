@@ -918,6 +918,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0025_currency_symbol_override.sql       ← allow custom (non-curated) currency_code by persisting a user-supplied symbol
 0026_drop_attachment_path.sql           ← drop the dead bills.attachment_path / vouchers.attachment_path columns (the polymorphic document_attachments table from 0022 has owned attachments for a while)
 0027_title_override.sql                 ← optional `title_override` text column on quotes / invoices / bills so the PDF big-header can be customised per document ("Development quote" instead of "QUOTATION")
+0028_denormalize_list_party_names.sql   ← denormalised `client_name` / `vendor_name` / `employee_name` columns on quotes / invoices / bills / payslips (plus `category_name/color/icon` on bills) so list pages render + sort + search without parsing the snapshot JSON per row. Backfilled from existing snapshots via SQLite's `json_extract`. Stores set the column whenever the snapshot is set; detail pages still use the full snapshot.
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,

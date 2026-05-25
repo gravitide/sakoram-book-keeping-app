@@ -27,6 +27,12 @@ export interface QuoteRow {
 	number: string
 	client_id: number
 	client_snapshot: string // JSON-serialised
+	/// Denormalised from `client_snapshot.name` — set whenever the
+	/// snapshot is set so the list page can render + sort + search by
+	/// client name without parsing the JSON blob on every keystroke.
+	/// Migration 0028 added this column and backfilled it from the
+	/// existing snapshots.
+	client_name: string
 	issue_date: string
 	valid_until: string
 	status: QuoteStatus
@@ -160,14 +166,14 @@ export const useQuotesStore = defineStore("quotes", () => {
 			if (validFrom.value && row.valid_until < validFrom.value) return false;
 			if (validTo.value && row.valid_until > validTo.value) return false;
 			if (!q) return true;
-			let snapName = "";
-			try {
-				snapName = (JSON.parse(row.client_snapshot) as ClientSnapshot).name?.toLowerCase() ?? "";
-			} catch { /* ignore */ }
+			// Search on the denormalised client_name column (migration
+			// 0028) so we don't JSON.parse the snapshot blob on every
+			// keystroke — used to be the most expensive part of the
+			// search filter at heavy demo scale.
 			return (
 				row.number.toLowerCase().includes(q)
 				|| row.project_title.toLowerCase().includes(q)
-				|| snapName.includes(q)
+				|| row.client_name.toLowerCase().includes(q)
 			);
 		});
 	});
@@ -213,6 +219,19 @@ export const useQuotesStore = defineStore("quotes", () => {
 			"SELECT * FROM quote_lines WHERE quote_id = ? ORDER BY sort_order ASC, id ASC",
 			[quoteId]
 		);
+
+	// Pull the name field out of a stored client_snapshot JSON. Only
+	// the `update()` path uses this — for the Refresh-client-snapshot
+	// button on the detail page, which is the one flow that mutates
+	// the snapshot post-create. createDraft / duplicate pass the name
+	// directly from their input / source row.
+	const nameFromClientSnapshot = (snap: string): string => {
+		try {
+			return (JSON.parse(snap) as { name?: string }).name ?? "";
+		} catch {
+			return "";
+		}
+	};
 
 	const buildClientSnapshot = (
 		client: { name: string, contact_person?: string | null, email?: string | null, phone?: string | null, address_line1?: string | null, address_line2?: string | null, city?: string | null, postal_code?: string | null, country?: string | null, tax_id?: string | null }
@@ -315,15 +334,16 @@ export const useQuotesStore = defineStore("quotes", () => {
 		const defaultVatBp = settings.default_vat_rate ?? 0;
 		const result = await execute(
 			`INSERT INTO quotes (
-				number, client_id, client_snapshot, issue_date, valid_until,
+				number, client_id, client_snapshot, client_name, issue_date, valid_until,
 				status, pricing_mode, project_title,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents,
 				prepared_by, bank_details_snapshot, business_bank_id
-			) VALUES (?, ?, ?, ?, ?, 'draft', 'bundle', ?, ?, 0, 0, 0, ?, ?, ?)`,
+			) VALUES (?, ?, ?, ?, ?, ?, 'draft', 'bundle', ?, ?, 0, 0, 0, ?, ?, ?)`,
 			[
 				allocation.number,
 				input.client.id,
 				clientSnap,
+				input.client.name,
 				issue,
 				validUntil,
 				input.project_title ?? "",
@@ -362,15 +382,16 @@ export const useQuotesStore = defineStore("quotes", () => {
 
 		const result = await execute(
 			`INSERT INTO quotes (
-				number, client_id, client_snapshot, issue_date, valid_until,
+				number, client_id, client_snapshot, client_name, issue_date, valid_until,
 				status, pricing_mode, project_title,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents,
 				notes, terms, prepared_by, bank_details_snapshot, business_bank_id
-			) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				allocation.number,
 				src.client_id,
 				src.client_snapshot,
+				src.client_name,
 				issue,
 				validUntil,
 				src.pricing_mode,
@@ -449,9 +470,16 @@ export const useQuotesStore = defineStore("quotes", () => {
 		if (cols.length === 0) return;
 		const setClause = cols.map((c) => `${c} = ?`).join(", ");
 		const params: unknown[] = cols.map((c) => patch[c] ?? null);
+		// Keep client_name in lockstep with the snapshot whenever the
+		// patch touches the snapshot (refresh-snapshot on detail page).
+		let extraSet = "";
+		if (Object.hasOwn(patch, "client_snapshot")) {
+			extraSet = ", client_name = ?";
+			params.push(nameFromClientSnapshot(patch.client_snapshot ?? ""));
+		}
 		params.push(id);
 		await execute(
-			`UPDATE quotes SET ${setClause}, updated_at = datetime('now') WHERE id = ?`,
+			`UPDATE quotes SET ${setClause}${extraSet}, updated_at = datetime('now') WHERE id = ?`,
 			params
 		);
 	};

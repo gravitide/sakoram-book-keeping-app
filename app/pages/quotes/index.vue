@@ -213,10 +213,10 @@
 						</div>
 					</template>
 				</Column>
-				<Column field="_client" header="Client" sortable>
+				<Column field="client_name" header="Client" sortable>
 					<template #body="{ data }">
 						<div class="truncate">
-							{{ data._client }}
+							{{ data.client_name }}
 						</div>
 					</template>
 				</Column>
@@ -278,7 +278,7 @@
 </template>
 
 <script setup lang="ts">
-	import type { ClientSnapshot, QuoteLineRow, QuoteRow, QuoteStatus } from "~/stores/quotes";
+	import type { QuoteLineRow, QuoteRow, QuoteStatus } from "~/stores/quotes";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { formatLKR } from "~/lib/money";
@@ -318,23 +318,12 @@
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();
 
-	// Hoisted helper so the row view-model below can close over it.
-	function clientName(snap: string): string {
-		try {
-			return (JSON.parse(snap) as ClientSnapshot).name ?? "—";
-		} catch {
-			return "—";
-		}
-	}
-
-	// View-model: PrimeVue's DataTable sorts by top-level fields, so we
-	// surface the snapshot-derived client name as `_client`.
-	interface QuoteRowVM extends QuoteRow {
-		_client: string
-	}
-	const rows = computed<QuoteRowVM[]>(() =>
-		store.filtered.map((q) => ({ ...q, _client: clientName(q.client_snapshot) }))
-	);
+	// `client_name` is now a real column on `quotes` (denormalised at
+	// write time from client_snapshot — see migration 0028) so the
+	// table reads + sorts off it directly. No JSON.parse per row,
+	// which used to be the most expensive part of every filter
+	// change at heavy demo scale.
+	const rows = computed<QuoteRow[]>(() => store.filtered);
 
 	// Sum of total_cents across the currently visible (filtered) rows.
 	// Reflects whatever the active filters narrow the list to, so the
@@ -560,7 +549,7 @@
 	// Three-group row-actions menu: lifecycle (Open + transitions),
 	// Duplicate, then Generate PDF. ResizableDataTable inserts a
 	// separator between each group.
-	function itemsFor(q: QuoteRowVM) {
+	function itemsFor(q: QuoteRow) {
 		const lifecycle: { label: string, icon: string, onSelect: () => void }[] = [
 			{ label: "Open", icon: "i-lucide-pencil", onSelect: () => open(q) }
 		];

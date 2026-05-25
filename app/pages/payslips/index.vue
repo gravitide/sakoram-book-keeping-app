@@ -215,10 +215,10 @@
 						</div>
 					</template>
 				</Column>
-				<Column field="_employee" header="Employee" sortable>
+				<Column field="employee_name" header="Employee" sortable>
 					<template #body="{ data }">
 						<div class="truncate">
-							{{ data._employee }}
+							{{ data.employee_name || "(unknown)" }}
 						</div>
 					</template>
 				</Column>
@@ -341,7 +341,7 @@
 </template>
 
 <script setup lang="ts">
-	import type { EmployeeSnapshot, PayslipLineDraft, PayslipRow, PayslipStatus } from "~/stores/payslips";
+	import type { PayslipLineDraft, PayslipRow, PayslipStatus } from "~/stores/payslips";
 	import { invoke } from "@tauri-apps/api/core";
 	import { join } from "@tauri-apps/api/path";
 	import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -415,25 +415,16 @@
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();
 
-	// Hoisted helper so the row view-model below can close over it.
-	function employeeName(r: PayslipRow): string {
-		try {
-			return (JSON.parse(r.employee_snapshot) as EmployeeSnapshot).full_name ?? "(unknown)";
-		} catch {
-			return "(unknown)";
-		}
-	}
-
-	// View-model: PrimeVue sorts by top-level fields, so derived employee
-	// name and status are surfaced as `_employee` and `_status`.
+	// `employee_name` is now a real column on `payslips` (denormalised
+	// at write time — see migration 0028) so we read it straight off
+	// the row instead of JSON-parsing the snapshot per render.
+	// Derived status still needs a per-row computation.
 	interface PayslipRowVM extends PayslipRow {
-		_employee: string
 		_status: PayslipStatus
 	}
 	const rows = computed<PayslipRowVM[]>(() =>
 		store.filtered.map((r) => ({
 			...r,
-			_employee: employeeName(r),
 			_status: store.derivedStatus(r)
 		}))
 	);
