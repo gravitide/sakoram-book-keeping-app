@@ -51,14 +51,23 @@ export default defineNuxtConfig({
 				{ name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1" }
 			]
 		},
-		pageTransition: {
-			name: "page",
-			mode: "out-in"
-		},
-		layoutTransition: {
-			name: "layout",
-			mode: "out-in"
-		}
+		// Page + layout transitions are disabled (set to false).
+		//
+		// Nuxt's default is `{ mode: "out-in" }` for both, which means
+		// the OLD page must finish its leave transition AND unmount
+		// before the new page even starts to mount. On a desktop app
+		// with heavy lists, that gives the user a "frozen until the
+		// new page is ready" feel — the sidebar is unresponsive during
+		// the leave transition, and the in-page loading spinner can't
+		// show because the new page hasn't mounted yet.
+		//
+		// Disabling the transitions lets the new page mount instantly
+		// on click. The NuxtLoadingIndicator bar + the in-page spinner
+		// + the keep-alive on <NuxtPage> together cover what the fade
+		// transition used to communicate (and what it never did, which
+		// is letting the user click another link mid-nav).
+		pageTransition: false,
+		layoutTransition: false
 	},
 	css: [
 		"@/assets/css/main.css"
