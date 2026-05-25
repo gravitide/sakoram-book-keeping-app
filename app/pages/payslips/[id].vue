@@ -1,38 +1,37 @@
 <template>
 	<div class="select-none">
-		<NuxtLink to="/payslips" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1 mb-4">
-			<UIcon name="i-lucide-arrow-left" class="size-4" />
-			Back to payslips
-		</NuxtLink>
+		<!-- Top toolbar row: back link on the left, action cluster on
+			the right. Pinned above the title block so buttons can't
+			collide with the number / status / employee meta as the
+			viewport narrows — same shape as the invoice / quote / bill
+			detail pages. -->
+		<div class="mb-4 flex items-center justify-between gap-4">
+			<NuxtLink to="/payslips" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
+				<UIcon name="i-lucide-arrow-left" class="size-4" />
+				Back to payslips
+			</NuxtLink>
 
-		<!-- Header: number + status + employee + period -->
-		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
-			<div class="min-w-0">
-				<div class="flex items-center gap-2 flex-wrap">
-					<h1 class="text-2xl font-semibold tabular-nums truncate">
-						{{ row?.number }}
-					</h1>
-					<StatusBadge v-if="row" :status="derived" />
-				</div>
-				<p class="text-sm text-(--ui-text-muted) mt-1">
-					<span class="font-medium text-(--ui-text)">{{ employee?.full_name }}</span>
-					<span v-if="employee?.designation">
-						· {{ employee.designation }}
-					</span>
-					<span class="ml-1">
-						· {{ row?.period_start }} → {{ row?.period_end }}
-					</span>
-				</p>
-			</div>
-
-			<div class="flex items-center gap-2 flex-wrap">
+			<!-- md+ inline cluster. Below md this collapses into a single
+				⋯ dropdown so the toolbar stays a tidy two-element row on
+				narrow windows; both paths share the same handlers. -->
+			<div class="hidden md:flex gap-2 items-center shrink-0">
+				<UButton
+					v-if="row?.status === 'issued'"
+					size="sm"
+					color="primary"
+					icon="i-lucide-banknote"
+					@click="recordPayment"
+				>
+					Record payment
+				</UButton>
 				<UButton
 					size="sm"
-					icon="i-lucide-file-down"
-					variant="soft"
 					color="neutral"
+					variant="outline"
+					icon="i-lucide-file-down"
 					:disabled="!row || dirty || pdf.state.rendering"
 					:loading="pdf.state.rendering"
+					:title="dirty ? 'Save first' : 'Preview this payslip as a PDF'"
 					@click="onPdfClick"
 				>
 					PDF & Print
@@ -40,6 +39,8 @@
 				<UButton
 					v-if="row?.status === 'draft'"
 					size="sm"
+					color="neutral"
+					variant="outline"
 					icon="i-lucide-send"
 					:disabled="!canIssue"
 					:loading="busy"
@@ -48,39 +49,63 @@
 					Mark issued
 				</UButton>
 				<UButton
-					v-if="row?.status === 'issued'"
-					size="sm"
-					icon="i-lucide-banknote"
-					color="success"
-					@click="recordPayment"
-				>
-					Record payment
-				</UButton>
-				<UButton
 					v-if="canCancel"
 					size="sm"
-					icon="i-lucide-circle-x"
-					variant="soft"
 					color="neutral"
+					variant="outline"
+					icon="i-lucide-circle-x"
 					:disabled="busy"
 					@click="cancel"
 				>
 					Cancel
 				</UButton>
-				<!-- Visual separator before the destructive action so a stray
-					click on Cancel / Record payment doesn't land on Delete. -->
+
+				<!-- Visual separator before the destructive action so the
+					delete button doesn't sit shoulder-to-shoulder with the
+					everyday actions and get accidentally clicked. -->
 				<div class="h-6 w-px bg-(--ui-border-accented) mx-1" />
+
 				<UButton
 					size="sm"
-					icon="i-lucide-trash-2"
-					variant="soft"
 					color="error"
+					variant="soft"
+					icon="i-lucide-trash-2"
 					:disabled="busy"
 					@click="confirmDelete = true"
 				>
 					Delete
 				</UButton>
 			</div>
+
+			<div class="md:hidden shrink-0">
+				<UDropdownMenu :items="actionMenuItems">
+					<UButton
+						size="sm"
+						color="neutral"
+						variant="outline"
+						icon="i-lucide-ellipsis-vertical"
+						title="Actions"
+						aria-label="Actions"
+					/>
+				</UDropdownMenu>
+			</div>
+		</div>
+
+		<!-- Header: number + status + employee + period -->
+		<header class="mb-6">
+			<h1 class="text-2xl font-semibold flex items-center gap-3 flex-wrap">
+				<span class="tabular-nums">{{ row?.number }}</span>
+				<StatusBadge v-if="row" :status="derived" size="md" />
+			</h1>
+			<p class="text-sm text-(--ui-text-muted) mt-1">
+				<span class="font-medium text-(--ui-text)">{{ employee?.full_name }}</span>
+				<span v-if="employee?.designation">
+					· {{ employee.designation }}
+				</span>
+				<span class="ml-1">
+					· {{ row?.period_start }} → {{ row?.period_end }}
+				</span>
+			</p>
 		</header>
 
 		<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -608,4 +633,63 @@
 			busy.value = false;
 		}
 	};
+
+	// Items rendered into the responsive UDropdownMenu shown below md
+	// (the inline cluster above is hidden at that width). Grouped so
+	// the dropdown draws separators between Record-payment + PDF,
+	// transitions (Mark issued / Cancel), and Delete. Declared at the
+	// end so the handlers it references are already in scope.
+	interface ActionItem {
+		label: string
+		icon: string
+		disabled?: boolean
+		class?: string
+		onSelect: () => void
+	}
+	const actionMenuItems = computed(() => {
+		const primary: ActionItem[] = [];
+		if (row.value?.status === "issued") {
+			primary.push({
+				label: "Record payment",
+				icon: "i-lucide-banknote",
+				onSelect: recordPayment
+			});
+		}
+		primary.push({
+			label: "PDF & Print",
+			icon: "i-lucide-file-down",
+			disabled: !row.value || dirty.value || pdf.state.rendering,
+			onSelect: onPdfClick
+		});
+
+		const transitions: ActionItem[] = [];
+		if (row.value?.status === "draft") {
+			transitions.push({
+				label: "Mark issued",
+				icon: "i-lucide-send",
+				disabled: !canIssue.value || busy.value,
+				onSelect: markIssued
+			});
+		}
+		if (canCancel.value) {
+			transitions.push({
+				label: "Cancel",
+				icon: "i-lucide-circle-x",
+				disabled: busy.value,
+				onSelect: cancel
+			});
+		}
+
+		const destructive: ActionItem[] = [{
+			label: "Delete",
+			icon: "i-lucide-trash-2",
+			disabled: busy.value,
+			class: "text-(--ui-error) hover:bg-(--ui-error)/10 [&>span>span:first-child]:text-(--ui-error)",
+			onSelect: () => {
+				confirmDelete.value = true;
+			}
+		}];
+
+		return [primary, transitions, destructive].filter((g) => g.length > 0);
+	});
 </script>
