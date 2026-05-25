@@ -226,13 +226,13 @@
 							<th class="py-2 pl-3 pr-2 font-medium">
 								Month
 							</th>
-							<th class="py-2 px-2 font-medium text-right">
+							<th class="py-2 px-2 font-medium text-right whitespace-nowrap">
 								Receipts (in)
 							</th>
-							<th class="py-2 px-2 font-medium text-right">
+							<th class="py-2 px-2 font-medium text-right whitespace-nowrap">
 								Payments (out)
 							</th>
-							<th class="py-2 pl-2 pr-3 font-medium text-right w-32">
+							<th class="py-2 pl-2 pr-3 font-medium text-right whitespace-nowrap">
 								Net
 							</th>
 						</tr>
@@ -254,21 +254,21 @@
 									{{ m.label }}
 								</div>
 							</td>
-							<td class="py-2 px-2 text-right tabular-nums" :class="m.receipts === 0 ? 'text-(--ui-text-muted)' : 'text-(--ui-success)'">
+							<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap" :class="m.receipts === 0 ? 'text-(--ui-text-muted)' : 'text-(--ui-success)'">
 								{{ m.receipts === 0 ? "—" : formatLKR(m.receipts) }}
 							</td>
-							<td class="py-2 px-2 text-right tabular-nums" :class="m.payments === 0 ? 'text-(--ui-text-muted)' : 'text-(--ui-error)'">
+							<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap" :class="m.payments === 0 ? 'text-(--ui-text-muted)' : 'text-(--ui-error)'">
 								{{ m.payments === 0 ? "—" : `− ${formatLKR(m.payments)}` }}
 							</td>
 							<td
-								class="py-2 pl-2 pr-3 text-right tabular-nums font-medium"
+								class="py-2 pl-2 pr-3 text-right tabular-nums font-medium whitespace-nowrap"
 								:class="m.net === 0 ? 'text-(--ui-text-muted)' : (m.net > 0 ? 'text-(--ui-success)' : 'text-(--ui-error)')"
 							>
 								<template v-if="m.net === 0">
 									—
 								</template>
 								<template v-else>
-									{{ m.net > 0 ? "+" : "−" }}{{ formatLKR(Math.abs(m.net)) }}
+									{{ m.net > 0 ? "+ " : "− " }}{{ formatLKR(Math.abs(m.net)) }}
 								</template>
 							</td>
 						</tr>
@@ -276,17 +276,17 @@
 							<td class="py-3 pl-3 pr-2 font-semibold">
 								Total
 							</td>
-							<td class="py-3 px-2 text-right tabular-nums font-semibold text-(--ui-success)">
+							<td class="py-3 px-2 text-right tabular-nums font-semibold text-(--ui-success) whitespace-nowrap">
 								{{ formatLKR(totals.receipts) }}
 							</td>
-							<td class="py-3 px-2 text-right tabular-nums font-semibold text-(--ui-error)">
+							<td class="py-3 px-2 text-right tabular-nums font-semibold text-(--ui-error) whitespace-nowrap">
 								{{ totals.payments === 0 ? "—" : `− ${formatLKR(totals.payments)}` }}
 							</td>
 							<td
-								class="py-3 pl-2 pr-3 text-right tabular-nums font-semibold"
+								class="py-3 pl-2 pr-3 text-right tabular-nums font-semibold whitespace-nowrap"
 								:class="totals.net >= 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'"
 							>
-								{{ totals.net >= 0 ? "+" : "−" }}{{ formatLKR(Math.abs(totals.net)) }}
+								{{ totals.net >= 0 ? "+ " : "− " }}{{ formatLKR(Math.abs(totals.net)) }}
 							</td>
 						</tr>
 					</tbody>
