@@ -244,17 +244,24 @@
 	type PageSizeChoice = number | "fit";
 	const pageSizeStorageKey = `${props.stateKey}:pageSize`;
 
-	// Default to the caller's `defaultPageSize` (usually "fit"). A
-	// persisted numeric pick from a previous session always wins;
-	// otherwise we fall through to the prop. This way list pages get
-	// auto-fitting tables and report pages can opt into a fixed
-	// number without anyone hand-seeding localStorage.
+	// Only an explicit numeric pick (10 / 15 / 25 / 50 / 100) is treated
+	// as user intent that overrides the page's `defaultPageSize` prop.
+	//
+	// `"fit"` in storage is treated as "no explicit preference" — it
+	// either came from a previous session where the component
+	// hard-defaulted to fit (before this prop existed), or the user
+	// picked fit from the dropdown on a page whose default IS fit.
+	// Either way, we honor the page's current prop default for fit-shaped
+	// preferences. Concretely:
+	//
+	//   - List pages (defaultPageSize="fit"): "fit" in storage → "fit".
+	//   - Report pages (defaultPageSize=50): stale "fit" in storage → 50.
+	//   - Either page type: explicit numeric pick → wins.
 	const readPersisted = (): PageSizeChoice => {
 		if (typeof localStorage === "undefined") return props.defaultPageSize;
 		try {
 			const raw = localStorage.getItem(pageSizeStorageKey);
-			if (raw === "fit") return "fit";
-			if (raw === null) return props.defaultPageSize;
+			if (raw === null || raw === "fit") return props.defaultPageSize;
 			const n = Number(raw);
 			return Number.isFinite(n) && n > 0 ? n : props.defaultPageSize;
 		} catch {
