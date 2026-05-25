@@ -142,15 +142,48 @@
 					stroke-width="1"
 				/>
 
+				<!-- Faint dashed reference line at the net trend's zero —
+					profit floats above it, losses dip below. Drawn before
+					the path / dots so the trend line sits in front. -->
+				<g v-if="netPath">
+					<line
+						:x1="PADDING_LEFT"
+						:x2="SVG_WIDTH - PADDING_RIGHT"
+						:y1="netMidY"
+						:y2="netMidY"
+						stroke="var(--ui-primary)"
+						stroke-width="0.5"
+						stroke-dasharray="3 4"
+						opacity="0.4"
+					/>
+					<text
+						:x="SVG_WIDTH - PADDING_RIGHT - 2"
+						:y="netMidY - 3"
+						text-anchor="end"
+						class="fill-(--ui-primary) text-[8px] uppercase tracking-wider"
+						opacity="0.7"
+					>
+						Net 0
+					</text>
+				</g>
+
 				<!-- Net trend line + dots, drawn on top so it floats above
 					the bars. The line dipping below zero crosses the
 					baseline into the loss zone — same visual cue the
-					Net KPI tile uses. -->
+					Net KPI tile uses.
+
+					stroke / fill set as direct SVG attributes (not
+					Tailwind classes) because the `stroke-(--ui-primary)`
+					arbitrary-value class doesn't reliably compile for
+					<path> elements in Tailwind v4 even though fill-* does
+					for <circle>. Going through `var(--ui-primary)` lets
+					the theme picker still drive the colour. -->
 				<g v-if="netPath">
 					<path
 						:d="netPath"
-						class="stroke-(--ui-primary) fill-none"
-						stroke-width="1.5"
+						fill="none"
+						stroke="var(--ui-primary)"
+						stroke-width="2"
 						stroke-linecap="round"
 						stroke-linejoin="round"
 					/>
@@ -159,8 +192,11 @@
 						:key="`pt-${m.key}`"
 						:cx="m.colX + colWidth / 2"
 						:cy="m.netY"
-						r="2.5"
-						class="fill-(--ui-primary) transition-opacity"
+						r="3"
+						fill="var(--ui-primary)"
+						stroke="var(--ui-bg)"
+						stroke-width="1.5"
+						class="transition-opacity"
 						:class="hover === null || hover === i ? '' : 'opacity-40'"
 					/>
 				</g>
@@ -306,8 +342,30 @@
 		const bw = Math.min(14, Math.max(6, cw * 0.32));
 		const bg = Math.max(2, cw * 0.06);
 
-		// Second pass: build geometry. Net y maps the signed value
-		// (can dip below baseline into the loss zone).
+		// Net line uses its own scale, vertically centred on the
+		// chart. The previous "anchor at baseline" approach put
+		// net = +scaleMax at the chart top and net = -scaleMax at
+		// y = baseline + usableHeight — well below the visible canvas
+		// (loss months disappeared off the bottom). Centring at midY
+		// with profit going up and loss going down means both
+		// directions get equal real estate and the line stays in
+		// frame. Scale denominator is the largest |net| across the
+		// series (with a floor so empty data doesn't divide by 0),
+		// so a series of small steady nets fills the chart instead
+		// of hugging the centre.
+		let maxNetAbs = 0;
+		for (const r of raw) {
+			const n = Math.abs(r.income - r.expense);
+			if (n > maxNetAbs) maxNetAbs = n;
+		}
+		const netScale = maxNetAbs > 0 ? maxNetAbs : 1;
+		const netMidY = (PADDING_TOP + baseline) / 2;
+		// Leave a bit of breathing room at top + bottom so the dots
+		// don't kiss the chart edges (and so the line doesn't fight
+		// with the y-axis "max" label).
+		const netHalfRange = (baseline - PADDING_TOP) / 2 * 0.82;
+
+		// Second pass: build geometry.
 		let prevYear = -1;
 		return raw.map((r, i) => {
 			const colX = PADDING_LEFT + i * cw;
@@ -315,11 +373,8 @@
 			const incomeH = (r.income / scaleMax) * usableHeight;
 			const expenseH = (r.expense / scaleMax) * usableHeight;
 			const net = r.income - r.expense;
-			// Net line: map [-scaleMax, +scaleMax] to the chart's
-			// vertical range, anchored on the baseline. Clamp so big
-			// net values don't escape the chart.
-			const netRatio = Math.max(-1, Math.min(1, net / scaleMax));
-			const netY = baseline - netRatio * usableHeight;
+			const netRatio = Math.max(-1, Math.min(1, net / netScale));
+			const netY = netMidY - netRatio * netHalfRange;
 			const showYear = i === 0 || r.d.getFullYear() !== prevYear;
 			prevYear = r.d.getFullYear();
 			return {
@@ -355,6 +410,11 @@
 	const barWidth = computed(() => Math.min(14, Math.max(6, colWidth.value * 0.32)));
 
 	const zeroY = SVG_HEIGHT - PADDING_BOTTOM;
+	// Net trend reference line. The net line floats on its own scale
+	// (so loss months don't fall off the bottom of the canvas) — this
+	// faint dashed line at the same midpoint gives users a visual
+	// anchor for "profit above, loss below".
+	const netMidY = (PADDING_TOP + (SVG_HEIGHT - PADDING_BOTTOM)) / 2;
 
 	// Y-axis ticks: max / mid / 0. shortMoney keeps the axis dense.
 	const yTicks = computed(() => {
