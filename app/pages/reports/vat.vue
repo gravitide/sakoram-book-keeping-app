@@ -342,6 +342,7 @@
 					state-key="reports-vat-invoices"
 					default-sort-field="issue_date"
 					:default-sort-order="-1"
+					:default-page-size="50"
 					@row-click="(row) => router.push(`/invoices/${row.id}`)"
 				>
 					<Column field="number" header="Number" sortable>
@@ -387,6 +388,7 @@
 					state-key="reports-vat-bills"
 					default-sort-field="issue_date"
 					:default-sort-order="-1"
+					:default-page-size="50"
 					@row-click="(row) => router.push(`/bills/${row.id}`)"
 				>
 					<Column field="number" header="Number" sortable>

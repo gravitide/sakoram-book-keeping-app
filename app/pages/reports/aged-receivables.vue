@@ -262,6 +262,7 @@
 				data-key="rowKey"
 				default-sort-field="total"
 				:default-sort-order="-1"
+				:default-page-size="50"
 				@row-click="(row) => openClient(row.clientId)"
 			>
 				<Column field="name" header="Client" sortable>

@@ -435,6 +435,7 @@
 					state-key="reports-pnl-invoices"
 					default-sort-field="issue_date"
 					:default-sort-order="-1"
+					:default-page-size="50"
 					@row-click="(row) => router.push(`/invoices/${row.id}`)"
 				>
 					<Column field="number" header="Number" sortable>
@@ -473,6 +474,7 @@
 					state-key="reports-pnl-bills"
 					default-sort-field="issue_date"
 					:default-sort-order="-1"
+					:default-page-size="50"
 					@row-click="(row) => router.push(`/bills/${row.id}`)"
 				>
 					<Column field="number" header="Number" sortable>
@@ -511,6 +513,7 @@
 					state-key="reports-pnl-payslips"
 					default-sort-field="period_end"
 					:default-sort-order="-1"
+					:default-page-size="50"
 					@row-click="(row) => router.push(`/payslips/${row.id}`)"
 				>
 					<Column field="number" header="Number" sortable>

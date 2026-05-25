@@ -163,6 +163,15 @@
 		// owns whatever it wants to do with it (e.g. bulk PDF on payslips).
 		selectable?: boolean
 		selection?: T[]
+		// Initial page-size choice when no value is persisted in
+		// localStorage yet (i.e. fresh visit). Defaults to "fit" — the
+		// list pages want the table to auto-fill the viewport. Pages
+		// where "fit" makes less sense (e.g. report drill-downs that
+		// are usually short tabular extracts the user wants to scan
+		// without paging) can pass a fixed number like 50 instead.
+		// Once the user picks any value from the dropdown that pick
+		// wins on subsequent visits — this prop is only the seed.
+		defaultPageSize?: number | "fit"
 	}
 
 	const props = withDefaults(defineProps<Props>(), {
@@ -180,7 +189,8 @@
 		rowsPerPage: 15,
 		rowsPerPageOptions: () => [10, 15, 25, 50, 100],
 		selectable: false,
-		selection: () => []
+		selection: () => [],
+		defaultPageSize: "fit"
 	});
 
 	const emit = defineEmits<{
@@ -220,19 +230,21 @@
 	type PageSizeChoice = number | "fit";
 	const pageSizeStorageKey = `${props.stateKey}:pageSize`;
 
-	// Default to "fit" — most useful for a desktop app where the user
-	// expects the table to fill the pane. A persisted numeric pick
-	// (from a previous session) wins; otherwise we land on fit.
+	// Default to the caller's `defaultPageSize` (usually "fit"). A
+	// persisted numeric pick from a previous session always wins;
+	// otherwise we fall through to the prop. This way list pages get
+	// auto-fitting tables and report pages can opt into a fixed
+	// number without anyone hand-seeding localStorage.
 	const readPersisted = (): PageSizeChoice => {
-		if (typeof localStorage === "undefined") return "fit";
+		if (typeof localStorage === "undefined") return props.defaultPageSize;
 		try {
 			const raw = localStorage.getItem(pageSizeStorageKey);
 			if (raw === "fit") return "fit";
-			if (raw === null) return "fit";
+			if (raw === null) return props.defaultPageSize;
 			const n = Number(raw);
-			return Number.isFinite(n) && n > 0 ? n : "fit";
+			return Number.isFinite(n) && n > 0 ? n : props.defaultPageSize;
 		} catch {
-			return "fit";
+			return props.defaultPageSize;
 		}
 	};
 
