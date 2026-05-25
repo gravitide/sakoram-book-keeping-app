@@ -32,18 +32,18 @@
 					<DayOfMonthField
 						v-model="periodStart"
 						label="Period start day"
-						hint="When the pay period begins (e.g. 1st of the month)."
+						help="When the pay period begins (e.g. 1st of the month)."
 						:show-last-day-toggle="false"
 					/>
 					<DayOfMonthField
 						v-model="periodEnd"
 						label="Period end day"
-						hint="When the pay period ends. If smaller than the start day, the period straddles two months (e.g. 26 → 25)."
+						help="When the pay period ends. If smaller than the start day, the period straddles two months (e.g. 26 → 25)."
 					/>
 					<DayOfMonthField
 						v-model="payDay"
 						label="Pay date"
-						hint="When salaries are paid out. Used for voucher dates on auto-paid payslips."
+						help="When salaries are paid out. Used for voucher dates on auto-paid payslips."
 					/>
 
 					<div class="rounded-md border border-(--ui-border) bg-(--ui-bg-muted) p-3 text-sm">
