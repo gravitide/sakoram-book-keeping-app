@@ -494,3 +494,133 @@ export const buildAgedReceivablesPdfPayload = (
 			]
 	};
 };
+
+// ---------- Aged payables ---------------------------------------------
+//
+// Mirror of aged receivables but for bills + vendors. Same payload
+// shape, same Typst template path — only the labels and party axis
+// flip.
+
+export interface AgedPayablesPdfInput {
+	settings: CompanySettingsRow | null
+	currency: CurrencyMeta
+	asOfDate: Date
+	totals: {
+		totalCurrent: number
+		totalOverdue: number
+		totalOutstanding: number
+		billCount: number
+		overdueCount: number
+		currentCount: number
+		vendorCount: number
+	}
+	buckets: {
+		key: "current" | "b1to30" | "b31to60" | "b61to90" | "b90plus"
+		label: string
+		count: number
+		amount: number
+	}[]
+	vendorRows: {
+		vendorId: number | null
+		name: string
+		billCount: number
+		current: number
+		b1to30: number
+		b31to60: number
+		b61to90: number
+		b90plus: number
+		total: number
+	}[]
+}
+
+export const buildAgedPayablesPdfPayload = (
+	input: AgedPayablesPdfInput
+): ReportPdfPayload => {
+	const fmt = (cents: number) => formatMoney(cents, input.currency);
+	// Currency-prefix-stripped formatter for the 7-col per-vendor
+	// table — same trick as the receivables builder so the Vendor
+	// column gets room to breathe on portrait A4.
+	const fmtBare = (cents: number) => formatMoney(cents, input.currency).replace(/^[^\d\-−]+/, "").trim();
+	const dashBare = (cents: number) => (cents === 0 ? "—" : fmtBare(cents));
+	const pct = (part: number, whole: number): string => {
+		if (whole === 0) return "—";
+		const v = (part / whole) * 100;
+		return `${v.toFixed(v < 10 ? 1 : 0)}%`;
+	};
+
+	const asOfISO = `${input.asOfDate.getFullYear()}-${String(input.asOfDate.getMonth() + 1).padStart(2, "0")}-${String(input.asOfDate.getDate()).padStart(2, "0")}`;
+	const asOfReadable = input.asOfDate.toLocaleDateString(undefined, {
+		year: "numeric",
+		month: "long",
+		day: "numeric"
+	});
+
+	const toneFor = (key: AgedPayablesPdfInput["buckets"][number]["key"]): "success" | "error" | "neutral" => {
+		if (key === "current") return "success";
+		if (key === "b61to90" || key === "b90plus") return "error";
+		return "neutral";
+	};
+
+	return {
+		...businessHeader(input.settings),
+		currency_code: input.currency.code,
+		title: "Aged payables",
+		subtitle: `Snapshot as of ${asOfReadable}. Outstanding bill balances bucketed by days past due.`,
+		period_label: `As of ${asOfISO}`,
+		generated_at: asOfISO,
+		summary: [
+			{
+				label: "Total outstanding",
+				value: fmt(input.totals.totalOutstanding),
+				sub: `${input.totals.billCount} open bill${input.totals.billCount === 1 ? "" : "s"} · ${input.totals.vendorCount} vendor${input.totals.vendorCount === 1 ? "" : "s"}`,
+				tone: "neutral"
+			},
+			{
+				label: "Overdue",
+				value: fmt(input.totals.totalOverdue),
+				sub: `${input.totals.overdueCount} bill${input.totals.overdueCount === 1 ? "" : "s"} past due`,
+				tone: "error"
+			},
+			{
+				label: "Current (not yet due)",
+				value: fmt(input.totals.totalCurrent),
+				sub: `${input.totals.currentCount} bill${input.totals.currentCount === 1 ? "" : "s"} still in-window`,
+				tone: "success"
+			}
+		],
+		breakdown: {
+			title: "Bucket distribution",
+			rows: input.buckets.map((b) => ({
+				label: b.label,
+				sublabel: `${b.count} bill${b.count === 1 ? "" : "s"}`,
+				amount: fmt(b.amount),
+				percent: pct(b.amount, input.totals.totalOutstanding),
+				tone: toneFor(b.key)
+			})),
+			total: {
+				label: "Total outstanding",
+				sublabel: null,
+				amount: fmt(input.totals.totalOutstanding),
+				percent: "100%",
+				tone: "neutral"
+			}
+		},
+		details: input.vendorRows.length === 0
+			? null
+			: [
+				{
+					title: `By vendor (${input.vendorRows.length}) — amounts in ${input.currency.code}`,
+					columns: ["Vendor", "Current", "1-30", "31-60", "61-90", "90+", "Total"],
+					rows: input.vendorRows.map((r) => [
+						`${r.name} (${r.billCount} open)`,
+						dashBare(r.current),
+						dashBare(r.b1to30),
+						dashBare(r.b31to60),
+						dashBare(r.b61to90),
+						dashBare(r.b90plus),
+						fmtBare(r.total)
+					])
+				}
+			]
+	};
+};
