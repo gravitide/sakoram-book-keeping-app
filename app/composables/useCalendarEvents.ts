@@ -56,15 +56,6 @@ export const EVENT_KIND_META: Record<CalendarEventKind, EventKindMeta> = {
 
 export const CALENDAR_EVENT_KINDS: CalendarEventKind[] = ["invoice", "bill", "quote", "payslip"];
 
-const partyNameFromSnapshot = (snap: string): string => {
-	try {
-		const obj = JSON.parse(snap) as { name?: string, full_name?: string };
-		return obj.name ?? obj.full_name ?? "—";
-	} catch {
-		return "—";
-	}
-};
-
 const todayISO = (): string => {
 	const d = new Date();
 	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -101,7 +92,7 @@ export const useCalendarEvents = (kindFilter?: Ref<Set<CalendarEventKind>>) => {
 				date: i.due_date,
 				kind: "invoice",
 				title: i.number,
-				party: partyNameFromSnapshot(i.client_snapshot),
+				party: i.client_name || "—",
 				amountCents: i.total_cents,
 				balanceCents: balance,
 				href: `/invoices/${i.id}`,
@@ -123,7 +114,7 @@ export const useCalendarEvents = (kindFilter?: Ref<Set<CalendarEventKind>>) => {
 				date: b.due_date,
 				kind: "bill",
 				title: b.number,
-				party: partyNameFromSnapshot(b.vendor_snapshot),
+				party: b.vendor_name || "—",
 				amountCents: b.total_cents,
 				balanceCents: balance,
 				href: `/bills/${b.id}`,
@@ -146,7 +137,7 @@ export const useCalendarEvents = (kindFilter?: Ref<Set<CalendarEventKind>>) => {
 				date: q.valid_until,
 				kind: "quote",
 				title: q.number,
-				party: partyNameFromSnapshot(q.client_snapshot),
+				party: q.client_name || "—",
 				amountCents: q.total_cents,
 				balanceCents: q.total_cents,
 				href: `/quotes/${q.id}`,
@@ -172,7 +163,7 @@ export const useCalendarEvents = (kindFilter?: Ref<Set<CalendarEventKind>>) => {
 				date: p.pay_date,
 				kind: "payslip",
 				title: p.number,
-				party: partyNameFromSnapshot(p.employee_snapshot),
+				party: p.employee_name || "—",
 				amountCents: p.net_cents,
 				balanceCents: balance,
 				href: `/payslips/${p.id}`,

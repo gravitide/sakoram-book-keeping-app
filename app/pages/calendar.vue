@@ -4,11 +4,24 @@
 			and triaging due items, not copying text out of. -->
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
 			<div class="min-w-0 flex-1">
-				<h1 class="text-2xl font-semibold">
+				<h1 class="text-2xl font-semibold flex items-center gap-3">
 					Calendar
+					<!-- Inline spinner while the four stores are hydrating
+						from the DB on first visit. Sits in the title row,
+						not as an overlay, so the page stays interactive
+						and sidebar nav keeps working while the data
+						loads in the background. -->
+					<UIcon
+						v-if="isLoading"
+						name="i-lucide-loader-circle"
+						class="size-4 animate-spin text-(--ui-primary)"
+					/>
 				</h1>
 				<p class="text-sm text-(--ui-text-muted)">
-					Upcoming receivables, payables, quote expiries and payslips — every due date in one place.
+					<span v-if="isLoading">Loading…</span>
+					<template v-else>
+						Upcoming receivables, payables, quote expiries and payslips — every due date in one place.
+					</template>
 				</p>
 			</div>
 		</header>
@@ -79,21 +92,31 @@
 
 	definePageMeta({ title: "Calendar" });
 
-	// Pre-warm every store the calendar reads from. These are normally
-	// loaded by their list pages on first visit, so on a cold app start
-	// the calendar would otherwise come up empty for a beat. Load them
-	// here so the grid is populated on first render.
+	// Pre-warm every store the calendar reads from. Load runs in
+	// onMounted (not top-level await) so the route transition isn't
+	// blocked while data hydrates — page mounts instantly with a
+	// spinner in the header, user can click another sidebar entry at
+	// any moment. ensureLoaded() is a no-op when a store is already
+	// populated (a list page mounted earlier in the same tenant
+	// session), so revisits to /calendar are effectively free.
 	const invoicesStore = useInvoicesStore();
 	const billsStore = useBillsStore();
 	const quotesStore = useQuotesStore();
 	const payslipsStore = usePayslipsStore();
 
-	await Promise.all([
-		invoicesStore.load(),
-		billsStore.load(),
-		quotesStore.load(),
-		payslipsStore.load()
-	]);
+	const isLoading = ref(true);
+	onMounted(async () => {
+		try {
+			await Promise.all([
+				invoicesStore.ensureLoaded(),
+				billsStore.ensureLoaded(),
+				quotesStore.ensureLoaded(),
+				payslipsStore.ensureLoaded()
+			]);
+		} finally {
+			isLoading.value = false;
+		}
+	});
 
 	// Filter set drives which kinds the calendar component renders.
 	// Empty = show all (matches the composable's contract). We seed it
