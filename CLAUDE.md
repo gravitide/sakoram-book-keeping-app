@@ -215,6 +215,7 @@ sakoram_app/
 │  │  ├─ payroll/                     ← index.vue is a landing card grid (mirrors /reports); dashboard.vue holds the upcoming-cycle hero + MoM chart + recent runs + outstanding
 │  │  ├─ payslips/                    ← list w/ row context menu (multi-select bulk PDF), [id], bulk (auto-issue + auto-pay). "New payslip" opens NewPayslipModal.
 │  │  ├─ reports/                     ← aggregate views over the books. index.vue lists available + upcoming reports; profit-loss.vue (accrual P&L), vat.vue (output VAT vs input VAT), aged-receivables.vue (open-invoice snapshot by days past due), and aged-payables.vue (open-bill mirror) are wired up. No DB writes.
+│  │  ├─ lists/                       ← index.vue is a landing card grid (mirrors /reports + /payroll) linking to /clients, /vendors, /categories. The list pages themselves live at their existing top-level URLs.
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
 │  │     ├─ company.vue               ← business info, address, bank, defaults, logo
@@ -1122,10 +1123,10 @@ Reports               ← aggregate views over the books (no editing)
   ├─ Aged receivables ← /reports/aged-receivables — open-invoice snapshot by days past due
   └─ Aged payables    ← /reports/aged-payables    — open-bill mirror, per-vendor breakdown
 ─── (divider)
-Lists
-  ├─ Clients
-  ├─ Vendors
-  └─ Bill categories
+Lists                 ← /lists — landing card grid mirroring /reports + /payroll
+  ├─ Clients         ← /clients
+  ├─ Vendors         ← /vendors
+  └─ Bill categories ← /categories
 ─── (divider)
 Settings                ← per-tenant business config (exported in backups)
   ├─ Business details
