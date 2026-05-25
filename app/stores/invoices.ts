@@ -43,6 +43,11 @@ export interface InvoiceRow {
 	number: string
 	client_id: number
 	client_snapshot: string
+	/// Denormalised from `client_snapshot.name` — set whenever the
+	/// snapshot is written so the list page can render the client
+	/// name + sort + search without paying a JSON.parse per row.
+	/// See migration 0028.
+	client_name: string
 	source_quote_id: number | null
 	issue_date: string
 	due_date: string
@@ -119,6 +124,19 @@ const daysBetween = (fromISO: string, toISO: string): number => {
 	const b = new Date(y2, m2 - 1, d2).getTime();
 	return Math.round((b - a) / 86_400_000);
 };
+
+/// Extract the `name` field from a stored client-snapshot JSON string.
+/// Used at write time to keep the denormalised `client_name` column
+/// (see migration 0028) in lockstep with the snapshot. Falls back to
+/// empty string for malformed snapshots — the column has a NOT NULL
+/// DEFAULT '' so an empty value is still a legal write.
+function nameFromClientSnapshot(snap: string): string {
+	try {
+		return (JSON.parse(snap) as { name?: string }).name ?? "";
+	} catch {
+		return "";
+	}
+}
 
 const buildClientSnapshot = (
 	c: { name: string, contact_person?: string | null, email?: string | null, phone?: string | null, address_line1?: string | null, address_line2?: string | null, city?: string | null, postal_code?: string | null, country?: string | null, tax_id?: string | null }
@@ -243,14 +261,13 @@ export const useInvoicesStore = defineStore("invoices", () => {
 			if (dueFrom.value && row.due_date < dueFrom.value) return false;
 			if (dueTo.value && row.due_date > dueTo.value) return false;
 			if (!q) return true;
-			let snapName = "";
-			try {
-				snapName = (JSON.parse(row.client_snapshot) as ClientSnapshot).name?.toLowerCase() ?? "";
-			} catch { /* ignore */ }
+			// Search the denormalised client_name directly — no JSON parse
+			// per row. At 800+ invoices this used to be the most expensive
+			// part of every keystroke in the search box.
 			return (
 				row.number.toLowerCase().includes(q)
 				|| row.project_title.toLowerCase().includes(q)
-				|| snapName.includes(q)
+				|| row.client_name.toLowerCase().includes(q)
 			);
 		});
 	});
@@ -358,15 +375,16 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		const defaultVatBp = settings.default_vat_rate ?? 0;
 		const result = await execute(
 			`INSERT INTO invoices (
-				number, client_id, client_snapshot, source_quote_id,
+				number, client_id, client_snapshot, client_name, source_quote_id,
 				issue_date, due_date, status, pricing_mode, project_title,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents,
 				prepared_by, bank_details_snapshot, business_bank_id
-			) VALUES (?, ?, ?, NULL, ?, ?, 'draft', 'bundle', ?, ?, 0, 0, 0, ?, ?, ?)`,
+			) VALUES (?, ?, ?, ?, NULL, ?, ?, 'draft', 'bundle', ?, ?, 0, 0, 0, ?, ?, ?)`,
 			[
 				allocation.number,
 				input.client.id,
 				clientSnap,
+				nameFromClientSnapshot(clientSnap),
 				issue,
 				due,
 				input.project_title ?? "",
@@ -403,15 +421,16 @@ export const useInvoicesStore = defineStore("invoices", () => {
 
 		const result = await execute(
 			`INSERT INTO invoices (
-				number, client_id, client_snapshot, source_quote_id,
+				number, client_id, client_snapshot, client_name, source_quote_id,
 				issue_date, due_date, status, pricing_mode, project_title,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents,
 				notes, terms, prepared_by, bank_details_snapshot, business_bank_id
-			) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				allocation.number,
 				quote.client_id,
 				quote.client_snapshot,
+				nameFromClientSnapshot(quote.client_snapshot),
 				quote.id,
 				issue,
 				due,
@@ -481,15 +500,16 @@ export const useInvoicesStore = defineStore("invoices", () => {
 
 		const result = await execute(
 			`INSERT INTO invoices (
-				number, client_id, client_snapshot, source_quote_id,
+				number, client_id, client_snapshot, client_name, source_quote_id,
 				issue_date, due_date, status, pricing_mode, project_title,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents,
 				notes, terms, prepared_by, bank_details_snapshot, business_bank_id
-			) VALUES (?, ?, ?, NULL, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			) VALUES (?, ?, ?, ?, NULL, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				allocation.number,
 				src.client_id,
 				src.client_snapshot,
+				nameFromClientSnapshot(src.client_snapshot),
 				issue,
 				due,
 				src.pricing_mode,
@@ -568,9 +588,18 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		if (cols.length === 0) return;
 		const setClause = cols.map((c) => `${c} = ?`).join(", ");
 		const params: unknown[] = cols.map((c) => patch[c] ?? null);
+		// Keep `client_name` in lockstep with the snapshot. The patch
+		// doesn't carry client_name explicitly — it's a derived column
+		// owned by this store. Refresh-client-snapshot on the detail
+		// page is the only flow that touches the snapshot post-create.
+		let extraSet = "";
+		if (Object.hasOwn(patch, "client_snapshot")) {
+			extraSet = ", client_name = ?";
+			params.push(nameFromClientSnapshot(patch.client_snapshot ?? ""));
+		}
 		params.push(id);
 		await execute(
-			`UPDATE invoices SET ${setClause}, updated_at = datetime('now') WHERE id = ?`,
+			`UPDATE invoices SET ${setClause}${extraSet}, updated_at = datetime('now') WHERE id = ?`,
 			params
 		);
 	};

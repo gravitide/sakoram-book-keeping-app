@@ -214,10 +214,10 @@
 						</div>
 					</template>
 				</Column>
-				<Column field="_client" header="Client" sortable>
+				<Column field="client_name" header="Client" sortable>
 					<template #body="{ data }">
 						<div class="truncate">
-							{{ data._client }}
+							{{ data.client_name }}
 						</div>
 					</template>
 				</Column>
@@ -301,7 +301,6 @@
 
 <script setup lang="ts">
 	import type { InvoiceLineRow, InvoiceRow, InvoiceStatus } from "~/stores/invoices";
-	import type { ClientSnapshot } from "~/stores/quotes";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { buildInvoicePdfPayload } from "~/lib/invoice-pdf";
@@ -343,31 +342,26 @@
 		}
 	});
 
-	// Pre-declare helpers that the column definitions below reference.
-	// (Plain `function` declarations hoist; `const` arrows don't.)
-	function clientName(snap: string): string {
-		try {
-			return (JSON.parse(snap) as ClientSnapshot).name ?? "—";
-		} catch {
-			return "—";
-		}
-	}
 	const balanceOf = (i: InvoiceRow) => store.balanceCentsFor(i);
 
 	// PrimeVue DataTable expects each row to expose every sortable
-	// field as a plain top-level property. The InvoiceRow type doesn't
-	// have client name / balance / status directly — they're derived —
-	// so we map to a view-model with those baked in. Underscored names
-	// keep them out of the way of any future schema additions.
+	// field as a plain top-level property. `client_name` is now a real
+	// column on `invoices` (denormalised at write time from
+	// client_snapshot — see migration 0028) so we can read it directly
+	// off the row. Balance + derived status still need to be computed
+	// per row, so they get attached as `_…` view-model fields.
+	//
+	// Skipping the snapshot JSON.parse here is the whole point of the
+	// migration: at heavy demo scale (~800 invoices) parsing 800
+	// snapshots on every store mutation was a ~100ms tax on each
+	// keystroke in the search box / chip toggle.
 	interface InvoiceRowVM extends InvoiceRow {
-		_client: string
 		_balance: number
 		_status: InvoiceStatus
 	}
 	const rows = computed<InvoiceRowVM[]>(() =>
 		store.filtered.map((i) => ({
 			...i,
-			_client: clientName(i.client_snapshot),
 			_balance: store.balanceCentsFor(i),
 			_status: store.derivedStatus(i)
 		}))

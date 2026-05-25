@@ -40,6 +40,14 @@ export interface BillRow {
 	number: string
 	vendor_id: number
 	vendor_snapshot: string // JSON-serialised
+	/// Denormalised from `vendor_snapshot.name` and the category
+	/// snapshot — set whenever the snapshot is set so the list page
+	/// can render + sort + search without parsing JSON. See migration
+	/// 0028 (backfilled from the snapshots on existing rows).
+	vendor_name: string
+	category_name: string | null
+	category_color: string | null
+	category_icon: string | null
 	vendor_invoice_number: string | null
 	issue_date: string
 	due_date: string
@@ -197,21 +205,13 @@ export const useBillsStore = defineStore("bills", () => {
 			if (dueFrom.value && row.due_date < dueFrom.value) return false;
 			if (dueTo.value && row.due_date > dueTo.value) return false;
 			if (!q) return true;
-			let snapName = "";
-			try {
-				snapName = (JSON.parse(row.vendor_snapshot) as VendorSnapshot).name?.toLowerCase() ?? "";
-			} catch { /* ignore */ }
-			let catName = "";
-			try {
-				if (row.category_snapshot) {
-					catName = (JSON.parse(row.category_snapshot) as { name: string }).name?.toLowerCase() ?? "";
-				}
-			} catch { /* ignore */ }
+			// Search the denormalised vendor_name + category_name columns
+			// (migration 0028) so no JSON.parse runs per row.
 			return (
 				row.number.toLowerCase().includes(q)
-				|| snapName.includes(q)
+				|| row.vendor_name.toLowerCase().includes(q)
 				|| (row.vendor_invoice_number ?? "").toLowerCase().includes(q)
-				|| catName.includes(q)
+				|| (row.category_name ?? "").toLowerCase().includes(q)
 			);
 		});
 	});
@@ -275,6 +275,35 @@ export const useBillsStore = defineStore("bills", () => {
 			[billId]
 		);
 
+	// Pull the name field out of a stored vendor_snapshot JSON. Used at
+	// write time to keep the denormalised vendor_name column in lockstep
+	// with the snapshot — see migration 0028.
+	const nameFromVendorSnapshot = (snap: string): string => {
+		try {
+			return (JSON.parse(snap) as { name?: string }).name ?? "";
+		} catch {
+			return "";
+		}
+	};
+	// Same idea for the category trio (name / color / icon) the list
+	// page renders as a swatch+icon+label cell. Returns null fields
+	// when the bill has no category attached.
+	const categoryMetaFromSnapshot = (
+		snap: string | null
+	): { name: string | null, color: string | null, icon: string | null } => {
+		if (!snap) return { name: null, color: null, icon: null };
+		try {
+			const o = JSON.parse(snap) as { name?: string, color?: string, icon?: string };
+			return {
+				name: o.name ?? null,
+				color: o.color ?? null,
+				icon: o.icon ?? null
+			};
+		} catch {
+			return { name: null, color: null, icon: null };
+		}
+	};
+
 	// Build a snapshot from a vendor row, freezing the vendor's identity at
 	// bill-creation time. Same shape as the client snapshot used on
 	// quotes/invoices.
@@ -320,11 +349,11 @@ export const useBillsStore = defineStore("bills", () => {
 		// because bill due dates are dictated by the vendor, not our terms.
 		const result = await execute(
 			`INSERT INTO bills (
-				number, vendor_id, vendor_snapshot,
+				number, vendor_id, vendor_snapshot, vendor_name,
 				issue_date, due_date, status, pricing_mode,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents
-			) VALUES (?, ?, ?, ?, ?, 'open', 'bundle', 0, 0, 0, 0)`,
-			[allocation.number, input.vendor.id, snap, issue, due]
+			) VALUES (?, ?, ?, ?, ?, ?, 'open', 'bundle', 0, 0, 0, 0)`,
+			[allocation.number, input.vendor.id, snap, nameFromVendorSnapshot(snap), issue, due]
 		);
 		if (result.lastInsertId === undefined) throw new Error("createBill: no lastInsertId");
 		await load();
@@ -361,9 +390,25 @@ export const useBillsStore = defineStore("bills", () => {
 		if (cols.length === 0) return;
 		const setClause = cols.map((c) => `${c} = ?`).join(", ");
 		const params: unknown[] = cols.map((c) => patch[c] ?? null);
+		// Keep the denormalised columns in lockstep with the snapshots
+		// whenever the patch touches them. vendor_snapshot is touched by
+		// the Refresh-vendor-snapshot button on the detail page;
+		// category_snapshot is touched whenever the user picks a
+		// different category.
+		const extras: string[] = [];
+		if (Object.hasOwn(patch, "vendor_snapshot")) {
+			extras.push("vendor_name = ?");
+			params.push(nameFromVendorSnapshot(patch.vendor_snapshot ?? ""));
+		}
+		if (Object.hasOwn(patch, "category_snapshot")) {
+			const meta = categoryMetaFromSnapshot(patch.category_snapshot ?? null);
+			extras.push("category_name = ?", "category_color = ?", "category_icon = ?");
+			params.push(meta.name, meta.color, meta.icon);
+		}
+		const extraSet = extras.length > 0 ? `, ${extras.join(", ")}` : "";
 		params.push(id);
 		await execute(
-			`UPDATE bills SET ${setClause}, updated_at = datetime('now') WHERE id = ?`,
+			`UPDATE bills SET ${setClause}${extraSet}, updated_at = datetime('now') WHERE id = ?`,
 			params
 		);
 	};
