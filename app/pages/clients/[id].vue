@@ -473,5 +473,4 @@
 			deleting.value = false;
 		}
 	};
-
 </script>

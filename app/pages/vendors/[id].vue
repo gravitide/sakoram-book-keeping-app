@@ -451,5 +451,4 @@
 			deleting.value = false;
 		}
 	};
-
 </script>
