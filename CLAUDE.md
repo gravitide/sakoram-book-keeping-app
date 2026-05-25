@@ -1541,6 +1541,22 @@ persisted to localStorage).
   data. The roadmap landing card grid now lists both P&L and VAT
   live; aged receivables / payables / cash flow / sales-by-client /
   payroll-register remain "Coming" tiles.
+- ✅ **Reports module — PDF export** for P&L + VAT. New generic Typst
+  template `src-tauri/templates/report.typ` shared by both reports —
+  the JSON payload drives title, period subtitle, three KPI summary
+  tiles, breakdown table with totals row, and per-source detail
+  sections (each on its own page so the summary is filable
+  separately). Adding a new report = a new payload builder in
+  `app/lib/report-pdf.ts`, no Rust change. New Rust command
+  `export_report_pdf` registered alongside the existing
+  `export_*_pdf` commands; reuses the shared `render_pdf()`
+  plumbing for logo handling + font path + typst sidecar. PDF
+  preview modal + Save-as flow uses the same `usePdfPreview`
+  composable every document detail page already does. Reports
+  skip the per-type owner-password protection toggle (entry in
+  `PROTECT_FLAG` is null — reports always render unencrypted; the
+  per-type protection is an invoice/quote/bill/voucher/payslip
+  concern).
 
 ### Deferred / open items
 
@@ -1648,10 +1664,9 @@ P&L + VAT + aged receivables alone close 80% of the "is this real
 bookkeeping software" perception gap. Credit notes are the
 next-most-impactful add after that.
 
-**Status (2026-05-25):** P&L + VAT shipped — see the Done bullets above.
-Next on this track is **PDF export** for the existing reports (both
-P&L and VAT need to be printable / archivable for tax-filing), then
-**aged receivables**.
+**Status (2026-05-25):** P&L + VAT + report PDF export shipped — see
+the Done bullets above. Next on this track is **aged receivables**,
+then aged payables and cash flow.
 
 ---
 

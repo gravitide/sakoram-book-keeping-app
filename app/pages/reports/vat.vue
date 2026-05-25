@@ -1,10 +1,25 @@
 <template>
 	<div class="select-none">
-		<div class="mb-4">
+		<!-- Top toolbar row: back link on the left, action cluster on the
+			right. Mirrors the invoice / quote / bill detail-page pattern. -->
+		<div class="mb-4 flex items-center justify-between gap-4">
 			<NuxtLink to="/reports" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
 				<UIcon name="i-lucide-arrow-left" class="size-4" />
 				Back to Reports
 			</NuxtLink>
+
+			<UButton
+				size="sm"
+				color="neutral"
+				variant="outline"
+				icon="i-lucide-file-down"
+				:loading="pdf.state.rendering"
+				:disabled="isLoading || pdf.state.rendering"
+				:title="isLoading ? 'Loading data…' : 'Preview this report as a PDF'"
+				@click="onPdfClick"
+			>
+				PDF & Print
+			</UButton>
 		</div>
 
 		<header class="mb-6">
@@ -411,6 +426,17 @@
 				</table>
 			</UCard>
 		</template>
+
+		<PdfPreviewModal
+			v-model:open="pdf.state.open"
+			:asset-url="pdf.state.assetUrl"
+			:temp-path="pdf.state.tempPath"
+			:suggested-file-name="pdf.state.suggestedFileName"
+			:saving="pdf.state.saving"
+			title="VAT report PDF preview"
+			@save="pdf.onSave"
+			@cancel="pdf.onCancel"
+		/>
 	</div>
 </template>
 
@@ -430,7 +456,9 @@
 // Status filtering mirrors the P&L (sent invoices only, non-cancelled
 // bills only). Drafts and cancelled documents never count toward VAT.
 
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { formatLKR } from "~/lib/money";
+	import { buildVatPdfPayload } from "~/lib/report-pdf";
 	import { useBillsStore } from "~/stores/bills";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { useSettingsStore } from "~/stores/settings";
@@ -438,6 +466,7 @@
 	definePageMeta({ title: "VAT report" });
 
 	const router = useRouter();
+	const currency = useActiveCurrency();
 	const invoicesStore = useInvoicesStore();
 	const billsStore = useBillsStore();
 	const settingsStore = useSettingsStore();
@@ -638,4 +667,32 @@
 			? "No invoices issued in this period."
 			: "No bills in this period."
 	);
+
+	// ---- PDF export ------------------------------------------------------
+	// Same preview-then-save flow every document detail page uses. The
+	// builder lives in app/lib/report-pdf.ts alongside the P&L builder
+	// so both reports share one template + one Rust command.
+	const pdf = usePdfPreview({
+		command: "export_report_pdf",
+		buildPayload: () => buildVatPdfPayload({
+			settings: settingsStore.settings,
+			currency: currency.value,
+			dateFrom: dateFrom.value,
+			dateTo: dateTo.value,
+			totals: totals.value,
+			filtered: filtered.value
+		}),
+		fileName: () => {
+			const stamp = dateFrom.value && dateTo.value
+				? `${dateFrom.value}_${dateTo.value}`
+				: new Date().toISOString().slice(0, 10);
+			return `vat-${stamp}.pdf`;
+		},
+		title: "VAT report PDF preview"
+	});
+
+	const onPdfClick = () => {
+		if (isLoading.value || pdf.state.rendering) return;
+		pdf.open();
+	};
 </script>
