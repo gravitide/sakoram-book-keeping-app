@@ -198,11 +198,23 @@
 		"update:selection": [rows: T[]]
 	}>();
 
-	// Strip persisted column widths on every page entry so the table
-	// opens at the browser's content-fitted natural widths every time —
-	// `width: 100%` on the table then stretches it across the container.
+	// Strip persisted layout + paging state on every page entry:
+	//
+	//   - columnWidths / tableWidth — the table opens at the browser's
+	//     content-fitted natural widths every time; `width: 100%` then
+	//     stretches it across the container.
+	//   - rows / first — pagination is owned by our own page-size
+	//     storage at `${stateKey}:pageSize` + the effectiveRows
+	//     computed below, NOT by PrimeVue's state-storage. Keeping a
+	//     PrimeVue-persisted `rows` value around fights the prop:
+	//     PrimeVue restores its old `rows` on mount and our
+	//     `:rows="effectiveRows"` binding loses, so the dropdown can
+	//     show one page size while the table paginates at another.
+	//     `first` is the row offset; stripping it lands the user on
+	//     page 1 on entry, which is the expected behaviour anyway.
+	//
 	// Runs synchronously in setup (before mount) so PrimeVue never reads
-	// the stale widths.
+	// the stale values.
 	if (typeof localStorage !== "undefined") {
 		try {
 			const raw = localStorage.getItem(props.stateKey);
@@ -210,6 +222,8 @@
 				const state = JSON.parse(raw) as Record<string, unknown>;
 				delete state.columnWidths;
 				delete state.tableWidth;
+				delete state.rows;
+				delete state.first;
 				localStorage.setItem(props.stateKey, JSON.stringify(state));
 			}
 		} catch {
