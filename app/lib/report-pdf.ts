@@ -365,3 +365,132 @@ export const buildVatPdfPayload = (input: VatPdfInput): ReportPdfPayload => {
 		]
 	};
 };
+
+// ---------- Aged receivables ------------------------------------------
+
+export interface AgedReceivablesPdfInput {
+	settings: CompanySettingsRow | null
+	currency: CurrencyMeta
+	asOfDate: Date
+	totals: {
+		totalCurrent: number
+		totalOverdue: number
+		totalOutstanding: number
+		invoiceCount: number
+		overdueCount: number
+		currentCount: number
+		clientCount: number
+	}
+	buckets: {
+		key: "current" | "b1to30" | "b31to60" | "b61to90" | "b90plus"
+		label: string
+		count: number
+		amount: number
+	}[]
+	clientRows: {
+		clientId: number | null
+		name: string
+		invoiceCount: number
+		current: number
+		b1to30: number
+		b31to60: number
+		b61to90: number
+		b90plus: number
+		total: number
+	}[]
+}
+
+export const buildAgedReceivablesPdfPayload = (
+	input: AgedReceivablesPdfInput
+): ReportPdfPayload => {
+	const fmt = (cents: number) => formatMoney(cents, input.currency);
+	// Per-cell amount for the 7-column client table. Currency prefix
+	// stripped — the report-level currency code is already implicit and
+	// every column is the same currency. Saves ~5mm per cell × 6
+	// columns and lets the Client column actually breathe.
+	const fmtBare = (cents: number) => formatMoney(cents, input.currency).replace(/^[^\d\-−]+/, "").trim();
+	const dashBare = (cents: number) => (cents === 0 ? "—" : fmtBare(cents));
+	const pct = (part: number, whole: number): string => {
+		if (whole === 0) return "—";
+		const v = (part / whole) * 100;
+		return `${v.toFixed(v < 10 ? 1 : 0)}%`;
+	};
+
+	const asOfISO = `${input.asOfDate.getFullYear()}-${String(input.asOfDate.getMonth() + 1).padStart(2, "0")}-${String(input.asOfDate.getDate()).padStart(2, "0")}`;
+	const asOfReadable = input.asOfDate.toLocaleDateString(undefined, {
+		year: "numeric",
+		month: "long",
+		day: "numeric"
+	});
+
+	// Tone the bucket rows the same way the on-screen table does — warning
+	// for 1–60-day creep, error past 60.
+	const toneFor = (key: AgedReceivablesPdfInput["buckets"][number]["key"]): "success" | "error" | "neutral" => {
+		if (key === "current") return "success";
+		if (key === "b61to90" || key === "b90plus") return "error";
+		return "neutral";
+	};
+
+	return {
+		...businessHeader(input.settings),
+		currency_code: input.currency.code,
+		title: "Aged receivables",
+		subtitle: `Snapshot as of ${asOfReadable}. Outstanding invoice balances bucketed by days past due.`,
+		period_label: `As of ${asOfISO}`,
+		generated_at: asOfISO,
+		summary: [
+			{
+				label: "Total outstanding",
+				value: fmt(input.totals.totalOutstanding),
+				sub: `${input.totals.invoiceCount} open invoice${input.totals.invoiceCount === 1 ? "" : "s"} · ${input.totals.clientCount} client${input.totals.clientCount === 1 ? "" : "s"}`,
+				tone: "neutral"
+			},
+			{
+				label: "Overdue",
+				value: fmt(input.totals.totalOverdue),
+				sub: `${input.totals.overdueCount} invoice${input.totals.overdueCount === 1 ? "" : "s"} past due`,
+				tone: "error"
+			},
+			{
+				label: "Current (not yet due)",
+				value: fmt(input.totals.totalCurrent),
+				sub: `${input.totals.currentCount} invoice${input.totals.currentCount === 1 ? "" : "s"} still in-window`,
+				tone: "success"
+			}
+		],
+		breakdown: {
+			title: "Bucket distribution",
+			rows: input.buckets.map((b) => ({
+				label: b.label,
+				sublabel: `${b.count} invoice${b.count === 1 ? "" : "s"}`,
+				amount: fmt(b.amount),
+				percent: pct(b.amount, input.totals.totalOutstanding),
+				tone: toneFor(b.key)
+			})),
+			total: {
+				label: "Total outstanding",
+				sublabel: null,
+				amount: fmt(input.totals.totalOutstanding),
+				percent: "100%",
+				tone: "neutral"
+			}
+		},
+		details: input.clientRows.length === 0
+			? null
+			: [
+				{
+					title: `By client (${input.clientRows.length}) — amounts in ${input.currency.code}`,
+					columns: ["Client", "Current", "1-30", "31-60", "61-90", "90+", "Total"],
+					rows: input.clientRows.map((r) => [
+						`${r.name} (${r.invoiceCount} open)`,
+						dashBare(r.current),
+						dashBare(r.b1to30),
+						dashBare(r.b31to60),
+						dashBare(r.b61to90),
+						dashBare(r.b90plus),
+						fmtBare(r.total)
+					])
+				}
+			]
+	};
+};

@@ -422,125 +422,129 @@
 					<div>{{ activeTabEmpty }}</div>
 				</div>
 
-				<table v-else-if="activeTab === 'invoices'" class="w-full text-sm">
-					<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-						<tr>
-							<th class="py-2 pl-3 pr-2 font-medium w-40">
-								Number
-							</th>
-							<th class="py-2 px-2 font-medium w-28">
-								Date
-							</th>
-							<th class="py-2 px-2 font-medium">
-								Client
-							</th>
-							<th class="py-2 pl-2 pr-3 font-medium text-right w-40">
-								Subtotal
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr
-							v-for="row in filtered.invoices"
-							:key="row.id"
-							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-							@click="router.push(`/invoices/${row.id}`)"
-						>
-							<td class="py-2 pl-3 pr-2 font-medium tabular-nums whitespace-nowrap">
-								{{ row.number }}
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums whitespace-nowrap">
-								{{ row.issue_date }}
-							</td>
-							<td class="py-2 px-2 truncate max-w-0">
-								{{ partyName(row.client_snapshot) }}
-							</td>
-							<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap">
-								{{ formatLKR(row.subtotal_cents) }}
-							</td>
-						</tr>
-					</tbody>
-				</table>
+				<!-- Three sibling ResizableDataTables — one per tab. Each
+					gets its own state-key so sort + page + Fit settings
+					persist independently. Click a row to jump to the
+					underlying document detail page (same UX every list
+					page in the app has). Party names read off the
+					denormalised columns added in migration 0028 — no
+					snapshot parsing per row. -->
+				<ResizableDataTable
+					v-else-if="activeTab === 'invoices'"
+					:rows="filtered.invoices"
+					state-key="reports-pnl-invoices"
+					default-sort-field="issue_date"
+					:default-sort-order="-1"
+					:default-page-size="50"
+					@row-click="(row) => router.push(`/invoices/${row.id}`)"
+				>
+					<Column field="number" header="Number" sortable>
+						<template #body="{ data }">
+							<div class="font-medium tabular-nums whitespace-nowrap">
+								{{ data.number }}
+							</div>
+						</template>
+					</Column>
+					<Column field="issue_date" header="Date" sortable>
+						<template #body="{ data }">
+							<div class="text-(--ui-text-muted) tabular-nums whitespace-nowrap">
+								{{ data.issue_date }}
+							</div>
+						</template>
+					</Column>
+					<Column field="client_name" header="Client" sortable>
+						<template #body="{ data }">
+							<div class="truncate min-w-[140px] max-w-[260px]">
+								{{ data.client_name || "—" }}
+							</div>
+						</template>
+					</Column>
+					<Column field="subtotal_cents" header="Subtotal" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap">
+								{{ formatLKR(data.subtotal_cents) }}
+							</div>
+						</template>
+					</Column>
+				</ResizableDataTable>
 
-				<table v-else-if="activeTab === 'bills'" class="w-full text-sm">
-					<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-						<tr>
-							<th class="py-2 pl-3 pr-2 font-medium w-40">
-								Number
-							</th>
-							<th class="py-2 px-2 font-medium w-28">
-								Date
-							</th>
-							<th class="py-2 px-2 font-medium">
-								Vendor
-							</th>
-							<th class="py-2 pl-2 pr-3 font-medium text-right w-40">
-								Subtotal
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr
-							v-for="row in filtered.bills"
-							:key="row.id"
-							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-							@click="router.push(`/bills/${row.id}`)"
-						>
-							<td class="py-2 pl-3 pr-2 font-medium tabular-nums whitespace-nowrap">
-								{{ row.number }}
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums whitespace-nowrap">
-								{{ row.issue_date }}
-							</td>
-							<td class="py-2 px-2 truncate max-w-0">
-								{{ partyName(row.vendor_snapshot) }}
-							</td>
-							<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap">
-								{{ formatLKR(row.subtotal_cents) }}
-							</td>
-						</tr>
-					</tbody>
-				</table>
+				<ResizableDataTable
+					v-else-if="activeTab === 'bills'"
+					:rows="filtered.bills"
+					state-key="reports-pnl-bills"
+					default-sort-field="issue_date"
+					:default-sort-order="-1"
+					:default-page-size="50"
+					@row-click="(row) => router.push(`/bills/${row.id}`)"
+				>
+					<Column field="number" header="Number" sortable>
+						<template #body="{ data }">
+							<div class="font-medium tabular-nums whitespace-nowrap">
+								{{ data.number }}
+							</div>
+						</template>
+					</Column>
+					<Column field="issue_date" header="Date" sortable>
+						<template #body="{ data }">
+							<div class="text-(--ui-text-muted) tabular-nums whitespace-nowrap">
+								{{ data.issue_date }}
+							</div>
+						</template>
+					</Column>
+					<Column field="vendor_name" header="Vendor" sortable>
+						<template #body="{ data }">
+							<div class="truncate min-w-[140px] max-w-[260px]">
+								{{ data.vendor_name || "—" }}
+							</div>
+						</template>
+					</Column>
+					<Column field="subtotal_cents" header="Subtotal" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap">
+								{{ formatLKR(data.subtotal_cents) }}
+							</div>
+						</template>
+					</Column>
+				</ResizableDataTable>
 
-				<table v-else class="w-full text-sm">
-					<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-						<tr>
-							<th class="py-2 pl-3 pr-2 font-medium w-40">
-								Number
-							</th>
-							<th class="py-2 px-2 font-medium w-28">
-								Period end
-							</th>
-							<th class="py-2 px-2 font-medium">
-								Employee
-							</th>
-							<th class="py-2 pl-2 pr-3 font-medium text-right w-40">
-								Earnings
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr
-							v-for="row in filtered.payslips"
-							:key="row.id"
-							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-							@click="router.push(`/payslips/${row.id}`)"
-						>
-							<td class="py-2 pl-3 pr-2 font-medium tabular-nums whitespace-nowrap">
-								{{ row.number }}
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums whitespace-nowrap">
-								{{ row.period_end }}
-							</td>
-							<td class="py-2 px-2 truncate max-w-0">
-								{{ partyName(row.employee_snapshot, "full_name") }}
-							</td>
-							<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap">
-								{{ formatLKR(row.earnings_cents) }}
-							</td>
-						</tr>
-					</tbody>
-				</table>
+				<ResizableDataTable
+					v-else
+					:rows="filtered.payslips"
+					state-key="reports-pnl-payslips"
+					default-sort-field="period_end"
+					:default-sort-order="-1"
+					:default-page-size="50"
+					@row-click="(row) => router.push(`/payslips/${row.id}`)"
+				>
+					<Column field="number" header="Number" sortable>
+						<template #body="{ data }">
+							<div class="font-medium tabular-nums whitespace-nowrap">
+								{{ data.number }}
+							</div>
+						</template>
+					</Column>
+					<Column field="period_end" header="Period end" sortable>
+						<template #body="{ data }">
+							<div class="text-(--ui-text-muted) tabular-nums whitespace-nowrap">
+								{{ data.period_end }}
+							</div>
+						</template>
+					</Column>
+					<Column field="employee_name" header="Employee" sortable>
+						<template #body="{ data }">
+							<div class="truncate min-w-[140px] max-w-[260px]">
+								{{ data.employee_name || "—" }}
+							</div>
+						</template>
+					</Column>
+					<Column field="earnings_cents" header="Earnings" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap">
+								{{ formatLKR(data.earnings_cents) }}
+							</div>
+						</template>
+					</Column>
+				</ResizableDataTable>
 			</UCard>
 		</template>
 
@@ -828,22 +832,9 @@
 		return "No payslips in this period.";
 	});
 
-	// Pull the party name out of a snapshot JSON column. Snapshots are
-	// JSON-stringified and shaped differently — clients/vendors use
-	// `name`, employees use `full_name` — so the second arg picks the
-	// key. Parsing JSON on every render is fine at expected row counts
-	// (typically <100 rows per P&L period); revisit if profiling shows
-	// it matters.
-	function partyName(snapshotJson: string | null | undefined, key: "name" | "full_name" = "name"): string {
-		if (!snapshotJson) return "—";
-		try {
-			const o = JSON.parse(snapshotJson) as Record<string, unknown>;
-			const v = o?.[key];
-			return typeof v === "string" && v.length > 0 ? v : "—";
-		} catch {
-			return "—";
-		}
-	}
+	// Party names come straight off the denormalised columns
+	// (`client_name` / `vendor_name` / `employee_name`) added in
+	// migration 0028 — no snapshot JSON parsing per row.
 
 	// ---- PDF export ------------------------------------------------------
 	// Same preview-then-save flow every document detail page uses. The

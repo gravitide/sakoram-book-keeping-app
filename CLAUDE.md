@@ -214,7 +214,7 @@ sakoram_app/
 │  │  ├─ vouchers/                    ← list, new, [id] (money in/out; read-only by default → click Edit to mutate). Still uses a /new page — form is too heavy for a modal (8+ fields, prefill from ?bill=/?invoice=/?payslip=, overpayment guard).
 │  │  ├─ payroll/                     ← dashboard (upcoming-cycle hero, MoM chart, recent runs, outstanding)
 │  │  ├─ payslips/                    ← list w/ row context menu (multi-select bulk PDF), [id], bulk (auto-issue + auto-pay). "New payslip" opens NewPayslipModal.
-│  │  ├─ reports/                     ← aggregate views over date ranges. index.vue lists available + upcoming reports; profit-loss.vue (accrual P&L) and vat.vue (output VAT vs input VAT) are wired up. No DB writes.
+│  │  ├─ reports/                     ← aggregate views over the books. index.vue lists available + upcoming reports; profit-loss.vue (accrual P&L), vat.vue (output VAT vs input VAT), and aged-receivables.vue (outstanding-balances snapshot by days past due) are wired up. No DB writes.
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
 │  │     ├─ company.vue               ← business info, address, bank, defaults, logo
@@ -1116,9 +1116,10 @@ Payroll
   ├─ Payslips
   └─ Settings        ← /settings/payroll — cycle template (period_start_day / period_end_day / pay_day)
 ─── (divider)
-Reports               ← aggregate views over date ranges (no editing)
+Reports               ← aggregate views over the books (no editing)
   ├─ Profit & Loss   ← /reports/profit-loss — income − bills − payroll, accrual
-  └─ VAT             ← /reports/vat — output VAT − input VAT, net payable for the period
+  ├─ VAT             ← /reports/vat — output VAT − input VAT, net payable for the period
+  └─ Aged receivables ← /reports/aged-receivables — outstanding-balances snapshot by days past due
 ─── (divider)
 Lists
   ├─ Clients
@@ -1541,6 +1542,22 @@ persisted to localStorage).
   data. The roadmap landing card grid now lists both P&L and VAT
   live; aged receivables / payables / cash flow / sales-by-client /
   payroll-register remain "Coming" tiles.
+- ✅ **Reports module — Aged receivables** (Tier 1, third cut). New
+  `/reports/aged-receivables` page — a snapshot report ("who owes us
+  money RIGHT NOW") rather than a date-range view. Outstanding invoice
+  balances are bucketed by days past `due_date`: Current (not yet due)
+  / 1-30 / 31-60 / 61-90 / 90+. Only sent invoices with a positive
+  balance count — drafts and cancelled never appear, fully-paid drop
+  off naturally. Balance is `invoicesStore.balanceCentsFor()` so this
+  report can never disagree with the dashboard tile or P&L drill-downs.
+  Three KPI tiles (Total outstanding / Overdue / Current) + a bucket
+  distribution table with count + amount + % of total + a per-client
+  breakdown sorted by total descending (worst-aged clients at the top).
+  Click a client row to jump to `/invoices` pre-filtered by client_id.
+  Same PDF export pipeline as P&L + VAT — `report.typ` learned a
+  7-column case for the per-client table (Client + 5 buckets + Total)
+  with the client name in a 1fr column and every amount column
+  right-aligned.
 - ✅ **Reports module — PDF export** for P&L + VAT. New generic Typst
   template `src-tauri/templates/report.typ` shared by both reports —
   the JSON payload drives title, period subtitle, three KPI summary
@@ -1664,9 +1681,9 @@ P&L + VAT + aged receivables alone close 80% of the "is this real
 bookkeeping software" perception gap. Credit notes are the
 next-most-impactful add after that.
 
-**Status (2026-05-25):** P&L + VAT + report PDF export shipped — see
-the Done bullets above. Next on this track is **aged receivables**,
-then aged payables and cash flow.
+**Status (2026-05-25):** P&L + VAT + aged receivables + report PDF
+export shipped — see the Done bullets above. Next on this track is
+**aged payables** (mirror), then cash flow.
 
 ---
 

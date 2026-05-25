@@ -163,6 +163,15 @@
 		// owns whatever it wants to do with it (e.g. bulk PDF on payslips).
 		selectable?: boolean
 		selection?: T[]
+		// Initial page-size choice when no value is persisted in
+		// localStorage yet (i.e. fresh visit). Defaults to "fit" — the
+		// list pages want the table to auto-fill the viewport. Pages
+		// where "fit" makes less sense (e.g. report drill-downs that
+		// are usually short tabular extracts the user wants to scan
+		// without paging) can pass a fixed number like 50 instead.
+		// Once the user picks any value from the dropdown that pick
+		// wins on subsequent visits — this prop is only the seed.
+		defaultPageSize?: number | "fit"
 	}
 
 	const props = withDefaults(defineProps<Props>(), {
@@ -180,7 +189,8 @@
 		rowsPerPage: 15,
 		rowsPerPageOptions: () => [10, 15, 25, 50, 100],
 		selectable: false,
-		selection: () => []
+		selection: () => [],
+		defaultPageSize: "fit"
 	});
 
 	const emit = defineEmits<{
@@ -188,11 +198,23 @@
 		"update:selection": [rows: T[]]
 	}>();
 
-	// Strip persisted column widths on every page entry so the table
-	// opens at the browser's content-fitted natural widths every time —
-	// `width: 100%` on the table then stretches it across the container.
+	// Strip persisted layout + paging state on every page entry:
+	//
+	//   - columnWidths / tableWidth — the table opens at the browser's
+	//     content-fitted natural widths every time; `width: 100%` then
+	//     stretches it across the container.
+	//   - rows / first — pagination is owned by our own page-size
+	//     storage at `${stateKey}:pageSize` + the effectiveRows
+	//     computed below, NOT by PrimeVue's state-storage. Keeping a
+	//     PrimeVue-persisted `rows` value around fights the prop:
+	//     PrimeVue restores its old `rows` on mount and our
+	//     `:rows="effectiveRows"` binding loses, so the dropdown can
+	//     show one page size while the table paginates at another.
+	//     `first` is the row offset; stripping it lands the user on
+	//     page 1 on entry, which is the expected behaviour anyway.
+	//
 	// Runs synchronously in setup (before mount) so PrimeVue never reads
-	// the stale widths.
+	// the stale values.
 	if (typeof localStorage !== "undefined") {
 		try {
 			const raw = localStorage.getItem(props.stateKey);
@@ -200,6 +222,8 @@
 				const state = JSON.parse(raw) as Record<string, unknown>;
 				delete state.columnWidths;
 				delete state.tableWidth;
+				delete state.rows;
+				delete state.first;
 				localStorage.setItem(props.stateKey, JSON.stringify(state));
 			}
 		} catch {
@@ -220,19 +244,28 @@
 	type PageSizeChoice = number | "fit";
 	const pageSizeStorageKey = `${props.stateKey}:pageSize`;
 
-	// Default to "fit" — most useful for a desktop app where the user
-	// expects the table to fill the pane. A persisted numeric pick
-	// (from a previous session) wins; otherwise we land on fit.
+	// Only an explicit numeric pick (10 / 15 / 25 / 50 / 100) is treated
+	// as user intent that overrides the page's `defaultPageSize` prop.
+	//
+	// `"fit"` in storage is treated as "no explicit preference" — it
+	// either came from a previous session where the component
+	// hard-defaulted to fit (before this prop existed), or the user
+	// picked fit from the dropdown on a page whose default IS fit.
+	// Either way, we honor the page's current prop default for fit-shaped
+	// preferences. Concretely:
+	//
+	//   - List pages (defaultPageSize="fit"): "fit" in storage → "fit".
+	//   - Report pages (defaultPageSize=50): stale "fit" in storage → 50.
+	//   - Either page type: explicit numeric pick → wins.
 	const readPersisted = (): PageSizeChoice => {
-		if (typeof localStorage === "undefined") return "fit";
+		if (typeof localStorage === "undefined") return props.defaultPageSize;
 		try {
 			const raw = localStorage.getItem(pageSizeStorageKey);
-			if (raw === "fit") return "fit";
-			if (raw === null) return "fit";
+			if (raw === null || raw === "fit") return props.defaultPageSize;
 			const n = Number(raw);
-			return Number.isFinite(n) && n > 0 ? n : "fit";
+			return Number.isFinite(n) && n > 0 ? n : props.defaultPageSize;
 		} catch {
-			return "fit";
+			return props.defaultPageSize;
 		}
 	};
 

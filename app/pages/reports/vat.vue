@@ -333,97 +333,100 @@
 					<div>{{ activeTabEmpty }}</div>
 				</div>
 
-				<table v-else-if="activeTab === 'invoices'" class="w-full text-sm">
-					<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-						<tr>
-							<th class="py-2 pl-3 pr-2 font-medium w-40">
-								Number
-							</th>
-							<th class="py-2 px-2 font-medium w-28">
-								Date
-							</th>
-							<th class="py-2 px-2 font-medium">
-								Client
-							</th>
-							<th class="py-2 px-2 font-medium text-right w-32">
-								Subtotal
-							</th>
-							<th class="py-2 pl-2 pr-3 font-medium text-right w-32">
-								VAT
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr
-							v-for="row in filtered.invoices"
-							:key="row.id"
-							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-							@click="router.push(`/invoices/${row.id}`)"
-						>
-							<td class="py-2 pl-3 pr-2 font-medium tabular-nums whitespace-nowrap">
-								{{ row.number }}
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums whitespace-nowrap">
-								{{ row.issue_date }}
-							</td>
-							<td class="py-2 px-2 truncate max-w-0">
-								{{ row.client_name || "—" }}
-							</td>
-							<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap text-(--ui-text-muted)">
-								{{ formatLKR(row.subtotal_cents) }}
-							</td>
-							<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap font-medium text-(--ui-success)">
-								{{ formatLKR(row.tax_cents) }}
-							</td>
-						</tr>
-					</tbody>
-				</table>
+				<!-- Two sibling ResizableDataTables — one per tab. Same
+					pattern as the P&L drill-down. Click a row to jump to
+					the invoice / bill detail page. -->
+				<ResizableDataTable
+					v-else-if="activeTab === 'invoices'"
+					:rows="filtered.invoices"
+					state-key="reports-vat-invoices"
+					default-sort-field="issue_date"
+					:default-sort-order="-1"
+					:default-page-size="50"
+					@row-click="(row) => router.push(`/invoices/${row.id}`)"
+				>
+					<Column field="number" header="Number" sortable>
+						<template #body="{ data }">
+							<div class="font-medium tabular-nums whitespace-nowrap">
+								{{ data.number }}
+							</div>
+						</template>
+					</Column>
+					<Column field="issue_date" header="Date" sortable>
+						<template #body="{ data }">
+							<div class="text-(--ui-text-muted) tabular-nums whitespace-nowrap">
+								{{ data.issue_date }}
+							</div>
+						</template>
+					</Column>
+					<Column field="client_name" header="Client" sortable>
+						<template #body="{ data }">
+							<div class="truncate min-w-[140px] max-w-[260px]">
+								{{ data.client_name || "—" }}
+							</div>
+						</template>
+					</Column>
+					<Column field="subtotal_cents" header="Subtotal" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap text-(--ui-text-muted)">
+								{{ formatLKR(data.subtotal_cents) }}
+							</div>
+						</template>
+					</Column>
+					<Column field="tax_cents" header="VAT" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap font-medium text-(--ui-success)">
+								{{ formatLKR(data.tax_cents) }}
+							</div>
+						</template>
+					</Column>
+				</ResizableDataTable>
 
-				<table v-else class="w-full text-sm">
-					<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-						<tr>
-							<th class="py-2 pl-3 pr-2 font-medium w-40">
-								Number
-							</th>
-							<th class="py-2 px-2 font-medium w-28">
-								Date
-							</th>
-							<th class="py-2 px-2 font-medium">
-								Vendor
-							</th>
-							<th class="py-2 px-2 font-medium text-right w-32">
-								Subtotal
-							</th>
-							<th class="py-2 pl-2 pr-3 font-medium text-right w-32">
-								VAT
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr
-							v-for="row in filtered.bills"
-							:key="row.id"
-							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-							@click="router.push(`/bills/${row.id}`)"
-						>
-							<td class="py-2 pl-3 pr-2 font-medium tabular-nums whitespace-nowrap">
-								{{ row.number }}
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums whitespace-nowrap">
-								{{ row.issue_date }}
-							</td>
-							<td class="py-2 px-2 truncate max-w-0">
-								{{ row.vendor_name || "—" }}
-							</td>
-							<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap text-(--ui-text-muted)">
-								{{ formatLKR(row.subtotal_cents) }}
-							</td>
-							<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap font-medium text-(--ui-error)">
-								{{ formatLKR(row.tax_cents) }}
-							</td>
-						</tr>
-					</tbody>
-				</table>
+				<ResizableDataTable
+					v-else
+					:rows="filtered.bills"
+					state-key="reports-vat-bills"
+					default-sort-field="issue_date"
+					:default-sort-order="-1"
+					:default-page-size="50"
+					@row-click="(row) => router.push(`/bills/${row.id}`)"
+				>
+					<Column field="number" header="Number" sortable>
+						<template #body="{ data }">
+							<div class="font-medium tabular-nums whitespace-nowrap">
+								{{ data.number }}
+							</div>
+						</template>
+					</Column>
+					<Column field="issue_date" header="Date" sortable>
+						<template #body="{ data }">
+							<div class="text-(--ui-text-muted) tabular-nums whitespace-nowrap">
+								{{ data.issue_date }}
+							</div>
+						</template>
+					</Column>
+					<Column field="vendor_name" header="Vendor" sortable>
+						<template #body="{ data }">
+							<div class="truncate min-w-[140px] max-w-[260px]">
+								{{ data.vendor_name || "—" }}
+							</div>
+						</template>
+					</Column>
+					<Column field="subtotal_cents" header="Subtotal" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap text-(--ui-text-muted)">
+								{{ formatLKR(data.subtotal_cents) }}
+							</div>
+						</template>
+					</Column>
+					<Column field="tax_cents" header="VAT" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap font-medium text-(--ui-error)">
+								{{ formatLKR(data.tax_cents) }}
+							</div>
+						</template>
+					</Column>
+				</ResizableDataTable>
 			</UCard>
 		</template>
 

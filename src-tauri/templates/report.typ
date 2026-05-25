@@ -134,7 +134,10 @@
   #table(
     columns: (1fr, auto, auto),
     align: (left, right, right),
-    stroke: none,
+    // Light grid lines — helps eye-tracking across dense numeric
+    // rows when printed. Same `line-color` (#e5e7eb) the rest of
+    // the template uses for separators.
+    stroke: 0.4pt + line-color,
     table.header(
       table.cell(fill: rgb("#f3f4f6"))[#label("Line")],
       table.cell(fill: rgb("#f3f4f6"))[#label("Amount")],
@@ -183,7 +186,16 @@
     let col-count = columns.len()
     // Build column-width tuple: first column auto, last 1-2 columns
     // right-aligned amounts, middle columns flex.
-    let col-widths = if col-count == 5 {
+    let col-widths = if col-count == 7 {
+      // Client / Current / 1-30 / 31-60 / 61-90 / 90+ / Total
+      // (Aged receivables per-client table). Explicit mm widths so
+      // the Client column doesn't get squeezed to nothing on
+      // portrait A4 — six amount columns + a readable name don't
+      // fit if everything claims its natural width. Currency prefix
+      // is stripped from per-cell amounts (see report-pdf.ts) so
+      // 18mm holds "1,368,800.00" at 8pt comfortably.
+      (1fr, 18mm, 18mm, 18mm, 18mm, 18mm, 22mm)
+    } else if col-count == 5 {
       // Number / Date / Party / Subtotal / Tax (VAT report)
       (auto, auto, 1fr, auto, auto)
     } else if col-count == 4 {
@@ -193,20 +205,38 @@
       // Fallback — auto everywhere
       (..columns.map(_ => auto))
     }
+    // Per-column alignment: aged receivables right-aligns every column
+    // after the client name; other tables right-align just the last two
+    // (amount columns).
     let col-aligns = (..columns.enumerate().map(((i, _)) => {
-      if i >= col-count - 2 and col-count >= 4 { right } else { left }
+      if col-count == 7 {
+        if i == 0 { left } else { right }
+      } else if i >= col-count - 2 and col-count >= 4 {
+        right
+      } else {
+        left
+      }
     }))
+
+    // Wider 7-col aged-receivables table drops to 8pt so amount cells
+    // fit on one line without forcing the Client column into the
+    // gutter. Other detail tables stay at 9pt.
+    let cell-size = if col-count == 7 { 8pt } else { 9pt }
 
     table(
       columns: col-widths,
       align: col-aligns,
-      stroke: none,
+      // Same light grid as the breakdown table — printed accounting
+      // tables read much better with cell borders for tracking the
+      // eye across rows.
+      stroke: 0.4pt + line-color,
+      inset: (x: 4pt, y: 5pt),
       table.header(
         ..columns.map(c => table.cell(fill: rgb("#f3f4f6"))[#label(c)])
       ),
       ..section.rows.enumerate().map(((i, row)) => {
         let bg = if calc.rem(i, 2) == 0 { white } else { row-alt }
-        row.map(cell => table.cell(fill: bg)[#text(size: 9pt)[#cell]])
+        row.map(cell => table.cell(fill: bg)[#text(size: cell-size)[#cell]])
       }).flatten()
     )
   }
