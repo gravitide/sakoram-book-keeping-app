@@ -418,7 +418,12 @@
 			]
 		},
 		{
-			to: "/clients",
+			// `/lists` is the landing card grid (mirrors `/reports` +
+			// `/payroll`). The underlying list pages stay at their
+			// existing top-level URLs — this index just gives the
+			// group a proper landing instead of jumping straight to
+			// Clients.
+			to: "/lists",
 			label: "Lists",
 			icon: "i-lucide-library",
 			divider: true,
