@@ -7,9 +7,9 @@
 // so PDF templates need no change — they keep reading
 // `bank_details_snapshot` from the quote / invoice row as before.
 
+import type { BankSnapshot } from "~/stores/quotes";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
-import type { BankSnapshot } from "~/stores/quotes";
 import { execute, select, selectOne } from "~/lib/db";
 
 export interface BusinessBankRow {

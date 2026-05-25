@@ -137,14 +137,14 @@
 						>
 							<!-- Column count tracks the card's effective width:
 								- sm: 1 col (page is single-column, card full-width
-								  but viewport is narrow)
+									but viewport is narrow)
 								- md: 2 cols (page still single-column, card has
-								  full viewport width — plenty of room)
+									full viewport width — plenty of room)
 								- lg: 1 col (page goes 2-col, card drops to
-								  half-width and 2 cols of fields cramp long
-								  values like email)
+									half-width and 2 cols of fields cramp long
+									values like email)
 								- xl+: 2 cols (page is wider, the half-width card
-								  is wide enough for 2 cols again)
+									is wide enough for 2 cols again)
 								SectionCard's outer space-y-4 is a no-op here
 								because this grid is its only child. -->
 							<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
@@ -205,8 +205,8 @@
 								- sm: stacked (each field on its own row)
 								- md: 3 equal cols, all three on one row
 								- lg: City(2) + Postal(1) on row 1, Country
-								  full-width on row 2 — the half-width card at
-								  lg makes three side-by-side fields cramped
+									full-width on row 2 — the half-width card at
+									lg makes three side-by-side fields cramped
 								- xl+: 3 cols again, all three on one row -->
 							<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
 								<UFormField label="City" name="city" class="lg:col-span-2 xl:col-span-1">
@@ -558,5 +558,4 @@
 			deleting.value = false;
 		}
 	};
-
 </script>

@@ -243,47 +243,47 @@
 						title="Operational defaults"
 						subtitle="Pre-fill values when creating new documents."
 					>
-					<UFormField label="Currency" name="currency_code" hint="Used everywhere money is displayed and on every PDF.">
-						<CurrencyPicker
-							v-model:code="form.currency_code"
-							v-model:symbol-override="form.currency_symbol_override"
-						/>
-					</UFormField>
-					<div class="grid grid-cols-2 gap-3">
-						<UFormField label="VAT rate (%)" name="default_vat_rate">
-							<UInputNumber
-								v-model="vatRatePct"
-								:step="0.5"
-								:min="0"
-								:max="100"
-								class="w-full"
+						<UFormField label="Currency" name="currency_code" hint="Used everywhere money is displayed and on every PDF.">
+							<CurrencyPicker
+								v-model:code="form.currency_code"
+								v-model:symbol-override="form.currency_symbol_override"
 							/>
 						</UFormField>
-						<UFormField label="Payment terms (days)" name="default_payment_terms_days">
-							<UInputNumber
-								v-model="form.default_payment_terms_days"
-								:min="0"
-								:max="365"
-								class="w-full"
-							/>
-						</UFormField>
-						<UFormField label="Quote validity (days)" name="default_quote_validity_days">
-							<UInputNumber
-								v-model="form.default_quote_validity_days"
-								:min="0"
-								:max="365"
-								class="w-full"
-							/>
-						</UFormField>
-						<UFormField label="Fiscal year starts" name="fiscal_year_start_month">
-							<USelect
-								v-model="form.fiscal_year_start_month"
-								:items="months"
-								value-key="value"
-								class="w-full"
-							/>
-						</UFormField>
-					</div>
+						<div class="grid grid-cols-2 gap-3">
+							<UFormField label="VAT rate (%)" name="default_vat_rate">
+								<UInputNumber
+									v-model="vatRatePct"
+									:step="0.5"
+									:min="0"
+									:max="100"
+									class="w-full"
+								/>
+							</UFormField>
+							<UFormField label="Payment terms (days)" name="default_payment_terms_days">
+								<UInputNumber
+									v-model="form.default_payment_terms_days"
+									:min="0"
+									:max="365"
+									class="w-full"
+								/>
+							</UFormField>
+							<UFormField label="Quote validity (days)" name="default_quote_validity_days">
+								<UInputNumber
+									v-model="form.default_quote_validity_days"
+									:min="0"
+									:max="365"
+									class="w-full"
+								/>
+							</UFormField>
+							<UFormField label="Fiscal year starts" name="fiscal_year_start_month">
+								<USelect
+									v-model="form.fiscal_year_start_month"
+									:items="months"
+									value-key="value"
+									class="w-full"
+								/>
+							</UFormField>
+						</div>
 					</SectionCard>
 				</div>
 			</div>
