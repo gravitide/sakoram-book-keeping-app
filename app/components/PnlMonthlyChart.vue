@@ -386,15 +386,36 @@
 		return (cents / 100).toFixed(0);
 	}
 
-	// Path for the net trend line. Drawn after the bars so it floats
-	// on top. A single-point path is invalid SVG; the v-if on the
-	// outer <g> guards that case.
+	// Smooth path for the net trend line. Catmull-Rom-to-Bezier: for
+	// each segment we derive two control points from the four
+	// surrounding samples so the curve passes through every dot
+	// without the harsh elbows a polyline would have. Standard
+	// 1/6 tension; ends clamp the missing neighbour to the endpoint
+	// so the curve doesn't whip past the start / finish.
+	//
+	// Drawn after the bars so it floats on top. The v-if on the outer
+	// <g> guards single-point ranges (invalid SVG path).
 	const netPath = computed<string | null>(() => {
 		if (months.value.length < 2) return null;
 		const cw = colWidth.value;
-		return months.value
-			.map((m, i) => `${i === 0 ? "M" : "L"}${(m.colX + cw / 2).toFixed(2)},${m.netY.toFixed(2)}`)
-			.join(" ");
+		const pts = months.value.map((m) => ({
+			x: m.colX + cw / 2,
+			y: m.netY
+		}));
+		const fix = (n: number) => n.toFixed(2);
+		let d = `M${fix(pts[0]!.x)},${fix(pts[0]!.y)}`;
+		for (let i = 0; i < pts.length - 1; i++) {
+			const p0 = pts[i - 1] ?? pts[i]!;
+			const p1 = pts[i]!;
+			const p2 = pts[i + 1]!;
+			const p3 = pts[i + 2] ?? p2;
+			const c1x = p1.x + (p2.x - p0.x) / 6;
+			const c1y = p1.y + (p2.y - p0.y) / 6;
+			const c2x = p2.x - (p3.x - p1.x) / 6;
+			const c2y = p2.y - (p3.y - p1.y) / 6;
+			d += ` C${fix(c1x)},${fix(c1y)} ${fix(c2x)},${fix(c2y)} ${fix(p2.x)},${fix(p2.y)}`;
+		}
+		return d;
 	});
 
 	const totalIncome = computed(() =>
