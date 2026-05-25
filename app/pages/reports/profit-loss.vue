@@ -1,10 +1,30 @@
 <template>
 	<div class="select-none">
-		<div class="mb-4">
+		<!-- Top toolbar row: back link on the left, action cluster on the
+			right. Mirrors the invoice / quote / bill detail-page pattern
+			so the button position is consistent across the app — sits
+			above the title block, not crammed beside the description. -->
+		<div class="mb-4 flex items-center justify-between gap-4">
 			<NuxtLink to="/reports" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
 				<UIcon name="i-lucide-arrow-left" class="size-4" />
 				Back to Reports
 			</NuxtLink>
+
+			<!-- PDF & Print: hands the same filtered/totals view-model to
+				the report template the user is looking at. Disabled
+				while data is loading so we don't render an empty PDF. -->
+			<UButton
+				size="sm"
+				color="neutral"
+				variant="outline"
+				icon="i-lucide-file-down"
+				:loading="pdf.state.rendering"
+				:disabled="isLoading || pdf.state.rendering"
+				:title="isLoading ? 'Loading data…' : 'Preview this report as a PDF'"
+				@click="onPdfClick"
+			>
+				PDF & Print
+			</UButton>
 		</div>
 
 		<header class="mb-6">
@@ -523,6 +543,17 @@
 				</table>
 			</UCard>
 		</template>
+
+		<PdfPreviewModal
+			v-model:open="pdf.state.open"
+			:asset-url="pdf.state.assetUrl"
+			:temp-path="pdf.state.tempPath"
+			:suggested-file-name="pdf.state.suggestedFileName"
+			:saving="pdf.state.saving"
+			title="Profit & Loss PDF preview"
+			@save="pdf.onSave"
+			@cancel="pdf.onCancel"
+		/>
 	</div>
 </template>
 
@@ -546,7 +577,9 @@
 // real tenant ever crosses ~10k documents we'd switch to a SQL-side
 // SUM query. See CLAUDE.md "DB-side pagination" deferred item.
 
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { formatLKR } from "~/lib/money";
+	import { buildPnlPdfPayload } from "~/lib/report-pdf";
 	import { useBillsStore } from "~/stores/bills";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { usePayslipsStore } from "~/stores/payslips";
@@ -559,6 +592,7 @@
 	const billsStore = useBillsStore();
 	const payslipsStore = usePayslipsStore();
 	const settingsStore = useSettingsStore();
+	const currency = useActiveCurrency();
 
 	// Loading state owned by `usePageLoading` — see the composable for
 	// the rAF-yield trick that ensures the skeleton actually paints.
@@ -810,4 +844,35 @@
 			return "—";
 		}
 	}
+
+	// ---- PDF export ------------------------------------------------------
+	// Same preview-then-save flow every document detail page uses. The
+	// builder lives in app/lib/report-pdf.ts so the shape is shared with
+	// the future "schedule a recurring P&L" / "email this report" flows
+	// without re-implementing the payload there.
+	const pdf = usePdfPreview({
+		command: "export_report_pdf",
+		buildPayload: () => buildPnlPdfPayload({
+			settings: settingsStore.settings,
+			currency: currency.value,
+			dateFrom: dateFrom.value,
+			dateTo: dateTo.value,
+			totals: totals.value,
+			filtered: filtered.value
+		}),
+		fileName: () => {
+			// Slug from the period bounds; fall back to a date stamp when
+			// the user has cleared the range (rare but legal).
+			const stamp = dateFrom.value && dateTo.value
+				? `${dateFrom.value}_${dateTo.value}`
+				: new Date().toISOString().slice(0, 10);
+			return `profit-loss-${stamp}.pdf`;
+		},
+		title: "Profit & Loss PDF preview"
+	});
+
+	const onPdfClick = () => {
+		if (isLoading.value || pdf.state.rendering) return;
+		pdf.open();
+	};
 </script>

@@ -27,6 +27,7 @@ use tauri_plugin_shell::ShellExt;
 const DOCUMENT_TEMPLATE: &str = include_str!("../templates/document.typ");
 const VOUCHER_TEMPLATE: &str = include_str!("../templates/voucher.typ");
 const PAYSLIP_TEMPLATE: &str = include_str!("../templates/payslip.typ");
+const REPORT_TEMPLATE: &str = include_str!("../templates/report.typ");
 
 #[derive(Debug, thiserror::Error)]
 pub enum PdfError {
@@ -299,6 +300,20 @@ pub async fn export_voucher_pdf(
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
 	render_pdf(&app, "voucher.typ", VOUCHER_TEMPLATE, data, PathBuf::from(output_path), protect_password).await
+}
+
+// Reports (P&L, VAT, future Tier 1 reports) all render through one
+// generic template — the JSON drives title, period, summary tiles,
+// breakdown rows, and detail tables. Adding a new report = a new
+// JS payload builder; no Rust change needed.
+#[tauri::command]
+pub async fn export_report_pdf(
+	app: AppHandle,
+	data: Value,
+	output_path: String,
+	protect_password: Option<String>,
+) -> Result<(), PdfError> {
+	render_pdf(&app, "report.typ", REPORT_TEMPLATE, data, PathBuf::from(output_path), protect_password).await
 }
 
 /// Copy a file from `src` to `dst`. Used by the PDF preview flow: we

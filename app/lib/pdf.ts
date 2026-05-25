@@ -29,7 +29,8 @@ export type PdfCommand
 		| "export_invoice_pdf"
 		| "export_bill_pdf"
 		| "export_voucher_pdf"
-		| "export_payslip_pdf";
+		| "export_payslip_pdf"
+		| "export_report_pdf";
 
 export type PdfResult
 	= | { ok: true, path: string }
@@ -58,12 +59,15 @@ const mapInvokeError = (err: unknown): { kind: "locked" | "failed", message: str
 // configured, we hand the password to the Rust side, which encrypts the
 // rendered PDF (AES-256, owner-password only — opens freely, editing
 // blocked). See src-tauri/src/pdf.rs.
-const PROTECT_FLAG: Record<PdfCommand, keyof CompanySettingsRow> = {
+const PROTECT_FLAG: Record<PdfCommand, keyof CompanySettingsRow | null> = {
 	export_quote_pdf: "pdf_protect_quote",
 	export_invoice_pdf: "pdf_protect_invoice",
 	export_bill_pdf: "pdf_protect_bill",
 	export_voucher_pdf: "pdf_protect_voucher",
-	export_payslip_pdf: "pdf_protect_payslip"
+	export_payslip_pdf: "pdf_protect_payslip",
+	// Reports are summary aggregates the user generates ad-hoc — no
+	// per-type protection setting (yet). Always renders unencrypted.
+	export_report_pdf: null
 };
 
 // Resolve the owner password to encrypt this document type with, or null
@@ -78,7 +82,11 @@ export const resolveProtectPassword = async (command: PdfCommand): Promise<strin
 	if (!s) return null;
 	const password = s.pdf_protect_password?.trim();
 	if (!password) return null;
-	return s[PROTECT_FLAG[command]] ? password : null;
+	// Reports skip the per-type toggle entirely — PROTECT_FLAG entry
+	// is null, so always renders unencrypted.
+	const flagKey = PROTECT_FLAG[command];
+	if (flagKey === null) return null;
+	return s[flagKey] ? password : null;
 };
 
 // Slugify a document number (e.g. "QT-2026-0001") into a filesystem-safe
