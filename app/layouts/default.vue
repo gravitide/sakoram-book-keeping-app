@@ -414,7 +414,8 @@
 				{ to: "/reports/profit-loss", label: "Profit & Loss", icon: "i-lucide-trending-up" },
 				{ to: "/reports/vat", label: "VAT", icon: "i-lucide-percent" },
 				{ to: "/reports/aged-receivables", label: "Aged receivables", icon: "i-lucide-clock" },
-				{ to: "/reports/aged-payables", label: "Aged payables", icon: "i-lucide-clock-alert" }
+				{ to: "/reports/aged-payables", label: "Aged payables", icon: "i-lucide-clock-alert" },
+				{ to: "/reports/cash-flow", label: "Cash flow", icon: "i-lucide-arrow-left-right" }
 			]
 		},
 		{

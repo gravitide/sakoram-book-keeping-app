@@ -101,6 +101,12 @@
 			label: "Aged payables",
 			icon: "i-lucide-clock-alert",
 			description: "Outstanding bills bucketed by days past due, per-vendor breakdown."
+		},
+		{
+			to: "/reports/cash-flow",
+			label: "Cash flow",
+			icon: "i-lucide-arrow-left-right",
+			description: "Receipts minus payments by month for any date range. Cash basis — the money-in / money-out view."
 		}
 	];
 
@@ -108,11 +114,6 @@
 	// Keeping them visible (not hidden behind a doc) signals to the user
 	// that the section is still being built out.
 	const upcomingReports: { label: string, icon: string, description: string }[] = [
-		{
-			label: "Cash flow",
-			icon: "i-lucide-arrow-left-right",
-			description: "Receipts minus payments by month for any date range."
-		},
 		{
 			label: "Sales by client",
 			icon: "i-lucide-users",
