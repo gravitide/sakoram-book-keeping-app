@@ -4,11 +4,19 @@
 			quotes, not copying cell text out of the table. -->
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
 			<div>
-				<h1 class="text-2xl font-semibold">
+				<h1 class="text-2xl font-semibold flex items-center gap-3">
 					Quotes
+					<UIcon
+						v-if="isLoading"
+						name="i-lucide-loader-circle"
+						class="size-4 animate-spin text-(--ui-primary)"
+					/>
 				</h1>
 				<p class="text-sm text-(--ui-text-muted)">
-					{{ store.quotes.length }} total · {{ counts.draft }} draft · {{ counts.sent }} sent · {{ counts.accepted }} accepted
+					<span v-if="isLoading">Loading…</span>
+					<template v-else>
+						{{ store.quotes.length }} total · {{ counts.draft }} draft · {{ counts.sent }} sent · {{ counts.accepted }} accepted
+					</template>
 				</p>
 			</div>
 			<UButton icon="i-lucide-plus" @click="newQuote">
@@ -288,12 +296,24 @@
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
 
-	// Load stores in parallel so the filter dropdown is populated by
-	// the time the table renders. Clients are needed only for the
-	// "Filter by client" select — the row itself reads off the snapshot.
-	await Promise.all([store.load(), clientsStore.load(), settingsStore.ensureLoaded()]);
-	// Auto-expire any sent quotes past their valid_until on every list load.
-	await store.expireOverdue().catch(() => { /* non-fatal */ });
+	// Data load in onMounted (not top-level await) — see /invoices for
+	// the rationale. Page mounts instantly so the user can navigate
+	// away mid-load. expireOverdue() runs after the store hydrates.
+	const isLoading = ref(true);
+	onMounted(async () => {
+		try {
+			await Promise.all([
+				store.ensureLoaded(),
+				clientsStore.ensureLoaded(),
+				settingsStore.ensureLoaded()
+			]);
+			// Auto-expire any sent quotes past valid_until — silently
+			// non-fatal if it fails.
+			await store.expireOverdue().catch(() => { /* */ });
+		} finally {
+			isLoading.value = false;
+		}
+	});
 
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();

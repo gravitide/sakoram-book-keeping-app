@@ -4,12 +4,20 @@
 			payslips, not copying cell text out of the table. -->
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
 			<div>
-				<h1 class="text-2xl font-semibold">
+				<h1 class="text-2xl font-semibold flex items-center gap-3">
 					Payslips
+					<UIcon
+						v-if="isLoading"
+						name="i-lucide-loader-circle"
+						class="size-4 animate-spin text-(--ui-primary)"
+					/>
 				</h1>
 				<p class="text-sm text-(--ui-text-muted)">
-					{{ store.payslips.length }} total · outstanding balance
-					<span class="font-medium tabular-nums">{{ formatMoney(store.outstandingTotal) }}</span>
+					<span v-if="isLoading">Loading…</span>
+					<template v-else>
+						{{ store.payslips.length }} total · outstanding balance
+						<span class="font-medium tabular-nums">{{ formatMoney(store.outstandingTotal) }}</span>
+					</template>
 				</p>
 			</div>
 			<div class="flex items-center gap-2">
@@ -358,12 +366,21 @@
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
 
-	await Promise.all([
-		store.load(),
-		employeesStore.employees.length === 0 ? employeesStore.load() : Promise.resolve(),
-		vouchersStore.vouchers.length === 0 ? vouchersStore.load() : Promise.resolve(),
-		settingsStore.ensureLoaded()
-	]);
+	// Data load in onMounted (not top-level await) — page mounts
+	// instantly so the user can navigate away mid-load.
+	const isLoading = ref(true);
+	onMounted(async () => {
+		try {
+			await Promise.all([
+				store.ensureLoaded(),
+				employeesStore.ensureLoaded(),
+				vouchersStore.ensureLoaded(),
+				settingsStore.ensureLoaded()
+			]);
+		} finally {
+			isLoading.value = false;
+		}
+	});
 
 	// Optional ?employee=ID query — used by the "View payslips" action on
 	// the employees list to land here pre-filtered to that employee.

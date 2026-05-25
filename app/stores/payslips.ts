@@ -169,6 +169,13 @@ export const usePayslipsStore = defineStore("payslips", () => {
 		return sum;
 	});
 
+	// See app/stores/invoices.ts for the `loaded` / `ensureLoaded`
+	// rationale + shared pendingLoad — same pattern: skip refetching
+	// when already populated, share a single in-flight promise across
+	// concurrent callers.
+	const loaded = ref(false);
+	let pendingLoad: Promise<void> | null = null;
+
 	const load = async () => {
 		loading.value = true;
 		error.value = null;
@@ -176,12 +183,23 @@ export const usePayslipsStore = defineStore("payslips", () => {
 			payslips.value = await select<PayslipRow>(
 				"SELECT * FROM payslips ORDER BY date(period_start) DESC, id DESC"
 			);
+			loaded.value = true;
 		} catch (err) {
 			error.value = err instanceof Error ? err.message : String(err);
 			throw err;
 		} finally {
 			loading.value = false;
 		}
+	};
+
+	const ensureLoaded = async () => {
+		if (loaded.value) return;
+		if (!pendingLoad) {
+			pendingLoad = load().finally(() => {
+				pendingLoad = null;
+			});
+		}
+		await pendingLoad;
 	};
 
 	const get = async (id: number): Promise<PayslipRow | null> =>
@@ -384,7 +402,9 @@ export const usePayslipsStore = defineStore("payslips", () => {
 		clearDateFilters,
 		filtered,
 		outstandingTotal,
+		loaded,
 		load,
+		ensureLoaded,
 		get,
 		getLines,
 		buildEmployeeSnapshot,

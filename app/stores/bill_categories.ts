@@ -52,6 +52,11 @@ export const useBillCategoriesStore = defineStore("bill_categories", () => {
 	const activeCount = computed(() => categories.value.filter((c) => c.is_archived === 0).length);
 	const archivedCount = computed(() => categories.value.filter((c) => c.is_archived === 1).length);
 
+	// See app/stores/invoices.ts for the `loaded` / `ensureLoaded`
+	// rationale — same pattern across every collection store.
+	const loaded = ref(false);
+	let pendingLoad: Promise<void> | null = null;
+
 	const load = async () => {
 		loading.value = true;
 		error.value = null;
@@ -59,12 +64,23 @@ export const useBillCategoriesStore = defineStore("bill_categories", () => {
 			categories.value = await select<BillCategoryRow>(
 				"SELECT * FROM bill_categories ORDER BY name COLLATE NOCASE ASC"
 			);
+			loaded.value = true;
 		} catch (err) {
 			error.value = err instanceof Error ? err.message : String(err);
 			throw err;
 		} finally {
 			loading.value = false;
 		}
+	};
+
+	const ensureLoaded = async () => {
+		if (loaded.value) return;
+		if (!pendingLoad) {
+			pendingLoad = load().finally(() => {
+				pendingLoad = null;
+			});
+		}
+		await pendingLoad;
 	};
 
 	const get = async (id: number): Promise<BillCategoryRow | null> =>
@@ -115,7 +131,9 @@ export const useBillCategoriesStore = defineStore("bill_categories", () => {
 		filtered,
 		activeCount,
 		archivedCount,
+		loaded,
 		load,
+		ensureLoaded,
 		get,
 		create,
 		update,

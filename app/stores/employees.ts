@@ -89,6 +89,11 @@ export const useEmployeesStore = defineStore("employees", () => {
 	const activeCount = computed(() => employees.value.filter((e) => e.is_archived === 0).length);
 	const archivedCount = computed(() => employees.value.filter((e) => e.is_archived === 1).length);
 
+	// See app/stores/invoices.ts for the `loaded` / `ensureLoaded`
+	// rationale — same pattern across every collection store.
+	const loaded = ref(false);
+	let pendingLoad: Promise<void> | null = null;
+
 	const load = async () => {
 		loading.value = true;
 		error.value = null;
@@ -96,12 +101,23 @@ export const useEmployeesStore = defineStore("employees", () => {
 			employees.value = await select<EmployeeRow>(
 				"SELECT * FROM employees ORDER BY full_name COLLATE NOCASE ASC"
 			);
+			loaded.value = true;
 		} catch (err) {
 			error.value = err instanceof Error ? err.message : String(err);
 			throw err;
 		} finally {
 			loading.value = false;
 		}
+	};
+
+	const ensureLoaded = async () => {
+		if (loaded.value) return;
+		if (!pendingLoad) {
+			pendingLoad = load().finally(() => {
+				pendingLoad = null;
+			});
+		}
+		await pendingLoad;
 	};
 
 	const get = async (id: number): Promise<EmployeeRow | null> => {
@@ -164,7 +180,9 @@ export const useEmployeesStore = defineStore("employees", () => {
 		filtered,
 		activeCount,
 		archivedCount,
+		loaded,
 		load,
+		ensureLoaded,
 		get,
 		create,
 		update,

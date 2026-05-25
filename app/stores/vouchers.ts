@@ -102,6 +102,13 @@ export const useVouchersStore = defineStore("vouchers", () => {
 			.reduce((s, v) => s + v.amount_cents, 0)
 	);
 
+	// See app/stores/invoices.ts for the `loaded` / `ensureLoaded`
+	// rationale + shared pendingLoad — same pattern: skip refetching
+	// when already populated, share a single in-flight promise across
+	// concurrent callers.
+	const loaded = ref(false);
+	let pendingLoad: Promise<void> | null = null;
+
 	const load = async () => {
 		loading.value = true;
 		error.value = null;
@@ -109,12 +116,23 @@ export const useVouchersStore = defineStore("vouchers", () => {
 			vouchers.value = await select<VoucherRow>(
 				"SELECT * FROM vouchers ORDER BY date(voucher_date) DESC, id DESC"
 			);
+			loaded.value = true;
 		} catch (err) {
 			error.value = err instanceof Error ? err.message : String(err);
 			throw err;
 		} finally {
 			loading.value = false;
 		}
+	};
+
+	const ensureLoaded = async () => {
+		if (loaded.value) return;
+		if (!pendingLoad) {
+			pendingLoad = load().finally(() => {
+				pendingLoad = null;
+			});
+		}
+		await pendingLoad;
 	};
 
 	const get = async (id: number): Promise<VoucherRow | null> =>
@@ -203,7 +221,9 @@ export const useVouchersStore = defineStore("vouchers", () => {
 		filtered,
 		totalPayments,
 		totalReceipts,
+		loaded,
 		load,
+		ensureLoaded,
 		get,
 		create,
 		update,

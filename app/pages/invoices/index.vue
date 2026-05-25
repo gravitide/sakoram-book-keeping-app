@@ -4,14 +4,26 @@
 			invoices, not copying cell text out of the table. -->
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
 			<div>
-				<h1 class="text-2xl font-semibold">
+				<h1 class="text-2xl font-semibold flex items-center gap-3">
 					Invoices
+					<!-- Inline spinner while the data is loading. Sits in the
+						title row (not as an overlay) so the page is fully
+						interactive while the rows hydrate — user can still
+						click another sidebar link without waiting. -->
+					<UIcon
+						v-if="isLoading"
+						name="i-lucide-loader-circle"
+						class="size-4 animate-spin text-(--ui-primary)"
+					/>
 				</h1>
 				<p class="text-sm text-(--ui-text-muted) tabular-nums">
-					{{ store.invoices.length }} total · {{ formatLKR(store.outstandingTotal) }} outstanding
-					<span v-if="store.overdueCount > 0" class="text-(--ui-error)">
-						· {{ store.overdueCount }} overdue
-					</span>
+					<span v-if="isLoading">Loading…</span>
+					<template v-else>
+						{{ store.invoices.length }} total · {{ formatLKR(store.outstandingTotal) }} outstanding
+						<span v-if="store.overdueCount > 0" class="text-(--ui-error)">
+							· {{ store.overdueCount }} overdue
+						</span>
+					</template>
 				</p>
 			</div>
 			<UButton icon="i-lucide-plus" @click="newInvoice">
@@ -309,10 +321,27 @@
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
 
-	// Load every store the list / filter dropdowns / derived status
-	// reach into, in parallel. Vouchers are essential because invoice
-	// status and balance are derived from linked receipt vouchers.
-	await Promise.all([store.load(), clientsStore.load(), vouchersStore.load(), settingsStore.ensureLoaded()]);
+	// Data load lives in onMounted (not top-level await) so the page
+	// mounts instantly when the user clicks the sidebar link. Without
+	// this, Vue's <Suspense> blocks the whole transition on this
+	// Promise.all — the previous page stays frozen for the duration
+	// of the load and the user can't click another sidebar entry.
+	// ensureLoaded() variants are no-ops when the store is already
+	// hydrated, so revisits during the same tenant session don't
+	// re-fetch (Pinia keeps the rows in memory).
+	const isLoading = ref(true);
+	onMounted(async () => {
+		try {
+			await Promise.all([
+				store.ensureLoaded(),
+				clientsStore.ensureLoaded(),
+				vouchersStore.ensureLoaded(),
+				settingsStore.ensureLoaded()
+			]);
+		} finally {
+			isLoading.value = false;
+		}
+	});
 
 	// Pre-declare helpers that the column definitions below reference.
 	// (Plain `function` declarations hoist; `const` arrows don't.)
