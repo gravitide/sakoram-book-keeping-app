@@ -258,68 +258,73 @@
 					<div>Nothing outstanding — all invoices paid.</div>
 				</div>
 
-				<table v-else class="w-full text-sm">
-					<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-						<tr>
-							<th class="py-2 pl-3 pr-2 font-medium">
-								Client
-							</th>
-							<th class="py-2 px-2 font-medium text-right tabular-nums">
-								Current
-							</th>
-							<th class="py-2 px-2 font-medium text-right tabular-nums">
-								1-30
-							</th>
-							<th class="py-2 px-2 font-medium text-right tabular-nums">
-								31-60
-							</th>
-							<th class="py-2 px-2 font-medium text-right tabular-nums">
-								61-90
-							</th>
-							<th class="py-2 px-2 font-medium text-right tabular-nums">
-								90+
-							</th>
-							<th class="py-2 pl-2 pr-3 font-medium text-right tabular-nums">
-								Total
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr
-							v-for="row in clientRows"
-							:key="row.clientId ?? row.name"
-							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-							@click="openClient(row.clientId)"
-						>
-							<td class="py-2 pl-3 pr-2 truncate max-w-0">
-								<div class="font-medium">
-									{{ row.name }}
-								</div>
-								<div class="text-xs text-(--ui-text-muted)">
-									{{ row.invoiceCount }} open invoice{{ row.invoiceCount === 1 ? "" : "s" }}
-								</div>
-							</td>
-							<td class="py-2 px-2 text-right tabular-nums" :class="cellClass(row.current)">
-								{{ amountOrDash(row.current) }}
-							</td>
-							<td class="py-2 px-2 text-right tabular-nums text-(--ui-warning)" :class="row.b1to30 === 0 ? 'text-(--ui-text-muted)' : ''">
-								{{ amountOrDash(row.b1to30) }}
-							</td>
-							<td class="py-2 px-2 text-right tabular-nums text-(--ui-warning)" :class="row.b31to60 === 0 ? 'text-(--ui-text-muted)' : ''">
-								{{ amountOrDash(row.b31to60) }}
-							</td>
-							<td class="py-2 px-2 text-right tabular-nums text-(--ui-error)" :class="row.b61to90 === 0 ? 'text-(--ui-text-muted)' : ''">
-								{{ amountOrDash(row.b61to90) }}
-							</td>
-							<td class="py-2 px-2 text-right tabular-nums text-(--ui-error)" :class="row.b90plus === 0 ? 'text-(--ui-text-muted)' : ''">
-								{{ amountOrDash(row.b90plus) }}
-							</td>
-							<td class="py-2 pl-2 pr-3 text-right tabular-nums font-semibold">
-								{{ formatLKR(row.total) }}
-							</td>
-						</tr>
-					</tbody>
-				</table>
+				<!-- Horizontally scrollable wrapper: at lg the card is
+					narrower than 6 amount columns + a readable client
+					name, so we let the user pan rather than wrap-and-crush. -->
+				<div v-else class="overflow-x-auto">
+					<table class="w-full text-sm min-w-[760px]">
+						<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
+							<tr>
+								<th class="py-2 pl-3 pr-2 font-medium">
+									Client
+								</th>
+								<th class="py-2 px-2 font-medium text-right tabular-nums whitespace-nowrap">
+									Current
+								</th>
+								<th class="py-2 px-2 font-medium text-right tabular-nums whitespace-nowrap">
+									1-30
+								</th>
+								<th class="py-2 px-2 font-medium text-right tabular-nums whitespace-nowrap">
+									31-60
+								</th>
+								<th class="py-2 px-2 font-medium text-right tabular-nums whitespace-nowrap">
+									61-90
+								</th>
+								<th class="py-2 px-2 font-medium text-right tabular-nums whitespace-nowrap">
+									90+
+								</th>
+								<th class="py-2 pl-2 pr-3 font-medium text-right tabular-nums whitespace-nowrap">
+									Total
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr
+								v-for="row in clientRows"
+								:key="row.clientId ?? row.name"
+								class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+								@click="openClient(row.clientId)"
+							>
+								<td class="py-2 pl-3 pr-2 max-w-[220px]">
+									<div class="font-medium truncate">
+										{{ row.name }}
+									</div>
+									<div class="text-xs text-(--ui-text-muted) truncate">
+										{{ row.invoiceCount }} open invoice{{ row.invoiceCount === 1 ? "" : "s" }}
+									</div>
+								</td>
+								<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap" :class="amountClass(row.current, 'neutral')">
+									{{ amountOrDash(row.current) }}
+								</td>
+								<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap" :class="amountClass(row.b1to30, 'warning')">
+									{{ amountOrDash(row.b1to30) }}
+								</td>
+								<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap" :class="amountClass(row.b31to60, 'warning')">
+									{{ amountOrDash(row.b31to60) }}
+								</td>
+								<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap" :class="amountClass(row.b61to90, 'error')">
+									{{ amountOrDash(row.b61to90) }}
+								</td>
+								<td class="py-2 px-2 text-right tabular-nums whitespace-nowrap" :class="amountClass(row.b90plus, 'error')">
+									{{ amountOrDash(row.b90plus) }}
+								</td>
+								<td class="py-2 pl-2 pr-3 text-right tabular-nums font-semibold whitespace-nowrap">
+									{{ formatLKR(row.total) }}
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
 			</UCard>
 		</template>
 
@@ -533,8 +538,17 @@
 		};
 	});
 
-	const cellClass = (v: number): string =>
-		v === 0 ? "text-(--ui-text-muted)" : "";
+	// Per-amount-cell colour. Zero values always render as a muted
+	// dash regardless of the bucket's tone — otherwise an empty cell
+	// in the 1-30 column would still paint a yellow "—" which reads
+	// like an actual warning. Non-zero values pick up the bucket's
+	// tone (warning for 1-60, error for 60+, plain text for current).
+	const amountClass = (v: number, tone: "warning" | "error" | "neutral"): string => {
+		if (v === 0) return "text-(--ui-text-muted)";
+		if (tone === "warning") return "text-(--ui-warning)";
+		if (tone === "error") return "text-(--ui-error)";
+		return "";
+	};
 
 	const amountOrDash = (v: number): string =>
 		v === 0 ? "—" : formatLKR(v);
