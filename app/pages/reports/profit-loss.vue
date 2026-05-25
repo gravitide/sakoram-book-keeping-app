@@ -220,146 +220,183 @@
 			</table>
 		</UCard>
 
-		<!-- Underlying document drill-downs. Each section lists the rows
-			that contributed to the line — clicking a row navigates to
-			the document's detail page. Keeps the report auditable
-			without needing to leave the page first. -->
-		<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-			<UCard>
-				<template #header>
-					<div class="app-chrome font-medium">
-						Invoices ({{ filtered.invoices.length }})
-					</div>
-				</template>
-				<div v-if="filtered.invoices.length === 0" class="py-6 text-center text-sm text-(--ui-text-muted)">
-					<UIcon name="i-lucide-receipt" class="size-8 mx-auto mb-2 opacity-50" />
-					<div>No invoices issued in this period.</div>
-				</div>
-				<table v-else class="w-full text-sm">
-					<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-						<tr>
-							<th class="py-2 pl-3 pr-2 font-medium">
-								Number
-							</th>
-							<th class="py-2 px-2 font-medium">
-								Date
-							</th>
-							<th class="py-2 pl-2 pr-3 font-medium text-right">
-								Subtotal
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr
-							v-for="row in filtered.invoices"
-							:key="row.id"
-							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-							@click="router.push(`/invoices/${row.id}`)"
-						>
-							<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
-								{{ row.number }}
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-								{{ row.issue_date }}
-							</td>
-							<td class="py-2 pl-2 pr-3 text-right tabular-nums">
-								{{ formatLKR(row.subtotal_cents) }}
-							</td>
-						</tr>
-					</tbody>
-				</table>
-			</UCard>
+		<!-- Underlying document drill-downs. Single full-width card with
+			a segmented tab control — at the earlier 3-column layout each
+			table got ~340px even at xl, which crushed Number / Date /
+			Subtotal into wrapped columns. Tabs give every table the
+			page's full width and let us add a Party column for context
+			(invoice numbers alone aren't very identifying — knowing the
+			client / vendor makes the audit trail real).
 
-			<UCard>
-				<template #header>
-					<div class="app-chrome font-medium">
-						Bills ({{ filtered.bills.length }})
-					</div>
-				</template>
-				<div v-if="filtered.bills.length === 0" class="py-6 text-center text-sm text-(--ui-text-muted)">
-					<UIcon name="i-lucide-file-input" class="size-8 mx-auto mb-2 opacity-50" />
-					<div>No bills in this period.</div>
-				</div>
-				<table v-else class="w-full text-sm">
-					<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-						<tr>
-							<th class="py-2 pl-3 pr-2 font-medium">
-								Number
-							</th>
-							<th class="py-2 px-2 font-medium">
-								Date
-							</th>
-							<th class="py-2 pl-2 pr-3 font-medium text-right">
-								Subtotal
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr
-							v-for="row in filtered.bills"
-							:key="row.id"
-							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-							@click="router.push(`/bills/${row.id}`)"
+			Tab strip styled to match the bundle/itemized toggle on the
+			document detail pages so the language is consistent. Counts
+			live inside each tab pill; the active tab's running total
+			shows on the right, so the user always sees both "how many
+			rows" and "how much" at a glance. -->
+		<UCard>
+			<template #header>
+				<div class="app-chrome flex items-center justify-between gap-3 flex-wrap">
+					<div class="flex border border-(--ui-border) rounded-md overflow-hidden text-xs">
+						<button
+							v-for="(t, i) in TABS"
+							:key="t.key"
+							type="button"
+							class="px-3 py-1.5 transition cursor-pointer inline-flex items-center gap-1.5"
+							:class="[
+								activeTab === t.key
+									? 'bg-(--ui-primary) text-(--ui-bg)'
+									: 'hover:bg-(--ui-bg-muted)',
+								i > 0 ? 'border-l border-(--ui-border)' : ''
+							]"
+							@click="activeTab = t.key"
 						>
-							<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
-								{{ row.number }}
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-								{{ row.issue_date }}
-							</td>
-							<td class="py-2 pl-2 pr-3 text-right tabular-nums">
-								{{ formatLKR(row.subtotal_cents) }}
-							</td>
-						</tr>
-					</tbody>
-				</table>
-			</UCard>
+							<UIcon :name="t.icon" class="size-3.5" />
+							<span>{{ t.label }}</span>
+							<span
+								class="tabular-nums px-1.5 rounded-sm"
+								:class="activeTab === t.key
+									? 'bg-(--ui-bg)/20'
+									: 'bg-(--ui-bg-muted) text-(--ui-text-muted)'"
+							>
+								{{ tabCounts[t.key] }}
+							</span>
+						</button>
+					</div>
+					<div class="text-xs text-(--ui-text-muted) tabular-nums">
+						Total <span class="text-(--ui-text) font-medium ml-1">{{ formatLKR(activeTabTotal) }}</span>
+					</div>
+				</div>
+			</template>
 
-			<UCard>
-				<template #header>
-					<div class="app-chrome font-medium">
-						Payslips ({{ filtered.payslips.length }})
-					</div>
-				</template>
-				<div v-if="filtered.payslips.length === 0" class="py-6 text-center text-sm text-(--ui-text-muted)">
-					<UIcon name="i-lucide-file-spreadsheet" class="size-8 mx-auto mb-2 opacity-50" />
-					<div>No payslips in this period.</div>
-				</div>
-				<table v-else class="w-full text-sm">
-					<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-						<tr>
-							<th class="py-2 pl-3 pr-2 font-medium">
-								Number
-							</th>
-							<th class="py-2 px-2 font-medium">
-								Period end
-							</th>
-							<th class="py-2 pl-2 pr-3 font-medium text-right">
-								Earnings
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr
-							v-for="row in filtered.payslips"
-							:key="row.id"
-							class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
-							@click="router.push(`/payslips/${row.id}`)"
-						>
-							<td class="py-2 pl-3 pr-2 font-medium tabular-nums">
-								{{ row.number }}
-							</td>
-							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums">
-								{{ row.period_end }}
-							</td>
-							<td class="py-2 pl-2 pr-3 text-right tabular-nums">
-								{{ formatLKR(row.earnings_cents) }}
-							</td>
-						</tr>
-					</tbody>
-				</table>
-			</UCard>
-		</div>
+			<!-- Empty states share one shell, swapping icon + label. -->
+			<div
+				v-if="tabCounts[activeTab] === 0"
+				class="py-10 text-center text-sm text-(--ui-text-muted)"
+			>
+				<UIcon :name="activeTabIcon" class="size-10 mx-auto mb-2 opacity-40" />
+				<div>{{ activeTabEmpty }}</div>
+			</div>
+
+			<table v-else-if="activeTab === 'invoices'" class="w-full text-sm">
+				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
+					<tr>
+						<th class="py-2 pl-3 pr-2 font-medium w-40">
+							Number
+						</th>
+						<th class="py-2 px-2 font-medium w-28">
+							Date
+						</th>
+						<th class="py-2 px-2 font-medium">
+							Client
+						</th>
+						<th class="py-2 pl-2 pr-3 font-medium text-right w-40">
+							Subtotal
+						</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr
+						v-for="row in filtered.invoices"
+						:key="row.id"
+						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+						@click="router.push(`/invoices/${row.id}`)"
+					>
+						<td class="py-2 pl-3 pr-2 font-medium tabular-nums whitespace-nowrap">
+							{{ row.number }}
+						</td>
+						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums whitespace-nowrap">
+							{{ row.issue_date }}
+						</td>
+						<td class="py-2 px-2 truncate max-w-0">
+							{{ partyName(row.client_snapshot) }}
+						</td>
+						<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap">
+							{{ formatLKR(row.subtotal_cents) }}
+						</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<table v-else-if="activeTab === 'bills'" class="w-full text-sm">
+				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
+					<tr>
+						<th class="py-2 pl-3 pr-2 font-medium w-40">
+							Number
+						</th>
+						<th class="py-2 px-2 font-medium w-28">
+							Date
+						</th>
+						<th class="py-2 px-2 font-medium">
+							Vendor
+						</th>
+						<th class="py-2 pl-2 pr-3 font-medium text-right w-40">
+							Subtotal
+						</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr
+						v-for="row in filtered.bills"
+						:key="row.id"
+						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+						@click="router.push(`/bills/${row.id}`)"
+					>
+						<td class="py-2 pl-3 pr-2 font-medium tabular-nums whitespace-nowrap">
+							{{ row.number }}
+						</td>
+						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums whitespace-nowrap">
+							{{ row.issue_date }}
+						</td>
+						<td class="py-2 px-2 truncate max-w-0">
+							{{ partyName(row.vendor_snapshot) }}
+						</td>
+						<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap">
+							{{ formatLKR(row.subtotal_cents) }}
+						</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<table v-else class="w-full text-sm">
+				<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
+					<tr>
+						<th class="py-2 pl-3 pr-2 font-medium w-40">
+							Number
+						</th>
+						<th class="py-2 px-2 font-medium w-28">
+							Period end
+						</th>
+						<th class="py-2 px-2 font-medium">
+							Employee
+						</th>
+						<th class="py-2 pl-2 pr-3 font-medium text-right w-40">
+							Earnings
+						</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr
+						v-for="row in filtered.payslips"
+						:key="row.id"
+						class="border-b border-(--ui-border)/60 last:border-0 hover:bg-(--ui-bg-muted) cursor-pointer"
+						@click="router.push(`/payslips/${row.id}`)"
+					>
+						<td class="py-2 pl-3 pr-2 font-medium tabular-nums whitespace-nowrap">
+							{{ row.number }}
+						</td>
+						<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums whitespace-nowrap">
+							{{ row.period_end }}
+						</td>
+						<td class="py-2 px-2 truncate max-w-0">
+							{{ partyName(row.employee_snapshot, "full_name") }}
+						</td>
+						<td class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap">
+							{{ formatLKR(row.earnings_cents) }}
+						</td>
+					</tr>
+				</tbody>
+			</table>
+		</UCard>
 	</div>
 </template>
 
@@ -588,5 +625,57 @@
 		// Hide hundredths for small percentages — looks tidier in a
 		// column of values that are mostly two-digit.
 		return `${v.toFixed(v < 10 ? 1 : 0)}%`;
+	}
+
+	// Drill-down tabs. Single full-width table per tab gives every
+	// column real breathing room — at the previous 3-up layout each
+	// table got ~340px even at xl and the cells wrapped awkwardly.
+	type TabKey = "invoices" | "bills" | "payslips";
+	interface TabDef { key: TabKey, label: string, icon: string }
+	const TABS: TabDef[] = [
+		{ key: "invoices", label: "Invoices", icon: "i-lucide-receipt" },
+		{ key: "bills", label: "Bills", icon: "i-lucide-file-input" },
+		{ key: "payslips", label: "Payslips", icon: "i-lucide-file-spreadsheet" }
+	];
+	const activeTab = ref<TabKey>("invoices");
+
+	const tabCounts = computed<Record<TabKey, number>>(() => ({
+		invoices: filtered.value.invoices.length,
+		bills: filtered.value.bills.length,
+		payslips: filtered.value.payslips.length
+	}));
+
+	const activeTabTotal = computed(() => {
+		if (activeTab.value === "invoices") return totals.value.income;
+		if (activeTab.value === "bills") return totals.value.bills;
+		return totals.value.payroll;
+	});
+
+	// Empty-state copy + icon for the current tab. Centralised so the
+	// per-tab `<table v-if>` branches stay flat.
+	const activeTabIcon = computed(() =>
+		TABS.find((t) => t.key === activeTab.value)?.icon ?? "i-lucide-file"
+	);
+	const activeTabEmpty = computed(() => {
+		if (activeTab.value === "invoices") return "No invoices issued in this period.";
+		if (activeTab.value === "bills") return "No bills in this period.";
+		return "No payslips in this period.";
+	});
+
+	// Pull the party name out of a snapshot JSON column. Snapshots are
+	// JSON-stringified and shaped differently — clients/vendors use
+	// `name`, employees use `full_name` — so the second arg picks the
+	// key. Parsing JSON on every render is fine at expected row counts
+	// (typically <100 rows per P&L period); revisit if profiling shows
+	// it matters.
+	function partyName(snapshotJson: string | null | undefined, key: "name" | "full_name" = "name"): string {
+		if (!snapshotJson) return "—";
+		try {
+			const o = JSON.parse(snapshotJson) as Record<string, unknown>;
+			const v = o?.[key];
+			return typeof v === "string" && v.length > 0 ? v : "—";
+		} catch {
+			return "—";
+		}
 	}
 </script>
