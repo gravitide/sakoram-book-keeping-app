@@ -154,6 +154,31 @@
 							Tax ID: {{ vendorSnapshot.tax_id }}
 						</div>
 					</div>
+					<!-- Cross-doc shortcuts. Open vendor routes to the
+						vendor detail page; View all bills pre-filters
+						the bills list to this vendor. Same pattern the
+						address-book hero uses (clients / vendors /
+						employees detail pages). -->
+					<div class="mt-4 pt-3 border-t border-(--ui-border) flex flex-wrap gap-2">
+						<UButton
+							size="xs"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-external-link"
+							@click="openVendor"
+						>
+							Open vendor
+						</UButton>
+						<UButton
+							size="xs"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-file-text"
+							@click="viewVendorBills"
+						>
+							View all bills
+						</UButton>
+					</div>
 				</UCard>
 
 				<UCard class="lg:col-span-2 lg:row-start-1">
@@ -692,6 +717,24 @@
 	// etc.), the Refresh button on the Bill-from card pulls the
 	// current vendor row into the bill's frozen snapshot. Sent / paid
 	// bills (non-editable) stay frozen as before.
+	// Cross-doc shortcuts on the Bill-from card. Same pattern as the
+	// vendors detail page's "View bills" action — set the destination
+	// list's vendorFilter (Pinia state survives navigation), clear other
+	// filters, then route. `openVendor` is the plain-navigation variant
+	// so the user can jump to the vendor profile from inside a bill.
+	const openVendor = () => {
+		if (!bill.value) return;
+		void router.push(`/vendors/${bill.value.vendor_id}`);
+	};
+	const viewVendorBills = () => {
+		if (!bill.value) return;
+		store.search = "";
+		store.clearStatusFilters();
+		store.clearDateFilters();
+		store.vendorFilter = bill.value.vendor_id;
+		void router.push("/bills");
+	};
+
 	const refreshVendorSnapshot = () => {
 		if (!editable.value || !bill.value) return;
 		const v = vendorsStore.vendors.find((x) => x.id === bill.value!.vendor_id);

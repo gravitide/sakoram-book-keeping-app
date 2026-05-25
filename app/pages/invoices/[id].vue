@@ -102,53 +102,96 @@
 		</header>
 
 		<div class="space-y-6">
-			<UCard>
-				<template #header>
-					<div class="app-chrome flex items-center justify-between">
-						<div class="app-chrome font-medium">
-							Client &amp; project
+			<!-- Two cards side-by-side at lg+: Reference (form fields) on
+				the left wider, Bill-to snapshot on the right narrower.
+				At md they stack with Bill to on TOP — the snapshot
+				identifies who the invoice is for, so it leads the page
+				when there's only one column. DOM order matches that
+				(Bill to first); at lg+ we explicitly place Bill to in
+				col 3 via `lg:col-start-3` so it visually moves to the
+				right while Reference auto-flows into cols 1-2. Mirrors
+				the bills detail page's split-card pattern. -->
+			<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+				<UCard class="lg:col-span-1 lg:col-start-3">
+					<template #header>
+						<div class="app-chrome flex items-center justify-between gap-2">
+							<div class="app-chrome font-medium">
+								Bill to
+							</div>
+							<!-- Re-snapshot the client's current row data
+								(address moved, tax ID updated, etc.).
+								Draft-only; sent invoices keep their frozen
+								snapshot. Icon-only because the Bill-to card
+								sits at col-span-1 (~340px wide) at lg+ and
+								the full label would wrap and squeeze the
+								card title. -->
+							<UButton
+								v-if="editable"
+								size="xs"
+								variant="ghost"
+								color="neutral"
+								icon="i-lucide-refresh-ccw"
+								title="Refresh client snapshot — pull the latest details from the client record"
+								aria-label="Refresh client snapshot"
+								@click="refreshClientSnapshot"
+							/>
 						</div>
+					</template>
+					<div class="text-sm">
+						<div class="font-medium">
+							{{ clientSnapshot?.name }}
+						</div>
+						<div v-if="clientSnapshot?.address_line1" class="text-(--ui-text-muted)">
+							{{ clientSnapshot.address_line1 }}
+						</div>
+						<div v-if="clientSnapshot?.address_line2" class="text-(--ui-text-muted)">
+							{{ clientSnapshot.address_line2 }}
+						</div>
+						<div v-if="clientSnapshot?.city || clientSnapshot?.country" class="text-(--ui-text-muted)">
+							{{ [clientSnapshot.city, clientSnapshot.postal_code, clientSnapshot.country].filter(Boolean).join(", ") }}
+						</div>
+						<div v-if="clientSnapshot?.tax_id" class="text-(--ui-text-muted) mt-1 text-xs">
+							Tax ID: {{ clientSnapshot.tax_id }}
+						</div>
+					</div>
+					<!-- Cross-doc shortcuts. Open client routes to the
+						client detail page; View all invoices pre-filters
+						the invoices list to this client. Same pattern the
+						address-book hero uses (clients / vendors /
+						employees detail pages). -->
+					<div class="mt-4 pt-3 border-t border-(--ui-border) flex flex-wrap gap-2">
 						<UButton
-							v-if="editable"
 							size="xs"
-							variant="ghost"
+							variant="soft"
 							color="neutral"
-							icon="i-lucide-refresh-ccw"
-							@click="refreshClientSnapshot"
+							icon="i-lucide-external-link"
+							@click="openClient"
 						>
-							Refresh client snapshot
+							Open client
+						</UButton>
+						<UButton
+							size="xs"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-receipt"
+							@click="viewClientInvoices"
+						>
+							View all invoices
 						</UButton>
 					</div>
-				</template>
-				<!-- 1:3 split at md+: see quote detail page for rationale. -->
-				<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-					<div class="md:col-span-1">
-						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) mb-1">
-							Bill to
+				</UCard>
+
+				<UCard class="lg:col-span-2 lg:row-start-1">
+					<template #header>
+						<div class="app-chrome font-medium">
+							Reference
 						</div>
-						<div class="text-sm">
-							<div class="font-medium">
-								{{ clientSnapshot?.name }}
-							</div>
-							<div v-if="clientSnapshot?.address_line1" class="text-(--ui-text-muted)">
-								{{ clientSnapshot.address_line1 }}
-							</div>
-							<div v-if="clientSnapshot?.address_line2" class="text-(--ui-text-muted)">
-								{{ clientSnapshot.address_line2 }}
-							</div>
-							<div v-if="clientSnapshot?.city || clientSnapshot?.country" class="text-(--ui-text-muted)">
-								{{ [clientSnapshot.city, clientSnapshot.postal_code, clientSnapshot.country].filter(Boolean).join(", ") }}
-							</div>
-							<div v-if="clientSnapshot?.tax_id" class="text-(--ui-text-muted) mt-1 text-xs">
-								Tax ID: {{ clientSnapshot.tax_id }}
-							</div>
-						</div>
-					</div>
-					<!-- Right column uses a 2-col inner grid — see quote
-						detail page for the rationale. md:col-span-3 ties
-						to the 1:3 outer split; max-w-3xl keeps inputs
-						from stretching to ~540px on wide xl/2xl cards. -->
-					<div class="md:col-span-3 grid grid-cols-2 gap-3 max-w-3xl">
+					</template>
+					<!-- 2-col inner grid; max-w-3xl keeps inputs from
+						stretching on wide xl/2xl cards. Bank account
+						spans both columns since it's the widest control
+						(displays bank name + account number). -->
+					<div class="grid grid-cols-2 gap-3 max-w-3xl">
 						<UFormField label="PDF header">
 							<UInput
 								v-model="formTitleOverride"
@@ -178,8 +221,8 @@
 							</template>
 						</UFormField>
 					</div>
-				</div>
-			</UCard>
+				</UCard>
+			</div>
 
 			<UCard>
 				<template #header>
@@ -707,6 +750,24 @@
 	const onLinesChange = (next: LineDraft[]) => {
 		lines.value = next;
 		dirty.value = true;
+	};
+
+	// Cross-doc shortcuts on the Bill-to card. Same pattern as the
+	// clients detail page's "View invoices" action — set the destination
+	// list's clientFilter (Pinia state survives navigation), clear other
+	// filters, then route. `openClient` is the plain-navigation variant
+	// so the user can jump to the client profile from inside an invoice.
+	const openClient = () => {
+		if (!invoice.value) return;
+		void router.push(`/clients/${invoice.value.client_id}`);
+	};
+	const viewClientInvoices = () => {
+		if (!invoice.value) return;
+		invoicesStore.search = "";
+		invoicesStore.clearStatusFilters();
+		invoicesStore.clearDateFilters();
+		invoicesStore.clientFilter = invoice.value.client_id;
+		void router.push("/invoices");
 	};
 
 	const refreshClientSnapshot = async () => {
