@@ -1478,6 +1478,23 @@ persisted to localStorage).
   field blank falls through to the hardcoded default. Vouchers and
   payslips are left as-is — voucher meaning is Receipt/Payment, and
   PAYSLIP is legally constrained.
+- ✅ **Split party-snapshot cards on quote / invoice / bill detail
+  pages** — the single Client & project / Bill from card became two
+  side-by-side UCards at lg+: a Reference card (form fields,
+  col-span-2) and a party-snapshot card (Quote to / Bill to / Bill
+  from, col-span-1, `lg:col-start-3` + `lg:row-start-1`). At md they
+  stack with the snapshot on top via DOM order so the "who is this
+  for / from" block leads the page when the column is single.
+  Refresh-snapshot button is icon-only on all three pages so the
+  narrow card title doesn't squeeze.
+- ✅ **Cross-doc shortcuts on the party-snapshot card** — quote /
+  invoice / bill detail pages now expose two actions on the party
+  snapshot card: **Open client / Open vendor** (routes to the
+  address-book detail page) and **View all quotes / View all invoices
+  / View all bills** (pre-filters the destination list by the party,
+  same setStore-filter + route pattern the clients / vendors detail
+  pages already use). Sits below the snapshot block separated by a
+  border-t so it reads as a footer action row.
 
 ### Deferred / open items
 
