@@ -134,7 +134,10 @@
   #table(
     columns: (1fr, auto, auto),
     align: (left, right, right),
-    stroke: none,
+    // Light grid lines — helps eye-tracking across dense numeric
+    // rows when printed. Same `line-color` (#e5e7eb) the rest of
+    // the template uses for separators.
+    stroke: 0.4pt + line-color,
     table.header(
       table.cell(fill: rgb("#f3f4f6"))[#label("Line")],
       table.cell(fill: rgb("#f3f4f6"))[#label("Amount")],
@@ -223,7 +226,10 @@
     table(
       columns: col-widths,
       align: col-aligns,
-      stroke: none,
+      // Same light grid as the breakdown table — printed accounting
+      // tables read much better with cell borders for tracking the
+      // eye across rows.
+      stroke: 0.4pt + line-color,
       inset: (x: 4pt, y: 5pt),
       table.header(
         ..columns.map(c => table.cell(fill: rgb("#f3f4f6"))[#label(c)])
