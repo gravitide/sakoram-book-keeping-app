@@ -124,6 +124,31 @@
 			</UCard>
 		</div>
 
+		<!-- Monthly trend: twin bars per month (income vs expense) with a
+			net trend line overlay. Reveals month-over-month patterns the
+			KPI tiles can't — a stable Net for the period might be hiding
+			a great Q1 + a terrible Q3, etc. Tied to the same filtered
+			row sets the breakdown uses, so totals line up exactly. -->
+		<UCard class="mb-6">
+			<template #header>
+				<div class="app-chrome flex items-center justify-between gap-2 flex-wrap">
+					<div class="app-chrome font-medium">
+						Monthly trend
+					</div>
+					<div class="text-xs text-(--ui-text-muted)">
+						{{ rangeLabel }}
+					</div>
+				</div>
+			</template>
+			<PnlMonthlyChart
+				:invoices="filtered.invoices"
+				:bills="filtered.bills"
+				:payslips="filtered.payslips"
+				:date-from="dateFrom"
+				:date-to="dateTo"
+			/>
+		</UCard>
+
 		<!-- Breakdown table — the canonical P&L shape: income line(s),
 			less expense line(s), final net. % column gives the user a
 			feel for which expense buckets dominate without needing to
