@@ -269,7 +269,7 @@ sakoram_app/
 │  │  └─ useCalendarEvents.ts         ← aggregates due-date events from invoices / bills / quotes / payslips into a Map<YYYY-MM-DD, CalendarEvent[]>. Per-source emitters are easy to extend — just add another computed + push into the sources array.
 │  ├─ lib/
 │  │  ├─ db.ts                        ← getDb() (lazy, reads active tenant URL), select/execute
-│  │  ├─ demo-seed.ts                 ← createDemoBusiness() — curated + bulk-fill (~25/section) + 10 employees + 3 months of payslips
+│  │  ├─ demo-seed.ts                 ← createDemoBusiness() — curated + bulk-fill at real-business volume: 200 clients / 150 vendors / 600 quotes / 800 invoices / 1000 bills / 400 standalone vouchers spread across ~18 months, 15 employees, 14 months of payslips, ~10 sample attachments. Takes 2-3 min; surfaces SeedProgress callback so the welcome page + Settings → Businesses can show a live stage label.
 │  │  ├─ money.ts                     ← toCents, formatMoney/formatLKR, computeLineTotals (integer math). Plus the runtime currency registry: built-in CURRENCIES map + registerCurrency() / isBuiltinCurrency() helpers so user-defined currencies (slotted in by the settings store on load from company_settings.currency_symbol_override) work everywhere formatMoney does.
 │  │  ├─ numbering.ts                 ← allocateDocumentNumber (single-statement atomic)
 │  │  ├─ pdf.ts                       ← preview/commit/legacy export helpers; PdfCommand union
@@ -1305,10 +1305,22 @@ persisted to localStorage).
   Step 1 has a "Skip onboarding" link for power users.
 - ✅ Allow deleting the active / last business
 - ✅ Pagination + click-to-sort columns on every list page
-- ✅ Demo seed bulk-fills ~22 extra rows of each entity plus 10
-  curated employees and ~30 payslips across 3 months with a
-  realistic status mix so the payroll dashboard / chart light up
-  on a freshly-seeded demo tenant.
+- ✅ **Demo seed at real-business volume** — `createDemoBusiness()`
+  now builds ~18 months of activity at the scale a real Sri Lankan
+  small business would generate: 200 clients, 150 vendors, 600
+  quotes, 800 invoices, 1000 bills, 400 standalone vouchers, 15
+  employees, 14 months of payslips, plus ~10 sample image
+  attachments scattered across documents. Bulk loops use coprime
+  date strides against a 540-day spread so issue dates land
+  uniformly across the range (the P&L fiscal-year preset and the
+  Last-year / This-year date chips all return meaningfully
+  different slices). Seed takes 2-3 minutes; a `SeedProgressFn`
+  callback feeds a live stage label ("Seeding bills · 425 / 1000")
+  into the welcome page + Settings → Businesses overlay so the
+  spinner has context. Original curated set (4 clients / 3
+  vendors / 3 quotes / 4 invoices / 3 bills / 4 vouchers) is
+  preserved as the "feature showcase" — those rows still drive the
+  dashboard's recent-activity feed and the detail-page demos.
 - ✅ Line-ending normalization via `.gitattributes`
 - ✅ Production build pipeline (MSI + NSIS installers)
 - ✅ **CI release workflows split per platform** — `release-windows.yml`

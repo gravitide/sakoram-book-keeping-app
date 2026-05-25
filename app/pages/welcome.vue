@@ -186,12 +186,22 @@
 					<h2 class="text-xl font-semibold mb-2">
 						Setting up your demo business
 					</h2>
-					<p class="text-sm text-(--ui-text-muted)">
-						Seeding clients, vendors, employees, quotes, invoices,
-						bills, vouchers, and payslips — this usually takes a few
-						seconds. The dashboard will open automatically when it's
-						ready.
+					<p class="text-sm text-(--ui-text-muted) mb-4">
+						Seeding 18 months of clients, vendors, quotes, invoices,
+						bills, vouchers, and payslips at real-business volume.
+						This can take a couple of minutes — the dashboard will
+						open automatically when it's ready.
 					</p>
+					<!-- Live stage label so the spinner has context. The seed
+						callback updates this every few rows; values like
+						"Seeding bills · 425 / 1000" tell the user how far
+						along we are without needing a real progress bar. -->
+					<div
+						v-if="seedingStage"
+						class="text-sm tabular-nums font-medium text-(--ui-primary)"
+					>
+						{{ seedingStage }}<span v-if="seedingTotal > 0"> · {{ seedingDone }} / {{ seedingTotal }}</span>
+					</div>
 				</div>
 			</div>
 		</Teleport>
@@ -273,11 +283,24 @@
 	// the moment the user lands. Hard-reloads on success so every
 	// store re-hydrates against the new DB.
 	const seedingDemo = ref(false);
+	// Live progress label fed by the seed callback. Empty string while
+	// setting up; cleared when the demo run finishes (we hard-reload
+	// before the user sees it anyway).
+	const seedingStage = ref("");
+	const seedingDone = ref(0);
+	const seedingTotal = ref(0);
 	const onAddDemo = async () => {
 		if (seedingDemo.value) return;
 		seedingDemo.value = true;
+		seedingStage.value = "";
+		seedingDone.value = 0;
+		seedingTotal.value = 0;
 		try {
-			const t = await createDemoBusiness();
+			const t = await createDemoBusiness(undefined, (p) => {
+				seedingStage.value = p.stage;
+				seedingDone.value = p.done;
+				seedingTotal.value = p.total;
+			});
 			toast.add({
 				title: `${t.name} created`,
 				description: "Sample clients, invoices, bills, and vouchers are ready to explore.",
@@ -287,6 +310,7 @@
 			window.location.assign("/");
 		} catch (err) {
 			seedingDemo.value = false;
+			seedingStage.value = "";
 			toast.add({
 				title: "Could not create the demo business",
 				description: err instanceof Error ? err.message : String(err),

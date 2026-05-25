@@ -228,6 +228,36 @@
 				</div>
 			</template>
 		</UModal>
+
+		<!-- Full-screen progress overlay during demo seeding. Matches the
+			welcome page's pattern — the seed can run for 2-3 minutes at
+			real-business volume so a frozen "Loading" spinner would
+			be misleading. -->
+		<Teleport to="body">
+			<div
+				v-if="seedingDemo"
+				class="fixed inset-0 z-40 flex items-center justify-center bg-(--ui-bg-muted)/95 backdrop-blur-sm"
+			>
+				<div class="text-center max-w-md px-6">
+					<UIcon
+						name="i-lucide-loader-circle"
+						class="size-10 animate-spin text-(--ui-primary) mx-auto mb-4"
+					/>
+					<h2 class="text-xl font-semibold mb-2">
+						Setting up your demo business
+					</h2>
+					<p class="text-sm text-(--ui-text-muted) mb-4">
+						Seeding 18 months of data at real-business volume — this can take a couple of minutes.
+					</p>
+					<div
+						v-if="seedingStage"
+						class="text-sm tabular-nums font-medium text-(--ui-primary)"
+					>
+						{{ seedingStage }}<span v-if="seedingTotal > 0"> · {{ seedingDone }} / {{ seedingTotal }}</span>
+					</div>
+				</div>
+			</div>
+		</Teleport>
 	</div>
 </template>
 
@@ -278,16 +308,29 @@
 	const goWelcome = () => router.push("/welcome");
 
 	// ---- Add demo business ----
-	// Spins up a fresh tenant pre-loaded with sample clients, vendors,
-	// quotes, invoices, bills, and vouchers so the user has something
-	// concrete to demo / explore. Hard-reloads on success so every
-	// store re-hydrates against the new DB.
+	// Spins up a fresh tenant pre-loaded with ~18 months of clients,
+	// vendors, quotes, invoices, bills, vouchers, payslips, and a
+	// handful of attachments at real-business volume so the user has
+	// something concrete to demo / explore. Hard-reloads on success
+	// so every store re-hydrates against the new DB. The progress
+	// overlay drives off these three refs — kept in lock-step with
+	// the welcome page so both entry points look the same.
 	const seedingDemo = ref(false);
+	const seedingStage = ref("");
+	const seedingDone = ref(0);
+	const seedingTotal = ref(0);
 	const onAddDemo = async () => {
 		if (seedingDemo.value) return;
 		seedingDemo.value = true;
+		seedingStage.value = "";
+		seedingDone.value = 0;
+		seedingTotal.value = 0;
 		try {
-			const t = await createDemoBusiness();
+			const t = await createDemoBusiness(undefined, (p) => {
+				seedingStage.value = p.stage;
+				seedingDone.value = p.done;
+				seedingTotal.value = p.total;
+			});
 			toast.add({
 				title: `${t.name} created`,
 				description: "Sample data ready to explore.",
@@ -297,6 +340,7 @@
 			window.location.assign("/");
 		} catch (err) {
 			seedingDemo.value = false;
+			seedingStage.value = "";
 			toast.add({
 				title: "Could not create the demo business",
 				description: err instanceof Error ? err.message : String(err),
