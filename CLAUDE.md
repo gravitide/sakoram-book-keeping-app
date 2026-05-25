@@ -214,7 +214,7 @@ sakoram_app/
 │  │  ├─ vouchers/                    ← list, new, [id] (money in/out; read-only by default → click Edit to mutate). Still uses a /new page — form is too heavy for a modal (8+ fields, prefill from ?bill=/?invoice=/?payslip=, overpayment guard).
 │  │  ├─ payroll/                     ← index.vue is a landing card grid (mirrors /reports); dashboard.vue holds the upcoming-cycle hero + MoM chart + recent runs + outstanding
 │  │  ├─ payslips/                    ← list w/ row context menu (multi-select bulk PDF), [id], bulk (auto-issue + auto-pay). "New payslip" opens NewPayslipModal.
-│  │  ├─ reports/                     ← aggregate views over the books. index.vue lists available + upcoming reports; profit-loss.vue (accrual P&L), vat.vue (output VAT vs input VAT), aged-receivables.vue (open-invoice snapshot by days past due), and aged-payables.vue (open-bill mirror) are wired up. No DB writes.
+│  │  ├─ reports/                     ← aggregate views over the books. index.vue lists available + upcoming reports; profit-loss.vue (accrual P&L), vat.vue (output VAT vs input VAT), aged-receivables.vue (open-invoice snapshot by days past due), aged-payables.vue (open-bill mirror), and cash-flow.vue (receipts in − payments out by month, cash basis) are wired up. No DB writes.
 │  │  ├─ lists/                       ← index.vue is a landing card grid (mirrors /reports + /payroll) linking to /clients, /vendors, /categories. The list pages themselves live at their existing top-level URLs.
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
@@ -1121,7 +1121,8 @@ Reports               ← aggregate views over the books (no editing)
   ├─ Profit & Loss   ← /reports/profit-loss — income − bills − payroll, accrual
   ├─ VAT             ← /reports/vat — output VAT − input VAT, net payable for the period
   ├─ Aged receivables ← /reports/aged-receivables — open-invoice snapshot by days past due
-  └─ Aged payables    ← /reports/aged-payables    — open-bill mirror, per-vendor breakdown
+  ├─ Aged payables    ← /reports/aged-payables    — open-bill mirror, per-vendor breakdown
+  └─ Cash flow        ← /reports/cash-flow        — receipts in − payments out by month (cash basis)
 ─── (divider)
 Lists                 ← /lists — landing card grid mirroring /reports + /payroll
   ├─ Clients         ← /clients
@@ -1544,6 +1545,20 @@ persisted to localStorage).
   data. The roadmap landing card grid now lists both P&L and VAT
   live; aged receivables / payables / cash flow / sales-by-client /
   payroll-register remain "Coming" tiles.
+- ✅ **Reports module — Cash flow** (Tier 1, fifth cut). New
+  `/reports/cash-flow` page — the cash-basis complement to P&L. Where
+  P&L counts on document issue dates (accrual), cash flow counts on
+  voucher dates (when the money actually moved). They can legitimately
+  disagree for the same period — both correct, different questions.
+  Three KPI tiles (Receipts in / Payments out / Net), monthly
+  breakdown table that emits a row for every month in the picked
+  range (even empty ones, dashed, so the user can see the full extent
+  of the period and spot dry months), and drill-down tabs (Receipts /
+  Payments) on ResizableDataTable with the standard 50-per-page
+  default. Math is pure voucher-store aggregation —
+  `voucher_type === 'receipt'` summed for in, `payment` for out, both
+  filtered by `voucher_date` in range. PDF export via the existing
+  `report.typ` template — same shape as P&L / VAT.
 - ✅ **Reports module — Aged payables** (Tier 1, fourth cut). New
   `/reports/aged-payables` page — exact mirror of aged receivables
   with bills + vendors swapped in: "who we owe money RIGHT NOW",
@@ -1696,8 +1711,12 @@ bookkeeping software" perception gap. Credit notes are the
 next-most-impactful add after that.
 
 **Status (2026-05-25):** P&L + VAT + aged receivables + aged payables
-+ report PDF export shipped — see the Done bullets above. Next on
-this track is **cash flow**, then sales-by-client / payroll register.
++ cash flow + report PDF export shipped — Tier 1 reports module is
+essentially complete. Remaining Tier 1 nice-to-haves: sales-by-client
+and payroll-register (both transforms of data we already aggregate;
+lower impact than what's shipped). Next biggest gap is **credit notes
+/ refunds** (Tier 2) — the only way to settle an over-invoice or a
+return is missing today.
 
 ---
 

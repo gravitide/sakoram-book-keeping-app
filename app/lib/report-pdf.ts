@@ -624,3 +624,139 @@ export const buildAgedPayablesPdfPayload = (
 			]
 	};
 };
+
+// ---------- Cash flow --------------------------------------------------
+//
+// Cash-basis report: receipts minus payments by month over a date
+// range. The voucher ledger is the source of truth, so this report
+// can never disagree with the actual money-in / money-out activity.
+
+export interface CashFlowPdfInput {
+	settings: CompanySettingsRow | null
+	currency: CurrencyMeta
+	dateFrom: string
+	dateTo: string
+	totals: {
+		receipts: number
+		payments: number
+		net: number
+		receiptCount: number
+		paymentCount: number
+	}
+	monthlyRows: {
+		key: string
+		label: string
+		receipts: number
+		payments: number
+		net: number
+	}[]
+	filtered: {
+		receipts: { number: string, voucher_date: string, party_name: string, amount_cents: number }[]
+		payments: { number: string, voucher_date: string, party_name: string, amount_cents: number }[]
+	}
+}
+
+export const buildCashFlowPdfPayload = (input: CashFlowPdfInput): ReportPdfPayload => {
+	const fmt = (cents: number) => formatMoney(cents, input.currency);
+	const pct = (part: number, whole: number): string => {
+		if (whole === 0) return "—";
+		const v = (part / whole) * 100;
+		return `${v.toFixed(v < 10 ? 1 : 0)}%`;
+	};
+	const netSign = input.totals.net >= 0 ? "+" : "−";
+	const netAbsStr = `${netSign}${fmt(Math.abs(input.totals.net))}`;
+	const netTone: "success" | "error" = input.totals.net >= 0 ? "success" : "error";
+	const netLabel = input.totals.net >= 0 ? "Net positive" : "Net negative";
+
+	// Sub-label on the net tile mirrors the on-screen reasoning.
+	let netSub = "";
+	if (input.totals.receipts === 0 && input.totals.payments === 0) {
+		netSub = "No voucher activity in this period";
+	} else if (input.totals.net === 0) {
+		netSub = "Receipts exactly matched payments";
+	} else if (input.totals.receipts === 0) {
+		netSub = "All outflow, no receipts";
+	} else {
+		const share = (input.totals.net / input.totals.receipts) * 100;
+		netSub = `${share >= 0 ? "+" : "−"}${Math.abs(share).toFixed(1)}% of receipts`;
+	}
+
+	return {
+		...businessHeader(input.settings),
+		currency_code: input.currency.code,
+		title: "Cash flow",
+		subtitle: "Cash basis — receipts in vs payments out, counted on voucher dates (when the money actually moved).",
+		period_label: formatPeriodLabel(input.dateFrom, input.dateTo),
+		generated_at: todayISO(),
+		summary: [
+			{
+				label: "Receipts (in)",
+				value: fmt(input.totals.receipts),
+				sub: `${input.totals.receiptCount} receipt${input.totals.receiptCount === 1 ? "" : "s"}`,
+				tone: "success"
+			},
+			{
+				label: "Payments (out)",
+				value: fmt(input.totals.payments),
+				sub: `${input.totals.paymentCount} payment${input.totals.paymentCount === 1 ? "" : "s"}`,
+				tone: "error"
+			},
+			{
+				label: netLabel,
+				value: netAbsStr,
+				sub: netSub,
+				tone: netTone
+			}
+		],
+		breakdown: {
+			title: "Monthly breakdown",
+			// One row per month spanned by the range, even months with
+			// no activity — the user gets the full extent of the
+			// period and can spot dry months at a glance.
+			rows: input.monthlyRows.map((m) => {
+				const monthNet = m.net;
+				const sign = monthNet >= 0 ? "+" : "−";
+				const tone: "success" | "error" | "neutral"
+					= monthNet === 0 ? "neutral" : monthNet > 0 ? "success" : "error";
+				return {
+					label: m.label,
+					sublabel: m.receipts === 0 && m.payments === 0
+						? "No activity"
+						: `In ${fmt(m.receipts)} · Out ${fmt(m.payments)}`,
+					amount: monthNet === 0 ? fmt(0) : `${sign}${fmt(Math.abs(monthNet))}`,
+					percent: pct(Math.abs(monthNet), input.totals.receipts),
+					tone
+				};
+			}),
+			total: {
+				label: netLabel,
+				sublabel: null,
+				amount: netAbsStr,
+				percent: pct(Math.abs(input.totals.net), input.totals.receipts),
+				tone: netTone
+			}
+		},
+		details: [
+			{
+				title: `Receipts (${input.filtered.receipts.length})`,
+				columns: ["Number", "Date", "Party", "Amount"],
+				rows: input.filtered.receipts.map((r) => [
+					r.number,
+					r.voucher_date,
+					r.party_name || "—",
+					fmt(r.amount_cents)
+				])
+			},
+			{
+				title: `Payments (${input.filtered.payments.length})`,
+				columns: ["Number", "Date", "Party", "Amount"],
+				rows: input.filtered.payments.map((r) => [
+					r.number,
+					r.voucher_date,
+					r.party_name || "—",
+					fmt(r.amount_cents)
+				])
+			}
+		]
+	};
+};
