@@ -386,12 +386,15 @@
 		{ to: "/bills", label: "Bills", icon: "i-lucide-file-input" },
 		{ to: "/vouchers", label: "Vouchers", icon: "i-lucide-ticket" },
 		{
+			// `/payroll` is the landing card grid (mirrors `/reports`).
+			// Dashboard lives at `/payroll/dashboard` so the top-level
+			// link can land on the overview-of-overview page.
 			to: "/payroll",
 			label: "Payroll",
 			icon: "i-lucide-wallet",
 			divider: true,
 			children: [
-				{ to: "/payroll", label: "Dashboard", icon: "i-lucide-layout-dashboard" },
+				{ to: "/payroll/dashboard", label: "Dashboard", icon: "i-lucide-layout-dashboard" },
 				{ to: "/employees", label: "Employees", icon: "i-lucide-users-round" },
 				{ to: "/payslips", label: "Payslips", icon: "i-lucide-file-spreadsheet" },
 				// Cycle template (period_start_day / period_end_day /

@@ -212,7 +212,7 @@ sakoram_app/
 │  │  ├─ invoices/                    ← list w/ row context menu, [id] (PDF, payment ledger). "New invoice" opens NewInvoiceModal.
 │  │  ├─ bills/                       ← list, [id] (vendor-FK + snapshot). "New bill" opens NewBillModal.
 │  │  ├─ vouchers/                    ← list, new, [id] (money in/out; read-only by default → click Edit to mutate). Still uses a /new page — form is too heavy for a modal (8+ fields, prefill from ?bill=/?invoice=/?payslip=, overpayment guard).
-│  │  ├─ payroll/                     ← dashboard (upcoming-cycle hero, MoM chart, recent runs, outstanding)
+│  │  ├─ payroll/                     ← index.vue is a landing card grid (mirrors /reports); dashboard.vue holds the upcoming-cycle hero + MoM chart + recent runs + outstanding
 │  │  ├─ payslips/                    ← list w/ row context menu (multi-select bulk PDF), [id], bulk (auto-issue + auto-pay). "New payslip" opens NewPayslipModal.
 │  │  ├─ reports/                     ← aggregate views over the books. index.vue lists available + upcoming reports; profit-loss.vue (accrual P&L), vat.vue (output VAT vs input VAT), aged-receivables.vue (open-invoice snapshot by days past due), and aged-payables.vue (open-bill mirror) are wired up. No DB writes.
 │  │  └─ settings/
@@ -1110,8 +1110,8 @@ Invoices
 Bills
 Vouchers
 ─── (divider)
-Payroll
-  ├─ Dashboard       ← /payroll — cycle / KPIs / MoM chart / recent runs
+Payroll               ← /payroll — landing card grid mirroring /reports
+  ├─ Dashboard       ← /payroll/dashboard — cycle / KPIs / MoM chart / recent runs
   ├─ Employees
   ├─ Payslips
   └─ Settings        ← /settings/payroll — cycle template (period_start_day / period_end_day / pay_day)
