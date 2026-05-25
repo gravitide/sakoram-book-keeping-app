@@ -153,6 +153,31 @@
 							Tax ID: {{ clientSnapshot.tax_id }}
 						</div>
 					</div>
+					<!-- Cross-doc shortcuts. Open client routes to the
+						client detail page; View all quotes pre-filters
+						the quotes list to this client. Same pattern the
+						address-book hero uses (clients / vendors /
+						employees detail pages). -->
+					<div class="mt-4 pt-3 border-t border-(--ui-border) flex flex-wrap gap-2">
+						<UButton
+							size="xs"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-external-link"
+							@click="openClient"
+						>
+							Open client
+						</UButton>
+						<UButton
+							size="xs"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-file-text"
+							@click="viewClientQuotes"
+						>
+							View all quotes
+						</UButton>
+					</div>
 				</UCard>
 
 				<UCard class="lg:col-span-2 lg:row-start-1">
@@ -622,6 +647,24 @@
 	// Re-snapshot the client. If the linked client has been updated since this
 	// draft was made, the user can refresh the snapshot here. (Not allowed once
 	// sent, since the snapshot is meant to be immutable.)
+	// Cross-doc shortcuts on the Quote-to card. Same pattern as the
+	// clients detail page's "View quotes" action — set the destination
+	// list's clientFilter (Pinia state survives navigation), clear other
+	// filters, then route. `openClient` is the plain-navigation variant
+	// so the user can jump to the client profile from inside a quote.
+	const openClient = () => {
+		if (!quote.value) return;
+		void router.push(`/clients/${quote.value.client_id}`);
+	};
+	const viewClientQuotes = () => {
+		if (!quote.value) return;
+		quotesStore.search = "";
+		quotesStore.clearStatusFilters();
+		quotesStore.clearDateFilters();
+		quotesStore.clientFilter = quote.value.client_id;
+		void router.push("/quotes");
+	};
+
 	const refreshClientSnapshot = async () => {
 		if (!quote.value || !editable.value) return;
 		const c: ClientRow | undefined = clientsStore.clients.find((cr) => cr.id === quote.value!.client_id);

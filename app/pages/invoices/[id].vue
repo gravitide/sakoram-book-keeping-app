@@ -154,6 +154,31 @@
 							Tax ID: {{ clientSnapshot.tax_id }}
 						</div>
 					</div>
+					<!-- Cross-doc shortcuts. Open client routes to the
+						client detail page; View all invoices pre-filters
+						the invoices list to this client. Same pattern the
+						address-book hero uses (clients / vendors /
+						employees detail pages). -->
+					<div class="mt-4 pt-3 border-t border-(--ui-border) flex flex-wrap gap-2">
+						<UButton
+							size="xs"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-external-link"
+							@click="openClient"
+						>
+							Open client
+						</UButton>
+						<UButton
+							size="xs"
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-receipt"
+							@click="viewClientInvoices"
+						>
+							View all invoices
+						</UButton>
+					</div>
 				</UCard>
 
 				<UCard class="lg:col-span-2 lg:row-start-1">
@@ -725,6 +750,24 @@
 	const onLinesChange = (next: LineDraft[]) => {
 		lines.value = next;
 		dirty.value = true;
+	};
+
+	// Cross-doc shortcuts on the Bill-to card. Same pattern as the
+	// clients detail page's "View invoices" action — set the destination
+	// list's clientFilter (Pinia state survives navigation), clear other
+	// filters, then route. `openClient` is the plain-navigation variant
+	// so the user can jump to the client profile from inside an invoice.
+	const openClient = () => {
+		if (!invoice.value) return;
+		void router.push(`/clients/${invoice.value.client_id}`);
+	};
+	const viewClientInvoices = () => {
+		if (!invoice.value) return;
+		invoicesStore.search = "";
+		invoicesStore.clearStatusFilters();
+		invoicesStore.clearDateFilters();
+		invoicesStore.clientFilter = invoice.value.client_id;
+		void router.push("/invoices");
 	};
 
 	const refreshClientSnapshot = async () => {
