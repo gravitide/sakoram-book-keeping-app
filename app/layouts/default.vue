@@ -383,6 +383,7 @@
 		{ to: "/calendar", label: "Calendar", icon: "i-lucide-calendar-days" },
 		{ to: "/quotes", label: "Quotes", icon: "i-lucide-file-text", divider: true },
 		{ to: "/invoices", label: "Invoices", icon: "i-lucide-receipt" },
+		{ to: "/credit-notes", label: "Credit notes", icon: "i-lucide-rotate-ccw" },
 		{ to: "/bills", label: "Bills", icon: "i-lucide-file-input" },
 		{ to: "/vouchers", label: "Vouchers", icon: "i-lucide-ticket" },
 		{

@@ -10,14 +10,15 @@
 
 import { execute, select, selectOne } from "./db";
 
-export type DocumentType = "quote" | "invoice" | "bill" | "voucher" | "payslip";
+export type DocumentType = "quote" | "invoice" | "bill" | "voucher" | "payslip" | "credit_note";
 
 const PREFIX: Record<DocumentType, string> = {
 	quote: "QUO",
 	invoice: "INV",
 	bill: "BIL",
 	voucher: "VCH",
-	payslip: "PSL"
+	payslip: "PSL",
+	credit_note: "CRN"
 };
 
 // Which document table holds the visible (formatted) number for each type.
@@ -29,7 +30,8 @@ const TABLE_FOR_TYPE: Record<DocumentType, string> = {
 	invoice: "invoices",
 	bill: "bills",
 	voucher: "vouchers",
-	payslip: "payslips"
+	payslip: "payslips",
+	credit_note: "credit_notes"
 };
 
 // Compute the fiscal year for a given ISO date string and the configured

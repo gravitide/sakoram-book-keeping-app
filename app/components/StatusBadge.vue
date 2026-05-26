@@ -38,7 +38,11 @@
 		overdue: "error",
 		cancelled: "neutral",
 		// bills add: unpaid
-		unpaid: "warning"
+		unpaid: "warning",
+		// credit notes use the simpler draft / issued / cancelled set;
+		// "issued" reads as a successful publication action — same tone
+		// as "paid" / "accepted" — to signal "this credit has taken effect".
+		issued: "success"
 	};
 
 	const color = computed<BadgeColor>(() => STATUS_COLOR[props.status] ?? "neutral");
