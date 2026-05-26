@@ -22,10 +22,17 @@
 				regardless of which surface the user clicks. -->
 			<HelpSidebar />
 			<main class="flex-1 min-w-0 overflow-auto">
-				<!-- Same content cap + padding the default layout uses
-					so the help reader inside the popout has the
-					exact same type measure as it does in-app. -->
-				<div class="p-4 max-w-[96rem] mx-auto">
+				<!-- max-w-5xl (1024px) caps the content for readable
+					docs prose. The /help/[slug] article inside hits
+					max-w-3xl (768px); the rest of the 1024 cap is
+					room for the TOC nav rail beside it.
+					Deliberately NO mx-auto — content is left-aligned
+					so it stays anchored next to the topics sidebar.
+					Centering content on a wide monitor (e.g. 4K
+					maximized) would leave a giant gap between
+					sidebar and content. Empty space on the right at
+					super-wide windows is the docs convention. -->
+				<div class="p-4 max-w-5xl">
 					<slot />
 				</div>
 			</main>
