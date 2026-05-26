@@ -3,13 +3,32 @@
 		of the scroll viewport. Same rationale as the topic reader —
 		layout's pb-2 is tight by design. -->
 	<div class="select-none pb-12">
-		<header class="mb-6">
-			<h1 class="text-2xl font-semibold">
-				Help &amp; guides
-			</h1>
-			<p class="text-sm text-(--ui-text-muted) mt-1 max-w-3xl">
-				Plain-English explanations of what each Sakoram concept means in the real business world, when you'd use it, and how to drive the app to do it. Tuned for Sri Lankan businesses — examples are in LKR, fiscal year is April–March, tax notes reference the IRD where relevant.
-			</p>
+		<header class="mb-6 flex items-start justify-between gap-4">
+			<div>
+				<h1 class="text-2xl font-semibold">
+					Help &amp; guides
+				</h1>
+				<p class="text-sm text-(--ui-text-muted) mt-1 max-w-3xl">
+					Plain-English explanations of what each Sakoram concept means in the real business world, when you'd use it, and how to drive the app to do it. Tuned for Sri Lankan businesses — examples are in LKR, fiscal year is April–March, tax notes reference the IRD where relevant.
+				</p>
+			</div>
+			<!-- Pop-out shortcut so users browsing the index can spin
+				up the docs window directly without first opening a
+				topic. Hidden when we're already inside a popout (would
+				just open another duplicate window) and outside Tauri
+				(no shell, no spawn API). -->
+			<UButton
+				v-if="isTauri && !isPopoutMode"
+				size="sm"
+				color="neutral"
+				variant="outline"
+				icon="i-lucide-picture-in-picture"
+				title="Open the help library in a separate window"
+				class="shrink-0"
+				@click="popOut"
+			>
+				Pop out
+			</UButton>
 		</header>
 
 		<!-- "Start here" hero — the bookkeeping-basics topic gets
@@ -92,6 +111,7 @@
 
 <script setup lang="ts">
 	import { useHelpLink } from "~/composables/useHelpLink";
+	import { useHelpWindow } from "~/composables/useHelpWindow";
 	import { groupedByCategory, HELP_TOPICS_BY_SLUG } from "~/help";
 
 	definePageMeta({ title: "Help" });
@@ -99,7 +119,16 @@
 	// linkTo() preserves the popout query when navigating between
 	// help routes — without this, clicking a hero/card from inside
 	// a popout window drops us out of the help-window layout.
-	const { linkTo } = useHelpLink();
+	const { linkTo, isPopoutMode } = useHelpLink();
+
+	// Pop-out shortcut on the index — same composable the modal +
+	// /help/[slug] use so there's one place to change the spawn
+	// behaviour. Lands the popout on the index itself (no slug)
+	// so the user can browse from there.
+	const { openHelpWindow, isTauri } = useHelpWindow();
+	const popOut = async () => {
+		await openHelpWindow();
+	};
 
 	// When loaded inside the popout WebviewWindow (URL carries
 	// `?popout=1`), switch to the help-window layout — strips the
