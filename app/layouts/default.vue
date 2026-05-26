@@ -31,7 +31,7 @@
 				</UDropdownMenu>
 
 				<nav class="flex-1 p-2 space-y-1 overflow-y-auto">
-					<template v-for="item in nav" :key="item.to">
+					<template v-for="item in nav" :key="item.to ?? item.label">
 						<!-- Optional rule above this item to break the list into
 					logical groups (documents / contacts / settings). -->
 						<div
@@ -39,7 +39,23 @@
 							class="my-2 border-t border-(--ui-border)"
 							aria-hidden="true"
 						/>
+						<!-- Two flavours: navigation items (item.to) render
+							as NuxtLink, action items (item.action) render
+							as a button. The action flavour is currently
+							only used by the Help item which spawns a
+							separate Tauri WebviewWindow instead of
+							navigating — see useHelpWindow. -->
+						<button
+							v-if="item.action"
+							type="button"
+							class="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text) cursor-pointer text-left"
+							@click="item.action"
+						>
+							<UIcon :name="item.icon" class="size-4" />
+							{{ item.label }}
+						</button>
 						<NuxtLink
+							v-else
 							:to="item.to"
 							class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
 							:active-class="item.children ? '' : '!bg-(--ui-primary)/10 !text-(--ui-primary) font-medium'"
@@ -233,9 +249,14 @@
 	// Sakoram brand wordmark — bundled into the build by Vite (resolves at
 	// compile time, no runtime fetch). Wide PNG, rendered in the About modal.
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
+	import { useHelpWindow } from "~/composables/useHelpWindow";
 	import { isValidThemeColor } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
+
+	// Sidebar Help item handler — spawns the docs window (or focuses
+	// it if already open). See useHelpWindow + app/layouts/help-window.vue.
+	const helpWindow = useHelpWindow();
 
 	// Pulls from package.json so we never forget to update the sidebar
 	// label when bumping the app version.
@@ -494,8 +515,12 @@
 			// when-to-use-it scenarios, and how-to-do-it-in-Sakoram
 			// walkthroughs. Per-page HelpButton (the ? icon) drops
 			// users straight into the relevant topic via a modal;
-			// this entry exposes the full library for browsing.
-			to: "/help",
+			// this entry spawns the dedicated docs WebviewWindow.
+			// Note `action` instead of `to` — the docs live in a
+			// separate window, not inside the main app's layout.
+			action: () => {
+				void helpWindow.openHelpWindow();
+			},
 			label: "Help",
 			icon: "i-lucide-book-open",
 			divider: true

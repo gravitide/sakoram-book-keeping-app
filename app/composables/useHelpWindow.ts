@@ -1,26 +1,27 @@
-// Help window — spawns the help library as a separate Tauri
-// WebviewWindow so the user can park it on a second monitor while
-// they work in the main app.
+// Help window — the help library is a separate Tauri WebviewWindow.
+// There is no in-app help reader any more; the sidebar "Help" link
+// and the HelpModal's "Open in docs window" button both call the
+// composable below, which:
 //
-// Each spawn gets a unique label (`help-${counter}`) so multiple
-// help windows can coexist — useful for cross-referencing two
-// topics side-by-side. The capability in src-tauri/capabilities/
-// main.json grants `core:webview:allow-create-webview-window` to
-// the main window and applies the rest of the main capabilities
-// to any window labelled `help-*` (wildcard match).
+//   1. Focuses the existing help window if one is open (so clicking
+//      Help a second time doesn't pile up windows). When a slug is
+//      supplied, emits a `help:navigate` Tauri event so the help
+//      window can route to that topic via its own listener — see
+//      app/layouts/help-window.vue.
+//   2. Otherwise spawns a new WebviewWindow at /help/[slug] (or /help
+//      if no slug was supplied).
 //
-// Falls back to a same-window navigation when the Tauri runtime
-// isn't available (e.g. `bun run dev` without `tauri:dev`) so the
-// feature doesn't break dev iteration.
+// Outside the Tauri runtime (e.g. `bun run dev` without the shell),
+// falls back to an in-place router push so dev iteration still works.
 
 import { useRouter } from "vue-router";
 import { useUserPlatform } from "~/composables/useUserPlatform";
 import { HELP_TOPICS_BY_SLUG } from "~/help";
 
-// Module-level counter — incremented per spawn so each window gets
-// a unique label even within a single session. Reset only when the
-// main window unloads.
-let nextHelpWindowIndex = 0;
+// Single label — only one help window ever exists. If we ever want
+// multi-window cross-referencing again, switch to a counter and
+// drop the getByLabel branch below.
+const HELP_WINDOW_LABEL = "help-main";
 
 interface OpenHelpWindowOptions {
 	/// Optional topic slug to open. Falls back to /help index when omitted.
@@ -35,64 +36,59 @@ export const useHelpWindow = () => {
 
 	const openHelpWindow = async (options: OpenHelpWindowOptions = {}): Promise<void> => {
 		const { slug } = options;
-		// `?popout=1` is the signal the /help pages read to switch
-		// into the help-window layout (sidebar-less docs reader).
-		// Without this the popped-out window would just render the
-		// full app chrome at the /help URL — confusing and not what
-		// "pop out a docs window" should feel like.
-		const url = slug ? `/help/${slug}?popout=1` : "/help?popout=1";
+		const url = slug ? `/help/${slug}` : "/help";
 
-		// Outside Tauri (dev mode without the shell): just navigate
-		// in-place. Won't be a separate window but the user still
-		// gets to the content.
+		// Outside Tauri (dev mode without the shell): same-window
+		// navigation. Won't be a separate window but the user still
+		// reaches the content.
 		if (!isTauri.value) {
 			await router.push(url);
 			return;
 		}
 
 		// Dynamic import so the @tauri-apps/api bundle doesn't get
-		// pulled into the initial route chunk. The help feature is
-		// secondary; pay for it only when the user actually uses it.
+		// pulled into the initial route chunk. Pay for it only when
+		// the user actually opens the help window.
 		const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
 
-		const label = `help-${++nextHelpWindowIndex}`;
+		// Focus-or-create. If a window with our label already exists,
+		// surface it (and tell it to navigate to the requested slug
+		// via a Tauri event the layout listens for).
+		const existing = await WebviewWindow.getByLabel(HELP_WINDOW_LABEL);
+		if (existing) {
+			await existing.show();
+			await existing.unminimize();
+			await existing.setFocus();
+			if (slug) {
+				await existing.emit("help:navigate", { slug });
+			} else {
+				await existing.emit("help:navigate", { slug: null });
+			}
+			return;
+		}
+
 		const title = slug && HELP_TOPICS_BY_SLUG[slug]
 			? `Help — ${HELP_TOPICS_BY_SLUG[slug].title}`
 			: "Sakoram — Help";
 
-		const win = new WebviewWindow(label, {
+		const win = new WebviewWindow(HELP_WINDOW_LABEL, {
 			url,
 			title,
-			// Mirror the main window's 1280×800 default — anything
-			// narrower (we previously shipped 1000) falls under the
-			// lg breakpoint (1024px) and the HelpSidebar's
-			// `hidden lg:block` hides it. minWidth pinned to 1024
-			// (matching main's minWidth) so the user can't drag the
-			// popout below the sidebar threshold either.
-			//
-			// Center-positioning means subsequent windows stack on
-			// top of each other; macOS cascades automatically, on
-			// Windows they overlap (acceptable v1 — drag apart).
+			// Mirror the main window's 1280×800 default. minWidth: 1024
+			// matches main's floor and is also the breakpoint above
+			// which the help sidebar comfortably fits.
 			width: 1280,
 			height: 800,
 			minWidth: 1024,
 			minHeight: 640,
 			center: true,
 			focus: true,
-			// decorations: false matches the main window — our custom
-			// TitleBar paints the chrome. show-sidebar-toggle is set
-			// to false in the help-window layout so the toggle button
-			// doesn't appear.
 			decorations: false,
 			resizable: true,
 			minimizable: true,
 			maximizable: true
 		});
 
-		// The window-creation Promise resolves with the WebviewWindow
-		// handle synchronously. Errors land on the 'tauri://error'
-		// event — listen once and surface any failure as a console
-		// warning so dev can spot it but the modal still closes cleanly.
 		win.once("tauri://error", (err) => {
 			console.warn("[useHelpWindow] failed to create help window:", err);
 		});

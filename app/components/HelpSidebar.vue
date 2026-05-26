@@ -7,7 +7,7 @@
 		<!-- "All topics" header link — same target as the /help/[slug]
 			page's back link, just always visible. -->
 		<NuxtLink
-			:to="linkTo()"
+			to="/help"
 			class="block px-4 py-3 border-b border-(--ui-border) text-sm font-medium hover:bg-(--ui-bg-elevated) transition flex items-center gap-2"
 			:class="isOnIndex ? 'text-(--ui-primary) bg-(--ui-primary)/8' : 'text-(--ui-text-muted) hover:text-(--ui-text)'"
 		>
@@ -34,7 +34,7 @@
 					<NuxtLink
 						v-for="t in group.topics"
 						:key="t.slug"
-						:to="linkTo(t.slug)"
+						:to="`/help/${t.slug}`"
 						class="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition"
 						:class="t.slug === activeSlug
 							? 'bg-(--ui-primary)/10 text-(--ui-primary) font-medium'
@@ -56,21 +56,15 @@
 <script setup lang="ts">
 // Help topics sidebar shown inside the popout WebviewWindow.
 //
-// Rendered by layouts/help-window.vue — the layout that takes over
-// when the popout's URL has `?popout=1`. Lets the user navigate
-// between topics like a real docs site. The main-app default layout
-// also has a sidebar (the app's nav), so this component is
-// deliberately scoped to the help-window layout only.
-//
-// Links go through useHelpLink so `?popout=1` propagates and the
-// popout window stays in the help-window layout as the user clicks
-// around.
+// Rendered by layouts/help-window.vue — the layout the docs window
+// uses for all /help routes. Lets the user navigate between topics
+// like a real docs site. The main-app default layout has its own
+// sidebar (the app's nav), so this component is scoped to the
+// help-window layout only.
 
-	import { useHelpLink } from "~/composables/useHelpLink";
 	import { groupedByCategory } from "~/help";
 
 	const route = useRoute();
-	const { linkTo } = useHelpLink();
 
 	// route.params.slug works on /help/[slug] but is undefined on
 	// /help — coerce to a string so the comparison is straightforward.

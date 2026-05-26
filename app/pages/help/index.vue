@@ -3,32 +3,13 @@
 		of the scroll viewport. Same rationale as the topic reader —
 		layout's pb-2 is tight by design. -->
 	<div class="select-none pb-12">
-		<header class="mb-6 flex items-start justify-between gap-4">
-			<div>
-				<h1 class="text-2xl font-semibold">
-					Help &amp; guides
-				</h1>
-				<p class="text-sm text-(--ui-text-muted) mt-1 max-w-3xl">
-					Plain-English explanations of what each Sakoram concept means in the real business world, when you'd use it, and how to drive the app to do it. Tuned for Sri Lankan businesses — examples are in LKR, fiscal year is April–March, tax notes reference the IRD where relevant.
-				</p>
-			</div>
-			<!-- Pop-out shortcut so users browsing the index can spin
-				up the docs window directly without first opening a
-				topic. Hidden when we're already inside a popout (would
-				just open another duplicate window) and outside Tauri
-				(no shell, no spawn API). -->
-			<UButton
-				v-if="isTauri && !isPopoutMode"
-				size="sm"
-				color="neutral"
-				variant="outline"
-				icon="i-lucide-picture-in-picture"
-				title="Open the help library in a separate window"
-				class="shrink-0"
-				@click="popOut"
-			>
-				Pop out
-			</UButton>
+		<header class="mb-6">
+			<h1 class="text-2xl font-semibold">
+				Help &amp; guides
+			</h1>
+			<p class="text-sm text-(--ui-text-muted) mt-1 max-w-3xl">
+				Plain-English explanations of what each Sakoram concept means in the real business world, when you'd use it, and how to drive the app to do it. Tuned for Sri Lankan businesses — examples are in LKR, fiscal year is April–March, tax notes reference the IRD where relevant.
+			</p>
 		</header>
 
 		<!-- "Start here" hero — the bookkeeping-basics topic gets
@@ -36,12 +17,9 @@
 			new users have an obvious entry point. We exclude this
 			slug from the categorized grid below to avoid showing it
 			twice. -->
-		<!-- linkTo() preserves `?popout=1` so clicking the hero from
-			inside a popout window keeps the help-window layout. Same
-			for the per-topic cards below. -->
 		<NuxtLink
 			v-if="basics"
-			:to="linkTo(basics.slug)"
+			:to="`/help/${basics.slug}`"
 			class="block group mb-8"
 		>
 			<UCard class="transition group-hover:border-(--ui-primary) bg-(--ui-primary)/8 border-(--ui-primary)/30">
@@ -85,7 +63,7 @@
 				<NuxtLink
 					v-for="t in group.topics"
 					:key="t.slug"
-					:to="linkTo(t.slug)"
+					:to="`/help/${t.slug}`"
 					class="block group h-full"
 				>
 					<UCard class="h-full transition group-hover:border-(--ui-primary)">
@@ -110,35 +88,16 @@
 </template>
 
 <script setup lang="ts">
-	import { useHelpLink } from "~/composables/useHelpLink";
-	import { useHelpWindow } from "~/composables/useHelpWindow";
 	import { groupedByCategory, HELP_TOPICS_BY_SLUG } from "~/help";
 
-	definePageMeta({ title: "Help" });
-
-	// linkTo() preserves the popout query when navigating between
-	// help routes — without this, clicking a hero/card from inside
-	// a popout window drops us out of the help-window layout.
-	const { linkTo, isPopoutMode } = useHelpLink();
-
-	// Pop-out shortcut on the index — same composable the modal +
-	// /help/[slug] use so there's one place to change the spawn
-	// behaviour. Lands the popout on the index itself (no slug)
-	// so the user can browse from there.
-	const { openHelpWindow, isTauri } = useHelpWindow();
-	const popOut = async () => {
-		await openHelpWindow();
-	};
-
-	// When loaded inside the popout WebviewWindow (URL carries
-	// `?popout=1`), switch to the help-window layout — strips the
-	// main app sidebar / tenant switcher so the popout reads as a
-	// proper docs window. In-app navigation (sidebar Help link) hits
-	// this same page without the query and gets the default layout.
-	const route = useRoute();
-	if (route.query.popout === "1") {
-		setPageLayout("help-window");
-	}
+	// Always uses the help-window layout — the help library lives
+	// exclusively inside the docs WebviewWindow. The main app's
+	// sidebar Help item spawns this window via useHelpWindow rather
+	// than navigating to it in-place.
+	definePageMeta({
+		title: "Help",
+		layout: "help-window"
+	});
 
 	// Bookkeeping-basics gets its own "Start here" hero card above the
 	// grid, so we exclude it from the categorized listing to avoid

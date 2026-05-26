@@ -10,27 +10,10 @@
 			the rule). Same treatment will work on any future
 			toolbar-with-just-a-back-link page. -->
 		<div class="mb-6 pb-3 border-b border-(--ui-border) flex items-center justify-between gap-4">
-			<!-- Preserves `?popout=1` when in popout mode so this back
-				link doesn't accidentally drop us out of the help-window
-				layout. See useHelpLink for the full rationale. -->
-			<NuxtLink :to="helpLink.linkTo()" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
+			<NuxtLink to="/help" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
 				<UIcon name="i-lucide-arrow-left" class="size-4" />
 				All help topics
 			</NuxtLink>
-			<!-- Pop-out to a separate Tauri WebviewWindow. Hidden
-				when already inside the popout (popout=1 query) — no
-				point offering "pop out" from a popped-out window. -->
-			<UButton
-				v-if="isTauri && topic && !isPopoutMode"
-				size="sm"
-				color="neutral"
-				variant="outline"
-				icon="i-lucide-picture-in-picture"
-				title="Open this guide in a separate window"
-				@click="popOut"
-			>
-				Pop out
-			</UButton>
 		</div>
 
 		<!-- Docs-style two-column layout: nav on the left, content on
@@ -94,8 +77,6 @@
 // docs that you can't copy from are annoying).
 
 	import type { TocEntry } from "~/help/toc";
-	import { useHelpLink } from "~/composables/useHelpLink";
-	import { useHelpWindow } from "~/composables/useHelpWindow";
 	import { HELP_TOPICS_BY_SLUG } from "~/help";
 	import { HelpTocKey } from "~/help/toc";
 
@@ -104,17 +85,14 @@
 
 	const topic = computed(() => HELP_TOPICS_BY_SLUG[slug.value]);
 
-	definePageMeta({ title: "Help" });
-
-	// When loaded inside the popout WebviewWindow (URL carries
-	// `?popout=1`), switch to the help-window layout — strips the
-	// main app sidebar / tenant switcher so the popout reads as a
-	// proper docs window. In-app navigation (sidebar Help link, See-
-	// also tiles in the main window) hits this same page without the
-	// query and gets the default layout.
-	if (route.query.popout === "1") {
-		setPageLayout("help-window");
-	}
+	// Always uses the help-window layout — the help library lives
+	// exclusively inside the docs WebviewWindow. The main app's
+	// sidebar Help item spawns this window via useHelpWindow rather
+	// than navigating to it in-place.
+	definePageMeta({
+		title: "Help",
+		layout: "help-window"
+	});
 
 	watchEffect(() => {
 		if (topic.value) {
@@ -161,18 +139,4 @@
 		activeId.value = null;
 		nextOrder = 0;
 	});
-
-	// ---- Pop-out to a separate Tauri WebviewWindow ----
-	// Same composable the HelpModal uses; renders a button on the
-	// page's top toolbar when the Tauri runtime is available so
-	// users who arrived via in-app nav can still escalate to a
-	// floating window if they want one. Hidden when we're ALREADY
-	// in a popped-out window — popping out from a popout is silly.
-	const { openHelpWindow, isTauri } = useHelpWindow();
-	const helpLink = useHelpLink();
-	const isPopoutMode = helpLink.isPopoutMode;
-	const popOut = async () => {
-		if (!topic.value) return;
-		await openHelpWindow({ slug: topic.value.slug });
-	};
 </script>

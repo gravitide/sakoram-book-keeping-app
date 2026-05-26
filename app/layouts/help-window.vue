@@ -41,13 +41,32 @@
 </template>
 
 <script setup lang="ts">
-// help-window layout. Switched into via setPageLayout('help-window')
-// on the /help pages when route.query.popout === '1' — see
-// app/pages/help/[slug].vue and app/pages/help/index.vue.
+// help-window layout. Used by /help and /help/[slug] (always, via
+// definePageMeta on those pages). The main app no longer has an
+// in-app docs reader — the help library lives exclusively in this
+// separate Tauri WebviewWindow.
 //
-// No store loading, no tenant middleware concerns — the layout is
-// just the titlebar + topics sidebar + slot. Pinia state is
-// independent per window in Tauri, so the popout doesn't share the
-// main window's stores; the help content is pure components anyway
-// so there's nothing to hydrate.
+// Listens for `help:navigate` events emitted from the spawner side
+// (see useHelpWindow). When the main window's "Help" button is
+// clicked while the help window is already open, the spawner
+// focuses this window and emits the event with the requested slug;
+// the listener below routes the help window to /help/[slug] (or
+// /help if no slug was supplied).
+
+	import { useUserPlatform } from "~/composables/useUserPlatform";
+
+	const router = useRouter();
+	const { platform } = useUserPlatform();
+
+	onMounted(async () => {
+		if (platform === "unknown") return; // Skip outside Tauri (dev).
+		const { listen } = await import("@tauri-apps/api/event");
+		const unlisten = await listen<{ slug: string | null }>("help:navigate", (event) => {
+			const slug = event.payload?.slug;
+			void router.push(slug ? `/help/${slug}` : "/help");
+		});
+		onBeforeUnmount(() => {
+			unlisten();
+		});
+	});
 </script>

@@ -38,15 +38,10 @@
 				See also
 			</h2>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-				<!-- useHelpLink preserves `?popout=1` when the user is
-					reading inside a popout window — without it, clicking
-					a See-also tile navigates to /help/<slug> with no
-					query and drops us out of the help-window layout
-					back into the full-app layout mid-window. -->
 				<NuxtLink
 					v-for="r in relatedTopics"
 					:key="r.slug"
-					:to="linkTo(r.slug)"
+					:to="`/help/${r.slug}`"
 					class="block group"
 				>
 					<div class="border border-(--ui-border) rounded-md px-3 py-2 hover:border-(--ui-primary) transition flex items-center gap-2">
@@ -69,7 +64,6 @@
 <script setup lang="ts">
 	import type { Component } from "vue";
 	import type { HelpTopic } from "~/help";
-	import { useHelpLink } from "~/composables/useHelpLink";
 	import { HELP_TOPICS_BY_SLUG } from "~/help";
 
 	const props = defineProps<{
@@ -106,10 +100,4 @@
 			.map((slug) => HELP_TOPICS_BY_SLUG[slug])
 			.filter((t): t is HelpTopic => t !== undefined)
 	);
-
-	// See-also tiles use the same link helper every other in-help
-	// surface uses, so the popout query propagates uniformly across
-	// the topic sidebar, modal hand-off, /help index, /help/[slug]
-	// back link, and these See-also tiles.
-	const { linkTo } = useHelpLink();
 </script>
