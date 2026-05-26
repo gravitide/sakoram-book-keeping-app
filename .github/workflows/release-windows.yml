@@ -130,9 +130,11 @@ jobs:
       # so this workflow still works on forks / contributors' branches
       # without coupling them to the gravitide.dev bucket.
       #
-      # Spaces in Tauri-produced filenames ("Sakoram Bookkeeping_…")
-      # are renamed to dots on upload so the resulting URL doesn't
-      # need %20 encoding to look clean.
+      # Defensive: spaces in Tauri-produced filenames are renamed to
+      # dots on upload so the URL doesn't need %20 encoding. With the
+      # current productName ("Sakoram") there are no spaces, so this
+      # is a no-op — kept in place in case the name picks up a space
+      # in the future.
       - name: Mirror installers to Cloudflare R2
         shell: bash
         env:

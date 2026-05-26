@@ -1,4 +1,4 @@
-# Sakoram Bookkeeping — handoff notes
+# Sakoram — handoff notes
 
 A single-user desktop bookkeeping app for a Sri Lankan business. Manages
 quotes, invoices, bills, vouchers, employees, payslips, and renders
@@ -33,9 +33,12 @@ pool, multi-tenancy, and the Tauri capability layer.
 `bun` is **mandatory** — `bun run`, `bun add`, etc. The user runs **bash
 on Windows** (Git Bash) — give shell commands accordingly.
 
-The product is named **Sakoram Bookkeeping** (one word). Don't slip back
-to "Book Keeping" — Tauri's `productName`, the README, the About modal,
-window titles, and a dozen other strings are all kept in sync.
+The product is named **Sakoram** at the OS level (Tauri `productName`,
+installer filename, Start menu / Dock entry, Add/Remove Programs). The
+full tagline **"Sakoram — The desktop bookkeeper!"** is the in-app
+identity — window title, sidebar tooltip, About modal subtitle, README
+H1. Don't slip back to "Bookkeeping" / "Book Keeping" anywhere; those
+were earlier names that have been retired.
 
 ---
 
@@ -1810,7 +1813,11 @@ return is missing today.
 - **Don't change `com.sakoram.billing` bundle identifier** — orphans
   user data.
 - **Don't change `productName`** lightly — installer filenames change
-  + a Windows-installed previous version won't auto-replace.
+  + a Windows-installed previous version won't auto-replace. The
+  current value is `"Sakoram"` (one word, no tagline). Earlier dev
+  builds shipped as `"Sakoram Bookkeeping"`; users who installed
+  those have to uninstall the old entry manually since Add/Remove
+  Programs keys off the productName.
 - **Don't rename `_sqlx_migrations`** — would fail to detect already-
   applied migrations on legacy DBs.
 - **Don't `Database.load()` a tenant URL before
