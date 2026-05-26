@@ -25,12 +25,19 @@
 			handles this). The gap-8 gives the columns breathing room
 			without crushing either.
 
+			No `items-start` here on purpose — both grid items need to
+			stretch to the row height so the nav's inner `position:
+			sticky` div has a tall enough containing block to actually
+			stick within. With `items-start` the aside was shrinking
+			to its content height, leaving zero slide room and making
+			the nav scroll away with the content.
+
 			pb-16 on the grid wrapper so the topic's last line doesn't
 			sit flush against the bottom of the scroll viewport — the
 			layout's pb-2 is tuned to align with the sidebar floor and
 			deliberately tight, so any long-form reading surface needs
 			to add its own breathing room. -->
-		<div class="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-8 items-start pb-16">
+		<div class="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-8 pb-16">
 			<HelpTopicNav />
 			<!-- max-w-3xl: long-form prose reads better at ~65-75ch.
 				Wider lines tax the eye on a desktop monitor. -->
