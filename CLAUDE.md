@@ -210,6 +210,7 @@ sakoram_app/
 │  │  ├─ categories/                  ← list w/ row context menu (Show bills) + bill counts — modal-driven CRUD
 │  │  ├─ quotes/                      ← list w/ row context menu, [id] (PDF, convert to invoice). "New quote" opens NewQuoteModal — no /new page.
 │  │  ├─ invoices/                    ← list w/ row context menu, [id] (PDF, payment ledger). "New invoice" opens NewInvoiceModal.
+│  │  ├─ credit-notes/                ← list, [id] (negative-invoice document for refunds / returns; optional source_invoice_id link). "New credit note" opens NewCreditNoteModal. No PDF yet — follow-up PR.
 │  │  ├─ bills/                       ← list, [id] (vendor-FK + snapshot). "New bill" opens NewBillModal.
 │  │  ├─ vouchers/                    ← list, new, [id] (money in/out; read-only by default → click Edit to mutate). Still uses a /new page — form is too heavy for a modal (8+ fields, prefill from ?bill=/?invoice=/?payslip=, overpayment guard).
 │  │  ├─ payroll/                     ← index.vue is a landing card grid (mirrors /reports); dashboard.vue holds the upcoming-cycle hero + MoM chart + recent runs + outstanding
@@ -920,6 +921,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0026_drop_attachment_path.sql           ← drop the dead bills.attachment_path / vouchers.attachment_path columns (the polymorphic document_attachments table from 0022 has owned attachments for a while)
 0027_title_override.sql                 ← optional `title_override` text column on quotes / invoices / bills so the PDF big-header can be customised per document ("Development quote" instead of "QUOTATION")
 0028_denormalize_list_party_names.sql   ← denormalised `client_name` / `vendor_name` / `employee_name` columns on quotes / invoices / bills / payslips (plus `category_name/color/icon` on bills) so list pages render + sort + search without parsing the snapshot JSON per row. Backfilled from existing snapshots via SQLite's `json_extract`. Stores set the column whenever the snapshot is set; detail pages still use the full snapshot.
+0029_credit_notes.sql                   ← `credit_notes` + `credit_note_lines` tables for the Tier 2 credit-note feature. Mirrors invoice shape (client_id FK + client_snapshot + denormalised client_name, project_title, vat_rate_basis_points, subtotal/tax/total cents, notes, title_override) plus `source_invoice_id` (nullable FK ON DELETE SET NULL) for the "credit against invoice X" link. Status FSM: `draft | issued | cancelled`. Document numbering type `credit_note` added to `app/lib/numbering.ts` (prefix CRN).
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,
@@ -1108,6 +1110,7 @@ Calendar              ← month-grid view of every upcoming due date
 ─── (divider)
 Quotes
 Invoices
+Credit notes          ← /credit-notes — negative invoices for refunds / returns; optional link to source invoice
 Bills
 Vouchers
 ─── (divider)
