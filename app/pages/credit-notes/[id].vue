@@ -136,7 +136,7 @@
 						<UFormField label="Issue date">
 							<DateField v-model="formIssueDate" :disabled="!editable" />
 						</UFormField>
-						<UFormField label="Source invoice" help="Optional — the invoice this credit settles.">
+						<UFormField label="Source invoice">
 							<USelect
 								v-model="formSourceInvoiceId"
 								:items="invoiceOptions"
@@ -144,6 +144,14 @@
 								class="w-full"
 								:disabled="!editable"
 							/>
+							<template #help>
+								<span v-if="hasInvoicesForClient">
+									Optional — the invoice this credit settles. Only this client's issued invoices are listed.
+								</span>
+								<span v-else class="text-(--ui-warning)">
+									{{ clientSnapshot?.name || "This client" }} has no issued invoices yet — leave blank for a standalone credit note.
+								</span>
+							</template>
 						</UFormField>
 					</div>
 				</UCard>
@@ -346,17 +354,24 @@
 
 	// Source invoice picker — all sent / partial / paid / overdue
 	// invoices for this credit note's client, so the user can link a
-	// freshly-created credit note to its source.
-	const invoiceOptions = computed(() => {
+	// freshly-created credit note to its source. Cross-client crediting
+	// doesn't make accounting sense (you can't credit Client B's
+	// invoice on Client A's credit note), so the filter is strict.
+	const invoicesForClient = computed(() => {
 		const cnClientId = creditNote.value?.client_id;
+		if (!cnClientId) return [];
+		return invoicesStore.invoices
+			.filter((i) => i.client_id === cnClientId && i.status !== "cancelled" && i.status !== "draft")
+			.sort((a, b) => b.issue_date.localeCompare(a.issue_date));
+	});
+
+	const hasInvoicesForClient = computed(() => invoicesForClient.value.length > 0);
+
+	const invoiceOptions = computed(() => {
 		const items: { label: string, value: number | null }[] = [
 			{ label: "— None —", value: null }
 		];
-		if (!cnClientId) return items;
-		const invoicesForClient = invoicesStore.invoices
-			.filter((i) => i.client_id === cnClientId && i.status !== "cancelled" && i.status !== "draft")
-			.sort((a, b) => b.issue_date.localeCompare(a.issue_date));
-		for (const i of invoicesForClient) {
+		for (const i of invoicesForClient.value) {
 			items.push({ label: `${i.number} · ${formatLKR(i.total_cents)}`, value: i.id });
 		}
 		return items;
