@@ -192,12 +192,9 @@
 					</template>
 
 					<div v-if="pricingMode === 'bundle' && editable" class="space-y-3">
-						<UFormField label="Subtotal" help="Total exclusive of VAT.">
+						<UFormField label="Credit subtotal" help="Total exclusive of VAT.">
 							<MoneyInput v-model="bundleSubtotalCents" />
 						</UFormField>
-						<!-- VAT input pinned to ~half width at md+ (matches the
-							invoice / quote pattern). The stepper's chrome looks
-							awkward stretched across the full card. -->
 						<UFormField label="VAT rate (%)" help="Set to 0 for a tax-free credit note.">
 							<UInputNumber
 								v-model="vatRatePct"
@@ -209,26 +206,28 @@
 						</UFormField>
 					</div>
 
-					<dl class="text-sm space-y-1.5 tabular-nums">
-						<div class="flex justify-between">
-							<dt class="text-(--ui-text-muted)">
-								Subtotal
-							</dt>
-							<dd>{{ formatLKR(computedTotals.subtotal) }}</dd>
+					<!-- Right-aligned summary block, same shape as the invoice
+						page's Totals card. The credit-note nature is conveyed
+						by the document header + the negative-sign treatment
+						on the page header / PDF, not by colouring this card
+						as an error — that would read like a loss. The
+						top border + spacing only kick in when the bundle
+						inputs sit above (drafts), so issued credit notes
+						don't carry a phantom separator above an empty
+						bottom block. -->
+					<div class="flex justify-end" :class="{ 'border-t border-(--ui-border) pt-4 mt-4': pricingMode === 'bundle' && editable }">
+						<div class="text-sm tabular-nums text-right space-y-0.5">
+							<div class="text-(--ui-text-muted)">
+								Subtotal: <span class="text-(--ui-text)">{{ formatLKR(computedTotals.subtotal) }}</span>
+							</div>
+							<div v-if="computedTotals.tax !== 0" class="text-(--ui-text-muted)">
+								VAT: <span class="text-(--ui-text)">{{ formatLKR(computedTotals.tax) }}</span>
+							</div>
+							<div class="font-semibold text-base">
+								Total: {{ formatLKR(computedTotals.total) }}
+							</div>
 						</div>
-						<div class="flex justify-between">
-							<dt class="text-(--ui-text-muted)">
-								VAT
-							</dt>
-							<dd>{{ formatLKR(computedTotals.tax) }}</dd>
-						</div>
-						<div class="flex justify-between pt-2 mt-2 border-t border-(--ui-border) font-semibold">
-							<dt>Credit total</dt>
-							<dd class="text-(--ui-error)">
-								− {{ formatLKR(computedTotals.total) }}
-							</dd>
-						</div>
-					</dl>
+					</div>
 				</UCard>
 
 				<UCard class="lg:col-span-3">
