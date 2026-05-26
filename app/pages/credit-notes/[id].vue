@@ -136,7 +136,7 @@
 						<UFormField label="Issue date">
 							<DateField v-model="formIssueDate" :disabled="!editable" />
 						</UFormField>
-						<UFormField label="Source invoice" hint="Optional — the invoice this credit settles.">
+						<UFormField label="Source invoice" help="Optional — the invoice this credit settles.">
 							<USelect
 								v-model="formSourceInvoiceId"
 								:items="invoiceOptions"
