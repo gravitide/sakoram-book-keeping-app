@@ -5,10 +5,11 @@
 		and substitutes a docs-style topic sidebar so the popout
 		reads as a true docs reader.
 
-		Keeps the custom TitleBar (drag region + close/min/max
-		buttons) so the window still behaves like every other
-		Sakoram window on the OS. The app-sidebar-toggle button is
-		hidden via the existing `show-sidebar-toggle="false"` prop. -->
+		Visually mirrors layouts/default.vue: same TitleBar, same
+		floating-card sidebar (HelpSidebar carries the same `m-2 mt-0
+		rounded-lg border bg shadow` chrome the main sidebar uses),
+		same main-scroll container — just a different sidebar
+		component and a slightly narrower content cap. -->
 	<div class="h-screen flex flex-col bg-(--ui-bg-muted)">
 		<TitleBar :show-sidebar-toggle="false" />
 		<div class="flex-1 min-h-0 flex">
@@ -16,23 +17,19 @@
 				ships at 1280×800 with a minWidth of 1024 (see
 				useHelpWindow) so there's always room for the
 				sidebar; user can't drag the window below that floor.
-				The topic links inside the page (See-also tiles,
-				/help index hero/cards) all preserve the popout query
-				so navigation stays in the popout-window layout
-				regardless of which surface the user clicks. -->
+				HelpSidebar is itself a floating card (`m-2 mt-0 ...`)
+				so the chrome matches layouts/default.vue. -->
 			<HelpSidebar />
 			<main class="flex-1 min-w-0 overflow-auto">
 				<!-- max-w-5xl (1024px) caps the content for readable
 					docs prose. The /help/[slug] article inside hits
 					max-w-3xl (768px); the rest of the 1024 cap is
 					room for the TOC nav rail beside it.
+					Bottom pad matches the sidebar's m-2 floor gap so
+					the lower edges of both surfaces line up.
 					Deliberately NO mx-auto — content is left-aligned
-					so it stays anchored next to the topics sidebar.
-					Centering content on a wide monitor (e.g. 4K
-					maximized) would leave a giant gap between
-					sidebar and content. Empty space on the right at
-					super-wide windows is the docs convention. -->
-				<div class="p-4 max-w-5xl">
+					so it stays anchored next to the topics sidebar. -->
+				<div class="p-4 pb-2 max-w-5xl">
 					<slot />
 				</div>
 			</main>
