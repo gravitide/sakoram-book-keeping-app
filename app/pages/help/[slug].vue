@@ -14,12 +14,11 @@
 				<UIcon name="i-lucide-arrow-left" class="size-4" />
 				All help topics
 			</NuxtLink>
-			<!-- Pop-out to a separate Tauri WebviewWindow. Only renders
-				when the Tauri runtime is available (i.e. not in
-				`bun run dev` without the shell). Same composable the
-				HelpModal uses — single source of truth for spawning. -->
+			<!-- Pop-out to a separate Tauri WebviewWindow. Hidden
+				when already inside the popout (popout=1 query) — no
+				point offering "pop out" from a popped-out window. -->
 			<UButton
-				v-if="isTauri && topic"
+				v-if="isTauri && topic && !isPopoutMode"
 				size="sm"
 				color="neutral"
 				variant="outline"
@@ -163,8 +162,10 @@
 	// Same composable the HelpModal uses; renders a button on the
 	// page's top toolbar when the Tauri runtime is available so
 	// users who arrived via in-app nav can still escalate to a
-	// floating window if they want one.
+	// floating window if they want one. Hidden when we're ALREADY
+	// in a popped-out window — popping out from a popout is silly.
 	const { openHelpWindow, isTauri } = useHelpWindow();
+	const isPopoutMode = computed(() => route.query.popout === "1");
 	const popOut = async () => {
 		if (!topic.value) return;
 		await openHelpWindow({ slug: topic.value.slug });
