@@ -90,7 +90,14 @@
 <script setup lang="ts">
 	import { groupedByCategory, HELP_TOPICS_BY_SLUG } from "~/help";
 
-	definePageMeta({ title: "Help" });
+	// Always uses the help-window layout — the help library lives
+	// exclusively inside the docs WebviewWindow. The main app's
+	// sidebar Help item spawns this window via useHelpWindow rather
+	// than navigating to it in-place.
+	definePageMeta({
+		title: "Help",
+		layout: "help-window"
+	});
 
 	// Bookkeeping-basics gets its own "Start here" hero card above the
 	// grid, so we exclude it from the categorized listing to avoid

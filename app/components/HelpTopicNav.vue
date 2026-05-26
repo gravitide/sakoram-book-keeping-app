@@ -26,7 +26,13 @@
 						class="size-3.5 shrink-0 mt-0.5"
 						:class="activeId === e.id ? 'text-(--ui-primary)' : 'text-(--ui-text-muted)/70'"
 					/>
-					<span class="truncate">{{ e.title }}</span>
+					<!-- Wrap long section titles instead of truncating with an
+					ellipsis. This is help docs prose — the user reading
+					the TOC wants to know what a link points at, not see
+					"How to create one in Sako…". `break-words` lets the
+					title flow onto a second line; `min-w-0` on the span
+					is what actually lets it shrink inside the flex row. -->
+					<span class="min-w-0 break-words">{{ e.title }}</span>
 				</a>
 			</nav>
 			<div v-else class="text-xs text-(--ui-text-muted) px-2 py-1">

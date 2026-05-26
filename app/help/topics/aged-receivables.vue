@@ -15,9 +15,9 @@
 			<p>
 				Every outstanding invoice is sorted into one of five buckets by how many days have passed since its due date:
 			</p>
-			<div class="overflow-x-auto rounded-lg border border-(--ui-border)">
+			<div class="overflow-x-auto rounded-lg border border-(--ui-border) bg-(--ui-bg)">
 				<table class="w-full text-sm">
-					<thead class="bg-(--ui-bg-elevated) text-left text-xs uppercase tracking-wide text-(--ui-text-muted)">
+					<thead class="bg-(--ui-bg-accented) text-left text-xs uppercase tracking-wide text-(--ui-text-muted)">
 						<tr>
 							<th class="px-3 py-2 font-medium">
 								Bucket

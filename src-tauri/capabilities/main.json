@@ -3,7 +3,8 @@
 	"identifier": "main",
 	"description": "Capabilities for the Sakoram Bookkeeping app window",
 	"windows": [
-		"main"
+		"main",
+		"help-*"
 	],
 	"permissions": [
 		"core:path:default",
@@ -15,6 +16,8 @@
 		"core:window:allow-toggle-maximize",
 		"core:window:allow-is-maximized",
 		"core:window:allow-close",
+		"core:webview:default",
+		"core:webview:allow-create-webview-window",
 		"core:app:default",
 		"core:resources:default",
 		"core:menu:default",

@@ -20,9 +20,9 @@
 			<p>
 				This report is the <strong>cash-basis</strong> complement to the P&L. They can — and usually do — disagree about the same period. Both are correct; they answer different questions:
 			</p>
-			<div class="overflow-x-auto rounded-lg border border-(--ui-border)">
+			<div class="overflow-x-auto rounded-lg border border-(--ui-border) bg-(--ui-bg)">
 				<table class="w-full text-sm">
-					<thead class="bg-(--ui-bg-elevated) text-left text-xs uppercase tracking-wide text-(--ui-text-muted)">
+					<thead class="bg-(--ui-bg-accented) text-left text-xs uppercase tracking-wide text-(--ui-text-muted)">
 						<tr>
 							<th class="px-3 py-2 font-medium">
 								Question

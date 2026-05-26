@@ -731,21 +731,48 @@ two shared primitives:
     info / SL-tax notes (`variant="tip|info|warning|tax"`)
 
 Topics are surfaced through two parallel UI surfaces, both backed by
-the same component:
+the same `HelpTopicView` renderer:
 
   - **`HelpButton`** + **`HelpModal`** — drops a `?` icon on any
     page header that opens an in-context modal for quick reference.
-  - **`/help/[slug]`** — full-page reading view with a wider layout
-    and an addressable, bookmarkable URL.
+    The modal's footer has an **"Open in docs window"** button that
+    escalates to the dedicated WebviewWindow.
+  - **The docs window** — `/help` and `/help/[slug]` routes always
+    use the `help-window` layout (no main-app chrome, custom
+    `HelpSidebar` for topic navigation, sticky `HelpTopicNav` TOC).
+    These routes are not navigated to from inside the main app —
+    they live exclusively inside the spawned WebviewWindow.
 
-`HelpTopicView` is the renderer they share (so the same content
-shows up in both surfaces with consistent treatment, including the
-auto-generated "See also" footer from each topic's `relatedSlugs`).
+**The docs window architecture:**
 
-**Future Phase 3** — escalate from modal to a separate Tauri
-`WebviewWindow` so the help docs can live on a second monitor as an
-independent OS window. The architecture is ready for it; just needs
-the spawn call wired to the modal footer's button.
+  - `useHelpWindow` composable owns the spawn. Uses a single
+    stable label `help-main` so only one help window can be open
+    at a time — clicking "Help" again focuses the existing window
+    rather than piling up duplicates. When the spawner asks to
+    navigate to a specific slug, it emits a `help:navigate` Tauri
+    event; the `help-window` layout has a listener that calls
+    `router.push` on the existing window.
+  - **Capability config** (`src-tauri/capabilities/main.json`): the
+    main window has `core:webview:allow-create-webview-window` so it
+    can spawn. The windows array includes `help-main` (and the
+    wildcard `help-*` is kept too, harmlessly, in case we ever
+    re-enable multi-window).
+  - **Sidebar Help entry** uses the nav item's `action` field
+    (instead of `to`) to call `openHelpWindow()` directly — there's
+    no in-app navigation to `/help`, so we don't render the
+    sidebar item as a NuxtLink.
+  - Dev fallback: outside the Tauri runtime (`bun run dev` without
+    the shell), `openHelpWindow` falls back to `router.push("/help")`
+    so dev iteration still works without spawning real windows.
+
+Trade-off acknowledged: external links inside topic prose (e.g.
+"go to /invoices" inside the credit-notes topic) navigate the docs
+window away from `/help/*` to whatever URL they point at — the
+docs window then renders that page with the help-window layout,
+which looks empty (no sidebar, no app chrome). Inter-window
+communication for "main window navigates, docs window stays" is a
+future improvement; v1 users either avoid those links or close
+the window and re-open from Help.
 
 ### Global UI tokens via `app/app.config.ts`
 

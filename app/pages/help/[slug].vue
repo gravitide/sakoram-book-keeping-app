@@ -85,7 +85,14 @@
 
 	const topic = computed(() => HELP_TOPICS_BY_SLUG[slug.value]);
 
-	definePageMeta({ title: "Help" });
+	// Always uses the help-window layout — the help library lives
+	// exclusively inside the docs WebviewWindow. The main app's
+	// sidebar Help item spawns this window via useHelpWindow rather
+	// than navigating to it in-place.
+	definePageMeta({
+		title: "Help",
+		layout: "help-window"
+	});
 
 	watchEffect(() => {
 		if (topic.value) {
