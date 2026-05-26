@@ -92,6 +92,16 @@
 
 	definePageMeta({ title: "Help" });
 
+	// When loaded inside the popout WebviewWindow (URL carries
+	// `?popout=1`), switch to the help-window layout — strips the
+	// main app sidebar / tenant switcher so the popout reads as a
+	// proper docs window. In-app navigation (sidebar Help link) hits
+	// this same page without the query and gets the default layout.
+	const route = useRoute();
+	if (route.query.popout === "1") {
+		setPageLayout("help-window");
+	}
+
 	// Bookkeeping-basics gets its own "Start here" hero card above the
 	// grid, so we exclude it from the categorized listing to avoid
 	// rendering it twice. If the slug isn't registered (e.g. removed

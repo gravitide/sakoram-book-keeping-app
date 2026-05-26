@@ -38,10 +38,16 @@
 				See also
 			</h2>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+				<!-- Route object instead of string so we can preserve the
+					`popout=1` query when the user is reading inside a
+					popout window — without it, clicking a See-also tile
+					navigates the popout to /help/<slug> with no query,
+					which would drop us out of the help-window layout
+					back into the full-app layout mid-window. -->
 				<NuxtLink
 					v-for="r in relatedTopics"
 					:key="r.slug"
-					:to="`/help/${r.slug}`"
+					:to="{ path: `/help/${r.slug}`, query: linkQuery }"
 					class="block group"
 				>
 					<div class="border border-(--ui-border) rounded-md px-3 py-2 hover:border-(--ui-primary) transition flex items-center gap-2">
@@ -99,5 +105,15 @@
 		(props.topic.relatedSlugs ?? [])
 			.map((slug) => HELP_TOPICS_BY_SLUG[slug])
 			.filter((t): t is HelpTopic => t !== undefined)
+	);
+
+	// Preserve the `popout=1` query on See-also tile clicks so the
+	// popout window stays in the help-window layout when the user
+	// navigates between topics. In the main app window (or inside
+	// the modal), the route has no popout query and linkQuery is
+	// empty — natural same-window behaviour.
+	const route = useRoute();
+	const linkQuery = computed<Record<string, string>>(() =>
+		route.query.popout === "1" ? { popout: "1" } : {}
 	);
 </script>

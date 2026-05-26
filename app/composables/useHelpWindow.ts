@@ -35,7 +35,12 @@ export const useHelpWindow = () => {
 
 	const openHelpWindow = async (options: OpenHelpWindowOptions = {}): Promise<void> => {
 		const { slug } = options;
-		const url = slug ? `/help/${slug}` : "/help";
+		// `?popout=1` is the signal the /help pages read to switch
+		// into the help-window layout (sidebar-less docs reader).
+		// Without this the popped-out window would just render the
+		// full app chrome at the /help URL — confusing and not what
+		// "pop out a docs window" should feel like.
+		const url = slug ? `/help/${slug}?popout=1` : "/help?popout=1";
 
 		// Outside Tauri (dev mode without the shell): just navigate
 		// in-place. Won't be a separate window but the user still

@@ -103,6 +103,16 @@
 
 	definePageMeta({ title: "Help" });
 
+	// When loaded inside the popout WebviewWindow (URL carries
+	// `?popout=1`), switch to the help-window layout — strips the
+	// main app sidebar / tenant switcher so the popout reads as a
+	// proper docs window. In-app navigation (sidebar Help link, See-
+	// also tiles in the main window) hits this same page without the
+	// query and gets the default layout.
+	if (route.query.popout === "1") {
+		setPageLayout("help-window");
+	}
+
 	watchEffect(() => {
 		if (topic.value) {
 			useHead({ title: `Help — ${topic.value.title}` });
