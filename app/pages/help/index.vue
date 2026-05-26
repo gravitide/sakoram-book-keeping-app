@@ -1,5 +1,8 @@
 <template>
-	<div class="select-none">
+	<!-- pb-12 so the last category's card row doesn't hug the bottom
+		of the scroll viewport. Same rationale as the topic reader —
+		layout's pb-2 is tight by design. -->
+	<div class="select-none pb-12">
 		<header class="mb-6">
 			<h1 class="text-2xl font-semibold">
 				Help &amp; guides
