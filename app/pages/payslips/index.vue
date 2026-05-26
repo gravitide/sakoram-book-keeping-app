@@ -6,6 +6,7 @@
 			<div>
 				<h1 class="text-2xl font-semibold flex items-center gap-3">
 					Payslips
+					<HelpButton slug="payslips" />
 					<UIcon
 						v-if="isLoading"
 						name="i-lucide-loader-circle"
