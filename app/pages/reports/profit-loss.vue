@@ -30,6 +30,7 @@
 		<header class="mb-6">
 			<h1 class="text-2xl font-semibold flex items-center gap-3">
 				Profit &amp; Loss
+				<HelpButton slug="profit-loss" />
 				<!-- Inline spinner mirrors the list pages — header stays
 					visible so the user knows where they are even while
 					the report's three stores hydrate. -->

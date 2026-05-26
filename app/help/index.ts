@@ -33,13 +33,26 @@ export interface HelpTopic {
 }
 
 export const HELP_TOPICS: HelpTopic[] = [
+	// General — the entry-point topic for new users. Linked from every
+	// document + report topic's relatedSlugs as the "back to basics"
+	// anchor.
+	{
+		slug: "bookkeeping-basics",
+		title: "Bookkeeping basics",
+		summary: "New to all this? Start here. The four questions bookkeeping answers, how the documents fit together, and where to begin.",
+		category: "general",
+		icon: "i-lucide-graduation-cap",
+		relatedSlugs: ["invoices", "bills", "vouchers", "profit-loss"],
+		component: () => import("./topics/bookkeeping-basics.vue")
+	},
+	// Documents
 	{
 		slug: "invoices",
 		title: "Invoices",
 		summary: "Billing a client for work done or goods delivered. The status lifecycle, recording payment, SL VAT obligations.",
 		category: "documents",
 		icon: "i-lucide-receipt",
-		relatedSlugs: ["quotes", "credit-notes", "vouchers"],
+		relatedSlugs: ["quotes", "credit-notes", "vouchers", "vat"],
 		component: () => import("./topics/invoices.vue")
 	},
 	{
@@ -66,7 +79,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 		summary: "Recording money you owe — supplier invoices, expense tracking by category, paying via vouchers.",
 		category: "documents",
 		icon: "i-lucide-file-input",
-		relatedSlugs: ["vouchers", "invoices"],
+		relatedSlugs: ["vouchers", "invoices", "vat"],
 		component: () => import("./topics/bills.vue")
 	},
 	{
@@ -75,9 +88,10 @@ export const HELP_TOPICS: HelpTopic[] = [
 		summary: "The cash ledger — every record of money actually moving in or out. Receipt vs payment, why it's the source of truth.",
 		category: "documents",
 		icon: "i-lucide-ticket",
-		relatedSlugs: ["invoices", "bills", "payslips"],
+		relatedSlugs: ["invoices", "bills", "payslips", "cash-flow"],
 		component: () => import("./topics/vouchers.vue")
 	},
+	// Payroll
 	{
 		slug: "payslips",
 		title: "Payslips",
@@ -86,6 +100,52 @@ export const HELP_TOPICS: HelpTopic[] = [
 		icon: "i-lucide-file-spreadsheet",
 		relatedSlugs: ["vouchers"],
 		component: () => import("./topics/payslips.vue")
+	},
+	// Reports
+	{
+		slug: "profit-loss",
+		title: "Profit & Loss",
+		summary: "Income vs expenses for any period (accrual basis). The single most-used report — what it includes, how to read it, why it differs from cash flow.",
+		category: "reports",
+		icon: "i-lucide-trending-up",
+		relatedSlugs: ["cash-flow", "vat", "invoices", "bills"],
+		component: () => import("./topics/profit-loss.vue")
+	},
+	{
+		slug: "vat",
+		title: "VAT report",
+		summary: "Output vs input VAT, net payable to the IRD. How to use it for your monthly VAT return.",
+		category: "reports",
+		icon: "i-lucide-percent",
+		relatedSlugs: ["invoices", "bills", "profit-loss"],
+		component: () => import("./topics/vat.vue")
+	},
+	{
+		slug: "aged-receivables",
+		title: "Aged receivables",
+		summary: "Who owes you money RIGHT NOW, bucketed by how overdue it is. The collections-priority report.",
+		category: "reports",
+		icon: "i-lucide-clock",
+		relatedSlugs: ["invoices", "aged-payables", "cash-flow"],
+		component: () => import("./topics/aged-receivables.vue")
+	},
+	{
+		slug: "aged-payables",
+		title: "Aged payables",
+		summary: "Who you owe money to RIGHT NOW, bucketed by how overdue it is. The treasury-planning report.",
+		category: "reports",
+		icon: "i-lucide-clock-alert",
+		relatedSlugs: ["bills", "aged-receivables", "cash-flow"],
+		component: () => import("./topics/aged-payables.vue")
+	},
+	{
+		slug: "cash-flow",
+		title: "Cash flow",
+		summary: "Receipts vs payments by month (cash basis). The 'did the bank balance grow?' view, distinct from P&L.",
+		category: "reports",
+		icon: "i-lucide-arrow-left-right",
+		relatedSlugs: ["profit-loss", "vouchers", "aged-receivables"],
+		component: () => import("./topics/cash-flow.vue")
 	}
 ];
 

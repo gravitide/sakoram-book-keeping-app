@@ -25,6 +25,7 @@
 		<header class="mb-6">
 			<h1 class="text-2xl font-semibold flex items-center gap-3">
 				Aged receivables
+				<HelpButton slug="aged-receivables" />
 				<UIcon
 					v-if="isLoading"
 					name="i-lucide-loader-circle"
