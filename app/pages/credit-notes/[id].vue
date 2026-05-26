@@ -195,13 +195,16 @@
 						<UFormField label="Subtotal" help="Total exclusive of VAT.">
 							<MoneyInput v-model="bundleSubtotalCents" />
 						</UFormField>
+						<!-- VAT input pinned to ~half width at md+ (matches the
+							invoice / quote pattern). The stepper's chrome looks
+							awkward stretched across the full card. -->
 						<UFormField label="VAT rate (%)" help="Set to 0 for a tax-free credit note.">
 							<UInputNumber
 								v-model="vatRatePct"
-								:step="0.5"
+								:step="0.01"
 								:min="0"
 								:max="100"
-								class="w-full"
+								class="md:w-32"
 							/>
 						</UFormField>
 					</div>
