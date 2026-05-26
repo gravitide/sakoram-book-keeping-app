@@ -4,6 +4,11 @@
 			<div>
 				<h1 class="text-2xl font-semibold flex items-center gap-3">
 					Credit notes
+					<!-- Help icon sits next to the title so it's discoverable
+						without crowding the action cluster on the right.
+						Same pattern works on any list page — we'll roll
+						this out across the app in follow-up PRs. -->
+					<HelpButton slug="credit-notes" />
 					<UIcon
 						v-if="isLoading"
 						name="i-lucide-loader-circle"

@@ -488,6 +488,17 @@
 				},
 				{ to: "/settings/businesses", label: "Businesses", icon: "i-lucide-briefcase" }
 			]
+		},
+		{
+			// Help library — plain-English bookkeeping explainers,
+			// when-to-use-it scenarios, and how-to-do-it-in-Sakoram
+			// walkthroughs. Per-page HelpButton (the ? icon) drops
+			// users straight into the relevant topic via a modal;
+			// this entry exposes the full library for browsing.
+			to: "/help",
+			label: "Help",
+			icon: "i-lucide-book-open",
+			divider: true
 		}
 	];
 </script>
