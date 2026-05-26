@@ -11,7 +11,7 @@
 
 		<HelpSection title="Earnings vs deductions" icon="i-lucide-receipt">
 			<p>Every line on a payslip is one of two kinds:</p>
-			<div class="overflow-x-auto rounded-lg border border-(--ui-border)">
+			<div class="overflow-x-auto rounded-lg border border-(--ui-border) bg-(--ui-bg)">
 				<table class="w-full text-sm">
 					<thead class="bg-(--ui-bg-elevated) text-left text-xs uppercase tracking-wide text-(--ui-text-muted)">
 						<tr>

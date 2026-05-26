@@ -13,7 +13,7 @@
 
 		<HelpSection title="The quote lifecycle" icon="i-lucide-route">
 			<p>Quotes move through more states than invoices because they have a sales-pipeline shape:</p>
-			<div class="overflow-x-auto rounded-lg border border-(--ui-border)">
+			<div class="overflow-x-auto rounded-lg border border-(--ui-border) bg-(--ui-bg)">
 				<table class="w-full text-sm">
 					<thead class="bg-(--ui-bg-elevated) text-left text-xs uppercase tracking-wide text-(--ui-text-muted)">
 						<tr>
@@ -111,7 +111,7 @@
 		</HelpSection>
 
 		<HelpSection title="Quote vs invoice — quick decoder" icon="i-lucide-shuffle">
-			<div class="overflow-x-auto rounded-lg border border-(--ui-border)">
+			<div class="overflow-x-auto rounded-lg border border-(--ui-border) bg-(--ui-bg)">
 				<table class="w-full text-sm">
 					<thead class="bg-(--ui-bg-elevated) text-left text-xs uppercase tracking-wide text-(--ui-text-muted)">
 						<tr>

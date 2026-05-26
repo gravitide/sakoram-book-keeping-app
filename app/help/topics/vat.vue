@@ -15,7 +15,7 @@
 			<p>
 				VAT in Sri Lanka (and most countries) is a tax on consumption that businesses <strong>collect on behalf of</strong> the government — you're not paying it out of your pocket, the end consumer is. As a registered business you have two roles:
 			</p>
-			<div class="overflow-x-auto rounded-lg border border-(--ui-border)">
+			<div class="overflow-x-auto rounded-lg border border-(--ui-border) bg-(--ui-bg)">
 				<table class="w-full text-sm">
 					<thead class="bg-(--ui-bg-elevated) text-left text-xs uppercase tracking-wide text-(--ui-text-muted)">
 						<tr>

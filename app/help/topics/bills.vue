@@ -11,7 +11,7 @@
 
 		<HelpSection title="The bill lifecycle" icon="i-lucide-route">
 			<p>Bills have a simpler state machine than invoices:</p>
-			<div class="overflow-x-auto rounded-lg border border-(--ui-border)">
+			<div class="overflow-x-auto rounded-lg border border-(--ui-border) bg-(--ui-bg)">
 				<table class="w-full text-sm">
 					<thead class="bg-(--ui-bg-elevated) text-left text-xs uppercase tracking-wide text-(--ui-text-muted)">
 						<tr>
