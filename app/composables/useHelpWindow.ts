@@ -63,22 +63,26 @@ export const useHelpWindow = () => {
 		const win = new WebviewWindow(label, {
 			url,
 			title,
-			// Picks reasonable defaults for a docs reader on a typical
-			// 1920×1080 desktop. The user can resize / maximize at will.
-			// Center-positioning means subsequent windows stack on top
-			// of each other; an OS like macOS handles cascading offsets
-			// automatically, on Windows they overlap (acceptable for
-			// v1 — the user just drags them apart).
-			width: 1000,
-			height: 760,
+			// Mirror the main window's 1280×800 default — anything
+			// narrower (we previously shipped 1000) falls under the
+			// lg breakpoint (1024px) and the HelpSidebar's
+			// `hidden lg:block` hides it. minWidth pinned to 1024
+			// (matching main's minWidth) so the user can't drag the
+			// popout below the sidebar threshold either.
+			//
+			// Center-positioning means subsequent windows stack on
+			// top of each other; macOS cascades automatically, on
+			// Windows they overlap (acceptable v1 — drag apart).
+			width: 1280,
+			height: 800,
+			minWidth: 1024,
+			minHeight: 640,
 			center: true,
 			focus: true,
-			// Visible by default; same chrome as the main window so the
-			// custom titlebar / sidebar / tenant switcher all paint
-			// normally. The trade-off: the help window shows full app
-			// chrome, not a minimal docs-reader layout. A follow-up
-			// can introduce a dedicated layout for help-* windows that
-			// strips the sidebar for a cleaner reading surface.
+			// decorations: false matches the main window — our custom
+			// TitleBar paints the chrome. show-sidebar-toggle is set
+			// to false in the help-window layout so the toggle button
+			// doesn't appear.
 			decorations: false,
 			resizable: true,
 			minimizable: true,
