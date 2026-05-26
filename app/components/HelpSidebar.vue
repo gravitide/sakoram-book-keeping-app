@@ -15,9 +15,18 @@
 			All help topics
 		</NuxtLink>
 
-		<nav class="p-2 space-y-3">
-			<div v-for="group in grouped" :key="group.category">
-				<div class="flex items-center gap-2 px-2 py-1.5 text-xs uppercase tracking-wide text-(--ui-text-muted)">
+		<nav class="p-2">
+			<!-- Each group after the first gets a top divider + extra
+				breathing room so the category headers don't blur into
+				the previous group's last topic link. The header
+				itself is now bolder + uppercase + wider tracking so
+				it reads as a label, not just "another item." -->
+			<div
+				v-for="(group, i) in grouped"
+				:key="group.category"
+				:class="i > 0 ? 'mt-4 pt-4 border-t border-(--ui-border)' : ''"
+			>
+				<div class="flex items-center gap-2 px-2 mb-1.5 text-[11px] uppercase tracking-wider text-(--ui-text-muted) font-semibold">
 					<UIcon :name="group.icon" class="size-3" />
 					{{ group.label }}
 				</div>
