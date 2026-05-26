@@ -217,6 +217,7 @@ sakoram_app/
 │  │  ├─ payslips/                    ← list w/ row context menu (multi-select bulk PDF), [id], bulk (auto-issue + auto-pay). "New payslip" opens NewPayslipModal.
 │  │  ├─ reports/                     ← aggregate views over the books. index.vue lists available + upcoming reports; profit-loss.vue (accrual P&L), vat.vue (output VAT vs input VAT), aged-receivables.vue (open-invoice snapshot by days past due), aged-payables.vue (open-bill mirror), and cash-flow.vue (receipts in − payments out by month, cash basis) are wired up. No DB writes.
 │  │  ├─ lists/                       ← index.vue is a landing card grid (mirrors /reports + /payroll) linking to /clients, /vendors, /categories. The list pages themselves live at their existing top-level URLs.
+│  │  ├─ help/                        ← in-app help library. /help index lists all topics grouped by category; /help/[slug] is the full-page reading view. Plain-English bookkeeping explainers tuned for SL businesses (LKR examples, IRD references, fiscal year April–March).
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
 │  │     ├─ company.vue               ← business info, address, bank, defaults, logo
@@ -269,6 +270,7 @@ sakoram_app/
 │  │  ├─ useUserPlatform.ts           ← cached host platform via @tauri-apps/plugin-os — exposes isMac / isWindows / isLinux for platform-conditional UI (e.g. macOS titlebar layout)
 │  │  ├─ useDragToScroll.ts           ← left-click-drag panning for the PrimeVue DataTable body. Listens on a stable wrapper and resolves the scroller per-mousedown so it survives DataTable remounts (auto-fit-columns triggers a remount).
 │  │  └─ useCalendarEvents.ts         ← aggregates due-date events from invoices / bills / quotes / payslips into a Map<YYYY-MM-DD, CalendarEvent[]>. Per-source emitters are easy to extend — just add another computed + push into the sources array.
+│  ├─ help/                           ← in-app help library. `index.ts` is the topic registry (slug, title, summary, category, icon, lazy component); one `.vue` per topic under `topics/`. See "Why help topics are Vue components" decision below.
 │  ├─ lib/
 │  │  ├─ db.ts                        ← getDb() (lazy, reads active tenant URL), select/execute
 │  │  ├─ demo-seed.ts                 ← createDemoBusiness() — curated + bulk-fill at real-business volume: 200 clients / 150 vendors / 600 quotes / 800 invoices / 1000 bills / 400 standalone vouchers spread across ~18 months, 15 employees, 14 months of payslips, ~10 sample attachments. Takes 2-3 min; surfaces SeedProgress callback so the welcome page + Settings → Businesses can show a live stage label.
@@ -697,6 +699,53 @@ We're a desktop app expected to work offline — that fails. Fix:
 `@iconify-json/lucide` as a dev dep + `icon.clientBundle.scan: true`
 in `nuxt.config.ts`. Vite scans templates and inlines only the icons
 actually used (~70 icons). Zero runtime network dependency.
+
+### Why help topics are Vue components, not Markdown
+
+The in-app help library (`app/help/`) renders contextual bookkeeping
+explainers — what a credit note is, when to use it, how it maps to
+Sakoram's UI. Three serious options were on the table:
+
+| Approach | Pros | Cons |
+|---|---|---|
+| `@nuxt/content` Markdown | conventional, easy editing | adds a heavy module + MDC parser; another build step |
+| Plain Markdown + `markdown-it` | lighter dep, simple | still need a parser at runtime; HTML extension points awkward |
+| **Vue components (chosen)** | native, no parser, full styling control, embed `<NuxtLink>` to app pages, reuse Tailwind tokens | less convenient for non-coder editors |
+
+The clinching trade-off was **deep linking into the app**. A help
+topic about credit notes naturally wants to say "go to
+`/credit-notes` and click New credit note" with that path being a
+live `<NuxtLink>`. Same for "see the VAT report" or "open your
+business defaults at `/settings/company`." With Markdown those have
+to round-trip through a custom MDC component or `[link](path)`
+post-processing; with a `.vue` topic they're plain JSX-ish template
+syntax with full IDE support.
+
+Topics live under `app/help/topics/` with one `.vue` per topic.
+`app/help/index.ts` is the registry — adding a topic is "drop the
+component, append one row to `HELP_TOPICS`." Each component uses
+two shared primitives:
+
+  - **`HelpSection`** — titled section with optional icon
+  - **`HelpCallout`** — coloured callout boxes for tips / warnings /
+    info / SL-tax notes (`variant="tip|info|warning|tax"`)
+
+Topics are surfaced through two parallel UI surfaces, both backed by
+the same component:
+
+  - **`HelpButton`** + **`HelpModal`** — drops a `?` icon on any
+    page header that opens an in-context modal for quick reference.
+  - **`/help/[slug]`** — full-page reading view with a wider layout
+    and an addressable, bookmarkable URL.
+
+`HelpTopicView` is the renderer they share (so the same content
+shows up in both surfaces with consistent treatment, including the
+auto-generated "See also" footer from each topic's `relatedSlugs`).
+
+**Future Phase 3** — escalate from modal to a separate Tauri
+`WebviewWindow` so the help docs can live on a second monitor as an
+independent OS window. The architecture is ready for it; just needs
+the spawn call wired to the modal footer's button.
 
 ### Global UI tokens via `app/app.config.ts`
 
@@ -1147,6 +1196,8 @@ App                     ← UI + multi-tenant administration
   │   ├─ Theme
   │   └─ Zoom
   └─ Businesses
+─── (divider)
+Help                  ← /help — in-app library of bookkeeping explainers + how-to guides. Per-page `?` icon (HelpButton) drops users into the relevant topic via modal; this entry exposes the full library.
 ```
 
 URLs all live under `/settings/*` even for the App group — only the
