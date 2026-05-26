@@ -12,16 +12,15 @@
 	<div class="h-screen flex flex-col bg-(--ui-bg-muted)">
 		<TitleBar :show-sidebar-toggle="false" />
 		<div class="flex-1 min-h-0 flex">
-			<!-- Help topics sidebar — visible at lg+ (the popout window
-				ships at 1000×760 by default, plenty of room). Below
-				lg the sidebar hides; the main column takes the full
-				width so the docs are still readable in a narrower
-				popout the user resized down. The topic links inside
-				the page (See-also tiles, /help index hero/cards) all
-				preserve the popout query, so navigation stays in
-				the popout-window layout regardless of which surface
-				the user clicks. -->
-			<HelpSidebar class="hidden lg:block" />
+			<!-- Help topics sidebar — always visible. The popout window
+				ships at 1280×800 with a minWidth of 1024 (see
+				useHelpWindow) so there's always room for the
+				sidebar; user can't drag the window below that floor.
+				The topic links inside the page (See-also tiles,
+				/help index hero/cards) all preserve the popout query
+				so navigation stays in the popout-window layout
+				regardless of which surface the user clicks. -->
+			<HelpSidebar />
 			<main class="flex-1 min-w-0 overflow-auto">
 				<!-- Same content cap + padding the default layout uses
 					so the help reader inside the popout has the
