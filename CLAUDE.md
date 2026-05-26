@@ -742,10 +742,27 @@ the same component:
 shows up in both surfaces with consistent treatment, including the
 auto-generated "See also" footer from each topic's `relatedSlugs`).
 
-**Future Phase 3** — escalate from modal to a separate Tauri
-`WebviewWindow` so the help docs can live on a second monitor as an
-independent OS window. The architecture is ready for it; just needs
-the spawn call wired to the modal footer's button.
+**Pop-out window (Phase 3, shipped)** — `useHelpWindow` composable
+spawns a separate Tauri `WebviewWindow` at the same `/help/[slug]`
+URL. Each spawn gets a unique label (`help-1`, `help-2`, …) so
+multiple help windows can coexist; the capability config in
+`src-tauri/capabilities/main.json` adds `core:webview:allow-create-
+webview-window` to the main window and wildcards `help-*` into the
+windows list so the spawned windows inherit the same permissions.
+Falls back to in-app navigation when the Tauri runtime isn't
+available (e.g. `bun run dev` without the shell), so the button
+stays useful in every environment.
+
+Two surfaces use the composable: the `HelpModal` footer ("Pop out"
+button next to "Open full guide"), and the `/help/[slug]` page's
+top toolbar ("Pop out" button next to the back link) — same call,
+single source of truth.
+
+Trade-off: the spawned window currently shows the full app chrome
+(sidebar, titlebar, tenant switcher) since it loads the same Nuxt
+app. A follow-up could introduce a `help-window` layout that
+strips chrome for a minimal docs-reader feel — for v1 the user can
+collapse the sidebar.
 
 ### Global UI tokens via `app/app.config.ts`
 

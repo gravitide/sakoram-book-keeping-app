@@ -18,6 +18,20 @@
 					<UButton color="neutral" variant="outline" @click="openModel = false">
 						Close
 					</UButton>
+					<!-- Pop-out: spawns a separate Tauri WebviewWindow so
+						the user can park the docs on a second monitor.
+						Outside Tauri (dev mode) it falls through to a
+						same-window navigation, so the button stays
+						useful in every environment. -->
+					<UButton
+						v-if="isTauri"
+						color="neutral"
+						variant="outline"
+						icon="i-lucide-picture-in-picture"
+						@click="popOut"
+					>
+						Pop out
+					</UButton>
 					<NuxtLink :to="`/help/${topic.slug}`" @click="openModel = false">
 						<UButton color="primary" icon="i-lucide-external-link" trailing>
 							Open full guide
@@ -31,20 +45,31 @@
 
 <script setup lang="ts">
 // Contextual help modal. Surface for the per-page `?` button —
-// quick-reference shape, not the "read for 5 minutes" shape. The
-// "Open full guide" link in the footer escalates to /help/[slug]
-// which is the proper reading surface (wider layout, no modal
-// scroll constraint, addressable URL the user can bookmark).
+// quick-reference shape, not the "read for 5 minutes" shape.
 //
-// Phase 3 (future): the Open full guide link can also be wired to
-// spawn a separate Tauri WebviewWindow so the help opens as an
-// independent OS window the user can park on a second monitor.
+// Two escalation paths in the footer:
+//   - "Open full guide" — in-app nav to /help/[slug]. Same window;
+//     user leaves their current task.
+//   - "Pop out" — spawns a separate Tauri WebviewWindow with the
+//     same content. Current task stays intact in the main window;
+//     the docs can park on a second monitor. Only renders when the
+//     Tauri runtime is available — in dev mode (bun run dev outside
+//     the shell) the button hides, since there's no way to spawn an
+//     actual OS window without Tauri.
 
 	import type { HelpTopic } from "~/help";
+	import { useHelpWindow } from "~/composables/useHelpWindow";
 
-	defineProps<{
+	const props = defineProps<{
 		topic: HelpTopic
 	}>();
 
 	const openModel = defineModel<boolean>("open", { default: false });
+
+	const { openHelpWindow, isTauri } = useHelpWindow();
+
+	const popOut = async () => {
+		await openHelpWindow({ slug: props.topic.slug });
+		openModel.value = false;
+	};
 </script>

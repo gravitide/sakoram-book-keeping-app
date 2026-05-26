@@ -14,6 +14,21 @@
 				<UIcon name="i-lucide-arrow-left" class="size-4" />
 				All help topics
 			</NuxtLink>
+			<!-- Pop-out to a separate Tauri WebviewWindow. Only renders
+				when the Tauri runtime is available (i.e. not in
+				`bun run dev` without the shell). Same composable the
+				HelpModal uses — single source of truth for spawning. -->
+			<UButton
+				v-if="isTauri && topic"
+				size="sm"
+				color="neutral"
+				variant="outline"
+				icon="i-lucide-picture-in-picture"
+				title="Open this guide in a separate window"
+				@click="popOut"
+			>
+				Pop out
+			</UButton>
 		</div>
 
 		<!-- Docs-style two-column layout: nav on the left, content on
@@ -77,6 +92,7 @@
 // docs that you can't copy from are annoying).
 
 	import type { TocEntry } from "~/help/toc";
+	import { useHelpWindow } from "~/composables/useHelpWindow";
 	import { HELP_TOPICS_BY_SLUG } from "~/help";
 	import { HelpTocKey } from "~/help/toc";
 
@@ -132,4 +148,15 @@
 		activeId.value = null;
 		nextOrder = 0;
 	});
+
+	// ---- Pop-out to a separate Tauri WebviewWindow ----
+	// Same composable the HelpModal uses; renders a button on the
+	// page's top toolbar when the Tauri runtime is available so
+	// users who arrived via in-app nav can still escalate to a
+	// floating window if they want one.
+	const { openHelpWindow, isTauri } = useHelpWindow();
+	const popOut = async () => {
+		if (!topic.value) return;
+		await openHelpWindow({ slug: topic.value.slug });
+	};
 </script>
