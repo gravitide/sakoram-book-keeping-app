@@ -17,9 +17,12 @@
 			new users have an obvious entry point. We exclude this
 			slug from the categorized grid below to avoid showing it
 			twice. -->
+		<!-- linkTo() preserves `?popout=1` so clicking the hero from
+			inside a popout window keeps the help-window layout. Same
+			for the per-topic cards below. -->
 		<NuxtLink
 			v-if="basics"
-			:to="`/help/${basics.slug}`"
+			:to="linkTo(basics.slug)"
 			class="block group mb-8"
 		>
 			<UCard class="transition group-hover:border-(--ui-primary) bg-(--ui-primary)/8 border-(--ui-primary)/30">
@@ -63,7 +66,7 @@
 				<NuxtLink
 					v-for="t in group.topics"
 					:key="t.slug"
-					:to="`/help/${t.slug}`"
+					:to="linkTo(t.slug)"
 					class="block group h-full"
 				>
 					<UCard class="h-full transition group-hover:border-(--ui-primary)">
@@ -88,9 +91,15 @@
 </template>
 
 <script setup lang="ts">
+	import { useHelpLink } from "~/composables/useHelpLink";
 	import { groupedByCategory, HELP_TOPICS_BY_SLUG } from "~/help";
 
 	definePageMeta({ title: "Help" });
+
+	// linkTo() preserves the popout query when navigating between
+	// help routes — without this, clicking a hero/card from inside
+	// a popout window drops us out of the help-window layout.
+	const { linkTo } = useHelpLink();
 
 	// When loaded inside the popout WebviewWindow (URL carries
 	// `?popout=1`), switch to the help-window layout — strips the

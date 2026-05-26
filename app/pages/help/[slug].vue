@@ -10,7 +10,10 @@
 			the rule). Same treatment will work on any future
 			toolbar-with-just-a-back-link page. -->
 		<div class="mb-6 pb-3 border-b border-(--ui-border) flex items-center justify-between gap-4">
-			<NuxtLink to="/help" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
+			<!-- Preserves `?popout=1` when in popout mode so this back
+				link doesn't accidentally drop us out of the help-window
+				layout. See useHelpLink for the full rationale. -->
+			<NuxtLink :to="helpLink.linkTo()" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
 				<UIcon name="i-lucide-arrow-left" class="size-4" />
 				All help topics
 			</NuxtLink>
@@ -91,6 +94,7 @@
 // docs that you can't copy from are annoying).
 
 	import type { TocEntry } from "~/help/toc";
+	import { useHelpLink } from "~/composables/useHelpLink";
 	import { useHelpWindow } from "~/composables/useHelpWindow";
 	import { HELP_TOPICS_BY_SLUG } from "~/help";
 	import { HelpTocKey } from "~/help/toc";
@@ -165,7 +169,8 @@
 	// floating window if they want one. Hidden when we're ALREADY
 	// in a popped-out window — popping out from a popout is silly.
 	const { openHelpWindow, isTauri } = useHelpWindow();
-	const isPopoutMode = computed(() => route.query.popout === "1");
+	const helpLink = useHelpLink();
+	const isPopoutMode = helpLink.isPopoutMode;
 	const popOut = async () => {
 		if (!topic.value) return;
 		await openHelpWindow({ slug: topic.value.slug });
