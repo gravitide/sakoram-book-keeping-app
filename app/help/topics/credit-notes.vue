@@ -82,32 +82,72 @@
 		</HelpSection>
 
 		<HelpSection title="Refund vs credit note vs receipt — quick decoder" icon="i-lucide-shuffle">
-			<dl class="space-y-2">
-				<div class="flex gap-3">
-					<dt class="font-medium shrink-0 w-32">
-						Receipt voucher
-					</dt>
-					<dd class="text-(--ui-text-muted)">
-						<span class="text-(--ui-text)">Money in.</span> The client paid you. Created via "Record payment" on an invoice.
-					</dd>
-				</div>
-				<div class="flex gap-3">
-					<dt class="font-medium shrink-0 w-32">
-						Payment voucher
-					</dt>
-					<dd class="text-(--ui-text-muted)">
-						<span class="text-(--ui-text)">Money out.</span> You paid someone — vendor, employee, or a refund to a client.
-					</dd>
-				</div>
-				<div class="flex gap-3">
-					<dt class="font-medium shrink-0 w-32">
-						Credit note
-					</dt>
-					<dd class="text-(--ui-text-muted)">
-						<span class="text-(--ui-text)">Adjusts what they owe.</span> No money movement on its own — just changes the outstanding balance. Pair it with a payment voucher if you're actually refunding cash.
-					</dd>
-				</div>
-			</dl>
+			<!-- Same striped + gridline treatment as the report
+				monthly-breakdown tables, so docs tables feel of-a-piece
+				with the rest of the app. Wrapping div is overflow-x-auto
+				so very narrow viewports (e.g. modal at sm) can pan
+				rather than wrap-and-crush. -->
+			<div class="overflow-x-auto rounded-lg border border-(--ui-border)">
+				<table class="w-full text-sm">
+					<thead class="bg-(--ui-bg-elevated) text-left text-xs uppercase tracking-wide text-(--ui-text-muted)">
+						<tr>
+							<th class="px-3 py-2 font-medium">
+								Document
+							</th>
+							<th class="px-3 py-2 font-medium whitespace-nowrap">
+								Direction
+							</th>
+							<th class="px-3 py-2 font-medium">
+								What it does
+							</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr class="border-t border-(--ui-border)">
+							<td class="px-3 py-2.5 font-medium whitespace-nowrap align-top">
+								Receipt voucher
+							</td>
+							<td class="px-3 py-2.5 align-top">
+								<span class="inline-flex items-center gap-1.5 text-(--ui-success) font-medium whitespace-nowrap">
+									<UIcon name="i-lucide-arrow-down-left" class="size-3.5" />
+									Money in
+								</span>
+							</td>
+							<td class="px-3 py-2.5 text-(--ui-text-muted) leading-relaxed">
+								The client paid you. Created via "Record payment" on an invoice.
+							</td>
+						</tr>
+						<tr class="border-t border-(--ui-border) bg-(--ui-bg-muted)/40">
+							<td class="px-3 py-2.5 font-medium whitespace-nowrap align-top">
+								Payment voucher
+							</td>
+							<td class="px-3 py-2.5 align-top">
+								<span class="inline-flex items-center gap-1.5 text-(--ui-error) font-medium whitespace-nowrap">
+									<UIcon name="i-lucide-arrow-up-right" class="size-3.5" />
+									Money out
+								</span>
+							</td>
+							<td class="px-3 py-2.5 text-(--ui-text-muted) leading-relaxed">
+								You paid someone — vendor, employee, or a refund to a client.
+							</td>
+						</tr>
+						<tr class="border-t border-(--ui-border)">
+							<td class="px-3 py-2.5 font-medium whitespace-nowrap align-top">
+								Credit note
+							</td>
+							<td class="px-3 py-2.5 align-top">
+								<span class="inline-flex items-center gap-1.5 text-(--ui-text-muted) font-medium whitespace-nowrap">
+									<UIcon name="i-lucide-equal" class="size-3.5" />
+									No cash moves
+								</span>
+							</td>
+							<td class="px-3 py-2.5 text-(--ui-text-muted) leading-relaxed">
+								Adjusts what they owe — changes the outstanding balance without moving cash. Pair with a payment voucher if you're actually refunding money to the client.
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
 		</HelpSection>
 	</div>
 </template>
