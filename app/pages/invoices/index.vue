@@ -6,6 +6,7 @@
 			<div>
 				<h1 class="text-2xl font-semibold flex items-center gap-3">
 					Invoices
+					<HelpButton slug="invoices" />
 					<!-- Inline spinner while the data is loading. Sits in the
 						title row (not as an overlay) so the page is fully
 						interactive while the rows hydrate — user can still

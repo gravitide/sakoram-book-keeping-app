@@ -34,12 +34,58 @@ export interface HelpTopic {
 
 export const HELP_TOPICS: HelpTopic[] = [
 	{
+		slug: "invoices",
+		title: "Invoices",
+		summary: "Billing a client for work done or goods delivered. The status lifecycle, recording payment, SL VAT obligations.",
+		category: "documents",
+		icon: "i-lucide-receipt",
+		relatedSlugs: ["quotes", "credit-notes", "vouchers"],
+		component: () => import("./topics/invoices.vue")
+	},
+	{
+		slug: "quotes",
+		title: "Quotes",
+		summary: "Sending a price estimate before doing the work. Accept / reject lifecycle, converting accepted quotes into invoices.",
+		category: "documents",
+		icon: "i-lucide-file-text",
+		relatedSlugs: ["invoices"],
+		component: () => import("./topics/quotes.vue")
+	},
+	{
 		slug: "credit-notes",
 		title: "Credit notes",
 		summary: "Issuing a credit to refund an over-invoice, settle a return, or apply a goodwill discount.",
 		category: "documents",
 		icon: "i-lucide-rotate-ccw",
+		relatedSlugs: ["invoices", "vouchers"],
 		component: () => import("./topics/credit-notes.vue")
+	},
+	{
+		slug: "bills",
+		title: "Bills",
+		summary: "Recording money you owe — supplier invoices, expense tracking by category, paying via vouchers.",
+		category: "documents",
+		icon: "i-lucide-file-input",
+		relatedSlugs: ["vouchers", "invoices"],
+		component: () => import("./topics/bills.vue")
+	},
+	{
+		slug: "vouchers",
+		title: "Vouchers",
+		summary: "The cash ledger — every record of money actually moving in or out. Receipt vs payment, why it's the source of truth.",
+		category: "documents",
+		icon: "i-lucide-ticket",
+		relatedSlugs: ["invoices", "bills", "payslips"],
+		component: () => import("./topics/vouchers.vue")
+	},
+	{
+		slug: "payslips",
+		title: "Payslips",
+		summary: "Per-employee, per-period pay records. Earnings + deductions, bulk monthly runs, EPF / ETF / PAYE context.",
+		category: "payroll",
+		icon: "i-lucide-file-spreadsheet",
+		relatedSlugs: ["vouchers"],
+		component: () => import("./topics/payslips.vue")
 	}
 ];
 
