@@ -31,8 +31,8 @@
 		"beforeDevCommand": "bun run dev",
 		"devUrl": "http://localhost:3000"
 	},
-	"productName": "Sakoram Bookkeeping",
-	"version": "0.93.1",
+	"productName": "Sakoram",
+	"version": "0.93.2",
 	"identifier": "com.sakoram.billing",
 	"plugins": {},
 	"app": {
