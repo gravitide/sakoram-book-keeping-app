@@ -1,8 +1,15 @@
 <template>
 	<div v-if="topic" class="select-text">
 		<!-- Top toolbar — back link on the left, no right cluster.
-			Help pages are read-only content. -->
-		<div class="mb-4 flex items-center justify-between gap-4">
+			Help pages are read-only content.
+
+			pb-3 + border-b gives the toolbar visual presence — without
+			the line it bleeds straight into the content below since
+			the right side of the row is empty (vs detail pages which
+			have an action cluster filling the right and don't need
+			the rule). Same treatment will work on any future
+			toolbar-with-just-a-back-link page. -->
+		<div class="mb-6 pb-3 border-b border-(--ui-border) flex items-center justify-between gap-4">
 			<NuxtLink to="/help" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
 				<UIcon name="i-lucide-arrow-left" class="size-4" />
 				All help topics
