@@ -1,8 +1,7 @@
 <template>
 	<div v-if="topic" class="select-text">
-		<!-- Same top-toolbar pattern the reports / detail pages use:
-			back link on the left, no right cluster. Help pages are
-			read-only content — no actions to surface. -->
+		<!-- Top toolbar — back link on the left, no right cluster.
+			Help pages are read-only content. -->
 		<div class="mb-4 flex items-center justify-between gap-4">
 			<NuxtLink to="/help" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
 				<UIcon name="i-lucide-arrow-left" class="size-4" />
@@ -10,11 +9,22 @@
 			</NuxtLink>
 		</div>
 
-		<!-- max-w-3xl: long-form prose reads better at ~65-75ch.
-			Wider lines tax the eye on a desktop monitor. -->
-		<article class="max-w-3xl">
-			<HelpTopicView :topic="topic" />
-		</article>
+		<!-- Docs-style two-column layout: nav on the left, content on
+			the right. lg:grid-cols-[220px_1fr] is the standard docs
+			width split — narrow enough that long topic titles read
+			cleanly but wide enough to fit "What is a credit note?"
+			without truncation. Below lg the nav hides and content
+			takes the full width (HelpTopicNav's `hidden lg:block`
+			handles this). The gap-8 gives the columns breathing room
+			without crushing either. -->
+		<div class="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-8 items-start">
+			<HelpTopicNav />
+			<!-- max-w-3xl: long-form prose reads better at ~65-75ch.
+				Wider lines tax the eye on a desktop monitor. -->
+			<article class="max-w-3xl min-w-0">
+				<HelpTopicView :topic="topic" />
+			</article>
+		</div>
 	</div>
 	<div v-else class="select-none py-12 text-center text-sm text-(--ui-text-muted)">
 		<UIcon name="i-lucide-circle-help" class="size-10 mx-auto mb-2 opacity-50" />
@@ -32,14 +42,23 @@
 
 <script setup lang="ts">
 // Per-topic full-page reading view. Same content as the HelpModal
-// shows but in a wider, addressable, bookmarkable surface — the
-// shape for "read carefully", vs the modal's "quick reference".
+// shows but in a wider, two-column reading surface with a TOC nav
+// on the left — the shape for "study carefully," vs the modal's
+// "quick glance."
+//
+// Provides the HelpToc context that HelpSection components inside
+// the topic body register themselves into. HelpTopicNav reads the
+// resulting reactive array to paint the left rail. The modal
+// surface does NOT provide this context, so sections rendered
+// there just no-op the registration step.
 //
 // select-text on the root so the user can copy snippets out of the
-// help (in contrast to most app surfaces which set select-none).
-// Reference docs that you can't copy from are annoying.
+// help (vs most app surfaces which set select-none — reference
+// docs that you can't copy from are annoying).
 
+	import type { TocEntry } from "~/help/toc";
 	import { HELP_TOPICS_BY_SLUG } from "~/help";
+	import { HelpTocKey } from "~/help/toc";
 
 	const route = useRoute();
 	const slug = computed(() => String(route.params.slug ?? ""));
@@ -48,11 +67,49 @@
 
 	definePageMeta({ title: "Help" });
 
-	// Update document title with the topic name once resolved so window
-	// title + breadcrumb-y experiences stay in sync.
 	watchEffect(() => {
 		if (topic.value) {
 			useHead({ title: `Help — ${topic.value.title}` });
 		}
+	});
+
+	// ---- TOC provide / context wiring ----
+	//
+	// Sections register themselves via inject; we keep them in
+	// document order using a monotonic `nextOrder` counter, and
+	// re-sort on every register so the nav paints in mount order.
+	// `activeId` is written by HelpTopicNav from its
+	// IntersectionObserver and read back here only so it's reactive
+	// to other consumers (none today, but the contract is symmetric).
+
+	const entries = ref<TocEntry[]>([]);
+	const activeId = ref<string | null>(null);
+	let nextOrder = 0;
+
+	provide(HelpTocKey, {
+		entries,
+		activeId,
+		register: (entry) => {
+			// Idempotent — protects against double-registration if a
+			// HelpSection ever gets re-mounted (e.g. <Suspense> retry).
+			if (entries.value.some((e) => e.id === entry.id)) return;
+			entries.value = [...entries.value, { ...entry, order: nextOrder++ }]
+				.sort((a, b) => a.order - b.order);
+		},
+		unregister: (id) => {
+			entries.value = entries.value.filter((e) => e.id !== id);
+		},
+		setActiveId: (id) => {
+			activeId.value = id;
+		}
+	});
+
+	// Reset the entries array when the topic slug changes — otherwise
+	// the previous topic's sections linger as stale TOC entries while
+	// the new topic's mount their replacements.
+	watch(slug, () => {
+		entries.value = [];
+		activeId.value = null;
+		nextOrder = 0;
 	});
 </script>
