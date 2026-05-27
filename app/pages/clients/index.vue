@@ -212,7 +212,7 @@
 		return map;
 	});
 
-	const { currency } = useActiveCurrency();
+	const currency = useActiveCurrency();
 	const fmt = (cents: number) => formatMoney(cents, currency.value);
 
 	// View-model row — synthesises `_outstanding` on each ClientRow so

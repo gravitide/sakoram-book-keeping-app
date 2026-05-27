@@ -329,7 +329,7 @@
 	// when nobody clicks the button.
 	const settingsStore = useSettingsStore();
 	const banksStore = useBusinessBanksStore();
-	const { currency } = useActiveCurrency();
+	const currency = useActiveCurrency();
 	const toast = useToast();
 
 	const idParam = String(route.params.id ?? "");
