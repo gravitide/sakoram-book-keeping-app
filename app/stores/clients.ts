@@ -50,6 +50,14 @@ export const useClientsStore = defineStore("clients", () => {
 	// UI filter state lives with the store so navigating away/back is sticky.
 	const search = ref("");
 	const showArchived = ref(false);
+	// "Outstanding only" filter — when on, the page further narrows the
+	// list to clients with at least one open (sent/partial/overdue)
+	// invoice. The actual outstanding lookup happens on the page (it
+	// needs the invoices store, which we don't want to depend on here
+	// to avoid circular-import risk); this ref just owns the toggle's
+	// state so it survives navigation, same as `search` and
+	// `showArchived` do.
+	const outstandingOnly = ref(false);
 
 	const filtered = computed(() => {
 		const q = search.value.trim().toLowerCase();
@@ -156,6 +164,7 @@ export const useClientsStore = defineStore("clients", () => {
 		error,
 		search,
 		showArchived,
+		outstandingOnly,
 		filtered,
 		activeCount,
 		archivedCount,

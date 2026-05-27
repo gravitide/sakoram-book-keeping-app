@@ -40,6 +40,26 @@
 				>
 					View invoices
 				</UButton>
+				<!-- Customer statement PDF — point-in-time "you owe us X
+					across these N invoices" snapshot. Disabled when the
+					client has nothing outstanding so the user gets a
+					hint before clicking; the click handler also
+					double-checks and toasts a friendly message in case
+					the state was stale. -->
+				<UButton
+					size="sm"
+					icon="i-lucide-file-clock"
+					variant="soft"
+					color="primary"
+					:loading="statementPdf.state.rendering"
+					:disabled="openInvoicesForClient.length === 0"
+					:title="openInvoicesForClient.length === 0
+						? 'No outstanding invoices to chase'
+						: `${openInvoicesForClient.length} outstanding invoice${openInvoicesForClient.length === 1 ? '' : 's'}`"
+					@click="openStatement"
+				>
+					Statement
+				</UButton>
 				<UButton
 					size="sm"
 					:icon="isArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
@@ -266,15 +286,33 @@
 				</div>
 			</template>
 		</UModal>
+
+		<!-- Statement PDF preview. Same chromeless preview + Save-as
+			flow every detail page uses; the only twist is no Save dialog
+			to clutter the page state — usePdfPreview owns it. -->
+		<PdfPreviewModal
+			v-model:open="statementPdf.state.open"
+			:asset-url="statementPdf.state.assetUrl"
+			:temp-path="statementPdf.state.tempPath"
+			:suggested-file-name="statementPdf.state.suggestedFileName"
+			:saving="statementPdf.state.saving"
+			title="Customer statement"
+			@save="statementPdf.onSave"
+		/>
 	</div>
 </template>
 
 <script setup lang="ts">
 	import type { ClientInput } from "~/stores/clients";
 	import { z } from "zod";
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
+	import { usePdfPreview } from "~/composables/usePdfPreview";
+	import { buildCustomerStatementPdfPayload, customerStatementFileName } from "~/lib/statement-pdf";
+	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { useQuotesStore } from "~/stores/quotes";
+	import { useSettingsStore } from "~/stores/settings";
 
 	definePageMeta({ title: "Client" });
 
@@ -286,6 +324,13 @@
 	// lands pre-filtered. Mirrors the row actions on the clients list.
 	const quotesStore = useQuotesStore();
 	const invoicesStore = useInvoicesStore();
+	// Customer-statement PDF generation reads from settings + banks +
+	// invoices + the active currency formatter. Loaded on demand by the
+	// `openStatement` handler so the page itself doesn't pay the cost
+	// when nobody clicks the button.
+	const settingsStore = useSettingsStore();
+	const banksStore = useBusinessBanksStore();
+	const currency = useActiveCurrency();
 	const toast = useToast();
 
 	const idParam = String(route.params.id ?? "");
@@ -443,6 +488,80 @@
 		invoicesStore.clearDateFilters();
 		invoicesStore.clientFilter = clientId;
 		void router.push("/invoices");
+	};
+
+	// Open invoices for this client — used both to gate the "Generate
+	// statement" button (disabled when zero) and as the row set for the
+	// PDF builder. Derived (not stored) so it auto-refreshes when an
+	// invoice gets paid / cancelled in another tab on the same window.
+	const openInvoicesForClient = computed(() => {
+		if (clientId === null) return [];
+		return invoicesStore.invoices.filter((inv) => {
+			if (inv.client_id !== clientId) return false;
+			const ds = invoicesStore.derivedStatus(inv);
+			// Keep only the document states a statement should chase:
+			// sent (not paid yet), partial (some paid), overdue (past
+			// due). Draft / cancelled / fully paid don't belong on a
+			// "you owe us" statement.
+			return ds === "sent" || ds === "partial" || ds === "overdue";
+		});
+	});
+
+	const statementPdf = usePdfPreview({
+		command: "export_statement_pdf",
+		title: "Customer statement",
+		buildPayload: () => {
+			// Build-time, not setup-time: settings + bank state may not
+			// have been loaded yet when the page first mounts. The
+			// openStatement handler awaits both before opening, so by
+			// the time this runs the data is in memory.
+			return buildCustomerStatementPdfPayload({
+				settings: settingsStore.settings,
+				currency: currency.value,
+				client: {
+					id: clientId ?? 0,
+					name: form.name,
+					contact_person: form.contact_person || null,
+					email: form.email || null,
+					phone: form.phone || null,
+					address_line1: form.address_line1 || null,
+					address_line2: form.address_line2 || null,
+					city: form.city || null,
+					postal_code: form.postal_code || null,
+					country: form.country || null,
+					tax_id: form.tax_id || null,
+					notes: form.notes || null,
+					is_archived: isArchived.value ? 1 : 0,
+					created_at: "",
+					updated_at: ""
+				},
+				openInvoices: openInvoicesForClient.value,
+				paidCentsFor: (id: number) => invoicesStore.paidCentsFor(id),
+				bank: banksStore.defaultBank ?? null
+			});
+		},
+		fileName: () => customerStatementFileName(form.name || "client")
+	});
+
+	// Pre-load settings + invoices + banks so the payload builder sees
+	// real data. The page renders without waiting on these (no spinner)
+	// — they're only needed when the user actually generates a PDF.
+	const openStatement = async () => {
+		if (openInvoicesForClient.value.length === 0) {
+			toast.add({
+				title: "No outstanding invoices",
+				description: "This client has nothing outstanding to chase.",
+				color: "info",
+				icon: "i-lucide-info"
+			});
+			return;
+		}
+		await Promise.all([
+			settingsStore.ensureLoaded(),
+			invoicesStore.load(),
+			banksStore.load()
+		]);
+		await statementPdf.open();
 	};
 
 	const onDelete = async () => {

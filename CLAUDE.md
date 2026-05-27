@@ -1756,9 +1756,16 @@ already in the DB; nothing aggregates it for a date range. Build a
   today. When you over-invoice or accept a return, you can't settle
   it cleanly against the original invoice. Add a `credit_note`
   document type that references an invoice and offsets its balance.
-- **Customer statements** — "everything outstanding for client X"
-  as a printable PDF. Data is already there; just needs a Typst
-  template + a button on the client detail page.
+- ✅ **Customer statements** — shipped. Printable point-in-time PDF of
+  every outstanding invoice for one client, with five aging-bucket
+  tiles + per-invoice rows (issue / due / total / paid / balance /
+  days overdue). Generated from `/clients/[id]` via the "Statement"
+  header button; disabled when the client has nothing outstanding.
+  Uses a dedicated `statement.typ` (party-block hero + bucket tiles +
+  7-column invoice table) — too far off the report.typ shape to
+  reuse cleanly. New `export_statement_pdf` Rust command +
+  `app/lib/statement-pdf.ts` payload builder. No DB schema — like
+  reports, statements are ad-hoc and never archived.
 - **Recurring invoices / recurring bills** — for retainers,
   subscriptions, monthly rent. A template + a "due today" generator
   that runs on app open (or on a Tauri startup hook).
@@ -1794,13 +1801,15 @@ P&L + VAT + aged receivables alone close 80% of the "is this real
 bookkeeping software" perception gap. Credit notes are the
 next-most-impactful add after that.
 
-**Status (2026-05-25):** P&L + VAT + aged receivables + aged payables
+**Status (2026-05-27):** P&L + VAT + aged receivables + aged payables
 + cash flow + report PDF export shipped — Tier 1 reports module is
-essentially complete. Remaining Tier 1 nice-to-haves: sales-by-client
-and payroll-register (both transforms of data we already aggregate;
-lower impact than what's shipped). Next biggest gap is **credit notes
-/ refunds** (Tier 2) — the only way to settle an over-invoice or a
-return is missing today.
+essentially complete. Credit notes (Tier 2) shipped. Customer
+statements (Tier 2) shipped. Remaining Tier 1 nice-to-haves:
+sales-by-client and payroll-register (both transforms of data we
+already aggregate; lower impact than what's shipped). Next biggest
+Tier 2 gap is **recurring invoices / bills** (retainers, monthly
+rent) — biggest pure productivity win for any SL business with
+regular billables.
 
 ---
 
