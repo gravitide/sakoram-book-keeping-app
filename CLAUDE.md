@@ -214,6 +214,7 @@ sakoram_app/
 │  │  ├─ quotes/                      ← list w/ row context menu, [id] (PDF, convert to invoice). "New quote" opens NewQuoteModal — no /new page.
 │  │  ├─ invoices/                    ← list w/ row context menu, [id] (PDF, payment ledger). "New invoice" opens NewInvoiceModal.
 │  │  ├─ credit-notes/                ← list, [id] (negative-invoice document for refunds / returns; optional source_invoice_id link). "New credit note" opens NewCreditNoteModal. No PDF yet — follow-up PR.
+│  │  ├─ recurring-invoices/         ← list, [id] (invoice TEMPLATES that materialise as draft invoices on a user-initiated cadence). "New recurring" opens NewRecurringInvoiceModal. Pending count + RecurringGenerateModal for bulk generation. No PDF — templates aren't issued documents.
 │  │  ├─ bills/                       ← list, [id] (vendor-FK + snapshot). "New bill" opens NewBillModal.
 │  │  ├─ vouchers/                    ← list, new, [id] (money in/out; read-only by default → click Edit to mutate). Still uses a /new page — form is too heavy for a modal (8+ fields, prefill from ?bill=/?invoice=/?payslip=, overpayment guard).
 │  │  ├─ payroll/                     ← index.vue is a landing card grid (mirrors /reports); dashboard.vue holds the upcoming-cycle hero + MoM chart + recent runs + outstanding
@@ -963,6 +964,29 @@ See `src-tauri/migrations/` for the source of truth. High-level:
   `source` (`local` = desktop file dialog, `phone` = LAN phone upload).
   Managed by `app/stores/document_attachments.ts`; the shared
   `AttachmentsCard.vue` renders it on every document detail page.
+- `recurring_invoices` + `recurring_invoice_lines` — invoice TEMPLATES
+  that the user materialises into real draft invoices on a cadence.
+  Templates carry `client_id` FK + `client_snapshot` + denormalised
+  `client_name`, a schedule (`frequency` ∈ weekly/monthly/quarterly/
+  yearly, `start_date`, `next_issue_date`, optional `end_date`), and
+  invoice defaults (`pricing_mode`, `vat_rate_basis_points`,
+  `payment_terms_days`, `project_title`, `notes`, `business_bank_id`)
+  cloned onto each generation. `is_paused` flips a template off
+  without deleting it. `invoices_generated` + `last_generated_at`
+  track materialisation history. Lines table uses a simpler shape
+  than `invoice_lines` — no `unit`, no per-line computed totals
+  (recomputed at generation time from the qty / unit price / VAT bp
+  so a rate edit on the template flows into the next generated
+  invoice cleanly). Generation is **user-initiated** —
+  `useRecurringInvoicesStore.generateOne(id)` allocates an invoice
+  number, inserts an `invoices` row in `draft` status, clones the
+  lines with recomputed totals, advances `next_issue_date` by one
+  frequency step, increments the counter. No background job, no
+  Tauri command — pure sequential SQL inserts. The list page shows
+  a "pending count" of templates ready to generate
+  (`is_paused=0 AND next_issue_date <= today AND
+  (end_date IS NULL OR next_issue_date <= end_date)`) and a
+  RecurringGenerateModal lets the user bulk-confirm.
 
 `PRAGMA table_info(...)` is used in `data_io.rs` to discover columns
 dynamically — adding a column to a migration auto-flows into export.
@@ -1001,6 +1025,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0027_title_override.sql                 ← optional `title_override` text column on quotes / invoices / bills so the PDF big-header can be customised per document ("Development quote" instead of "QUOTATION")
 0028_denormalize_list_party_names.sql   ← denormalised `client_name` / `vendor_name` / `employee_name` columns on quotes / invoices / bills / payslips (plus `category_name/color/icon` on bills) so list pages render + sort + search without parsing the snapshot JSON per row. Backfilled from existing snapshots via SQLite's `json_extract`. Stores set the column whenever the snapshot is set; detail pages still use the full snapshot.
 0029_credit_notes.sql                   ← `credit_notes` + `credit_note_lines` tables for the Tier 2 credit-note feature. Mirrors invoice shape (client_id FK + client_snapshot + denormalised client_name, project_title, vat_rate_basis_points, subtotal/tax/total cents, notes, title_override) plus `source_invoice_id` (nullable FK ON DELETE SET NULL) for the "credit against invoice X" link. Status FSM: `draft | issued | cancelled`. Document numbering type `credit_note` added to `app/lib/numbering.ts` (prefix CRN).
+0030_recurring_invoices.sql             ← `recurring_invoices` + `recurring_invoice_lines` tables for the Tier 2 recurring-invoice templates feature. Templates carry a client_id FK + client_snapshot + denormalised client_name, a schedule (frequency / start_date / next_issue_date / optional end_date), and invoice defaults (pricing_mode, vat_rate_basis_points, payment_terms_days, project_title, notes, business_bank_id) cloned onto each generated invoice. `is_paused` flips a template inactive without losing data. `invoices_generated` + `last_generated_at` track materialisation. Generation is user-initiated via `useRecurringInvoicesStore.generateOne()` — no Tauri command, just sequential SQL inserts + a `next_issue_date` advance.
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,
@@ -1189,6 +1214,7 @@ Calendar              ← month-grid view of every upcoming due date
 ─── (divider)
 Quotes
 Invoices
+Recurring             ← /recurring-invoices — invoice templates that generate drafts on a user-initiated cadence
 Credit notes          ← /credit-notes — negative invoices for refunds / returns; optional link to source invoice
 Bills
 Vouchers
@@ -1766,9 +1792,23 @@ already in the DB; nothing aggregates it for a date range. Build a
   reuse cleanly. New `export_statement_pdf` Rust command +
   `app/lib/statement-pdf.ts` payload builder. No DB schema — like
   reports, statements are ad-hoc and never archived.
-- **Recurring invoices / recurring bills** — for retainers,
-  subscriptions, monthly rent. A template + a "due today" generator
-  that runs on app open (or on a Tauri startup hook).
+- ✅ **Recurring invoices** — shipped. Templates that materialise as
+  draft invoices on a user-initiated cadence (weekly / monthly /
+  quarterly / yearly). `/recurring-invoices` list page shows the
+  pending count and a one-click bulk-generate modal; per-template
+  detail page tunes the schedule + invoice defaults + line items.
+  Generation is **user-initiated** — no background job, no Tauri
+  command, just sequential SQL inserts that allocate the next
+  invoice number, clone the template's lines (with totals recomputed
+  from current qty/price/VAT), advance `next_issue_date` by one
+  frequency step, and bump the `invoices_generated` counter.
+  Generated invoices are always drafts — the user reviews on
+  /invoices before issuing, which is the safety net for one-off
+  edits. Templates can be paused (kept in the list, doesn't show as
+  pending) or deleted (already-generated invoices stay intact, since
+  they're real rows independent of the template). Recurring **bills**
+  haven't shipped yet — that's the next follow-up (vendor side
+  mirrors the client side).
 - **Bank reconciliation** — import a bank statement CSV and tick off
   matched vouchers. Manual today; a side-by-side reconcile screen
   would be a real productivity win for any business with > ~20
@@ -1806,9 +1846,13 @@ next-most-impactful add after that.
 essentially complete. **Sales by client + Expenses by vendor +
 Payroll register** also shipped, closing out the Tier 1 leftovers.
 Credit notes (Tier 2) shipped. Customer statements (Tier 2) shipped.
-Next biggest Tier 2 gap is **recurring invoices / bills** (retainers,
-monthly rent) — biggest pure productivity win for any SL business
-with regular billables.
+**Recurring invoices (Tier 2) shipped** — templates that generate
+draft invoices on a user-initiated weekly/monthly/quarterly/yearly
+cadence. Next biggest Tier 2 gap is **bank reconciliation** (CSV
+import + side-by-side ticker against the voucher ledger) — biggest
+remaining productivity win for any SL business with > ~20
+transactions/month. Recurring bills (vendor-side mirror of recurring
+invoices) is a smaller follow-up that should slot in alongside.
 
 ---
 
