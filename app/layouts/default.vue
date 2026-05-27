@@ -437,7 +437,10 @@
 				{ to: "/reports/vat", label: "VAT", icon: "i-lucide-percent" },
 				{ to: "/reports/aged-receivables", label: "Aged receivables", icon: "i-lucide-clock" },
 				{ to: "/reports/aged-payables", label: "Aged payables", icon: "i-lucide-clock-alert" },
-				{ to: "/reports/cash-flow", label: "Cash flow", icon: "i-lucide-arrow-left-right" }
+				{ to: "/reports/cash-flow", label: "Cash flow", icon: "i-lucide-arrow-left-right" },
+				{ to: "/reports/sales-by-client", label: "Sales by client", icon: "i-lucide-users-round" },
+				{ to: "/reports/expenses-by-vendor", label: "Expenses by vendor", icon: "i-lucide-store" },
+				{ to: "/reports/payroll-register", label: "Payroll register", icon: "i-lucide-clipboard-list" }
 			]
 		},
 		{

@@ -760,3 +760,354 @@ export const buildCashFlowPdfPayload = (input: CashFlowPdfInput): ReportPdfPaylo
 		]
 	};
 };
+
+// ---------- Sales by client -------------------------------------------
+//
+// Per-client revenue breakdown for a date range. Pulls from issued
+// invoices (drafts + cancelled excluded) and uses subtotal_cents
+// (VAT is a pass-through, not revenue). Builder shape mirrors P&L:
+// three KPI tiles + breakdown table (one row per client, sorted by
+// total descending) + a single drill-down detail table listing every
+// underlying invoice chronologically.
+
+export interface SalesByClientPdfInput {
+	settings: CompanySettingsRow | null
+	currency: CurrencyMeta
+	dateFrom: string
+	dateTo: string
+	totals: {
+		revenue: number
+		invoiceCount: number
+		clientCount: number
+	}
+	clientRows: {
+		clientId: number | null
+		name: string
+		invoiceCount: number
+		total: number
+	}[]
+	invoices: InvoiceRow[]
+}
+
+export const buildSalesByClientPdfPayload = (
+	input: SalesByClientPdfInput
+): ReportPdfPayload => {
+	const fmt = (cents: number) => formatMoney(cents, input.currency);
+	const pct = (part: number, whole: number): string => {
+		if (whole === 0) return "—";
+		const v = (part / whole) * 100;
+		return `${v.toFixed(v < 10 ? 1 : 0)}%`;
+	};
+
+	// Average per client / per invoice for the sub-labels. Same gut-check
+	// numbers the on-screen tiles surface so the PDF doesn't feel
+	// thinner than the live page.
+	const avgPerClient = input.totals.clientCount === 0
+		? 0
+		: Math.round(input.totals.revenue / input.totals.clientCount);
+	const avgPerInvoice = input.totals.invoiceCount === 0
+		? 0
+		: Math.round(input.totals.revenue / input.totals.invoiceCount);
+
+	return {
+		...businessHeader(input.settings),
+		currency_code: input.currency.code,
+		title: "Sales by client",
+		subtitle: "Revenue per client over the period. Subtotals exclude VAT — issued invoices only.",
+		period_label: formatPeriodLabel(input.dateFrom, input.dateTo),
+		generated_at: todayISO(),
+		summary: [
+			{
+				label: "Total revenue",
+				value: fmt(input.totals.revenue),
+				sub: `${input.totals.invoiceCount} invoice${input.totals.invoiceCount === 1 ? "" : "s"} issued`,
+				tone: "success"
+			},
+			{
+				label: "Clients",
+				value: String(input.totals.clientCount),
+				sub: input.totals.clientCount === 0
+					? "No clients in this period"
+					: `Avg ${fmt(avgPerClient)} per client`,
+				tone: "neutral"
+			},
+			{
+				label: "Invoices",
+				value: String(input.totals.invoiceCount),
+				sub: input.totals.invoiceCount === 0
+					? "No invoices issued"
+					: `Avg ${fmt(avgPerInvoice)} per invoice`,
+				tone: "neutral"
+			}
+		],
+		breakdown: input.clientRows.length === 0
+			? null
+			: {
+				title: "By client",
+				rows: input.clientRows.map((r) => ({
+					label: r.name,
+					sublabel: `${r.invoiceCount} invoice${r.invoiceCount === 1 ? "" : "s"}`,
+					amount: fmt(r.total),
+					percent: pct(r.total, input.totals.revenue),
+					tone: "success"
+				})),
+				total: {
+					label: "Total revenue",
+					sublabel: null,
+					amount: fmt(input.totals.revenue),
+					percent: "100%",
+					tone: "success"
+				}
+			},
+		details: input.invoices.length === 0
+			? null
+			: [
+				{
+					title: `Invoices (${input.invoices.length})`,
+					columns: ["Number", "Date", "Client", "Subtotal"],
+					rows: input.invoices.map((r) => [
+						r.number,
+						r.issue_date,
+						r.client_name || "—",
+						fmt(r.subtotal_cents)
+					])
+				}
+			]
+	};
+};
+
+// ---------- Expenses by vendor ----------------------------------------
+//
+// Mirror of sales-by-client, but for bills + vendors. Same shape,
+// labels and party axis swapped. Excludes cancelled bills; uses
+// subtotal_cents (VAT is recoverable via the VAT report, not an
+// expense here).
+
+export interface ExpensesByVendorPdfInput {
+	settings: CompanySettingsRow | null
+	currency: CurrencyMeta
+	dateFrom: string
+	dateTo: string
+	totals: {
+		spend: number
+		billCount: number
+		vendorCount: number
+	}
+	vendorRows: {
+		vendorId: number | null
+		name: string
+		billCount: number
+		total: number
+	}[]
+	bills: BillRow[]
+}
+
+export const buildExpensesByVendorPdfPayload = (
+	input: ExpensesByVendorPdfInput
+): ReportPdfPayload => {
+	const fmt = (cents: number) => formatMoney(cents, input.currency);
+	const pct = (part: number, whole: number): string => {
+		if (whole === 0) return "—";
+		const v = (part / whole) * 100;
+		return `${v.toFixed(v < 10 ? 1 : 0)}%`;
+	};
+
+	const avgPerVendor = input.totals.vendorCount === 0
+		? 0
+		: Math.round(input.totals.spend / input.totals.vendorCount);
+	const avgPerBill = input.totals.billCount === 0
+		? 0
+		: Math.round(input.totals.spend / input.totals.billCount);
+
+	return {
+		...businessHeader(input.settings),
+		currency_code: input.currency.code,
+		title: "Expenses by vendor",
+		subtitle: "Spend per vendor over the period. Subtotals exclude VAT — non-cancelled bills only.",
+		period_label: formatPeriodLabel(input.dateFrom, input.dateTo),
+		generated_at: todayISO(),
+		summary: [
+			{
+				label: "Total spend",
+				value: fmt(input.totals.spend),
+				sub: `${input.totals.billCount} bill${input.totals.billCount === 1 ? "" : "s"} received`,
+				tone: "error"
+			},
+			{
+				label: "Vendors",
+				value: String(input.totals.vendorCount),
+				sub: input.totals.vendorCount === 0
+					? "No vendors in this period"
+					: `Avg ${fmt(avgPerVendor)} per vendor`,
+				tone: "neutral"
+			},
+			{
+				label: "Bills",
+				value: String(input.totals.billCount),
+				sub: input.totals.billCount === 0
+					? "No bills received"
+					: `Avg ${fmt(avgPerBill)} per bill`,
+				tone: "neutral"
+			}
+		],
+		breakdown: input.vendorRows.length === 0
+			? null
+			: {
+				title: "By vendor",
+				rows: input.vendorRows.map((r) => ({
+					label: r.name,
+					sublabel: `${r.billCount} bill${r.billCount === 1 ? "" : "s"}`,
+					amount: fmt(r.total),
+					percent: pct(r.total, input.totals.spend),
+					tone: "error"
+				})),
+				total: {
+					label: "Total spend",
+					sublabel: null,
+					amount: fmt(input.totals.spend),
+					percent: "100%",
+					tone: "error"
+				}
+			},
+		details: input.bills.length === 0
+			? null
+			: [
+				{
+					title: `Bills (${input.bills.length})`,
+					columns: ["Number", "Date", "Vendor", "Subtotal"],
+					rows: input.bills.map((r) => [
+						r.number,
+						r.issue_date,
+						r.vendor_name || "—",
+						fmt(r.subtotal_cents)
+					])
+				}
+			]
+	};
+};
+
+// ---------- Payroll register -------------------------------------------
+//
+// Every payslip in a date range (period_start in [from, to], cancelled
+// excluded), with a per-employee breakdown + a flat per-payslip detail
+// table. KPI tiles: total gross earnings, total net pay, payslip count.
+// Breakdown rows are per-employee subtotals; percent column is share
+// of gross earnings (matches how the dashboard payroll tile reads).
+//
+// PDF detail uses the 5-col table case the template already supports:
+// Number / Period end / Employee / Earnings / Net. Deductions are
+// implicit (Earnings - Net) and shown on the on-screen table; dropping
+// them from the PDF lets the existing 5-col layout do the work without
+// adding a 6-col branch to report.typ.
+
+export interface PayrollRegisterPdfInput {
+	settings: CompanySettingsRow | null
+	currency: CurrencyMeta
+	dateFrom: string
+	dateTo: string
+	totals: {
+		earnings: number
+		deductions: number
+		net: number
+		paid: number
+		payslipCount: number
+		employeeCount: number
+	}
+	employeeRows: {
+		employeeId: number | null
+		name: string
+		payslipCount: number
+		earnings: number
+		deductions: number
+		net: number
+		paid: number
+	}[]
+	payslips: PayslipRow[]
+}
+
+export const buildPayrollRegisterPdfPayload = (
+	input: PayrollRegisterPdfInput
+): ReportPdfPayload => {
+	const fmt = (cents: number) => formatMoney(cents, input.currency);
+	const pct = (part: number, whole: number): string => {
+		if (whole === 0) return "—";
+		const v = (part / whole) * 100;
+		return `${v.toFixed(v < 10 ? 1 : 0)}%`;
+	};
+
+	const outstanding = Math.max(0, input.totals.net - input.totals.paid);
+
+	return {
+		...businessHeader(input.settings),
+		currency_code: input.currency.code,
+		title: "Payroll register",
+		subtitle: "Issued payslips whose period falls in this range. Gross earnings, deductions and net pay per employee.",
+		period_label: formatPeriodLabel(input.dateFrom, input.dateTo),
+		generated_at: todayISO(),
+		summary: [
+			{
+				label: "Gross earnings",
+				value: fmt(input.totals.earnings),
+				sub: `${input.totals.payslipCount} payslip${input.totals.payslipCount === 1 ? "" : "s"} · ${input.totals.employeeCount} employee${input.totals.employeeCount === 1 ? "" : "s"}`,
+				tone: "neutral"
+			},
+			{
+				label: "Net pay",
+				value: fmt(input.totals.net),
+				sub: input.totals.earnings === 0
+					? "No payroll in this period"
+					: `After ${fmt(input.totals.deductions)} deductions`,
+				tone: "success"
+			},
+			{
+				label: outstanding === 0 ? "Paid out" : "Outstanding",
+				value: outstanding === 0
+					? fmt(input.totals.paid)
+					: fmt(outstanding),
+				sub: outstanding === 0
+					? "All payslips fully paid"
+					: `${fmt(input.totals.paid)} paid so far`,
+				tone: outstanding === 0 ? "success" : "error"
+			}
+		],
+		breakdown: input.employeeRows.length === 0
+			? null
+			: {
+				title: "By employee",
+				rows: input.employeeRows.map((r) => ({
+					label: r.name,
+					sublabel: `${r.payslipCount} payslip${r.payslipCount === 1 ? "" : "s"} · net ${fmt(r.net)}`,
+					amount: fmt(r.earnings),
+					percent: pct(r.earnings, input.totals.earnings),
+					tone: "neutral"
+				})),
+				total: {
+					label: "Total gross",
+					sublabel: null,
+					amount: fmt(input.totals.earnings),
+					percent: "100%",
+					tone: "neutral"
+				}
+			},
+		details: input.payslips.length === 0
+			? null
+			: [
+				{
+					title: `Payslips (${input.payslips.length})`,
+					// 5 columns — matches the existing 5-col template case
+					// (Number / Date / Party / Subtotal / Tax shape). The
+					// Deductions column lives on-screen only; deductions
+					// = earnings − net and the PDF reader can do the
+					// arithmetic if they need it.
+					columns: ["Number", "Period end", "Employee", "Earnings", "Net"],
+					rows: input.payslips.map((r) => [
+						r.number,
+						r.period_end,
+						r.employee_name || "—",
+						fmt(r.earnings_cents),
+						fmt(r.net_cents)
+					])
+				}
+			]
+	};
+};

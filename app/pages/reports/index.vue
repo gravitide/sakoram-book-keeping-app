@@ -107,22 +107,29 @@
 			label: "Cash flow",
 			icon: "i-lucide-arrow-left-right",
 			description: "Receipts minus payments by month for any date range. Cash basis — the money-in / money-out view."
+		},
+		{
+			to: "/reports/sales-by-client",
+			label: "Sales by client",
+			icon: "i-lucide-users-round",
+			description: "Per-client revenue breakdown for a date range, sorted by total. Drill down to the underlying invoices."
+		},
+		{
+			to: "/reports/expenses-by-vendor",
+			label: "Expenses by vendor",
+			icon: "i-lucide-store",
+			description: "Per-vendor spend breakdown for a date range, sorted by total. Drill down to the underlying bills."
+		},
+		{
+			to: "/reports/payroll-register",
+			label: "Payroll register",
+			icon: "i-lucide-clipboard-list",
+			description: "Every payslip in a period with employee, gross, deductions, net and paid columns. Hand-off-ready for accountants."
 		}
 	];
 
-	// Roadmap surface. These match the Tier 1 reports listed in CLAUDE.md.
-	// Keeping them visible (not hidden behind a doc) signals to the user
-	// that the section is still being built out.
-	const upcomingReports: { label: string, icon: string, description: string }[] = [
-		{
-			label: "Sales by client",
-			icon: "i-lucide-users",
-			description: "Revenue per client with drill-down to underlying invoices."
-		},
-		{
-			label: "Payroll register",
-			icon: "i-lucide-users-round",
-			description: "Every payslip in a period with earnings / deductions / net / paid columns."
-		}
-	];
+	// Roadmap surface. Empty for now — every Tier 1 report has shipped.
+	// Kept as a typed empty array so future "Coming" reports can be
+	// added back in without changing the template shape.
+	const upcomingReports: { label: string, icon: string, description: string }[] = [];
 </script>
