@@ -233,12 +233,18 @@
 // ============================================================
 
 #if data.bank_block != none [
+  // breakable: false keeps the whole card on one page — bank +
+  // branch + account name + account number must be readable
+  // together for the recipient to actually pay. Without this the
+  // card would split at whatever line the page floor lands on
+  // (typically Bank/Branch on page 1, account number on page 2).
   #block(
     fill: rgb("#f9fafb"),
     stroke: 0.5pt + line-color,
     radius: 4pt,
     inset: (x: 10pt, y: 10pt),
     width: 100%,
+    breakable: false,
   )[
     #text(size: 8pt, fill: muted, tracking: 0.05em)[PAYMENT DETAILS]
     #v(4pt)
