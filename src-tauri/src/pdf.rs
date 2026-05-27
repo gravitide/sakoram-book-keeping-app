@@ -28,6 +28,7 @@ const DOCUMENT_TEMPLATE: &str = include_str!("../templates/document.typ");
 const VOUCHER_TEMPLATE: &str = include_str!("../templates/voucher.typ");
 const PAYSLIP_TEMPLATE: &str = include_str!("../templates/payslip.typ");
 const REPORT_TEMPLATE: &str = include_str!("../templates/report.typ");
+const STATEMENT_TEMPLATE: &str = include_str!("../templates/statement.typ");
 
 #[derive(Debug, thiserror::Error)]
 pub enum PdfError {
@@ -314,6 +315,21 @@ pub async fn export_report_pdf(
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
 	render_pdf(&app, "report.typ", REPORT_TEMPLATE, data, PathBuf::from(output_path), protect_password).await
+}
+
+// Customer statements — per-client snapshot of outstanding invoices.
+// Generated ad-hoc; not stored, not numbered. Same render pipeline as
+// reports, separate template because the shape (party-block hero +
+// aging tiles + 7-column invoice table) doesn't reuse report.typ
+// cleanly.
+#[tauri::command]
+pub async fn export_statement_pdf(
+	app: AppHandle,
+	data: Value,
+	output_path: String,
+	protect_password: Option<String>,
+) -> Result<(), PdfError> {
+	render_pdf(&app, "statement.typ", STATEMENT_TEMPLATE, data, PathBuf::from(output_path), protect_password).await
 }
 
 /// Copy a file from `src` to `dst`. Used by the PDF preview flow: we
