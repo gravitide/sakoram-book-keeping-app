@@ -68,6 +68,24 @@
 			<span class="truncate" data-tauri-drag-region>{{ title }}</span>
 		</div>
 
+		<!-- Global help button — always-visible escape hatch to the
+			docs WebviewWindow. Sits left of the OS-control cluster on
+			Windows; on macOS it becomes the rightmost titlebar button
+			(no OS cluster on that side). Hidden inside the docs window
+			itself via `show-help-button="false"` on the help-window
+			layout — clicking Help from inside Help is redundant. -->
+		<button
+			v-if="showHelpButton"
+			type="button"
+			class="flex items-center justify-center hover:bg-(--ui-bg-accented) transition shrink-0"
+			:class="isMac ? 'w-[36px]' : 'w-[44px]'"
+			title="Open Help &amp; Guides"
+			aria-label="Open Help and Guides"
+			@click="openHelp"
+		>
+			<UIcon name="i-lucide-circle-help" class="size-[16px]" />
+		</button>
+
 		<!-- Right cluster: Windows-only. macOS uses the OS traffic-light
 			buttons on the left for these actions, so we omit ours here. -->
 		<div v-if="!isMac" class="flex items-stretch">
@@ -105,11 +123,28 @@
 <script setup lang="ts">
 	import { getCurrentWindow } from "@tauri-apps/api/window";
 	import sakoramIcon from "~/assets/sakoram-icon.svg?url";
+	import { useHelpWindow } from "~/composables/useHelpWindow";
 	import { useTenantsStore } from "~/stores/tenants";
 
-	withDefaults(defineProps<{ showSidebarToggle?: boolean }>(), {
-		showSidebarToggle: false
+	withDefaults(defineProps<{
+		showSidebarToggle?: boolean
+		// Whether to render the help icon. Default on so every window
+		// surface gets it; the docs window itself flips this off
+		// (clicking Help from inside Help is redundant — focus stays
+		// here).
+		showHelpButton?: boolean
+	}>(), {
+		showSidebarToggle: false,
+		showHelpButton: true
 	});
+
+	// Spawns (or focuses) the docs WebviewWindow. Same composable the
+	// sidebar's Help item uses, so the behaviour is identical from
+	// both entry points.
+	const helpWindow = useHelpWindow();
+	const openHelp = () => {
+		void helpWindow.openHelpWindow();
+	};
 
 	const { isMaximized } = useWindowState();
 	const { sidebarCollapsed, toggleSidebar } = useUiState();

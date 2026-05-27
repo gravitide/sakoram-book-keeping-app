@@ -11,7 +11,7 @@
 		same main-scroll container — just a different sidebar
 		component and a slightly narrower content cap. -->
 	<div class="h-screen flex flex-col bg-(--ui-bg-muted)">
-		<TitleBar :show-sidebar-toggle="false" />
+		<TitleBar :show-sidebar-toggle="false" :show-help-button="false" />
 		<div class="flex-1 min-h-0 flex">
 			<!-- Help topics sidebar — always visible. The popout window
 				ships at 1280×800 with a minWidth of 1024 (see
