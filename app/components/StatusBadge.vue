@@ -42,7 +42,13 @@
 		// credit notes use the simpler draft / issued / cancelled set;
 		// "issued" reads as a successful publication action — same tone
 		// as "paid" / "accepted" — to signal "this credit has taken effect".
-		issued: "success"
+		issued: "success",
+		// recurring invoice templates: active (currently generating) /
+		// paused (skip the upcoming cycle). Active reads green-ish to
+		// signal "this template is healthy and running"; paused stays
+		// neutral so the row doesn't look like a problem.
+		active: "success",
+		paused: "neutral"
 	};
 
 	const color = computed<BadgeColor>(() => STATUS_COLOR[props.status] ?? "neutral");

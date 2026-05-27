@@ -52,8 +52,17 @@ export const HELP_TOPICS: HelpTopic[] = [
 		summary: "Billing a client for work done or goods delivered. The status lifecycle, recording payment, SL VAT obligations.",
 		category: "documents",
 		icon: "i-lucide-receipt",
-		relatedSlugs: ["quotes", "credit-notes", "customer-statements", "vouchers", "vat", "sales-by-client"],
+		relatedSlugs: ["quotes", "recurring-invoices", "credit-notes", "customer-statements", "vouchers", "vat", "sales-by-client"],
 		component: () => import("./topics/invoices.vue")
+	},
+	{
+		slug: "recurring-invoices",
+		title: "Recurring invoices",
+		summary: "Templates that generate the same invoice on a schedule — monthly retainers, subscriptions, rent. User-initiated generation, no surprises.",
+		category: "documents",
+		icon: "i-lucide-repeat",
+		relatedSlugs: ["invoices", "vouchers", "vat"],
+		component: () => import("./topics/recurring-invoices.vue")
 	},
 	{
 		slug: "quotes",

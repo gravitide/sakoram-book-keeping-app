@@ -72,6 +72,7 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(27, "title override", include_str!("../migrations/0027_title_override.sql")),
 	(28, "denormalize list party names", include_str!("../migrations/0028_denormalize_list_party_names.sql")),
 	(29, "credit notes", include_str!("../migrations/0029_credit_notes.sql")),
+	(30, "recurring invoices", include_str!("../migrations/0030_recurring_invoices.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
