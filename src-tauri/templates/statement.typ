@@ -13,8 +13,15 @@
 #let data = json("data.json")
 
 #set document(title: data.title, author: data.business_name)
+// Landscape A4 — statements lean on a wide 7-column invoice table
+// (number / issued / due / total / paid / balance / status). Portrait
+// squeezed the Balance column hard enough to wrap the totals-row
+// amount onto two lines; landscape gives every column its natural
+// width and leaves the aging tiles / party blocks better proportioned
+// to the page edge.
 #set page(
   paper: "a4",
+  flipped: true,
   margin: (x: 18mm, top: 16mm, bottom: 20mm),
   footer: [
     #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))
