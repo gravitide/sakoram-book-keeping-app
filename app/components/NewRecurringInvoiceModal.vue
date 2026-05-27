@@ -2,11 +2,23 @@
 	<UModal v-model:open="openModel" title="New recurring invoice">
 		<template #body>
 			<form id="new-recurring-form" @submit.prevent="create">
-				<p class="text-sm text-(--ui-text-muted) mb-4">
-					A template will be created. Add line items and tune the schedule on the next screen.
+				<p class="text-sm text-(--ui-text-muted) mb-5">
+					Templates seed future invoices. Line items, payment
+					terms, and the bank account are set on the next
+					screen — this modal is just enough to mint the row.
 				</p>
+				<!-- Field help text uses UFormField's `help` slot — renders
+					small muted text *below* the input. NuxtUI's `hint`
+					prop renders inline with the label and is meant for
+					tiny annotations (e.g. "Optional"); using it for a
+					full sentence pushes the label sideways and breaks
+					the column rhythm. -->
 				<div class="space-y-4">
-					<UFormField label="Template name" required hint="A short label so you can find this template later, e.g. 'Acme monthly retainer'.">
+					<UFormField
+						label="Template name"
+						required
+						help="A short label so you can find this template later."
+					>
 						<UInput v-model="templateName" placeholder="e.g. Acme — monthly retainer" autofocus />
 					</UFormField>
 
@@ -15,7 +27,11 @@
 					</UFormField>
 
 					<div class="grid grid-cols-2 gap-3">
-						<UFormField label="Frequency" required>
+						<UFormField
+							label="Frequency"
+							required
+							help="How often to issue."
+						>
 							<USelect
 								v-model="frequency"
 								:items="FREQUENCY_OPTIONS"
@@ -23,7 +39,11 @@
 								class="w-full"
 							/>
 						</UFormField>
-						<UFormField label="Start date" required hint="The first invoice will be issued on or after this date.">
+						<UFormField
+							label="Start date"
+							required
+							help="When the first invoice is due."
+						>
 							<DateField v-model="startDate" />
 						</UFormField>
 					</div>

@@ -49,6 +49,11 @@ export interface RecurringInvoiceRow {
 	end_date: string | null
 	project_title: string | null
 	pricing_mode: PricingMode
+	// Bundle-mode lump-sum amount. Ignored when pricing_mode is
+	// 'itemized' (totals roll up from line qty × price × VAT).
+	// Defaults to 0 on freshly-created templates; migration 0031
+	// backfilled existing rows with 0.
+	bundle_subtotal_cents: number
 	vat_rate_basis_points: number
 	payment_terms_days: number
 	notes: string | null
@@ -300,7 +305,14 @@ export const useRecurringInvoicesStore = defineStore("recurring_invoices", () =>
 				input.client.name,
 				input.frequency,
 				input.start_date,
-				input.start_date, // next_issue_date starts at start_date
+				// Seed next_issue_date one frequency step after start_date.
+				// "Start" reads as "when the subscription / contract began"
+				// and "next issue" as "when the next bill fires" — same
+				// mental model Stripe / Xero use. If the user wants the
+				// first invoice ON the start date (e.g. rent due May 1
+				// for a tenant who started May 1), they can edit
+				// next_issue_date back manually on the detail page.
+				advanceDate(input.start_date, input.frequency),
 				defaultVatBp,
 				defaultTerms,
 				bankId
@@ -313,7 +325,8 @@ export const useRecurringInvoicesStore = defineStore("recurring_invoices", () =>
 
 	type RecurringUpdate = Partial<Pick<RecurringInvoiceRow, | "template_name" | "client_id" | "client_snapshot"
 		| "frequency" | "start_date" | "next_issue_date" | "end_date"
-		| "project_title" | "pricing_mode" | "vat_rate_basis_points"
+		| "project_title" | "pricing_mode" | "bundle_subtotal_cents"
+		| "vat_rate_basis_points"
 		| "payment_terms_days" | "notes" | "business_bank_id">>;
 
 	const UPDATABLE: ReadonlyArray<keyof RecurringUpdate> = [
@@ -326,6 +339,7 @@ export const useRecurringInvoicesStore = defineStore("recurring_invoices", () =>
 		"end_date",
 		"project_title",
 		"pricing_mode",
+		"bundle_subtotal_cents",
 		"vat_rate_basis_points",
 		"payment_terms_days",
 		"notes",
@@ -437,18 +451,64 @@ export const useRecurringInvoicesStore = defineStore("recurring_invoices", () =>
 		const bankId = template.business_bank_id ?? banksStore.defaultBank?.id ?? null;
 		const bankSnap = await banksStore.buildSnapshotForId(bankId);
 
-		// Compute the generated invoice's totals from the template
-		// lines + template VAT rate (itemized lines carry their own
-		// VAT bps; bundle mode would store the bundle subtotal on the
-		// template — but we don't expose bundle mode on templates yet,
-		// always itemized, so sum line-by-line).
-		const computed = lines.map((l) => ({
-			...l,
-			...computeLineTotals(l.quantity_milli, l.unit_price_cents, l.vat_rate_basis_points)
-		}));
-		const subtotal = computed.reduce((s, l) => s + l.line_subtotal_cents, 0);
-		const tax = computed.reduce((s, l) => s + l.line_tax_cents, 0);
-		const total = computed.reduce((s, l) => s + l.line_total_cents, 0);
+		// Compute the generated invoice's totals.
+		//   - Itemized: each line carries its own qty × price × VAT,
+		//     totals roll up.
+		//   - Bundle: lines are scope text only; the lump-sum amount
+		//     lives on the template (bundle_subtotal_cents). VAT is
+		//     the template-level rate. The single first line on the
+		//     generated invoice carries the bundle amount as its
+		//     price so the invoice's PDF + payment ledger work
+		//     without special-casing bundle invoices downstream.
+		const isBundle = template.pricing_mode === "bundle";
+		let subtotal: number;
+		let tax: number;
+		let total: number;
+		let computed: (RecurringInvoiceLineRow & ReturnType<typeof computeLineTotals>)[];
+		if (isBundle) {
+			subtotal = template.bundle_subtotal_cents;
+			tax = Math.round((subtotal * template.vat_rate_basis_points) / 10000);
+			total = subtotal + tax;
+			// Build a single "summary line" for the invoice carrying the
+			// bundle amount. Falls back to project title / template name
+			// for the item_label when the user didn't add any scope
+			// lines. Multi-line scope from the template is collapsed
+			// onto this one line's description field separated by
+			// newlines so nothing is lost — invoice PDFs in bundle
+			// mode render the description as scope copy anyway.
+			const scopeDescription = lines.length === 0
+				? null
+				: lines.map((l) => {
+					const head = l.item_label?.trim();
+					const body = l.description?.trim();
+					if (head && body) return `${head}\n${body}`;
+					return head || body || null;
+				}).filter((s) => s).join("\n\n") || null;
+			const summaryLabel = (lines[0]?.item_label?.trim())
+				|| template.project_title?.trim()
+				|| template.template_name;
+			computed = [{
+				id: 0,
+				recurring_invoice_id: template.id,
+				position: 0,
+				item_label: summaryLabel,
+				description: scopeDescription,
+				quantity_milli: 1000,
+				unit_price_cents: subtotal,
+				vat_rate_basis_points: template.vat_rate_basis_points,
+				line_subtotal_cents: subtotal,
+				line_tax_cents: tax,
+				line_total_cents: total
+			}];
+		} else {
+			computed = lines.map((l) => ({
+				...l,
+				...computeLineTotals(l.quantity_milli, l.unit_price_cents, l.vat_rate_basis_points)
+			}));
+			subtotal = computed.reduce((s, l) => s + l.line_subtotal_cents, 0);
+			tax = computed.reduce((s, l) => s + l.line_tax_cents, 0);
+			total = computed.reduce((s, l) => s + l.line_total_cents, 0);
+		}
 
 		const allocation = await allocateDocumentNumber("invoice", issue);
 

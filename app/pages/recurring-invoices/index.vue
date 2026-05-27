@@ -112,8 +112,12 @@
 				</div>
 			</template>
 
+			<!-- Action bar only matters when there's a table to act on.
+				Hidden during load / error / empty states — no point
+				showing 'Auto-fit columns' for a table that isn't
+				rendered. -->
 			<div
-				v-if="!store.loading && !store.error"
+				v-if="!store.loading && !store.error && store.filtered.length > 0"
 				class="flex justify-between items-center gap-3 flex-wrap text-sm text-(--ui-text-muted) tabular-nums mb-3"
 			>
 				<UButton

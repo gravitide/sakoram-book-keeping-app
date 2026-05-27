@@ -150,13 +150,13 @@
 						<UFormField label="Start date">
 							<DateField v-model="formStartDate" />
 						</UFormField>
-						<UFormField label="Next issue date" hint="Advances by one cycle every time you generate. Edit this to skip or backdate a cycle.">
+						<UFormField label="Next issue date" help="Auto-set to one cycle after start. Edit to skip, backdate, or fire on the start date itself.">
 							<DateField v-model="formNextIssueDate" />
 						</UFormField>
-						<UFormField label="End date" hint="Optional — leave blank for an open-ended schedule.">
+						<UFormField label="End date" help="Optional. Leave blank for an open-ended schedule.">
 							<DateField v-model="formEndDate" :min-value="formNextIssueDate || undefined" />
 						</UFormField>
-						<UFormField label="Payment terms (days)" hint="Net-N — added to each generated invoice's issue date to set its due date.">
+						<UFormField label="Payment terms (days)" help="Net-N. Added to issue date to set the due date.">
 							<UInputNumber v-model="formPaymentTermsDays" :min="0" :step="1" class="w-full" />
 						</UFormField>
 					</div>
@@ -165,38 +165,150 @@
 
 			<UCard>
 				<template #header>
-					<div class="app-chrome font-medium">
-						Items
+					<div class="app-chrome flex items-center justify-between gap-4 flex-wrap">
+						<div class="app-chrome font-medium">
+							Items
+						</div>
+						<!-- Bundle vs itemized switch — same shape as the
+							invoice detail page. Bundle = one lump-sum
+							amount, itemized = per-line breakdown. The
+							template's pricing_mode flows onto every
+							generated invoice. -->
+						<div class="flex border border-(--ui-border) rounded-md overflow-hidden text-xs">
+							<button
+								type="button"
+								class="px-3 py-1.5"
+								:class="formPricingMode === 'bundle' ? 'bg-(--ui-primary) text-(--ui-bg)' : 'hover:bg-(--ui-bg-muted)'"
+								@click="formPricingMode = 'bundle'"
+							>
+								Bundle
+							</button>
+							<button
+								type="button"
+								class="px-3 py-1.5 border-l border-(--ui-border)"
+								:class="formPricingMode === 'itemized' ? 'bg-(--ui-primary) text-(--ui-bg)' : 'hover:bg-(--ui-bg-muted)'"
+								@click="formPricingMode = 'itemized'"
+							>
+								Itemized
+							</button>
+						</div>
 					</div>
 				</template>
+
+				<!-- Line editor in both modes. Bundle mode hides
+					qty/price/VAT columns (item + description only); the
+					lump-sum amount + VAT live in the Totals card below.
+					Itemized mode shows the full per-line breakdown. -->
 				<DocumentLineEditor
 					:model-value="lineDrafts"
-					mode="itemized"
+					:mode="formPricingMode"
 					@update:model-value="onLinesChange"
 				/>
 			</UCard>
 
-			<div class="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
-				<UCard class="lg:col-span-2">
+			<!-- Totals + Defaults side-by-side. Totals is fixed-width
+				(matches its inner max-w-sm input column + card padding)
+				so it doesn't sprawl; Defaults takes whatever's left.
+				Flex (not grid) for the row so the fixed/flex sizing
+				is explicit. Stacks vertically below lg. Notes goes
+				full-width below this row since long-form copy
+				deserves the room. -->
+			<div class="flex flex-col lg:flex-row gap-6 items-start">
+				<UCard class="w-full lg:w-[26rem] shrink-0">
+					<template #header>
+						<div class="app-chrome font-medium">
+							Totals
+						</div>
+					</template>
+					<div class="flex justify-end">
+						<div class="w-full max-w-sm space-y-3">
+							<UFormField
+								v-if="formPricingMode === 'bundle'"
+								label="Bundle subtotal"
+								help="Amount before VAT."
+							>
+								<MoneyInput v-model="bundleSubtotalCents" class="text-right" />
+							</UFormField>
+							<!-- VAT toggle. Unchecked = tax-exempt; the rate
+								input hides and the totals math zeroes
+								tax. Common case for rent / exempt
+								services / international clients.
+								Right-aligned so the checkbox + label
+								sit against the same edge as the
+								MoneyInput / rate input above and the
+								totals readout below — keeps the
+								column reading as a clean rail. -->
+							<div class="flex justify-end">
+								<UCheckbox
+									v-model="formApplyVat"
+									label="Apply VAT"
+									:ui="{ label: 'font-medium' }"
+								/>
+							</div>
+							<!-- Right-aligned VAT field. Built manually instead
+								of via UFormField because UFormField's
+								label is a block-level element and
+								`text-align: right` on the wrapper only
+								affects inline content (the input + help
+								text move; the block-level label does
+								not). Hand-stacking label / input / help
+								in a `text-right` column gives us
+								control without fighting framework
+								defaults. Classes match UFormField's
+								default look so the field still reads
+								as part of the same form. -->
+							<div v-if="formApplyVat" class="text-right">
+								<div class="text-sm font-medium mb-1.5">
+									VAT rate (%)
+								</div>
+								<div class="flex justify-end">
+									<UInputNumber
+										v-model="vatRatePct"
+										:step="0.01"
+										:min="0"
+										:max="100"
+										class="md:w-32"
+									/>
+								</div>
+								<div class="text-xs text-(--ui-text-muted) mt-1.5">
+									Applied to the subtotal on each generated invoice.
+								</div>
+							</div>
+							<!-- Live preview of the total. In bundle mode
+								= subtotal + (subtotal × VAT). In itemized
+								mode the editor's row totals roll up;
+								we re-display the sums here so the user
+								doesn't have to mentally add the rows. -->
+							<div class="border-t border-(--ui-border) pt-3 text-sm tabular-nums text-right space-y-0.5">
+								<div class="text-(--ui-text-muted)">
+									Subtotal: <span class="text-(--ui-text)">{{ formatLKR(totalsPreview.subtotal) }}</span>
+								</div>
+								<div v-if="totalsPreview.tax !== 0" class="text-(--ui-text-muted)">
+									VAT: <span class="text-(--ui-text)">{{ formatLKR(totalsPreview.tax) }}</span>
+								</div>
+								<div class="font-medium text-base">
+									Total: {{ formatLKR(totalsPreview.total) }}
+								</div>
+							</div>
+						</div>
+					</div>
+				</UCard>
+				<UCard class="w-full lg:flex-1 min-w-0">
 					<template #header>
 						<div class="app-chrome font-medium">
 							Defaults
 						</div>
 					</template>
 					<div class="space-y-3">
-						<UFormField label="Project title" hint="Becomes the subtitle on each generated invoice.">
+						<UFormField label="Project title" help="Becomes the subtitle on each generated invoice.">
 							<UInput v-model="formProjectTitle" />
 						</UFormField>
-						<UFormField label="VAT rate (%)" hint="Seeded onto every generated invoice. Override per-invoice before issuing.">
-							<UInputNumber
-								v-model="vatRatePct"
-								:step="0.01"
-								:min="0"
-								:max="100"
-								class="md:w-32"
-							/>
-						</UFormField>
-						<UFormField label="Bank account" hint="The bank printed on each generated invoice.">
+						<!-- VAT rate moved into the Totals card above so
+							bundle pricing reads in one place. The bank
+							account stays here — it's a default that
+							flows onto each generated invoice but
+							doesn't affect totals math. -->
+						<UFormField label="Bank account" help="The bank printed on each generated invoice.">
 							<USelect
 								v-model="formBankId"
 								:items="bankPickerOptions"
@@ -206,20 +318,23 @@
 						</UFormField>
 					</div>
 				</UCard>
-				<UCard class="lg:col-span-3">
-					<template #header>
-						<div class="app-chrome font-medium">
-							Notes
-						</div>
-					</template>
-					<UTextarea
-						v-model="formNotes"
-						:rows="6"
-						placeholder="Carried onto each generated invoice. The user reviewing the draft can still edit per-invoice."
-						class="w-full"
-					/>
-				</UCard>
 			</div>
+
+			<!-- Notes full-width below — long-form copy gets the room it
+				deserves instead of being squeezed into a side column. -->
+			<UCard>
+				<template #header>
+					<div class="app-chrome font-medium">
+						Notes
+					</div>
+				</template>
+				<UTextarea
+					v-model="formNotes"
+					:rows="6"
+					placeholder="Carried onto each generated invoice. The user reviewing the draft can still edit per-invoice."
+					class="w-full"
+				/>
+			</UCard>
 		</div>
 
 		<!-- Sticky save bar. Same shape as the other detail pages. -->
@@ -298,10 +413,11 @@
 		RecurringInvoiceLineRow,
 		RecurringInvoiceRow
 	} from "~/stores/recurring_invoices";
+	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
-	import { useRecurringInvoicesStore } from "~/stores/recurring_invoices";
+	import { advanceDate, useRecurringInvoicesStore } from "~/stores/recurring_invoices";
 
 	definePageMeta({ title: "Recurring invoice" });
 
@@ -337,6 +453,49 @@
 	const formPaymentTermsDays = ref(30);
 	const vatRatePct = ref(0);
 	const lineDrafts = ref<LineDraft[]>([]);
+	// Bundle vs itemized — same toggle invoices have. Bundle stores a
+	// single lump-sum amount; itemized uses the line editor. The
+	// pricing_mode flows onto every generated invoice.
+	const formPricingMode = ref<"bundle" | "itemized">("itemized");
+	const bundleSubtotalCents = ref<number>(0);
+	// VAT toggle. When off, the rate input is hidden and the
+	// totals math treats VAT as 0 regardless of vatRatePct's value.
+	// vatRatePct itself is kept around so unchecking + re-checking
+	// doesn't lose what the user typed. Hydrated from the saved row
+	// as `vat_rate_basis_points > 0` — i.e. any nonzero rate means
+	// VAT applies; zero means it doesn't.
+	const formApplyVat = ref<boolean>(true);
+
+	// Live preview of what the generated invoice's totals will be. In
+	// bundle mode: subtotal is what the user typed, tax = subtotal ×
+	// VAT rate (or 0 when formApplyVat is off — tax-exempt). In
+	// itemized mode: roll up each line's own qty × price × VAT
+	// (matches the invoice detail page's computedTotals). The VAT
+	// toggle only gates bundle mode's calc — itemized lines carry
+	// their own per-line VAT so the toggle wouldn't be unambiguous
+	// there.
+	const totalsPreview = computed(() => {
+		if (formPricingMode.value === "bundle") {
+			const sub = bundleSubtotalCents.value;
+			const bp = formApplyVat.value ? Math.round(vatRatePct.value * 100) : 0;
+			const tax = Math.round((sub * bp) / 10000);
+			return { subtotal: sub, tax, total: sub + tax };
+		}
+		const subs = lineDrafts.value.map((l) =>
+			computeLineTotals(l.quantity_milli, l.unit_price_cents, l.tax_rate_basis_points).line_subtotal_cents
+		);
+		const taxes = lineDrafts.value.map((l) =>
+			computeLineTotals(l.quantity_milli, l.unit_price_cents, l.tax_rate_basis_points).line_tax_cents
+		);
+		const totals = lineDrafts.value.map((l) =>
+			computeLineTotals(l.quantity_milli, l.unit_price_cents, l.tax_rate_basis_points).line_total_cents
+		);
+		return {
+			subtotal: sumCents(...subs),
+			tax: sumCents(...taxes),
+			total: sumCents(...totals)
+		};
+	});
 
 	const FREQUENCY_OPTIONS: { label: string, value: RecurringFrequency }[] = [
 		{ label: "Weekly", value: "weekly" },
@@ -404,6 +563,15 @@
 		formBankId.value = row.business_bank_id;
 		formPaymentTermsDays.value = row.payment_terms_days;
 		vatRatePct.value = row.vat_rate_basis_points / 100;
+		// VAT applies when the saved rate is anything > 0. Tax-exempt
+		// templates land with formApplyVat = false; the rate input
+		// stays hidden until the user re-enables.
+		formApplyVat.value = row.vat_rate_basis_points > 0;
+		formPricingMode.value = row.pricing_mode;
+		// Bundle-mode lump-sum amount lives on the template row itself
+		// (migration 0031). In itemized mode this is 0 / ignored;
+		// totals roll up from each line's qty × price × VAT instead.
+		bundleSubtotalCents.value = row.bundle_subtotal_cents;
 
 		const lineRows: RecurringInvoiceLineRow[] = await store.getLines(templateId);
 		// Map RecurringInvoiceLineRow → LineDraft shape that
@@ -424,6 +592,22 @@
 		hydrating.value = false;
 	};
 
+	// Auto-sync next_issue_date when start_date or frequency changes,
+	// matching the "subscription" mental model: start_date = when the
+	// recurrence began, next_issue_date = start_date + 1 cycle. Only
+	// runs while hydrating is false (so loading a saved row doesn't
+	// trigger it) and while no invoices have been generated yet (so
+	// editing an in-flight schedule doesn't blow away the user's
+	// manually-set next_issue_date). If the user wants the first
+	// invoice ON the start date (e.g. rent due on the 1st), they can
+	// still edit next_issue_date manually after this auto-sync fires.
+	watch([formStartDate, formFrequency], ([start, freq]) => {
+		if (hydrating.value) return;
+		if (!start) return;
+		if (template.value && template.value.invoices_generated > 0) return;
+		formNextIssueDate.value = advanceDate(start, freq);
+	});
+
 	await hydrate();
 
 	watch(
@@ -437,7 +621,10 @@
 			formNotes,
 			formBankId,
 			formPaymentTermsDays,
-			vatRatePct
+			vatRatePct,
+			formApplyVat,
+			formPricingMode,
+			bundleSubtotalCents
 		],
 		() => {
 			if (!hydrating.value) dirty.value = true;
@@ -481,7 +668,12 @@
 		if (!template.value) return;
 		saving.value = true;
 		try {
-			const bp = Math.round(vatRatePct.value * 100);
+			// VAT toggle gates the rate. Unchecked = persist 0 (the
+			// canonical "tax exempt" value); checked = whatever
+			// vatRatePct has. Keeping vatRatePct in component state
+			// independent of the toggle lets the user re-check
+			// without losing what they previously typed.
+			const bp = formApplyVat.value ? Math.round(vatRatePct.value * 100) : 0;
 			await store.update(templateId, {
 				template_name: formTemplateName.value.trim() || template.value.template_name,
 				client_snapshot: template.value.client_snapshot,
@@ -490,15 +682,19 @@
 				next_issue_date: formNextIssueDate.value,
 				end_date: formEndDate.value,
 				project_title: formProjectTitle.value || null,
+				pricing_mode: formPricingMode.value,
+				bundle_subtotal_cents: bundleSubtotalCents.value,
 				vat_rate_basis_points: bp,
 				payment_terms_days: formPaymentTermsDays.value,
 				notes: formNotes.value || null,
 				business_bank_id: formBankId.value
 			});
-			// Replace lines — map LineDraft → RecurringInvoiceLineDraft
-			// (no `unit`, vat_rate_basis_points instead of
-			// tax_rate_basis_points). Template lines are intentionally
-			// simpler than invoice lines.
+			// Lines hold scope (item + description). In bundle mode the
+			// editor hides qty/price/VAT and only item + description
+			// are meaningful — but we still persist whatever's in the
+			// drafts so the structure is consistent. The bundle amount
+			// lives on the template row's bundle_subtotal_cents (see
+			// store.update above), not on a line.
 			await store.replaceLines(templateId, lineDrafts.value.map((l) => ({
 				item_label: l.item_label,
 				description: l.description || null,
@@ -582,6 +778,12 @@
 		deleting.value = true;
 		try {
 			await store.remove(templateId);
+			// Close the modal BEFORE navigating. UModal teleports to
+			// <body> — outside the keep-alive'd page tree — so simply
+			// router.push-ing away leaves the modal mounted on the
+			// next page until something else triggers a re-render.
+			confirmDelete.value = false;
+			deleting.value = false;
 			toast.add({ title: "Template deleted", color: "info", icon: "i-lucide-trash-2" });
 			await router.replace("/recurring-invoices");
 		} catch (err) {
