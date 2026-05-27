@@ -52,7 +52,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 		summary: "Billing a client for work done or goods delivered. The status lifecycle, recording payment, SL VAT obligations.",
 		category: "documents",
 		icon: "i-lucide-receipt",
-		relatedSlugs: ["quotes", "credit-notes", "customer-statements", "vouchers", "vat"],
+		relatedSlugs: ["quotes", "credit-notes", "customer-statements", "vouchers", "vat", "sales-by-client"],
 		component: () => import("./topics/invoices.vue")
 	},
 	{
@@ -79,7 +79,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 		summary: "Recording money you owe — supplier invoices, expense tracking by category, paying via vouchers.",
 		category: "documents",
 		icon: "i-lucide-file-input",
-		relatedSlugs: ["vouchers", "invoices", "vat"],
+		relatedSlugs: ["vouchers", "invoices", "vat", "expenses-by-vendor"],
 		component: () => import("./topics/bills.vue")
 	},
 	{
@@ -107,7 +107,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 		summary: "Per-employee, per-period pay records. Earnings + deductions, bulk monthly runs, EPF / ETF / PAYE context.",
 		category: "payroll",
 		icon: "i-lucide-file-spreadsheet",
-		relatedSlugs: ["vouchers"],
+		relatedSlugs: ["vouchers", "payroll-register"],
 		component: () => import("./topics/payslips.vue")
 	},
 	// Reports
@@ -155,6 +155,33 @@ export const HELP_TOPICS: HelpTopic[] = [
 		icon: "i-lucide-arrow-left-right",
 		relatedSlugs: ["profit-loss", "vouchers", "aged-receivables"],
 		component: () => import("./topics/cash-flow.vue")
+	},
+	{
+		slug: "sales-by-client",
+		title: "Sales by client",
+		summary: "Per-client revenue breakdown for any period. The concentration-risk + top-customer view.",
+		category: "reports",
+		icon: "i-lucide-users-round",
+		relatedSlugs: ["invoices", "profit-loss", "expenses-by-vendor", "vat"],
+		component: () => import("./topics/sales-by-client.vue")
+	},
+	{
+		slug: "expenses-by-vendor",
+		title: "Expenses by vendor",
+		summary: "Per-vendor spend breakdown for any period. Mirror of sales-by-client for the bills side.",
+		category: "reports",
+		icon: "i-lucide-store",
+		relatedSlugs: ["bills", "profit-loss", "sales-by-client", "vat"],
+		component: () => import("./topics/expenses-by-vendor.vue")
+	},
+	{
+		slug: "payroll-register",
+		title: "Payroll register",
+		summary: "Every payslip in a period, in one table — gross, deductions, net, paid. The accountant hand-off.",
+		category: "reports",
+		icon: "i-lucide-clipboard-list",
+		relatedSlugs: ["payslips", "profit-loss", "vouchers"],
+		component: () => import("./topics/payroll-register.vue")
 	}
 ];
 

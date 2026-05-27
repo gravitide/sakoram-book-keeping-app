@@ -1803,13 +1803,12 @@ next-most-impactful add after that.
 
 **Status (2026-05-27):** P&L + VAT + aged receivables + aged payables
 + cash flow + report PDF export shipped — Tier 1 reports module is
-essentially complete. Credit notes (Tier 2) shipped. Customer
-statements (Tier 2) shipped. Remaining Tier 1 nice-to-haves:
-sales-by-client and payroll-register (both transforms of data we
-already aggregate; lower impact than what's shipped). Next biggest
-Tier 2 gap is **recurring invoices / bills** (retainers, monthly
-rent) — biggest pure productivity win for any SL business with
-regular billables.
+essentially complete. **Sales by client + Expenses by vendor +
+Payroll register** also shipped, closing out the Tier 1 leftovers.
+Credit notes (Tier 2) shipped. Customer statements (Tier 2) shipped.
+Next biggest Tier 2 gap is **recurring invoices / bills** (retainers,
+monthly rent) — biggest pure productivity win for any SL business
+with regular billables.
 
 ---
 
