@@ -294,6 +294,7 @@
 			v-model:open="statementPdf.state.open"
 			:asset-url="statementPdf.state.assetUrl"
 			:temp-path="statementPdf.state.tempPath"
+			:suggested-file-name="statementPdf.state.suggestedFileName"
 			:saving="statementPdf.state.saving"
 			title="Customer statement"
 			@save="statementPdf.onSave"
