@@ -4,8 +4,14 @@
 			clients, not copying cell text out of the table. -->
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
 			<div>
-				<h1 class="text-2xl font-semibold">
+				<h1 class="text-2xl font-semibold flex items-center gap-3">
 					Clients
+					<!-- HelpButton points at customer-statements because
+						that's the workflow that begins here — the "Has
+						outstanding" chip + the per-client Statement
+						button are the things users come to /clients to
+						use. -->
+					<HelpButton slug="customer-statements" />
 				</h1>
 				<p class="text-sm text-(--ui-text-muted)">
 					{{ store.activeCount }} active · {{ store.archivedCount }} archived

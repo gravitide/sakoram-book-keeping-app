@@ -52,7 +52,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 		summary: "Billing a client for work done or goods delivered. The status lifecycle, recording payment, SL VAT obligations.",
 		category: "documents",
 		icon: "i-lucide-receipt",
-		relatedSlugs: ["quotes", "credit-notes", "vouchers", "vat"],
+		relatedSlugs: ["quotes", "credit-notes", "customer-statements", "vouchers", "vat"],
 		component: () => import("./topics/invoices.vue")
 	},
 	{
@@ -70,7 +70,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 		summary: "Issuing a credit to refund an over-invoice, settle a return, or apply a goodwill discount.",
 		category: "documents",
 		icon: "i-lucide-rotate-ccw",
-		relatedSlugs: ["invoices", "vouchers"],
+		relatedSlugs: ["invoices", "customer-statements", "vouchers"],
 		component: () => import("./topics/credit-notes.vue")
 	},
 	{
@@ -90,6 +90,15 @@ export const HELP_TOPICS: HelpTopic[] = [
 		icon: "i-lucide-ticket",
 		relatedSlugs: ["invoices", "bills", "payslips", "cash-flow"],
 		component: () => import("./topics/vouchers.vue")
+	},
+	{
+		slug: "customer-statements",
+		title: "Customer statements",
+		summary: "Printable per-client snapshot of every outstanding invoice — the collections document you send when chasing payment.",
+		category: "documents",
+		icon: "i-lucide-file-clock",
+		relatedSlugs: ["invoices", "aged-receivables", "credit-notes"],
+		component: () => import("./topics/customer-statements.vue")
 	},
 	// Payroll
 	{
@@ -126,7 +135,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 		summary: "Who owes you money RIGHT NOW, bucketed by how overdue it is. The collections-priority report.",
 		category: "reports",
 		icon: "i-lucide-clock",
-		relatedSlugs: ["invoices", "aged-payables", "cash-flow"],
+		relatedSlugs: ["invoices", "customer-statements", "aged-payables", "cash-flow"],
 		component: () => import("./topics/aged-receivables.vue")
 	},
 	{
