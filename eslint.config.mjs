@@ -6,6 +6,11 @@ export default eslintConfig(
 	{
 		typescript: true,
 		vue: true,
+		// Ignore the docs/ folder — design specs + implementation
+		// plans contain fenced code blocks (TS, Vue, SQL) that ESLint
+		// will try to parse as actual source. They're meant as
+		// human-readable guides, not executable artifacts.
+		ignores: ["docs/**"],
 		stylistic: {
 			indent: "tab",
 			quotes: "double"
