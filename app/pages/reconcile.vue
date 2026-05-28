@@ -156,6 +156,7 @@
 				state-key="reconcile-unreconciled-vouchers-table"
 				default-sort-field="voucher_date"
 				:default-sort-order="-1"
+				:default-page-size="50"
 				@row-click="(row) => router.push(`/vouchers/${row.id}`)"
 			>
 				<Column field="number" header="Number" sortable>
