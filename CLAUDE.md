@@ -1312,7 +1312,7 @@ persisted to localStorage).
 
 ### Done
 
-- ✅ DB schema + migrations 0001..0025 (`SCHEMA_VERSION` 25)
+- ✅ DB schema + migrations 0001..0032 (`SCHEMA_VERSION` 32)
 - ✅ Clients / Vendors / Employees CRUD (hero + SectionCard layout)
 - ✅ Quotes (full lifecycle, PDF, convert-to-invoice; default VAT seeded
   from settings on draft creation)
@@ -1760,8 +1760,10 @@ persisted to localStorage).
   list loads all rows; sort/filter/page is in-memory. Acceptable up
   to a few thousand rows per table; revisit if a real tenant feels
   slow.
-- **Drag-drop reorder for line items** — currently up/down arrow
-  buttons in `DocumentLineEditor` / `PayslipLineEditor`.
+- **Drag-drop reorder for `PayslipLineEditor`** —
+  `DocumentLineEditor` already has it (grip handle + HTML5
+  drag/drop in both bundle + itemized modes); `PayslipLineEditor`
+  still uses up/down arrow buttons.
 - **Localised dates in list pages** — list tables show raw
   `2026-05-05` strings. Could use `Intl.DateTimeFormat`.
 - **Soften schema-version gate on import** — currently refuses if
@@ -1990,6 +1992,12 @@ quality-of-life win.
   on each row so by-field sorting matches the rendered cell.
 - For lint conformance, the project uses tabs and a fairly strict
   eslint config. `bun run lint` auto-fixes most issues.
+- For mount-time store loads on a detail page, use
+  `store.ensureLoaded()`, NOT `store.load()`. `ensureLoaded` is the
+  load-once cache (Pinia state survives navigation; tenant switch
+  hard-reloads the whole page). `.load()` is for explicit refresh
+  after a write — keep that path as-is. Detail pages doing `.load()`
+  on mount were re-fetching hundreds of rows per click; see PR #216.
 
 ---
 
