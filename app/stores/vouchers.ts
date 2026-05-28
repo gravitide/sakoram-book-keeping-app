@@ -35,10 +35,20 @@ export interface VoucherRow {
 	// by the reconcile page to scope matching per bank. Added in
 	// migration 0033.
 	business_bank_id: number | null
+	// ISO timestamp set when this voucher is matched to a bank
+	// statement row via the reconcile page; cleared on unlink.
+	// Updated by the bank_statements store directly — not part of
+	// the regular CRUD path, so not in INSERT or UPDATABLE.
+	reconciled_at: string | null
 	created_at: string
 }
 
-export type VoucherInput = Omit<VoucherRow, "id" | "number" | "created_at">;
+// `reconciled_at` is excluded from VoucherInput because it's never
+// set by the regular create/update path — only the bank_statements
+// store writes to it via direct UPDATE when linking/unlinking a
+// statement row. Keeping it out of the input type means callers
+// don't have to pass `reconciled_at: null` on every create.
+export type VoucherInput = Omit<VoucherRow, "id" | "number" | "created_at" | "reconciled_at">;
 type VoucherUpdate = Partial<Omit<VoucherInput, "voucher_type">>;
 // voucher_type is immutable post-creation: switching a payment to a
 // receipt would invert the accounting and is almost certainly a data-

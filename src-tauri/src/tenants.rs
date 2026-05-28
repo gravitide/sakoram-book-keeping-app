@@ -76,6 +76,7 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(31, "recurring bundle subtotal", include_str!("../migrations/0031_recurring_bundle_subtotal.sql")),
 	(32, "recurring bills", include_str!("../migrations/0032_recurring_bills.sql")),
 	(33, "voucher bank id", include_str!("../migrations/0033_voucher_bank_id.sql")),
+	(34, "bank reconciliation", include_str!("../migrations/0034_bank_reconciliation.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
