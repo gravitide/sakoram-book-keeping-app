@@ -289,7 +289,16 @@
 		{ label: "—", value: null }
 	];
 
-	await Promise.all([invoicesStore.load(), billsStore.load(), payslipsStore.load()]);
+	// Linked-doc pickers (invoice / bill / payslip selectors in the
+	// voucher form) bind to the corresponding store list. ensureLoaded
+	// skips re-fetch on cached stores so subsequent voucher opens
+	// don't re-query three tables — substantial win on the back-button
+	// + open-another flow.
+	await Promise.all([
+		invoicesStore.ensureLoaded(),
+		billsStore.ensureLoaded(),
+		payslipsStore.ensureLoaded()
+	]);
 
 	const hydrate = async () => {
 		const row = await store.get(voucherId);

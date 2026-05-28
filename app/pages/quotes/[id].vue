@@ -551,7 +551,7 @@
 		}
 	});
 
-	await Promise.all([settingsStore.ensureLoaded(), clientsStore.load(), banksStore.ensureLoaded()]);
+	await Promise.all([settingsStore.ensureLoaded(), clientsStore.ensureLoaded(), banksStore.ensureLoaded()]);
 
 	const hydrate = async () => {
 		hydrating.value = true;

@@ -540,7 +540,7 @@
 
 	await Promise.all([
 		banksStore.ensureLoaded(),
-		clientsStore.load(),
+		clientsStore.ensureLoaded(),
 		invoicesStore.ensureLoaded(),
 		store.ensureLoaded()
 	]);

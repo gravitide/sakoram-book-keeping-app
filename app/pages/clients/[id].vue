@@ -558,8 +558,8 @@
 		}
 		await Promise.all([
 			settingsStore.ensureLoaded(),
-			invoicesStore.load(),
-			banksStore.load()
+			invoicesStore.ensureLoaded(),
+			banksStore.ensureLoaded()
 		]);
 		await statementPdf.open();
 	};

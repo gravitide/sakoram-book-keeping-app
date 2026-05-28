@@ -456,7 +456,7 @@
 	});
 
 	await Promise.all([
-		vendorsStore.load(),
+		vendorsStore.ensureLoaded(),
 		billsStore.ensureLoaded(),
 		categoriesStore.ensureLoaded(),
 		store.ensureLoaded()
