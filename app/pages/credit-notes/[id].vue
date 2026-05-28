@@ -378,7 +378,7 @@
 	});
 
 	await Promise.all([
-		clientsStore.load(),
+		clientsStore.ensureLoaded(),
 		invoicesStore.ensureLoaded(),
 		creditNotesStore.ensureLoaded()
 	]);

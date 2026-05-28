@@ -648,11 +648,15 @@
 	// Vouchers store is loaded too — derived paid / status / payments
 	// panel all read off it. If a deep-link navigates straight here,
 	// the panel would otherwise be empty until a manual refresh.
+	// All four use ensureLoaded so a second visit to /invoices/[id] is
+	// instant (Pinia state survives navigation; only a tenant switch
+	// or explicit .load() refetches). The first visit still cold-loads
+	// each store — same cost — but every subsequent open is free.
 	await Promise.all([
 		settingsStore.ensureLoaded(),
 		banksStore.ensureLoaded(),
-		clientsStore.load(),
-		vouchersStore.load()
+		clientsStore.ensureLoaded(),
+		vouchersStore.ensureLoaded()
 	]);
 
 	const hydrate = async () => {

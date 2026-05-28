@@ -530,15 +530,13 @@
 	// Payments panel reads them and the derived "paid" / "balance" /
 	// status all fall out of the voucher ledger. Vendors backs the
 	// Refresh-snapshot button on the Bill-from card.
-	if (vendorsStore.vendors.length === 0) {
-		vendorsStore.load().catch(() => { /* surfaced elsewhere */ });
-	}
-	if (categoriesStore.categories.length === 0) {
-		categoriesStore.load().catch(() => { /* surfaced via picker empty state */ });
-	}
-	if (vouchersStore.vouchers.length === 0) {
-		vouchersStore.load().catch(() => { /* non-fatal — payments panel just stays empty */ });
-	}
+	// Fire-and-forget — payments panel + vendor refresh + category
+	// picker hydrate as these arrive. ensureLoaded dedupes concurrent
+	// calls and skips when the store's already cached (subsequent
+	// visits to /bills/[id] are instant).
+	vendorsStore.ensureLoaded().catch(() => { /* surfaced elsewhere */ });
+	categoriesStore.ensureLoaded().catch(() => { /* surfaced via picker empty state */ });
+	vouchersStore.ensureLoaded().catch(() => { /* non-fatal — payments panel just stays empty */ });
 
 	const billId = Number(route.params.id);
 	if (!Number.isFinite(billId)) {

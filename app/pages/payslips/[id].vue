@@ -391,8 +391,10 @@
 	}
 
 	// Make sure the vouchers store has loaded so derived paid-state
-	// works without flicker.
-	if (vouchersStore.vouchers.length === 0) await vouchersStore.load();
+	// works without flicker. ensureLoaded dedupes concurrent calls
+	// and is a no-op on subsequent visits — only the first /payslips/[id]
+	// open per session cold-starts the vouchers store.
+	await vouchersStore.ensureLoaded();
 	// Settings drive theme color, PDF font, business name, header logo.
 	await settingsStore.ensureLoaded();
 
