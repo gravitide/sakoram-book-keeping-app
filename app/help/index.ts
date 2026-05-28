@@ -88,8 +88,17 @@ export const HELP_TOPICS: HelpTopic[] = [
 		summary: "Recording money you owe — supplier invoices, expense tracking by category, paying via vouchers.",
 		category: "documents",
 		icon: "i-lucide-file-input",
-		relatedSlugs: ["vouchers", "invoices", "vat", "expenses-by-vendor"],
+		relatedSlugs: ["vouchers", "invoices", "vat", "expenses-by-vendor", "recurring-bills"],
 		component: () => import("./topics/bills.vue")
+	},
+	{
+		slug: "recurring-bills",
+		title: "Recurring bills",
+		summary: "Templates that generate the same vendor bill on a schedule — rent, subscriptions, retainers. User-initiated generation, no surprises.",
+		category: "documents",
+		icon: "i-lucide-repeat-2",
+		relatedSlugs: ["bills", "vouchers", "vat", "expenses-by-vendor", "recurring-invoices"],
+		component: () => import("./topics/recurring-bills.vue")
 	},
 	{
 		slug: "vouchers",

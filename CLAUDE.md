@@ -216,6 +216,7 @@ sakoram_app/
 │  │  ├─ credit-notes/                ← list, [id] (negative-invoice document for refunds / returns; optional source_invoice_id link). "New credit note" opens NewCreditNoteModal. No PDF yet — follow-up PR.
 │  │  ├─ recurring-invoices/         ← list, [id] (invoice TEMPLATES that materialise as draft invoices on a user-initiated cadence). "New recurring" opens NewRecurringInvoiceModal. Pending count + RecurringGenerateModal for bulk generation. No PDF — templates aren't issued documents.
 │  │  ├─ bills/                       ← list, [id] (vendor-FK + snapshot). "New bill" opens NewBillModal.
+│  │  ├─ recurring-bills/            ← list, [id] (vendor-side mirror of recurring-invoices — bill TEMPLATES that materialise as unpaid bills on a user-initiated cadence). "New recurring" opens NewRecurringBillModal. Pending count + RecurringGenerateBillsModal for bulk generation. Carries a CATEGORY picker (bills have categories, invoices don't); no bank, no project title. Generated bills land in status `unpaid` (not draft — bills don't have a draft state).
 │  │  ├─ vouchers/                    ← list, new, [id] (money in/out; read-only by default → click Edit to mutate). Still uses a /new page — form is too heavy for a modal (8+ fields, prefill from ?bill=/?invoice=/?payslip=, overpayment guard).
 │  │  ├─ payroll/                     ← index.vue is a landing card grid (mirrors /reports); dashboard.vue holds the upcoming-cycle hero + MoM chart + recent runs + outstanding
 │  │  ├─ payslips/                    ← list w/ row context menu (multi-select bulk PDF), [id], bulk (auto-issue + auto-pay). "New payslip" opens NewPayslipModal.
@@ -987,6 +988,31 @@ See `src-tauri/migrations/` for the source of truth. High-level:
   (`is_paused=0 AND next_issue_date <= today AND
   (end_date IS NULL OR next_issue_date <= end_date)`) and a
   RecurringGenerateModal lets the user bulk-confirm.
+- `recurring_bills` + `recurring_bill_lines` — vendor-side mirror of
+  `recurring_invoices`. Templates that materialise into real bills
+  (status `unpaid`) on a user-initiated cadence. Same schedule shape
+  (`frequency`, `start_date`, `next_issue_date`, optional `end_date`)
+  and the same `is_paused` flag. Carries `vendor_id` FK +
+  `vendor_snapshot` + denormalised `vendor_name`, plus an optional
+  `category_id` FK + `category_snapshot` + the denormalised trio
+  (`category_name`/`color`/`icon`) so the list page can render the
+  category cell without parsing the snapshot — mirrors the bills
+  table's shape post-migration 0028. Bill defaults cloned onto each
+  generation: `pricing_mode`, `bundle_subtotal_cents`,
+  `vat_rate_basis_points`, `payment_terms_days`, `notes`. No
+  `business_bank_id` (bills don't carry one — we're paying THEM) and
+  no `project_title` (vendor invoices typically don't have one). Lines
+  table mirrors `recurring_invoice_lines` verbatim — no per-line
+  computed totals (recomputed at generation time). Generation is
+  **user-initiated** — `useRecurringBillsStore.generateOne(id)`
+  allocates a bill number, inserts a `bills` row in status `open` (the
+  bills store derives `unpaid` from it), clones the lines with
+  recomputed totals, advances `next_issue_date` by one frequency step,
+  increments `bills_generated`. Unlike recurring invoices (which
+  produce drafts for review), generated bills are real liabilities the
+  moment they land — the user records payment via a voucher on the
+  bills page when it's actually paid. `RecurringGenerateBillsModal` is
+  the bulk-confirm flow.
 
 `PRAGMA table_info(...)` is used in `data_io.rs` to discover columns
 dynamically — adding a column to a migration auto-flows into export.
@@ -1026,6 +1052,8 @@ dynamically — adding a column to a migration auto-flows into export.
 0028_denormalize_list_party_names.sql   ← denormalised `client_name` / `vendor_name` / `employee_name` columns on quotes / invoices / bills / payslips (plus `category_name/color/icon` on bills) so list pages render + sort + search without parsing the snapshot JSON per row. Backfilled from existing snapshots via SQLite's `json_extract`. Stores set the column whenever the snapshot is set; detail pages still use the full snapshot.
 0029_credit_notes.sql                   ← `credit_notes` + `credit_note_lines` tables for the Tier 2 credit-note feature. Mirrors invoice shape (client_id FK + client_snapshot + denormalised client_name, project_title, vat_rate_basis_points, subtotal/tax/total cents, notes, title_override) plus `source_invoice_id` (nullable FK ON DELETE SET NULL) for the "credit against invoice X" link. Status FSM: `draft | issued | cancelled`. Document numbering type `credit_note` added to `app/lib/numbering.ts` (prefix CRN).
 0030_recurring_invoices.sql             ← `recurring_invoices` + `recurring_invoice_lines` tables for the Tier 2 recurring-invoice templates feature. Templates carry a client_id FK + client_snapshot + denormalised client_name, a schedule (frequency / start_date / next_issue_date / optional end_date), and invoice defaults (pricing_mode, vat_rate_basis_points, payment_terms_days, project_title, notes, business_bank_id) cloned onto each generated invoice. `is_paused` flips a template inactive without losing data. `invoices_generated` + `last_generated_at` track materialisation. Generation is user-initiated via `useRecurringInvoicesStore.generateOne()` — no Tauri command, just sequential SQL inserts + a `next_issue_date` advance.
+0031_recurring_bundle_subtotal.sql      ← adds `bundle_subtotal_cents` to `recurring_invoices` so bundle-mode templates can store a lump-sum amount independent of the lines table (mirrors how issued invoices already store `subtotal_cents`).
+0032_recurring_bills.sql                ← `recurring_bills` + `recurring_bill_lines` tables — vendor-side mirror of recurring_invoices. Templates carry a vendor_id FK + vendor_snapshot + denormalised vendor_name, an optional category_id FK + category_snapshot + denormalised category_name/color/icon (bills have categories, invoices don't), a schedule (same frequency / start_date / next_issue_date / optional end_date shape), and bill defaults (pricing_mode, bundle_subtotal_cents, vat_rate_basis_points, payment_terms_days, notes). NO business_bank_id (bills don't carry one — we're paying THEM) and NO project_title. `bundle_subtotal_cents` folded in from the start, no separate migration. `bills_generated` + `last_generated_at` track materialisation. Generation user-initiated via `useRecurringBillsStore.generateOne()` — same shape as recurring invoices, but generated bills land in status `unpaid` (not draft — bills don't have a draft state).
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,
@@ -1217,6 +1245,7 @@ Invoices
 Recurring             ← /recurring-invoices — invoice templates that generate drafts on a user-initiated cadence
 Credit notes          ← /credit-notes — negative invoices for refunds / returns; optional link to source invoice
 Bills
+Recurring bills       ← /recurring-bills — vendor-side mirror of /recurring-invoices; generates real unpaid bills (not drafts) on a user-initiated cadence
 Vouchers
 ─── (divider)
 Payroll               ← /payroll — landing card grid mirroring /reports
@@ -1806,9 +1835,19 @@ already in the DB; nothing aggregates it for a date range. Build a
   /invoices before issuing, which is the safety net for one-off
   edits. Templates can be paused (kept in the list, doesn't show as
   pending) or deleted (already-generated invoices stay intact, since
-  they're real rows independent of the template). Recurring **bills**
-  haven't shipped yet — that's the next follow-up (vendor side
-  mirrors the client side).
+  they're real rows independent of the template).
+- ✅ **Recurring bills** — shipped. Vendor-side mirror of recurring
+  invoices: templates that generate real unpaid bills on the same
+  user-initiated cadence (weekly / monthly / quarterly / yearly).
+  `/recurring-bills` list page shows the pending count and a
+  one-click bulk-generate modal; per-template detail page tunes the
+  schedule + bill defaults + line items + the bill-category picker
+  (bills have categories, invoices don't). Generated bills land in
+  status `unpaid` (not draft — bills don't have a draft state), so
+  they're real liabilities on your books the moment they materialise.
+  Payment via the existing voucher flow. Same store / page shape as
+  recurring invoices with vendor swapped for client and no bank /
+  project-title fields (vendor invoices don't carry those).
 - **Bank reconciliation** — import a bank statement CSV and tick off
   matched vouchers. Manual today; a side-by-side reconcile screen
   would be a real productivity win for any business with > ~20
@@ -1841,18 +1880,21 @@ P&L + VAT + aged receivables alone close 80% of the "is this real
 bookkeeping software" perception gap. Credit notes are the
 next-most-impactful add after that.
 
-**Status (2026-05-27):** P&L + VAT + aged receivables + aged payables
+**Status (2026-05-28):** P&L + VAT + aged receivables + aged payables
 + cash flow + report PDF export shipped — Tier 1 reports module is
 essentially complete. **Sales by client + Expenses by vendor +
 Payroll register** also shipped, closing out the Tier 1 leftovers.
 Credit notes (Tier 2) shipped. Customer statements (Tier 2) shipped.
-**Recurring invoices (Tier 2) shipped** — templates that generate
-draft invoices on a user-initiated weekly/monthly/quarterly/yearly
-cadence. Next biggest Tier 2 gap is **bank reconciliation** (CSV
-import + side-by-side ticker against the voucher ledger) — biggest
-remaining productivity win for any SL business with > ~20
-transactions/month. Recurring bills (vendor-side mirror of recurring
-invoices) is a smaller follow-up that should slot in alongside.
+**Recurring invoices + Recurring bills (Tier 2) shipped** — templates
+that generate documents on a user-initiated weekly/monthly/quarterly/
+yearly cadence. Invoice templates produce drafts (review-first);
+bill templates produce real unpaid bills (immediate liability). Next
+biggest Tier 2 gap is **bank reconciliation** (CSV import +
+side-by-side ticker against the voucher ledger) — biggest remaining
+productivity win for any SL business with > ~20 transactions/month.
+After that, **statutory auto-compute on payslips** (EPF 8% employee /
+ETF 3% employer / PAYE) is the next-most-impactful payroll
+quality-of-life win.
 
 ---
 
