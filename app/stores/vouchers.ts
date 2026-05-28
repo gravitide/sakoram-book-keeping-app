@@ -31,6 +31,10 @@ export interface VoucherRow {
 	related_invoice_id: number | null
 	related_bill_id: number | null
 	related_payslip_id: number | null
+	// Bank account this voucher hit (NULL for cash transactions). Used
+	// by the reconcile page to scope matching per bank. Added in
+	// migration 0033.
+	business_bank_id: number | null
 	created_at: string
 }
 
@@ -154,8 +158,9 @@ export const useVouchersStore = defineStore("vouchers", () => {
 			`INSERT INTO vouchers (
 				number, voucher_type, voucher_date, party_name, amount_cents,
 				payment_method, reference, description,
-				related_invoice_id, related_bill_id, related_payslip_id
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				related_invoice_id, related_bill_id, related_payslip_id,
+				business_bank_id
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				allocation.number,
 				input.voucher_type,
@@ -167,7 +172,8 @@ export const useVouchersStore = defineStore("vouchers", () => {
 				input.description,
 				input.related_invoice_id,
 				input.related_bill_id,
-				input.related_payslip_id
+				input.related_payslip_id,
+				input.business_bank_id
 			]
 		);
 		if (result.lastInsertId === undefined) throw new Error("create: no lastInsertId");
@@ -184,7 +190,8 @@ export const useVouchersStore = defineStore("vouchers", () => {
 		"description",
 		"related_invoice_id",
 		"related_bill_id",
-		"related_payslip_id"
+		"related_payslip_id",
+		"business_bank_id"
 	];
 
 	const update = async (id: number, patch: VoucherUpdate): Promise<void> => {
