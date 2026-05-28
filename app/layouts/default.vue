@@ -409,6 +409,7 @@
 		{ to: "/bills", label: "Bills", icon: "i-lucide-file-input" },
 		{ to: "/recurring-bills", label: "Recurring bills", icon: "i-lucide-repeat-2" },
 		{ to: "/vouchers", label: "Vouchers", icon: "i-lucide-ticket" },
+		{ to: "/reconcile", label: "Reconcile", icon: "i-lucide-scale" },
 		{
 			// `/payroll` is the landing card grid (mirrors `/reports`).
 			// Dashboard lives at `/payroll/dashboard` so the top-level

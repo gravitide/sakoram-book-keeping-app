@@ -167,6 +167,19 @@
 					</UFormField>
 				</div>
 
+				<UFormField
+					v-if="method !== 'cash'"
+					label="Bank account"
+					help="Which of your bank accounts received / sent the money."
+				>
+					<USelect
+						v-model="bankId"
+						:items="bankPickerOptions"
+						value-key="value"
+						class="w-full"
+					/>
+				</UFormField>
+
 				<UFormField label="Description">
 					<UTextarea v-model="description" :rows="3" />
 				</UFormField>
@@ -207,6 +220,7 @@
 	import type { VoucherInput, VoucherMethod, VoucherType } from "~/stores/vouchers";
 	import { formatLKR } from "~/lib/money";
 	import { useBillsStore } from "~/stores/bills";
+	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { usePayslipsStore } from "~/stores/payslips";
 	import { useVouchersStore } from "~/stores/vouchers";
@@ -220,11 +234,12 @@
 	const invoicesStore = useInvoicesStore();
 	const billsStore = useBillsStore();
 	const payslipsStore = usePayslipsStore();
+	const banksStore = useBusinessBanksStore();
 
 	// Vouchers store has to be loaded too so the bills store's
 	// derivedStatus / paidCentsFor below see existing payment vouchers
 	// when we compute the suggested-amount default.
-	await Promise.all([store.load(), invoicesStore.load(), billsStore.load(), payslipsStore.load()]);
+	await Promise.all([store.load(), invoicesStore.load(), billsStore.load(), payslipsStore.load(), banksStore.ensureLoaded()]);
 
 	// "Record payment" on a bill or invoice detail page navigates here
 	// with ?bill=N or ?invoice=N — we pre-fill the appropriate fields
@@ -354,6 +369,7 @@
 	const partyName = ref<string>(initialPartyName);
 	const amountCents = ref<number>(seedAmountCents);
 	const method = ref<VoucherMethod | null>("bank_transfer");
+	const bankId = ref<number | null>(banksStore.defaultBank?.id ?? null);
 	const reference = ref<string>("");
 	const description = ref<string>(initialDescription);
 	const relatedInvoiceId = ref<number | null>(seedInvoice?.id ?? null);
@@ -407,6 +423,30 @@
 		{ label: "Other", value: "other" },
 		{ label: "—", value: null }
 	];
+
+	const bankPickerOptions = computed<{ label: string, value: number | null }[]>(() => {
+		const items: { label: string, value: number | null }[] = [
+			{ label: "—", value: null }
+		];
+		for (const b of banksStore.activeBanks) {
+			items.push({
+				label: b.bank_name ? `${b.label} · ${b.bank_name}` : b.label,
+				value: b.id
+			});
+		}
+		return items;
+	});
+
+	// Cash vouchers don't carry a bank. Auto-clear bankId when the
+	// payment method flips to cash; auto-default to the business's
+	// default bank when flipping back from cash.
+	watch(method, (next, prev) => {
+		if (next === "cash") {
+			bankId.value = null;
+		} else if (prev === "cash" && bankId.value === null) {
+			bankId.value = banksStore.defaultBank?.id ?? null;
+		}
+	});
 
 	// The document the voucher is currently linked to (whether by
 	// prefill or by the user picking from the dropdown). Drives the
@@ -569,6 +609,7 @@
 				party_name: partyName.value.trim(),
 				amount_cents: amountCents.value,
 				payment_method: method.value,
+				business_bank_id: method.value === "cash" ? null : bankId.value,
 				reference: reference.value.trim() || null,
 				description: description.value.trim() || null,
 				related_invoice_id: voucherType.value === "receipt" ? relatedInvoiceId.value : null,

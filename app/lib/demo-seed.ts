@@ -72,6 +72,14 @@ function daysFromNow(n: number): string {
 	return daysAgo(-n);
 }
 
+// Resolve the bank-account id for a seeded voucher. Cash transactions
+// don't belong to a bank account; everything else flows through the
+// default bank (which seedBanks() plants early in the seed flow).
+const bankIdFor = (paymentMethod: string | null): number | null => {
+	if (paymentMethod === "cash") return null;
+	return useBusinessBanksStore().defaultBank?.id ?? null;
+};
+
 // ---------- Settings -------------------------------------------------------
 
 const seedSettings = async () => {
@@ -580,6 +588,7 @@ const seedBills = async (vs: VendorIds, cats: CategoryIds): Promise<BillIds> => 
 		party_name: hnb.name,
 		amount_cents: 800_000,
 		payment_method: "bank_transfer",
+		business_bank_id: bankIdFor("bank_transfer"),
 		reference: "OUT-HNB-FX-1",
 		description: `Partial payment for ${(await bills.get(ids.bank))?.number}`,
 		related_invoice_id: null,
@@ -611,6 +620,7 @@ const seedVouchers = async (cs: ClientIds, vs: VendorIds, bs: BillIds, is: Invoi
 		party_name: galle.name,
 		amount_cents: 56_640_000,
 		payment_method: "bank_transfer",
+		business_bank_id: bankIdFor("bank_transfer"),
 		reference: "TXN-883421",
 		description: "Full payment for hotel branding refresh.",
 		related_invoice_id: is.galle,
@@ -625,6 +635,7 @@ const seedVouchers = async (cs: ClientIds, vs: VendorIds, bs: BillIds, is: Invoi
 		party_name: premier.name,
 		amount_cents: 60_000_000,
 		payment_method: "cheque",
+		business_bank_id: bankIdFor("cheque"),
 		reference: "CHQ-001245",
 		description: "Stage-2 milestone (50%).",
 		related_invoice_id: is.premier,
@@ -639,6 +650,7 @@ const seedVouchers = async (cs: ClientIds, vs: VendorIds, bs: BillIds, is: Invoi
 		party_name: ceb.name,
 		amount_cents: 3_540_000,
 		payment_method: "bank_transfer",
+		business_bank_id: bankIdFor("bank_transfer"),
 		reference: "OUT-CEB-04",
 		description: "April electricity bill.",
 		related_invoice_id: null,
@@ -654,6 +666,7 @@ const seedVouchers = async (cs: ClientIds, vs: VendorIds, bs: BillIds, is: Invoi
 		party_name: office.name,
 		amount_cents: 250_000,
 		payment_method: "cash",
+		business_bank_id: bankIdFor("cash"),
 		reference: null,
 		description: "Petty-cash advance for delivery handler.",
 		related_invoice_id: null,
@@ -1026,6 +1039,7 @@ const seedPayslips = async (employeeIds: number[], onProgress: SeedProgressFn = 
 					party_name: e.full_name,
 					amount_cents: payAmount,
 					payment_method: "bank_transfer",
+					business_bank_id: bankIdFor("bank_transfer"),
 					reference: `TXN-${payDate.replace(/-/g, "")}-${e.employee_number ?? e.id}`,
 					description: `Salary for ${bounds.start.slice(0, 7)}`,
 					related_invoice_id: null,
@@ -1205,6 +1219,7 @@ const seedBulkInvoices = async (clientIds: number[], onProgress: SeedProgressFn 
 				party_name: clientName,
 				amount_cents: Math.floor(total / 2),
 				payment_method: "bank_transfer",
+				business_bank_id: bankIdFor("bank_transfer"),
 				reference: `PART-${String(i).padStart(3, "0")}`,
 				description: `Bulk partial invoice #${i}`,
 				related_invoice_id: id,
@@ -1218,6 +1233,7 @@ const seedBulkInvoices = async (clientIds: number[], onProgress: SeedProgressFn 
 				party_name: clientName,
 				amount_cents: total,
 				payment_method: "bank_transfer",
+				business_bank_id: bankIdFor("bank_transfer"),
 				reference: `PAID-${String(i).padStart(3, "0")}`,
 				description: `Bulk paid invoice #${i}`,
 				related_invoice_id: id,
@@ -1299,6 +1315,7 @@ const seedBulkBills = async (
 				party_name: vendorName,
 				amount_cents: total,
 				payment_method: "bank_transfer",
+				business_bank_id: bankIdFor("bank_transfer"),
 				reference: `BLK-PAY-${String(i).padStart(4, "0")}`,
 				description: `Bulk paid bill #${i}`,
 				related_invoice_id: null,
@@ -1312,6 +1329,7 @@ const seedBulkBills = async (
 				party_name: vendorName,
 				amount_cents: Math.floor(total / 2),
 				payment_method: "bank_transfer",
+				business_bank_id: bankIdFor("bank_transfer"),
 				reference: `BLK-PAY-${String(i).padStart(4, "0")}-P`,
 				description: `Bulk partial bill #${i}`,
 				related_invoice_id: null,
@@ -1345,12 +1363,14 @@ const seedBulkVouchers = async (
 			? clients.clients.find((c) => c.id === partyId)?.name ?? "Demo client"
 			: vendors.vendors.find((v) => v.id === partyId)?.name ?? "Demo vendor";
 		const amount = (1 + (i % 12)) * 500_000;
+		const pm = methods[i % methods.length] ?? "bank_transfer";
 		await vouchers.create({
 			voucher_type: isReceipt ? "receipt" : "payment",
 			voucher_date: daysAgo((i * 13) % BULK_DATE_SPREAD_DAYS),
 			party_name: partyName,
 			amount_cents: amount,
-			payment_method: methods[i % methods.length] ?? "bank_transfer",
+			payment_method: pm,
+			business_bank_id: bankIdFor(pm),
 			reference: `BLK-VCH-${String(i).padStart(4, "0")}`,
 			description: isReceipt
 				? `Bulk receipt #${i}`

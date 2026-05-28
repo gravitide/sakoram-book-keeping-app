@@ -98,6 +98,20 @@
 					</UFormField>
 				</div>
 
+				<UFormField
+					v-if="method !== 'cash'"
+					label="Bank account"
+					help="Which of your bank accounts received / sent the money."
+				>
+					<USelect
+						v-model="bankId"
+						:items="bankPickerOptions"
+						value-key="value"
+						class="w-full"
+						:disabled="!editing"
+					/>
+				</UFormField>
+
 				<UFormField label="Description">
 					<UTextarea v-model="description" :rows="3" :disabled="!editing" />
 				</UFormField>
@@ -238,6 +252,7 @@
 	import { formatLKR } from "~/lib/money";
 	import { buildVoucherPdfPayload, resolveVoucherRelatedLabel } from "~/lib/voucher-pdf";
 	import { useBillsStore } from "~/stores/bills";
+	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
@@ -253,6 +268,7 @@
 	const invoicesStore = useInvoicesStore();
 	const billsStore = useBillsStore();
 	const payslipsStore = usePayslipsStore();
+	const banksStore = useBusinessBanksStore();
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
 	settingsStore.ensureLoaded().catch(() => { /* surfaced elsewhere */ });
@@ -279,6 +295,20 @@
 	const relatedInvoiceId = ref<number | null>(null);
 	const relatedBillId = ref<number | null>(null);
 	const relatedPayslipId = ref<number | null>(null);
+	const bankId = ref<number | null>(null);
+
+	const bankPickerOptions = computed<{ label: string, value: number | null }[]>(() => {
+		const items: { label: string, value: number | null }[] = [
+			{ label: "—", value: null }
+		];
+		for (const b of banksStore.activeBanks) {
+			items.push({
+				label: b.bank_name ? `${b.label} · ${b.bank_name}` : b.label,
+				value: b.id
+			});
+		}
+		return items;
+	});
 
 	const methodOptions: { label: string, value: VoucherMethod | null }[] = [
 		{ label: "Bank transfer", value: "bank_transfer" },
@@ -297,7 +327,8 @@
 	await Promise.all([
 		invoicesStore.ensureLoaded(),
 		billsStore.ensureLoaded(),
-		payslipsStore.ensureLoaded()
+		payslipsStore.ensureLoaded(),
+		banksStore.ensureLoaded()
 	]);
 
 	const hydrate = async () => {
@@ -315,14 +346,26 @@
 		relatedInvoiceId.value = row.related_invoice_id;
 		relatedBillId.value = row.related_bill_id;
 		relatedPayslipId.value = row.related_payslip_id;
+		bankId.value = row.business_bank_id;
 		dirty.value = false;
 	};
 
 	await hydrate();
 
-	watch([voucherDate, partyName, amountCents, method, reference, description, relatedInvoiceId, relatedBillId, relatedPayslipId], () => {
+	watch([voucherDate, partyName, amountCents, method, reference, description, relatedInvoiceId, relatedBillId, relatedPayslipId, bankId], () => {
 		dirty.value = true;
 	}, { deep: true });
+
+	// Cash vouchers don't carry a bank. Auto-clear bankId when the
+	// payment method flips to cash; auto-default to the business's
+	// default bank when flipping back from cash.
+	watch(method, (next, prev) => {
+		if (next === "cash") {
+			bankId.value = null;
+		} else if (prev === "cash" && bankId.value === null) {
+			bankId.value = banksStore.defaultBank?.id ?? null;
+		}
+	});
 
 	const isReceipt = computed(() => voucher.value?.voucher_type === "receipt");
 
@@ -387,7 +430,8 @@
 				description: description.value.trim() || null,
 				related_invoice_id: isReceipt.value ? relatedInvoiceId.value : null,
 				related_bill_id: !isReceipt.value ? relatedBillId.value : null,
-				related_payslip_id: !isReceipt.value ? relatedPayslipId.value : null
+				related_payslip_id: !isReceipt.value ? relatedPayslipId.value : null,
+				business_bank_id: method.value === "cash" ? null : bankId.value
 			});
 			await hydrate();
 			editing.value = false;
