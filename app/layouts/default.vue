@@ -407,6 +407,7 @@
 		{ to: "/recurring-invoices", label: "Recurring", icon: "i-lucide-repeat" },
 		{ to: "/credit-notes", label: "Credit notes", icon: "i-lucide-rotate-ccw" },
 		{ to: "/bills", label: "Bills", icon: "i-lucide-file-input" },
+		{ to: "/recurring-bills", label: "Recurring bills", icon: "i-lucide-repeat-2" },
 		{ to: "/vouchers", label: "Vouchers", icon: "i-lucide-ticket" },
 		{
 			// `/payroll` is the landing card grid (mirrors `/reports`).
