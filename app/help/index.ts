@@ -106,7 +106,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 		summary: "The cash ledger — every record of money actually moving in or out. Receipt vs payment, why it's the source of truth.",
 		category: "documents",
 		icon: "i-lucide-ticket",
-		relatedSlugs: ["invoices", "bills", "payslips", "cash-flow"],
+		relatedSlugs: ["invoices", "bills", "payslips", "cash-flow", "reconciliation"],
 		component: () => import("./topics/vouchers.vue")
 	},
 	{
@@ -117,6 +117,15 @@ export const HELP_TOPICS: HelpTopic[] = [
 		icon: "i-lucide-file-clock",
 		relatedSlugs: ["invoices", "aged-receivables", "credit-notes"],
 		component: () => import("./topics/customer-statements.vue")
+	},
+	{
+		slug: "reconciliation",
+		title: "Bank reconciliation",
+		summary: "Import a CSV bank statement, match its rows against existing vouchers, create vouchers from unmatched rows. Audit-ready books in minutes.",
+		category: "documents",
+		icon: "i-lucide-scale",
+		relatedSlugs: ["vouchers", "bills", "invoices"],
+		component: () => import("./topics/reconciliation.vue")
 	},
 	// Payroll
 	{
