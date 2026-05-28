@@ -6,65 +6,79 @@
 
 		<!-- ───────────────────────── Bundle mode ───────────────────────── -->
 		<template v-else-if="mode === 'bundle'">
-			<!-- Column header — only on wide windows -->
-			<div class="hidden xl:grid xl:grid-cols-[2.25rem_minmax(14rem,24rem)_minmax(0,1fr)_2.25rem] xl:gap-x-3 text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border) pb-2">
-				<span />
-				<span>Item</span>
-				<span>Description</span>
-				<span />
-			</div>
+			<!-- Each scope line is a card: drag handle + item input + delete
+				on the top row, full-width description textarea below.
+				Card-style at all breakpoints — the previous xl-only grid
+				gave Description ~2x the width of Item which read as
+				unbalanced. A stacked "item header / scope body" layout
+				is the natural shape: short item label, longer scope
+				prose, both with the room they need.
 
+				Item label is hand-decorated as a small uppercase
+				"ITEM #N" badge on the left of the card header — clearer
+				visual identity per row + makes the drag handle's
+				purpose obvious by association. -->
 			<div
 				v-for="(line, idx) in lines"
 				:key="idx"
-				class="flex items-stretch rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated)/40 overflow-hidden
-					xl:grid xl:grid-cols-[2.25rem_minmax(14rem,24rem)_minmax(0,1fr)_2.25rem] xl:gap-x-3 xl:items-start xl:py-3
-					xl:rounded-none xl:border-0 xl:border-b xl:border-(--ui-border)/60 xl:bg-transparent xl:overflow-visible"
+				class="group rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated)/40 hover:bg-(--ui-bg-elevated)/60 transition-colors"
 				:class="rowStateClass(idx)"
 				@dragover.prevent="onDragOver(idx)"
 				@drop.prevent="onDrop(idx)"
 				@dragend="resetDrag"
 			>
-				<!-- Drag handle rail -->
-				<div
-					class="flex items-center justify-center w-9 shrink-0 border-r border-(--ui-border) text-(--ui-text-dimmed) transition-colors
-						xl:w-auto xl:border-r-0 xl:self-stretch xl:py-3 xl:rounded-md"
-					:class="disabled ? 'opacity-30' : 'cursor-grab active:cursor-grabbing hover:text-(--ui-text) hover:bg-(--ui-bg-elevated)'"
-					:draggable="!disabled"
-					role="button"
-					aria-label="Drag to reorder"
-					@dragstart="onDragStart(idx, $event)"
-				>
-					<UIcon name="i-lucide-grip-vertical" class="size-4" />
-				</div>
-
-				<!-- Content column -->
-				<div class="flex-1 min-w-0 flex flex-col gap-3 p-3 xl:contents">
-					<div class="min-w-0">
-						<UInput
-							:model-value="line.item_label"
-							placeholder="e.g. App development"
-							:disabled="disabled"
-							class="w-full"
-							@update:model-value="updateField(idx, 'item_label', String($event))"
-						/>
+				<!-- Header row: drag handle + row index badge + item input + delete -->
+				<div class="flex items-center gap-2 px-3 pt-3">
+					<div
+						class="flex items-center justify-center size-7 shrink-0 rounded-md text-(--ui-text-dimmed) transition-colors"
+						:class="disabled
+							? 'opacity-30'
+							: 'cursor-grab active:cursor-grabbing hover:bg-(--ui-bg-accented) hover:text-(--ui-text)'"
+						:draggable="!disabled"
+						role="button"
+						aria-label="Drag to reorder"
+						@dragstart="onDragStart(idx, $event)"
+					>
+						<UIcon name="i-lucide-grip-vertical" class="size-4" />
 					</div>
-					<div class="min-w-0">
-						<span class="block xl:hidden text-xs font-medium uppercase tracking-wide text-(--ui-text-muted) mb-1">Description</span>
-						<UTextarea
-							:model-value="line.description"
-							placeholder="Scope details. Use line breaks for sub-points."
-							:rows="3"
-							:disabled="disabled"
-							class="w-full"
-							@update:model-value="updateField(idx, 'description', String($event))"
-						/>
-					</div>
+					<span class="text-xs font-medium uppercase tracking-wider text-(--ui-text-muted) shrink-0 tabular-nums">
+						Item {{ idx + 1 }}
+					</span>
+					<UInput
+						:model-value="line.item_label"
+						placeholder="e.g. App development"
+						:disabled="disabled"
+						class="flex-1 min-w-0"
+						@update:model-value="updateField(idx, 'item_label', String($event))"
+					/>
+					<UButton
+						size="xs"
+						variant="ghost"
+						color="error"
+						icon="i-lucide-trash-2"
+						:disabled="disabled"
+						aria-label="Delete row"
+						@click="removeRow(idx)"
+					/>
 				</div>
-
-				<!-- Delete rail -->
-				<div class="flex items-center justify-center w-9 shrink-0 border-l border-(--ui-border) xl:w-auto xl:border-l-0 xl:self-stretch xl:py-3">
-					<UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" :disabled="disabled" @click="removeRow(idx)" />
+				<!-- Description row — full width below. Indented to align
+					with the item input above (drag handle 28 + gap 8 +
+					"Item N" badge ~52 + gap 8 = 96px from the left edge
+					of the card padding, which is 12px in itself, so
+					ml-[88px] from the card content's left padding edge.
+					Pragmatic: ml-9 (36px) just keeps it off the very
+					left edge so it reads as part of the same item;
+					perfect-pixel alignment with the input above isn't
+					worth the fragility.) -->
+				<div class="px-3 pt-2 pb-3 pl-12">
+					<UTextarea
+						:model-value="line.description"
+						placeholder="Scope details. Use line breaks for sub-points."
+						:rows="2"
+						:disabled="disabled"
+						class="w-full"
+						@update:model-value="updateField(idx, 'description', String($event))"
+					/>
 				</div>
 			</div>
 		</template>
