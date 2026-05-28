@@ -218,6 +218,7 @@ sakoram_app/
 │  │  ├─ bills/                       ← list, [id] (vendor-FK + snapshot). "New bill" opens NewBillModal.
 │  │  ├─ recurring-bills/            ← list, [id] (vendor-side mirror of recurring-invoices — bill TEMPLATES that materialise as unpaid bills on a user-initiated cadence). "New recurring" opens NewRecurringBillModal. Pending count + RecurringGenerateBillsModal for bulk generation. Carries a CATEGORY picker (bills have categories, invoices don't); no bank, no project title. Generated bills land in status `unpaid` (not draft — bills don't have a draft state).
 │  │  ├─ vouchers/                    ← list, new, [id] (money in/out; read-only by default → click Edit to mutate). Still uses a /new page — form is too heavy for a modal (8+ fields, prefill from ?bill=/?invoice=/?payslip=, overpayment guard).
+│  │  ├─ reconcile.vue                ← bank reconciliation: import bank statement CSV, match rows to vouchers, create vouchers from unmatched. /reconcile route.
 │  │  ├─ payroll/                     ← index.vue is a landing card grid (mirrors /reports); dashboard.vue holds the upcoming-cycle hero + MoM chart + recent runs + outstanding
 │  │  ├─ payslips/                    ← list w/ row context menu (multi-select bulk PDF), [id], bulk (auto-issue + auto-pay). "New payslip" opens NewPayslipModal.
 │  │  ├─ reports/                     ← aggregate views over the books. index.vue lists available + upcoming reports; profit-loss.vue (accrual P&L), vat.vue (output VAT vs input VAT), aged-receivables.vue (open-invoice snapshot by days past due), aged-payables.vue (open-bill mirror), and cash-flow.vue (receipts in − payments out by month, cash basis) are wired up. No DB writes.
@@ -955,6 +956,21 @@ See `src-tauri/migrations/` for the source of truth. High-level:
   detail page is **read-only by default**; the user clicks Edit to
   enter mutate-mode (Cancel re-hydrates from DB, Save persists +
   exits edit mode).
+- `bank_statement_imports` — one row per CSV statement upload.
+  business_bank_id FK + filename + imported_at + column_mapping
+  (JSON, so re-imports remember the column assignment).
+- `bank_statement_rows` — one row per parsed statement line.
+  Signed amount_cents, optional balance, dedupe_hash (sha256 of
+  date|amount|description|reference) UNIQUE per bank so re-imports
+  silently skip duplicates. matched_voucher_id nullable FK to
+  vouchers (SET NULL on voucher delete so statement history
+  survives).
+- `vouchers.business_bank_id` — explicit FK to business_banks for
+  per-bank reconciliation scoping. NULL for cash vouchers.
+  Backfilled to default bank for existing non-cash vouchers in
+  migration 0033.
+- `vouchers.reconciled_at` — ISO timestamp set when a voucher is
+  matched to a statement row; cleared on unlink.
 - `document_attachments` — scans / photos attached to any document
   (quote / invoice / bill / voucher). Polymorphic: keyed by
   `(document_type, document_id)`, **no FK** — so each document store's
@@ -1054,6 +1070,8 @@ dynamically — adding a column to a migration auto-flows into export.
 0030_recurring_invoices.sql             ← `recurring_invoices` + `recurring_invoice_lines` tables for the Tier 2 recurring-invoice templates feature. Templates carry a client_id FK + client_snapshot + denormalised client_name, a schedule (frequency / start_date / next_issue_date / optional end_date), and invoice defaults (pricing_mode, vat_rate_basis_points, payment_terms_days, project_title, notes, business_bank_id) cloned onto each generated invoice. `is_paused` flips a template inactive without losing data. `invoices_generated` + `last_generated_at` track materialisation. Generation is user-initiated via `useRecurringInvoicesStore.generateOne()` — no Tauri command, just sequential SQL inserts + a `next_issue_date` advance.
 0031_recurring_bundle_subtotal.sql      ← adds `bundle_subtotal_cents` to `recurring_invoices` so bundle-mode templates can store a lump-sum amount independent of the lines table (mirrors how issued invoices already store `subtotal_cents`).
 0032_recurring_bills.sql                ← `recurring_bills` + `recurring_bill_lines` tables — vendor-side mirror of recurring_invoices. Templates carry a vendor_id FK + vendor_snapshot + denormalised vendor_name, an optional category_id FK + category_snapshot + denormalised category_name/color/icon (bills have categories, invoices don't), a schedule (same frequency / start_date / next_issue_date / optional end_date shape), and bill defaults (pricing_mode, bundle_subtotal_cents, vat_rate_basis_points, payment_terms_days, notes). NO business_bank_id (bills don't carry one — we're paying THEM) and NO project_title. `bundle_subtotal_cents` folded in from the start, no separate migration. `bills_generated` + `last_generated_at` track materialisation. Generation user-initiated via `useRecurringBillsStore.generateOne()` — same shape as recurring invoices, but generated bills land in status `unpaid` (not draft — bills don't have a draft state).
+0033_voucher_bank_id.sql                ← `vouchers.business_bank_id` FK to business_banks (ON DELETE SET NULL) + index. Backfilled non-cash existing vouchers to the default bank.
+0034_bank_reconciliation.sql            ← `bank_statement_imports` + `bank_statement_rows` tables. `vouchers.reconciled_at` ISO timestamp column. Bank FKs are RESTRICT (a bank with reconciliation history can't be deleted without clearing imports first). `matched_voucher_id` is SET NULL so deleting a voucher quietly unmatches its statement row.
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,
@@ -1247,6 +1265,7 @@ Credit notes          ← /credit-notes — negative invoices for refunds / retu
 Bills
 Recurring bills       ← /recurring-bills — vendor-side mirror of /recurring-invoices; generates real unpaid bills (not drafts) on a user-initiated cadence
 Vouchers
+Reconcile             ← /reconcile — bank reconciliation; import CSV statement, match rows to vouchers, create vouchers from unmatched rows
 ─── (divider)
 Payroll               ← /payroll — landing card grid mirroring /reports
   ├─ Dashboard       ← /payroll/dashboard — cycle / KPIs / MoM chart / recent runs
@@ -1742,6 +1761,14 @@ persisted to localStorage).
   `PROTECT_FLAG` is null — reports always render unencrypted; the
   per-type protection is an invoice/quote/bill/voucher/payslip
   concern).
+- ✅ **Bank reconciliation** — shipped. Standard-scope reconciliation:
+  CSV import with column-mapping UI (per-bank last-mapping recall),
+  auto-suggest matches (amount + date ±3d + reference token overlap,
+  scored), one-click voucher creation from unmatched rows. Persisted
+  statement rows via two new tables (`bank_statement_imports` +
+  `bank_statement_rows`), dedupe via sha256 hash so re-imports skip
+  duplicates. `vouchers.business_bank_id` FK added (migration 0033)
+  so matching is cleanly scoped per bank.
 
 ### Deferred / open items
 
@@ -1884,19 +1911,15 @@ next-most-impactful add after that.
 
 **Status (2026-05-28):** P&L + VAT + aged receivables + aged payables
 + cash flow + report PDF export shipped — Tier 1 reports module is
-essentially complete. **Sales by client + Expenses by vendor +
-Payroll register** also shipped, closing out the Tier 1 leftovers.
-Credit notes (Tier 2) shipped. Customer statements (Tier 2) shipped.
-**Recurring invoices + Recurring bills (Tier 2) shipped** — templates
-that generate documents on a user-initiated weekly/monthly/quarterly/
-yearly cadence. Invoice templates produce drafts (review-first);
-bill templates produce real unpaid bills (immediate liability). Next
-biggest Tier 2 gap is **bank reconciliation** (CSV import +
-side-by-side ticker against the voucher ledger) — biggest remaining
-productivity win for any SL business with > ~20 transactions/month.
-After that, **statutory auto-compute on payslips** (EPF 8% employee /
-ETF 3% employer / PAYE) is the next-most-impactful payroll
-quality-of-life win.
+complete. **Sales by client + Expenses by vendor + Payroll register**
+also shipped. Credit notes (Tier 2) shipped. Customer statements
+(Tier 2) shipped. Recurring invoices + Recurring bills (Tier 2)
+shipped. **Bank reconciliation (Tier 2) shipped** — CSV import,
+suggestion-based matching, voucher creation from unmatched rows.
+Next biggest gap is **statutory auto-compute on payslips** (EPF 8%
+/ ETF 3% / PAYE) — would dramatically lift the SL payroll
+credibility. After that, the **Cmd/Ctrl+K command palette** is the
+next "feels native" win.
 
 ---
 
