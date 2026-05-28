@@ -125,34 +125,102 @@
 			</div>
 		</UCard>
 
-		<!-- Unreconciled vouchers side panel -->
+		<!-- Unreconciled vouchers panel — vouchers on this bank that
+			haven't been matched to a statement row. Same ResizableDataTable
+			shape every other list page uses (sort, paginate, auto-fit,
+			localStorage column widths) so the rhythm carries through. -->
 		<UCard v-if="unreconciledVouchers.length > 0">
 			<template #header>
-				<div class="app-chrome font-medium">
-					Unreconciled vouchers ({{ unreconciledVouchers.length }})
+				<div class="flex items-center justify-between gap-3 flex-wrap">
+					<div class="app-chrome font-medium">
+						Unreconciled vouchers ({{ unreconciledVouchers.length }})
+					</div>
+					<UButton
+						size="xs"
+						variant="soft"
+						color="neutral"
+						icon="i-lucide-table-columns-split"
+						title="Auto-size columns to their content"
+						@click="autoFitUnreconciledColumns"
+					>
+						Auto-fit columns
+					</UButton>
 				</div>
 			</template>
 			<div class="text-xs text-(--ui-text-muted) mb-3">
 				Vouchers on this bank that aren't on the imported statement. Could be a missing entry or a bounced transaction.
 			</div>
-			<div class="space-y-1">
-				<NuxtLink
-					v-for="v in unreconciledVouchers.slice(0, 20)"
-					:key="v.id"
-					:to="`/vouchers/${v.id}`"
-					class="flex items-center justify-between gap-3 px-3 py-2 rounded-md hover:bg-(--ui-bg-elevated) text-sm"
+			<ResizableDataTable
+				ref="unreconciledTableRef"
+				:rows="unreconciledVouchers"
+				state-key="reconcile-unreconciled-vouchers-table"
+				default-sort-field="voucher_date"
+				:default-sort-order="-1"
+				@row-click="(row) => router.push(`/vouchers/${row.id}`)"
+			>
+				<Column field="number" header="Number" sortable>
+					<template #body="{ data }">
+						<div class="truncate font-medium tabular-nums">
+							{{ data.number }}
+						</div>
+					</template>
+				</Column>
+				<Column field="voucher_type" header="Type" sortable>
+					<template #body="{ data }">
+						<UBadge
+							:color="data.voucher_type === 'receipt' ? 'success' : 'warning'"
+							variant="subtle"
+							size="sm"
+							class="min-w-24 justify-center uppercase tracking-wider"
+						>
+							{{ data.voucher_type === 'receipt' ? 'Receipt' : 'Payment' }}
+						</UBadge>
+					</template>
+				</Column>
+				<Column field="voucher_date" header="Date" sortable>
+					<template #body="{ data }">
+						<div class="truncate text-(--ui-text-muted) tabular-nums">
+							{{ data.voucher_date }}
+						</div>
+					</template>
+				</Column>
+				<Column field="party_name" header="Party" sortable>
+					<template #body="{ data }">
+						<div class="truncate">
+							{{ data.party_name }}
+						</div>
+					</template>
+				</Column>
+				<Column field="reference" header="Reference" sortable>
+					<template #body="{ data }">
+						<div class="truncate text-(--ui-text-muted)">
+							{{ data.reference || "—" }}
+						</div>
+					</template>
+				</Column>
+				<Column field="description" header="Description" sortable>
+					<template #body="{ data }">
+						<div class="truncate text-(--ui-text-muted)">
+							{{ data.description || "—" }}
+						</div>
+					</template>
+				</Column>
+				<Column
+					field="amount_cents"
+					header="Amount"
+					sortable
+					:style="{ textAlign: 'right' }"
 				>
-					<span class="font-mono text-xs">{{ v.number }}</span>
-					<span class="text-(--ui-text-muted)">{{ v.voucher_date }}</span>
-					<span class="flex-1 truncate text-(--ui-text-muted)">{{ v.description || "—" }}</span>
-					<span class="tabular-nums" :class="v.voucher_type === 'receipt' ? 'text-(--ui-success)' : 'text-(--ui-error)'">
-						{{ v.voucher_type === "receipt" ? "+" : "−" }}{{ formatLKR(v.amount_cents) }}
-					</span>
-				</NuxtLink>
-			</div>
-			<div v-if="unreconciledVouchers.length > 20" class="text-xs text-(--ui-text-muted) mt-3 text-center">
-				+ {{ unreconciledVouchers.length - 20 }} more
-			</div>
+					<template #body="{ data }">
+						<div
+							class="truncate text-right tabular-nums whitespace-nowrap font-medium"
+							:class="data.voucher_type === 'receipt' ? 'text-(--ui-success)' : 'text-(--ui-error)'"
+						>
+							{{ data.voucher_type === 'receipt' ? '+' : '−' }} {{ formatLKR(data.amount_cents) }}
+						</div>
+					</template>
+				</Column>
+			</ResizableDataTable>
 		</UCard>
 
 		<!-- Modals — components will be created in subsequent tasks. -->
@@ -188,6 +256,13 @@
 	const vouchersStore = useVouchersStore();
 	const store = useBankStatementsStore();
 	const toast = useToast();
+	const router = useRouter();
+
+	// Auto-fit hook for the unreconciled-vouchers ResizableDataTable —
+	// same shape every list page exposes (tableRef.autoFit()) so the
+	// "Auto-fit columns" button has the standard behaviour.
+	const unreconciledTableRef = ref<{ autoFit: () => void } | null>(null);
+	const autoFitUnreconciledColumns = () => unreconciledTableRef.value?.autoFit();
 
 	await Promise.all([
 		banks.ensureLoaded(),
