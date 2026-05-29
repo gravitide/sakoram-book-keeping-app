@@ -275,7 +275,10 @@ sakoram_app/
 │  │  ├─ useActiveCurrency.ts         ← live ref of the active business's currency meta
 │  │  ├─ useUserPlatform.ts           ← cached host platform via @tauri-apps/plugin-os — exposes isMac / isWindows / isLinux for platform-conditional UI (e.g. macOS titlebar layout)
 │  │  ├─ useDragToScroll.ts           ← left-click-drag panning for the PrimeVue DataTable body. Listens on a stable wrapper and resolves the scroller per-mousedown so it survives DataTable remounts (auto-fit-columns triggers a remount).
-│  │  └─ useCalendarEvents.ts         ← aggregates due-date events from invoices / bills / quotes / payslips into a Map<YYYY-MM-DD, CalendarEvent[]>. Per-source emitters are easy to extend — just add another computed + push into the sources array.
+│  │  ├─ useCalendarEvents.ts         ← aggregates due-date events from invoices / bills / quotes / payslips into a Map<YYYY-MM-DD, CalendarEvent[]>. Per-source emitters are easy to extend — just add another computed + push into the sources array.
+│  │  ├─ usePageLoading.ts            ← per-page loading flag with a guaranteed rAF yield around the async work so list / detail pages actually paint a skeleton before stores load. Pair with ListPageSkeleton for content-shaped placeholders.
+│  │  ├─ useCsvParser.ts              ← parseCsv(input) → { headers, rows } for bank reconciliation imports. Handles quoted fields, escaped quotes, CR/LF/CRLF, empty fields, UTF-8 BOM. Pure function, fully unit-tested.
+│  │  └─ useHelpWindow.ts             ← spawns / focuses the help WebviewWindow (single stable label `help-main` so clicking Help twice doesn't pile up windows). Emits `help:navigate` Tauri event when a slug is supplied so an existing window routes to that topic. Falls back to in-place router push outside the Tauri runtime.
 │  ├─ help/                           ← in-app help library. `index.ts` is the topic registry (slug, title, summary, category, icon, lazy component); one `.vue` per topic under `topics/`. See "Why help topics are Vue components" decision below.
 │  ├─ lib/
 │  │  ├─ db.ts                        ← getDb() (lazy, reads active tenant URL), select/execute
@@ -289,6 +292,12 @@ sakoram_app/
 │  │  ├─ voucher-pdf.ts               ← shared builder for the one-page voucher.typ template + resolveVoucherRelatedLabel helper for the linked-doc tag
 │  │  ├─ payslip-pdf.ts               ← shared payload builder used by both payslip detail page and list-row Generate-PDF action
 │  │  ├─ payroll-cycle.ts             ← resolvePayrollCycle + nextPayrollCycle: turn (year, month, settings) → ISO dates with clamping (31 = last day of month)
+│  │  ├─ report-pdf.ts                ← PDF payload builders for every report page (P&L / VAT / aged receivables + payables / cash flow / sales-by-client / expenses-by-vendor / payroll register). All consumed by `export_report_pdf` against `src-tauri/templates/report.typ`.
+│  │  ├─ statement-pdf.ts             ← customer statement PDF payload builder — point-in-time snapshot of one client's outstanding invoices with aging buckets. Fed to `export_statement_pdf` against `src-tauri/templates/statement.typ`. Ad-hoc, never archived.
+│  │  ├─ dashboard-data.ts            ← SQL-side aggregates for the dashboard KPI tiles + charts. Pushes reduction into SQLite so first paint doesn't wait on ~3400 rows of snapshot JSON across the IPC bridge.
+│  │  ├─ validation.ts                ← Zod schemas for UI ↔ DB boundary; currently settings + clients only.
+│  │  ├─ date-parse.ts                ← parseStatementDate(raw, format) for bank reconciliation CSV imports. Supports YYYY-MM-DD / DD/MM/YYYY / DD-MM-YYYY / DD-MMM-YYYY with Date-roundtrip validation (Feb 31 → null). Pure function, fully unit-tested.
+│  │  ├─ reconcile-match.ts           ← pure scored matcher used by bank reconciliation. ±1 day = 100, ±2 = 90, ±3 = 80; +20 for shared reference token. No Pinia / Vue deps so it's trivially testable.
 │  │  └─ theme.ts                     ← THEME_COLORS palette (name → hex)
 │  ├─ middleware/
 │  │  └─ tenant.global.ts             ← redirect to /welcome if no active tenant
@@ -309,7 +318,11 @@ sakoram_app/
 │     ├─ document_attachments.ts      ← scans / photos attached to any document (local file + phone upload)
 │     ├─ bills.ts                     ← vendor_id FK + vendor_snapshot + category_snapshot. Payments via vouchers.related_bill_id.
 │     ├─ payslips.ts                  ← payslips + payslip_lines, status FSM, derivedStatus/paidCentsFor sum vouchers.related_payslip_id.
-│     ├─ vouchers.ts                  ← receipts/payments; carries related_invoice_id, related_bill_id, related_payslip_id
+│     ├─ vouchers.ts                  ← receipts/payments; carries related_invoice_id, related_bill_id, related_payslip_id, business_bank_id, reconciled_at
+│     ├─ credit_notes.ts              ← negative-invoice document for refunds / returns; mirrors invoice shape with optional source_invoice_id link. Status FSM draft → issued → cancelled.
+│     ├─ recurring_invoices.ts        ← invoice TEMPLATES that materialise as draft invoices on a user-initiated cadence. generateOne(id) clones lines with recomputed totals and advances next_issue_date.
+│     ├─ recurring_bills.ts           ← vendor-side mirror of recurring_invoices; generated bills land in status `unpaid` (not draft — bills have no draft state).
+│     ├─ bank_statements.ts           ← imported bank statement rows + imports table. linkMatch / unlinkMatch run as two sequential auto-commits per the connection-pool caveat. suggestMatchesFor wraps the pure matcher in app/lib/reconcile-match.ts.
 │     └─ tenants.ts                   ← bridges JS to Rust tenant registry
 └─ src-tauri/
    ├─ Cargo.toml                      ← Rust deps (tauri 2.10, sqlx 0.8, zip 2, qpdf 0.3 vendored)
@@ -1877,10 +1890,15 @@ already in the DB; nothing aggregates it for a date range. Build a
   Payment via the existing voucher flow. Same store / page shape as
   recurring invoices with vendor swapped for client and no bank /
   project-title fields (vendor invoices don't carry those).
-- **Bank reconciliation** — import a bank statement CSV and tick off
-  matched vouchers. Manual today; a side-by-side reconcile screen
-  would be a real productivity win for any business with > ~20
-  transactions/month.
+- ✅ **Bank reconciliation** — shipped. CSV statement import with
+  column-mapping UI (per-bank last-mapping recall), scored
+  auto-suggest matches (amount + date ±3d + reference token overlap),
+  one-click voucher linking, and a "create voucher from unmatched
+  row" flow. Persisted statement rows via two new tables; SHA-256
+  dedupe so re-imports skip duplicates. `vouchers.business_bank_id`
+  FK added so matching scopes per bank. See migrations 0033 + 0034.
+  Manual tick-off mode (for users whose bank only emits PDFs) is a
+  planned follow-up.
 
 **Tier 3 — niceties, low-leverage:**
 
