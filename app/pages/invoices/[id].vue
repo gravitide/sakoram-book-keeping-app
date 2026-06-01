@@ -271,18 +271,55 @@
 					</template>
 
 					<div v-if="pricingMode === 'bundle' && editable" class="space-y-3">
-						<UFormField label="Invoice subtotal" help="Total exclusive of VAT.">
+						<div class="flex items-center justify-between gap-2">
+							<span class="text-xs text-(--ui-text-muted) select-none">Amount entered is</span>
+							<div class="flex gap-1">
+								<UButton
+									size="xs"
+									:variant="vatMode === 'exclusive' ? 'solid' : 'ghost'"
+									:color="vatMode === 'exclusive' ? 'primary' : 'neutral'"
+									@click="vatMode = 'exclusive'"
+								>
+									Before VAT
+								</UButton>
+								<UButton
+									size="xs"
+									:variant="vatMode === 'inclusive' ? 'solid' : 'ghost'"
+									:color="vatMode === 'inclusive' ? 'primary' : 'neutral'"
+									@click="vatMode = 'inclusive'"
+								>
+									VAT-inclusive
+								</UButton>
+							</div>
+						</div>
+						<UFormField v-if="vatMode === 'exclusive'" label="Invoice subtotal" help="Total exclusive of VAT.">
 							<MoneyInput v-model="bundleSubtotalCents" />
 						</UFormField>
-						<UFormField label="VAT rate (%)" help="Set to 0 for a tax-free invoice.">
-							<UInputNumber
-								v-model="vatRatePct"
-								:step="0.01"
-								:min="0"
-								:max="100"
-								class="md:w-32"
-							/>
+						<UFormField v-else label="Grand total (incl. VAT)" help="We split out the subtotal and VAT below.">
+							<MoneyInput v-model="grandTotalCents" />
 						</UFormField>
+						<div class="w-1/2 ml-auto space-y-2">
+							<div class="flex justify-end">
+								<UCheckbox
+									:model-value="vatEnabled"
+									label="Charge VAT"
+									@update:model-value="(v) => setVatEnabled(v === true)"
+								/>
+							</div>
+							<UFormField
+								v-if="vatEnabled"
+								label="VAT rate (%)"
+								:ui="{ labelWrapper: 'justify-end', label: 'text-right' }"
+							>
+								<UInputNumber
+									v-model="vatRatePct"
+									:step="0.01"
+									:min="0"
+									:max="100"
+									class="w-full"
+								/>
+							</UFormField>
+						</div>
 					</div>
 
 					<div class="flex justify-end" :class="{ 'border-t border-(--ui-border) pt-4 mt-4': pricingMode === 'bundle' && editable }">
@@ -563,6 +600,41 @@
 
 	const bundleSubtotalCents = ref<number>(0);
 	const vatRatePct = ref<number>(0);
+	// "Charge VAT" toggle. The persisted source of truth stays the rate
+	// (0 = no VAT), so vatEnabled derives from the rate on hydrate. Toggling
+	// it off zeroes the rate; toggling on restores the last non-zero rate
+	// (falling back to the SL-standard 18% the first time).
+	const vatEnabled = ref<boolean>(false);
+	const lastVatPct = ref<number>(18);
+	// VAT entry mode (ephemeral UI state, not persisted). 'exclusive' = type
+	// the net subtotal, VAT added on top (default). 'inclusive' = type the
+	// gross grand total and we split out subtotal + VAT from the rate. The
+	// stored value is always the net subtotal_cents + rate, so a reload shows
+	// the net breakdown regardless of which mode it was entered in.
+	const vatMode = ref<"exclusive" | "inclusive">("exclusive");
+	// Two-way bridge for inclusive mode. Getter reconstructs the gross total
+	// from the stored net subtotal + rate; setter splits an entered gross back
+	// into net subtotal (tax = total × rate / (100% + rate)).
+	const grandTotalCents = computed<number>({
+		get: () => {
+			const bp = Math.round(vatRatePct.value * 100);
+			return bundleSubtotalCents.value + Math.round((bundleSubtotalCents.value * bp) / 10000);
+		},
+		set: (total) => {
+			const bp = Math.round(vatRatePct.value * 100);
+			const tax = Math.round((total * bp) / (10000 + bp));
+			bundleSubtotalCents.value = Math.max(0, total - tax);
+		}
+	});
+	const setVatEnabled = (on: boolean) => {
+		vatEnabled.value = on;
+		if (on) {
+			vatRatePct.value = lastVatPct.value > 0 ? lastVatPct.value : 18;
+		} else {
+			if (vatRatePct.value > 0) lastVatPct.value = vatRatePct.value;
+			vatRatePct.value = 0;
+		}
+	};
 	const formIssueDate = ref("");
 	const formDueDate = ref("");
 	const formProjectTitle = ref("");
@@ -676,6 +748,8 @@
 		formBankId.value = row.business_bank_id;
 		formTitleOverride.value = row.title_override ?? "";
 		vatRatePct.value = row.vat_rate_basis_points / 100;
+		vatEnabled.value = vatRatePct.value > 0;
+		if (vatRatePct.value > 0) lastVatPct.value = vatRatePct.value;
 		bundleSubtotalCents.value = row.subtotal_cents;
 
 		const lineRows: InvoiceLineRow[] = await invoicesStore.getLines(invoiceId);
