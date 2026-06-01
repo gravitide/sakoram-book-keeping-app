@@ -18,6 +18,8 @@ import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { sumCents } from "~/lib/money";
 import { allocateDocumentNumber, allocateSpecificDocumentNumber } from "~/lib/numbering";
+import { computeStatutory } from "~/lib/statutory";
+import { useSettingsStore } from "~/stores/settings";
 import { useVouchersStore } from "~/stores/vouchers";
 
 export type PayslipPersistedStatus = "draft" | "issued" | "cancelled";
@@ -45,6 +47,14 @@ export interface PayslipRow {
 	earnings_cents: number
 	deductions_cents: number
 	net_cents: number
+	// Frozen statutory figures (cents). epf_employee_cents mirrors the
+	// managed EPF deduction line; the employer figures are not deducted
+	// from net. statutory_enabled is the per-payslip toggle, seeded from
+	// company_settings.statutory_auto_compute at create.
+	epf_employee_cents: number
+	epf_employer_cents: number
+	etf_cents: number
+	statutory_enabled: number
 	notes: string | null
 	status: PayslipPersistedStatus
 	created_at: string
@@ -79,6 +89,11 @@ export interface PayslipLineRow {
 	kind: PayslipLineKind
 	label: string
 	amount_cents: number
+	// EPF-liable flag (0/1) — meaningful on earning lines; the EPF/ETF
+	// base is the sum of liable earnings. auto_source tags machine-owned
+	// lines: NULL = manual, 'epf_employee' = the managed EPF deduction.
+	epf_liable: number
+	auto_source: string | null
 }
 
 export type PayslipLineDraft = Omit<PayslipLineRow, "id" | "payslip_id">;
@@ -267,6 +282,19 @@ export const usePayslipsStore = defineStore("payslips", () => {
 			? await allocateSpecificDocumentNumber("payslip", input.payDate, input.sequence)
 			: await allocateDocumentNumber("payslip", input.payDate);
 		const snap = buildEmployeeSnapshot(input.employee);
+		const settings = useSettingsStore();
+		await settings.ensureLoaded();
+		const statutoryOn = (settings.settings?.statutory_auto_compute ?? 1) === 1;
+		const basic = input.employee.basic_salary_cents;
+		const stat = statutoryOn
+			? computeStatutory(basic, {
+				epfEmployeeBp: settings.settings?.epf_employee_rate_bp ?? 800,
+				epfEmployerBp: settings.settings?.epf_employer_rate_bp ?? 1200,
+				etfBp: settings.settings?.etf_rate_bp ?? 300
+			})
+			: { baseCents: 0, epfEmployeeCents: 0, epfEmployerCents: 0, etfCents: 0 };
+		const deductionsSeed = stat.epfEmployeeCents;
+		const netSeed = Math.max(0, basic - deductionsSeed);
 		// Seed the draft with a single Basic earning line equal to the
 		// employee's basic_salary_cents so the user has something concrete
 		// on the editor — they can edit/delete and add their own lines.
@@ -274,8 +302,9 @@ export const usePayslipsStore = defineStore("payslips", () => {
 			`INSERT INTO payslips (
 				number, fiscal_year, employee_id, employee_snapshot, employee_name,
 				period_start, period_end, pay_date,
-				earnings_cents, deductions_cents, net_cents, status
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'draft')`,
+				earnings_cents, deductions_cents, net_cents, status,
+				epf_employee_cents, epf_employer_cents, etf_cents, statutory_enabled
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?)`,
 			[
 				allocation.number,
 				allocation.fiscalYear,
@@ -285,8 +314,13 @@ export const usePayslipsStore = defineStore("payslips", () => {
 				input.periodStart,
 				input.periodEnd,
 				input.payDate,
-				input.employee.basic_salary_cents,
-				input.employee.basic_salary_cents
+				basic,
+				deductionsSeed,
+				netSeed,
+				stat.epfEmployeeCents,
+				stat.epfEmployerCents,
+				stat.etfCents,
+				statutoryOn ? 1 : 0
 			]
 		);
 		if (result.lastInsertId === undefined) throw new Error("createPayslip: no lastInsertId");
@@ -294,9 +328,18 @@ export const usePayslipsStore = defineStore("payslips", () => {
 		if (input.employee.basic_salary_cents > 0) {
 			await execute(
 				`INSERT INTO payslip_lines (
-					payslip_id, sort_order, kind, label, amount_cents
-				) VALUES (?, 0, 'earning', 'Basic', ?)`,
+					payslip_id, sort_order, kind, label, amount_cents, epf_liable, auto_source
+				) VALUES (?, 0, 'earning', 'Basic', ?, 1, NULL)`,
 				[id, input.employee.basic_salary_cents]
+			);
+		}
+		if (statutoryOn && stat.epfEmployeeCents > 0) {
+			const epfPct = (settings.settings?.epf_employee_rate_bp ?? 800) / 100;
+			await execute(
+				`INSERT INTO payslip_lines (
+					payslip_id, sort_order, kind, label, amount_cents, epf_liable, auto_source
+				) VALUES (?, 1, 'deduction', ?, ?, 0, 'epf_employee')`,
+				[id, `EPF (${epfPct}%)`, stat.epfEmployeeCents]
 			);
 		}
 		await load();
@@ -304,7 +347,8 @@ export const usePayslipsStore = defineStore("payslips", () => {
 	};
 
 	type PayslipUpdate = Partial<Pick<PayslipRow, | "period_start" | "period_end" | "pay_date"
-		| "earnings_cents" | "deductions_cents" | "net_cents" | "notes">>;
+		| "earnings_cents" | "deductions_cents" | "net_cents" | "notes"
+		| "epf_employee_cents" | "epf_employer_cents" | "etf_cents" | "statutory_enabled">>;
 
 	const UPDATABLE: ReadonlyArray<keyof PayslipUpdate> = [
 		"period_start",
@@ -313,7 +357,11 @@ export const usePayslipsStore = defineStore("payslips", () => {
 		"earnings_cents",
 		"deductions_cents",
 		"net_cents",
-		"notes"
+		"notes",
+		"epf_employee_cents",
+		"epf_employer_cents",
+		"etf_cents",
+		"statutory_enabled"
 	];
 
 	const update = async (id: number, patch: PayslipUpdate): Promise<void> => {
@@ -340,9 +388,9 @@ export const usePayslipsStore = defineStore("payslips", () => {
 			if (!l) continue;
 			await execute(
 				`INSERT INTO payslip_lines (
-					payslip_id, sort_order, kind, label, amount_cents
-				) VALUES (?, ?, ?, ?, ?)`,
-				[payslipId, i, l.kind, l.label, l.amount_cents]
+					payslip_id, sort_order, kind, label, amount_cents, epf_liable, auto_source
+				) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+				[payslipId, i, l.kind, l.label, l.amount_cents, l.epf_liable ?? 1, l.auto_source ?? null]
 			);
 		}
 		const earnings = sumCents(...lines.filter((l) => l.kind === "earning").map((l) => l.amount_cents));
