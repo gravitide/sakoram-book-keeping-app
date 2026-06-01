@@ -139,12 +139,24 @@
 							<h2 class="font-semibold">
 								Earnings & deductions
 							</h2>
-							<span class="text-xs text-(--ui-text-muted)">
-								{{ locked ? `Locked — payslip is ${row?.status}` : "Edit until you mark it issued" }}
-							</span>
+							<div class="flex items-center gap-3">
+								<label v-if="!locked" class="flex items-center gap-2 text-xs text-(--ui-text-muted)">
+									Apply EPF / ETF
+									<USwitch v-model="statutoryEnabled" />
+								</label>
+								<span class="text-xs text-(--ui-text-muted)">
+									{{ locked ? `Locked — payslip is ${row?.status}` : "Edit until you mark it issued" }}
+								</span>
+							</div>
 						</div>
 					</template>
-					<PayslipLineEditor v-model="form.lines" :disabled="locked" />
+					<PayslipLineEditor
+						v-model="form.lines"
+						:disabled="locked"
+						:statutory-enabled="statutoryEnabled"
+						:rates="statRates"
+						:epf-employee-rate-bp="statRates.epfEmployeeBp"
+					/>
 				</UCard>
 
 				<UCard>
@@ -370,6 +382,7 @@
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { formatMoney } from "~/lib/money";
 	import { buildPayslipPdfPayload } from "~/lib/payslip-pdf";
+	import { computeStatutory } from "~/lib/statutory";
 	import { usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
@@ -432,6 +445,11 @@
 			amount_cents: l.amount_cents
 		}));
 
+	// Declared before hydrate() so the async hydrate() call can write to it.
+	// Per-payslip toggle, defaulting to the row value (seeded from settings
+	// at create). A local ref so the editor toggle can flip it live.
+	const statutoryEnabled = ref<boolean>(false);
+
 	const hydrate = async () => {
 		const r = await store.get(payslipId);
 		if (!r) throw createError({ statusCode: 404, statusMessage: "Payslip not found" });
@@ -442,11 +460,12 @@
 		form.notes = r.notes ?? "";
 		const lines = await store.getLines(payslipId);
 		form.lines = linesToDrafts(lines);
+		statutoryEnabled.value = (r.statutory_enabled ?? 0) === 1;
 	};
 
 	await hydrate();
 
-	const formSnapshot = computed(() => JSON.stringify(form));
+	const formSnapshot = computed(() => JSON.stringify({ ...form, statutoryEnabled: statutoryEnabled.value }));
 	const baseline = ref<string>(formSnapshot.value);
 	const dirty = computed(() => formSnapshot.value !== baseline.value);
 	const refreshBaseline = () => {
@@ -455,6 +474,12 @@
 
 	const derived = computed(() => row.value ? store.derivedStatus(row.value) : "draft");
 	const locked = computed(() => row.value?.status !== "draft");
+
+	const statRates = computed(() => ({
+		epfEmployeeBp: settingsStore.settings?.epf_employee_rate_bp ?? 800,
+		epfEmployerBp: settingsStore.settings?.epf_employer_rate_bp ?? 1200,
+		etfBp: settingsStore.settings?.etf_rate_bp ?? 300
+	}));
 
 	const paidCents = computed(() => row.value ? store.paidCentsFor(row.value.id) : 0);
 	const balanceCents = computed(() => row.value ? store.balanceCentsFor(row.value) : 0);
@@ -496,6 +521,12 @@
 				});
 			} else {
 				const totals = await store.replaceLines(row.value.id, form.lines);
+				const liableBase = form.lines
+					.filter((l) => l.kind === "earning" && (l.epf_liable ?? 1) === 1)
+					.reduce((s, l) => s + l.amount_cents, 0);
+				const stat = statutoryEnabled.value
+					? computeStatutory(liableBase, statRates.value)
+					: { baseCents: 0, epfEmployeeCents: 0, epfEmployerCents: 0, etfCents: 0 };
 				await store.update(row.value.id, {
 					period_start: form.period_start ?? row.value.period_start,
 					period_end: form.period_end ?? row.value.period_end,
@@ -503,7 +534,11 @@
 					notes: form.notes.trim() || null,
 					earnings_cents: totals.earnings_cents,
 					deductions_cents: totals.deductions_cents,
-					net_cents: totals.net_cents
+					net_cents: totals.net_cents,
+					epf_employee_cents: stat.epfEmployeeCents,
+					epf_employer_cents: stat.epfEmployerCents,
+					etf_cents: stat.etfCents,
+					statutory_enabled: statutoryEnabled.value ? 1 : 0
 				});
 			}
 			await store.load();
