@@ -432,6 +432,7 @@ bun install                              # bun is required (preinstall hook bloc
 
 # Dev (Rust + Vite + Webview, hot reload)
 bun run tauri:dev                        # background process; closes the window → exits
+                                         # dev server runs on port 4004 (see gotcha below)
 
 # Frontend-only
 bun run dev                              # nuxt dev (no Tauri shell)
@@ -461,6 +462,14 @@ Code-signing requires a CA cert (~$200–400/year), out of scope.
   bumps, `@tauri-apps/api` must follow.
 - **Background dev server exit code 255** = user closed the window. Not
   an error.
+- **Dev server port lives in `scripts/tauri-dev.ts`, not `tauri.conf.json`.**
+  `bun run tauri:dev` runs that script, which takes `DEFAULT_PORT` (4004),
+  finds the next free port from there, and spawns `tauri dev` with a
+  `--config` that overrides `build.devUrl` + `beforeDevCommand`
+  (`bun run dev --port N`). So editing `tauri.conf.json`'s `devUrl` or
+  `nuxt.config.ts`'s `devServer.port` alone has **no effect** on
+  `tauri:dev` — change `DEFAULT_PORT`. (Those two configs only drive the
+  standalone `tauri dev` / `bun run dev` paths, kept in sync at 4004.)
 - **Page must have a single root node.** Vue/Nuxt warn loudly if a page
   has a leading template comment outside the root `<div>` — and the
   symptom on subsequent navigations is a blank/empty page after route
@@ -1345,7 +1354,7 @@ persisted to localStorage).
 
 ### Done
 
-- ✅ DB schema + migrations 0001..0032 (`SCHEMA_VERSION` 32)
+- ✅ DB schema + migrations 0001..0035 (`SCHEMA_VERSION` 35)
 - ✅ Clients / Vendors / Employees CRUD (hero + SectionCard layout)
 - ✅ Quotes (full lifecycle, PDF, convert-to-invoice; default VAT seeded
   from settings on draft creation)
@@ -1353,6 +1362,14 @@ persisted to localStorage).
   derived from voucher sums + due date)
 - ✅ Bills (vendor FK + snapshot + category FK + snapshot; payments via
   payment vouchers, status derived)
+- ✅ **VAT entry mode on bundle totals** — every bundle-mode doc (quote /
+  invoice / bill / credit-note / recurring invoice / recurring bill) has a
+  "Charge VAT" toggle + a "Before VAT / VAT-inclusive" switch on the totals
+  card. Inclusive mode back-calculates the net subtotal from an entered
+  gross (`tax = total × rate / (100% + rate)`). Persisted data is unchanged
+  — always net `subtotal_cents` / `bundle_subtotal_cents` + rate — so PDFs /
+  reports / recurring generation are unaffected; the mode is ephemeral UI
+  state that re-derives from the stored rate on load.
 - ✅ Vouchers (money in/out, PDF, big amount card layout; "Record
   payment" prefill + bounce-back; voucher detail page is read-only
   by default with explicit Edit toggle)
