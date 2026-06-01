@@ -126,7 +126,8 @@ export default defineNuxtConfig({
 		}
 	},
 	devServer: {
-		host: host || "0.0.0.0"
+		host: host || "0.0.0.0",
+		port: 4004
 	},
 	router: {
 		options: {

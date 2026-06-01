@@ -214,13 +214,35 @@
 					</template>
 					<div class="flex justify-end">
 						<div class="w-full max-w-sm space-y-3">
-							<UFormField
-								v-if="formPricingMode === 'bundle'"
-								label="Bundle subtotal"
-								help="Amount before VAT."
-							>
-								<MoneyInput v-model="bundleSubtotalCents" class="text-right" />
-							</UFormField>
+							<template v-if="formPricingMode === 'bundle'">
+								<div class="flex items-center justify-end gap-2">
+									<span class="text-xs text-(--ui-text-muted) select-none">Amount entered is</span>
+									<div class="flex gap-1">
+										<UButton
+											size="xs"
+											:variant="vatMode === 'exclusive' ? 'solid' : 'ghost'"
+											:color="vatMode === 'exclusive' ? 'primary' : 'neutral'"
+											@click="vatMode = 'exclusive'"
+										>
+											Before VAT
+										</UButton>
+										<UButton
+											size="xs"
+											:variant="vatMode === 'inclusive' ? 'solid' : 'ghost'"
+											:color="vatMode === 'inclusive' ? 'primary' : 'neutral'"
+											@click="vatMode = 'inclusive'"
+										>
+											VAT-inclusive
+										</UButton>
+									</div>
+								</div>
+								<UFormField v-if="vatMode === 'exclusive'" label="Bundle subtotal" help="Amount before VAT.">
+									<MoneyInput v-model="bundleSubtotalCents" class="text-right" />
+								</UFormField>
+								<UFormField v-else label="Grand total (incl. VAT)" help="We split out the subtotal and VAT below.">
+									<MoneyInput v-model="grandTotalCents" class="text-right" />
+								</UFormField>
+							</template>
 							<div class="flex justify-end">
 								<UCheckbox
 									v-model="formApplyVat"
@@ -401,6 +423,22 @@
 	const formPricingMode = ref<"bundle" | "itemized">("bundle");
 	const bundleSubtotalCents = ref<number>(0);
 	const formApplyVat = ref<boolean>(true);
+	// VAT entry mode for bundle pricing. 'exclusive' = type the net subtotal
+	// (default); 'inclusive' = type the gross grand total and split out the
+	// net + VAT from the rate. Ephemeral UI state — the stored value is always
+	// the net bundle_subtotal_cents + rate.
+	const vatMode = ref<"exclusive" | "inclusive">("exclusive");
+	const grandTotalCents = computed<number>({
+		get: () => {
+			const bp = formApplyVat.value ? Math.round(vatRatePct.value * 100) : 0;
+			return bundleSubtotalCents.value + Math.round((bundleSubtotalCents.value * bp) / 10000);
+		},
+		set: (total) => {
+			const bp = formApplyVat.value ? Math.round(vatRatePct.value * 100) : 0;
+			const tax = Math.round((total * bp) / (10000 + bp));
+			bundleSubtotalCents.value = Math.max(0, total - tax);
+		}
+	});
 
 	const totalsPreview = computed(() => {
 		if (formPricingMode.value === "bundle") {

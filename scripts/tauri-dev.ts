@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 
-const DEFAULT_PORT = 3000;
+const DEFAULT_PORT = 4004;
 
 function isPortAvailable(port: number): Promise<boolean> {
 	return new Promise((resolve) => {
