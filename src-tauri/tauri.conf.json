@@ -29,10 +29,10 @@
 		"beforeBuildCommand": "bun run generate",
 		"frontendDist": "../dist",
 		"beforeDevCommand": "bun run dev",
-		"devUrl": "http://localhost:3000"
+		"devUrl": "http://localhost:4004"
 	},
 	"productName": "Sakoram",
-	"version": "0.101.0",
+	"version": "0.102.0",
 	"identifier": "com.sakoram.billing",
 	"plugins": {},
 	"app": {
