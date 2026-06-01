@@ -18,11 +18,14 @@ describe("computeStatutory", () => {
 		expect(r).toEqual({ baseCents: 0, epfEmployeeCents: 0, epfEmployerCents: 0, etfCents: 0 });
 	});
 
-	it("uses banker's (half-even) rounding", () => {
-		// 156.25 cents * 800 / 10000 = 12.5 -> round half to even = 12
-		expect(computeStatutory(156.25, SL).epfEmployeeCents).toBe(12);
-		// 187.5 cents * 800 / 10000 = 15.0 -> 15 (exact, sanity)
-		expect(computeStatutory(187.5, SL).epfEmployeeCents).toBe(15);
+	it("uses banker's (half-even) rounding on exact .5 ties", () => {
+		// ETF 3% on an integer base that lands exactly on a .5 cent tie.
+		// 50 * 300 / 10000 = 1.5  -> nearest even = 2
+		expect(computeStatutory(50, { epfEmployeeBp: 0, epfEmployerBp: 0, etfBp: 300 }).etfCents).toBe(2);
+		// 150 * 300 / 10000 = 4.5  -> nearest even = 4
+		expect(computeStatutory(150, { epfEmployeeBp: 0, epfEmployerBp: 0, etfBp: 300 }).etfCents).toBe(4);
+		// 250 * 300 / 10000 = 7.5  -> nearest even = 8
+		expect(computeStatutory(250, { epfEmployeeBp: 0, epfEmployerBp: 0, etfBp: 300 }).etfCents).toBe(8);
 	});
 
 	it("honours custom rates", () => {
