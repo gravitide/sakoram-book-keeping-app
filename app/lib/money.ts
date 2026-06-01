@@ -80,7 +80,7 @@ export const getActiveCurrency = (): CurrencyMeta =>
 
 const isInt = (n: number): boolean => Number.isInteger(n);
 
-const roundHalfEven = (n: number): number => {
+export const roundHalfEven = (n: number): number => {
 	const floor = Math.floor(n);
 	const diff = n - floor;
 	if (diff < 0.5) return floor;
