@@ -442,7 +442,9 @@
 			sort_order: l.sort_order,
 			kind: l.kind,
 			label: l.label,
-			amount_cents: l.amount_cents
+			amount_cents: l.amount_cents,
+			epf_liable: l.epf_liable,
+			auto_source: l.auto_source
 		}));
 
 	// Declared before hydrate() so the async hydrate() call can write to it.
