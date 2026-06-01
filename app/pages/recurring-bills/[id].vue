@@ -246,7 +246,7 @@
 							<div class="flex justify-end">
 								<UCheckbox
 									v-model="formApplyVat"
-									label="Apply VAT"
+									label="Charge VAT"
 									:ui="{ label: 'font-medium' }"
 								/>
 							</div>

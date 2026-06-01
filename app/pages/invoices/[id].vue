@@ -298,7 +298,7 @@
 						<UFormField v-else label="Grand total (incl. VAT)" help="We split out the subtotal and VAT below.">
 							<MoneyInput v-model="grandTotalCents" />
 						</UFormField>
-						<div class="w-1/2 ml-auto space-y-2">
+						<div class="ml-auto max-w-[12rem] space-y-2">
 							<div class="flex justify-end">
 								<UCheckbox
 									:model-value="vatEnabled"
