@@ -42,6 +42,13 @@ export interface CompanySettingsRow {
 	payroll_period_start_day: number
 	payroll_period_end_day: number
 	payroll_pay_day: number
+	// Statutory auto-compute (EPF + ETF). Rates are basis points
+	// (8% = 800). statutory_auto_compute is the master toggle that seeds
+	// each new payslip's statutory_enabled. See app/lib/statutory.ts.
+	statutory_auto_compute: number
+	epf_employee_rate_bp: number
+	epf_employer_rate_bp: number
+	etf_rate_bp: number
 	// PDF owner-password protection. `pdf_protect_password` is the owner
 	// password (null/empty = protection off). The five flags are per-type
 	// opt-ins, stored as 0/1 INTEGERs. A document is encrypted only when
@@ -84,6 +91,10 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"payroll_period_start_day",
 	"payroll_period_end_day",
 	"payroll_pay_day",
+	"statutory_auto_compute",
+	"epf_employee_rate_bp",
+	"epf_employer_rate_bp",
+	"etf_rate_bp",
 	"pdf_protect_password",
 	"pdf_protect_quote",
 	"pdf_protect_invoice",

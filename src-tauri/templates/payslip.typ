@@ -223,6 +223,27 @@
 ]
 
 // ============================================================
+// Employer contributions (not deducted from net)
+// ============================================================
+#if data.statutory_enabled == true and (data.epf_employer_display != none or data.etf_display != none) [
+  #v(14pt)
+  #block(breakable: false)[
+    #label("Employer contributions (not deducted)")
+    #v(4pt)
+    #grid(
+      columns: (auto, auto),
+      column-gutter: 16pt,
+      row-gutter: 4pt,
+      align: (left, right),
+      ..if data.epf_employer_display != none { (faint("EPF (employer)"), [#data.currency_symbol #data.epf_employer_display]) } else { () },
+      ..if data.etf_display != none { (faint("ETF (employer)"), [#data.currency_symbol #data.etf_display]) } else { () },
+      text(weight: "semibold")[Total cost of employment],
+      text(weight: "bold")[#data.currency_symbol #data.total_cost_display],
+    )
+  ]
+]
+
+// ============================================================
 // Bank details (from the employee snapshot)
 // ============================================================
 #if data.employee.bank_account_number != none and data.employee.bank_account_number != "" [

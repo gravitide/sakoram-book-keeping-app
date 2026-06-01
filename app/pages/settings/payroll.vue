@@ -71,12 +71,55 @@
 					</div>
 				</template>
 			</UCard>
+
+			<UCard>
+				<template #header>
+					<div class="flex items-center justify-between">
+						<div class="font-medium">
+							Statutory contributions (EPF / ETF)
+						</div>
+						<USwitch v-model="statutoryOn" />
+					</div>
+					<div class="text-xs text-(--ui-text-muted) mt-1">
+						When on, new payslips auto-add the employee EPF deduction and
+						show employer EPF + ETF contributions. Rates are percentages of
+						EPF-liable earnings. Sri Lankan defaults: EPF 8% / 12%, ETF 3%.
+					</div>
+				</template>
+
+				<div class="space-y-5" :class="statutoryOn ? '' : 'opacity-50 pointer-events-none'">
+					<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+						<UFormField label="EPF — employee" help="Deducted from net pay.">
+							<UInputNumber v-model="epfEmployeePct" :min="0" :max="100" :step="0.1" />
+						</UFormField>
+						<UFormField label="EPF — employer" help="Business cost, not deducted.">
+							<UInputNumber v-model="epfEmployerPct" :min="0" :max="100" :step="0.1" />
+						</UFormField>
+						<UFormField label="ETF — employer" help="Business cost, not deducted.">
+							<UInputNumber v-model="etfPct" :min="0" :max="100" :step="0.1" />
+						</UFormField>
+					</div>
+
+					<div class="rounded-md border border-(--ui-border) bg-(--ui-bg-muted) p-3 text-sm">
+						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) mb-1">
+							Preview — on {{ formatMoney(previewBase) }} liable earnings
+						</div>
+						<div class="tabular-nums">
+							EPF employee <span class="font-medium">{{ formatMoney(previewStatutory.epfEmployeeCents) }}</span>
+							· EPF employer <span class="font-medium">{{ formatMoney(previewStatutory.epfEmployerCents) }}</span>
+							· ETF <span class="font-medium">{{ formatMoney(previewStatutory.etfCents) }}</span>
+						</div>
+					</div>
+				</div>
+			</UCard>
 		</div>
 	</div>
 </template>
 
 <script setup lang="ts">
+	import { formatMoney } from "~/lib/money";
 	import { formatMonthLabel, resolvePayrollCycle } from "~/lib/payroll-cycle";
+	import { computeStatutory } from "~/lib/statutory";
 	import { useSettingsStore } from "~/stores/settings";
 
 	definePageMeta({ title: "Payroll" });
@@ -90,16 +133,40 @@
 	const periodEnd = ref<number>(store.settings?.payroll_period_end_day ?? 31);
 	const payDay = ref<number>(store.settings?.payroll_pay_day ?? 31);
 
+	// Statutory config. Percentages in the UI, basis points in the DB
+	// (8% <-> 800). Round on the bp boundary so 8.1% survives the trip.
+	const statutoryOn = ref<boolean>((store.settings?.statutory_auto_compute ?? 1) === 1);
+	const epfEmployeePct = ref<number>((store.settings?.epf_employee_rate_bp ?? 800) / 100);
+	const epfEmployerPct = ref<number>((store.settings?.epf_employer_rate_bp ?? 1200) / 100);
+	const etfPct = ref<number>((store.settings?.etf_rate_bp ?? 300) / 100);
+
+	const toBp = (pct: number) => Math.round((pct || 0) * 100);
+
+	const previewBase = 10_000_000; // Rs 100,000 in cents
+	const previewStatutory = computed(() => computeStatutory(previewBase, {
+		epfEmployeeBp: toBp(epfEmployeePct.value),
+		epfEmployerBp: toBp(epfEmployerPct.value),
+		etfBp: toBp(etfPct.value)
+	}));
+
 	const initial = ref({
 		start: periodStart.value,
 		end: periodEnd.value,
-		pay: payDay.value
+		pay: payDay.value,
+		on: statutoryOn.value,
+		epfEmp: epfEmployeePct.value,
+		epfEr: epfEmployerPct.value,
+		etf: etfPct.value
 	});
 
 	const dirty = computed(() =>
 		periodStart.value !== initial.value.start
 		|| periodEnd.value !== initial.value.end
 		|| payDay.value !== initial.value.pay
+		|| statutoryOn.value !== initial.value.on
+		|| epfEmployeePct.value !== initial.value.epfEmp
+		|| epfEmployerPct.value !== initial.value.epfEr
+		|| etfPct.value !== initial.value.etf
 	);
 
 	// Preview against today's month so the user sees concrete dates for
@@ -123,12 +190,20 @@
 			await store.save({
 				payroll_period_start_day: periodStart.value,
 				payroll_period_end_day: periodEnd.value,
-				payroll_pay_day: payDay.value
+				payroll_pay_day: payDay.value,
+				statutory_auto_compute: statutoryOn.value ? 1 : 0,
+				epf_employee_rate_bp: toBp(epfEmployeePct.value),
+				epf_employer_rate_bp: toBp(epfEmployerPct.value),
+				etf_rate_bp: toBp(etfPct.value)
 			});
 			initial.value = {
 				start: periodStart.value,
 				end: periodEnd.value,
-				pay: payDay.value
+				pay: payDay.value,
+				on: statutoryOn.value,
+				epfEmp: epfEmployeePct.value,
+				epfEr: epfEmployerPct.value,
+				etf: etfPct.value
 			};
 			toast.add({ title: "Payroll cycle saved", color: "success", icon: "i-lucide-check" });
 		} catch (err) {
@@ -147,5 +222,9 @@
 		periodStart.value = initial.value.start;
 		periodEnd.value = initial.value.end;
 		payDay.value = initial.value.pay;
+		statutoryOn.value = initial.value.on;
+		epfEmployeePct.value = initial.value.epfEmp;
+		epfEmployerPct.value = initial.value.epfEr;
+		etfPct.value = initial.value.etf;
 	};
 </script>

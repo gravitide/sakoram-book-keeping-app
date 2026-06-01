@@ -1085,6 +1085,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0032_recurring_bills.sql                ← `recurring_bills` + `recurring_bill_lines` tables — vendor-side mirror of recurring_invoices. Templates carry a vendor_id FK + vendor_snapshot + denormalised vendor_name, an optional category_id FK + category_snapshot + denormalised category_name/color/icon (bills have categories, invoices don't), a schedule (same frequency / start_date / next_issue_date / optional end_date shape), and bill defaults (pricing_mode, bundle_subtotal_cents, vat_rate_basis_points, payment_terms_days, notes). NO business_bank_id (bills don't carry one — we're paying THEM) and NO project_title. `bundle_subtotal_cents` folded in from the start, no separate migration. `bills_generated` + `last_generated_at` track materialisation. Generation user-initiated via `useRecurringBillsStore.generateOne()` — same shape as recurring invoices, but generated bills land in status `unpaid` (not draft — bills don't have a draft state).
 0033_voucher_bank_id.sql                ← `vouchers.business_bank_id` FK to business_banks (ON DELETE SET NULL) + index. Backfilled non-cash existing vouchers to the default bank.
 0034_bank_reconciliation.sql            ← `bank_statement_imports` + `bank_statement_rows` tables. `vouchers.reconciled_at` ISO timestamp column. Bank FKs are RESTRICT (a bank with reconciliation history can't be deleted without clearing imports first). `matched_voucher_id` is SET NULL so deleting a voucher quietly unmatches its statement row.
+0035_payslip_statutory.sql              ← EPF/ETF statutory auto-compute. company_settings gains statutory_auto_compute (master toggle) + epf_employee_rate_bp (800) / epf_employer_rate_bp (1200) / etf_rate_bp (300). payslip_lines gains epf_liable (0/1) + auto_source ('epf_employee' tags the managed EPF deduction line). payslips gains epf_employee_cents / epf_employer_cents / etf_cents (frozen figures) + statutory_enabled (per-payslip toggle, seeded from settings). Pure math in app/lib/statutory.ts.
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,
@@ -1375,6 +1376,11 @@ persisted to localStorage).
     tiles (active employees / outstanding payroll / paid this year),
     12-month salaries-paid bar chart, recent runs panel, outstanding
     list.
+  - **Statutory auto-compute (EPF/ETF)** — employee EPF 8% as a
+    live-recomputed managed deduction line; employer EPF 12% + ETF 3%
+    stored + printed. Rates + master toggle on /settings/payroll;
+    per-payslip override. PAYE still manual. Pure math in
+    app/lib/statutory.ts.
 - ✅ Universal delete on quotes/invoices/bills/payslips. Linked
   vouchers stay intact (their `related_*_id` is nulled on delete).
 - ✅ Dashboard (KPI tiles, monthly cash-flow chart, receivables aging,
@@ -1809,8 +1815,9 @@ persisted to localStorage).
 - **Soften schema-version gate on import** — currently refuses if
   bundle's `schema_version != current`. Future: per-version restore
   adapters.
-- **Statutory auto-compute** — EPF (8% employee), ETF (3% employer),
-  PAYE on payslips. Currently manual line entry.
+- **Statutory auto-compute — PAYE/APIT** — EPF (employee 8%) + employer
+  EPF/ETF (12%/3%) now auto-compute on payslips (migration 0035 +
+  app/lib/statutory.ts). PAYE/APIT progressive tax tables remain manual.
 - **Per-tenant default payslip lines** — settings panel that seeds
   every new payslip with a configurable list (Basic, EPF, etc.).
 - **Code-signing the installers** — currently unsigned; SmartScreen
@@ -1934,10 +1941,10 @@ also shipped. Credit notes (Tier 2) shipped. Customer statements
 (Tier 2) shipped. Recurring invoices + Recurring bills (Tier 2)
 shipped. **Bank reconciliation (Tier 2) shipped** — CSV import,
 suggestion-based matching, voucher creation from unmatched rows.
-Next biggest gap is **statutory auto-compute on payslips** (EPF 8%
-/ ETF 3% / PAYE) — would dramatically lift the SL payroll
-credibility. After that, the **Cmd/Ctrl+K command palette** is the
-next "feels native" win.
+EPF/ETF statutory auto-compute shipped (migration 0035 +
+app/lib/statutory.ts). The remaining payroll gap is **PAYE/APIT
+progressive tax tables**. After that, the **Cmd/Ctrl+K command
+palette** is the next "feels native" win.
 
 ---
 
