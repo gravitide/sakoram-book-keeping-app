@@ -39,13 +39,11 @@
 						@input="onChange"
 					/>
 					<UCheckbox
-						v-model="line.epf_liable"
+						:model-value="line.epf_liable === 1"
 						:disabled="disabled || !statutoryEnabled"
-						:true-value="1"
-						:false-value="0"
 						label="EPF"
 						title="Include this earning in the EPF/ETF base"
-						@update:model-value="onChange"
+						@update:model-value="(v) => setEpfLiable(line, v)"
 					/>
 					<MoneyInput
 						v-model="line.amount_cents"
@@ -112,9 +110,16 @@
 						:disabled="disabled || line.auto_source === 'epf_employee'"
 						@update:model-value="onChange"
 					/>
-					<div v-if="line.auto_source === 'epf_employee'" class="flex items-center justify-center" title="Auto-computed from EPF-liable earnings">
-						<UIcon name="i-lucide-lock" class="size-4 text-(--ui-text-muted)" />
-					</div>
+					<UButton
+						v-if="line.auto_source === 'epf_employee'"
+						icon="i-lucide-lock"
+						variant="ghost"
+						color="neutral"
+						size="xs"
+						disabled
+						aria-label="Auto-computed from EPF-liable earnings — not editable"
+						title="Auto-computed from EPF-liable earnings"
+					/>
 					<UButton
 						v-else
 						icon="i-lucide-trash-2"
@@ -250,6 +255,14 @@
 	watch(() => [props.statutoryEnabled, props.rates] as const, () => {
 		onChange();
 	}, { deep: true });
+
+	// UCheckbox models a boolean; we store epf_liable as 0/1 (DB INTEGER
+	// convention). Bridge the two here so the flag stays a clean number and
+	// the liable-base math (which tests `=== 1`) never sees a stray boolean.
+	const setEpfLiable = (line: PayslipLineDraft, value: boolean | "indeterminate") => {
+		line.epf_liable = value === true ? 1 : 0;
+		onChange();
+	};
 
 	const addLine = (kind: "earning" | "deduction") => {
 		lines.push({ sort_order: lines.length, kind, label: "", amount_cents: 0, epf_liable: kind === "earning" ? 1 : 0, auto_source: null });
