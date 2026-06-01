@@ -16,7 +16,7 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
-import { sumCents } from "~/lib/money";
+import { formatRate, sumCents } from "~/lib/money";
 import { allocateDocumentNumber, allocateSpecificDocumentNumber } from "~/lib/numbering";
 import { computeStatutory } from "~/lib/statutory";
 import { useSettingsStore } from "~/stores/settings";
@@ -334,12 +334,12 @@ export const usePayslipsStore = defineStore("payslips", () => {
 			);
 		}
 		if (statutoryOn && stat.epfEmployeeCents > 0) {
-			const epfPct = (settings.settings?.epf_employee_rate_bp ?? 800) / 100;
+			const epfBp = settings.settings?.epf_employee_rate_bp ?? 800;
 			await execute(
 				`INSERT INTO payslip_lines (
 					payslip_id, sort_order, kind, label, amount_cents, epf_liable, auto_source
 				) VALUES (?, 1, 'deduction', ?, ?, 0, 'epf_employee')`,
-				[id, `EPF (${epfPct}%)`, stat.epfEmployeeCents]
+				[id, `EPF (${formatRate(epfBp)})`, stat.epfEmployeeCents]
 			);
 		}
 		await load();

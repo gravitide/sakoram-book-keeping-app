@@ -167,7 +167,7 @@
 <script setup lang="ts">
 	import type { StatutoryRates } from "~/lib/statutory";
 	import type { PayslipLineDraft } from "~/stores/payslips";
-	import { formatMoney } from "~/lib/money";
+	import { formatMoney, formatRate } from "~/lib/money";
 	import { computeStatutory } from "~/lib/statutory";
 
 	interface Props {
@@ -216,7 +216,7 @@
 			return;
 		}
 		const stat = computeStatutory(liableBase(), props.rates);
-		const label = `EPF (${props.epfEmployeeRateBp / 100}%)`;
+		const label = `EPF (${formatRate(props.epfEmployeeRateBp)})`;
 		if (stat.epfEmployeeCents <= 0) {
 			if (idx !== -1) lines.splice(idx, 1);
 			return;

@@ -206,7 +206,7 @@
 						/>
 						<div class="text-sm tabular-nums shrink-0 text-right">
 							<div class="font-medium">
-								{{ formatMoney(row.employee.basic_salary_cents) }}
+								{{ formatMoney(expectedNet(row.employee.basic_salary_cents)) }}
 							</div>
 							<div class="text-xs text-(--ui-text-muted)">
 								{{ runStepsLabel }}
@@ -254,6 +254,7 @@
 	import type { VoucherMethod } from "~/stores/vouchers";
 	import { formatMoney } from "~/lib/money";
 	import { formatMonthLabel, nextPayrollCycle, resolvePayrollCycle } from "~/lib/payroll-cycle";
+	import { computeStatutory } from "~/lib/statutory";
 	import { useEmployeesStore } from "~/stores/employees";
 	import { monthBounds, usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
@@ -380,6 +381,19 @@
 		const fmt = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" });
 		return `Salary for ${fmt.format(new Date(y, m - 1, 1))}`;
 	});
+
+	// Expected take-home for the bulk preview: basic minus the EPF that
+	// createPayslip will seed when statutory auto-compute is on. Mirrors
+	// the actual net so the preview matches what gets paid.
+	const expectedNet = (basicCents: number): number => {
+		if ((settingsStore.settings?.statutory_auto_compute ?? 1) !== 1) return basicCents;
+		const { epfEmployeeCents } = computeStatutory(basicCents, {
+			epfEmployeeBp: settingsStore.settings?.epf_employee_rate_bp ?? 800,
+			epfEmployerBp: settingsStore.settings?.epf_employer_rate_bp ?? 1200,
+			etfBp: settingsStore.settings?.etf_rate_bp ?? 300
+		});
+		return Math.max(0, basicCents - epfEmployeeCents);
+	};
 
 	// Per-employee row state. Re-derived whenever the period changes — an
 	// employee that just had a payslip created in another tab shouldn't
@@ -525,11 +539,16 @@
 				continue;
 			}
 
-			// Step 2 & 3 require a positive net. Basic salary 0 is a likely
-			// data-entry oversight — surface as an error so the user knows
-			// to set it on the employee record, but don't fail the whole
-			// run.
-			const netCents = row.employee.basic_salary_cents;
+			// Step 2 & 3 require a positive net. Read the ACTUAL net back from
+			// the created payslip — createPayslip seeds an EPF deduction when
+			// statutory auto-compute is on, so net = basic − EPF. Paying gross
+			// basic here would overpay every payslip and corrupt the ledger.
+			// Basic salary 0 is a likely data-entry oversight — surface as an
+			// error so the user knows to set it on the employee record, but
+			// don't fail the whole run.
+			if (payslipId === null) continue;
+			const created = await store.get(payslipId);
+			const netCents = created?.net_cents ?? 0;
 			if (netCents <= 0) {
 				if (autoIssue.value || autoPay.value) {
 					errors.push({
