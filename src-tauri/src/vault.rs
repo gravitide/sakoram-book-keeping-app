@@ -67,6 +67,47 @@ pub struct VaultMeta {
 }
 
 use argon2::{Algorithm, Argon2, Params, Version};
+use chacha20poly1305::{
+    aead::{Aead, KeyInit},
+    Key, XChaCha20Poly1305, XNonce,
+};
+use data_encoding::BASE64;
+use rand_core::{OsRng, RngCore};
+
+fn random_bytes<const N: usize>() -> [u8; N] {
+    let mut buf = [0u8; N];
+    OsRng.fill_bytes(&mut buf);
+    buf
+}
+
+fn wrap_key(wrapping_key: &[u8; 32], dek: &[u8; 32]) -> Result<WrappedKey, VaultError> {
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(wrapping_key));
+    let nonce = random_bytes::<24>();
+    let ct = cipher
+        .encrypt(XNonce::from_slice(&nonce), dek.as_ref())
+        .map_err(|_| VaultError::Crypto)?;
+    Ok(WrappedKey {
+        nonce: BASE64.encode(&nonce),
+        ct: BASE64.encode(&ct),
+    })
+}
+
+fn unwrap_key(wrapping_key: &[u8; 32], w: &WrappedKey) -> Result<[u8; 32], VaultError> {
+    let nonce = BASE64
+        .decode(w.nonce.as_bytes())
+        .map_err(|e| VaultError::Encoding(e.to_string()))?;
+    let ct = BASE64
+        .decode(w.ct.as_bytes())
+        .map_err(|e| VaultError::Encoding(e.to_string()))?;
+    if nonce.len() != 24 {
+        return Err(VaultError::Encoding("bad nonce length".into()));
+    }
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(wrapping_key));
+    let pt = cipher
+        .decrypt(XNonce::from_slice(&nonce), ct.as_ref())
+        .map_err(|_| VaultError::Auth)?;
+    pt.try_into().map_err(|_| VaultError::Crypto)
+}
 
 fn derive_kek(
     password: &[u8],
@@ -99,5 +140,29 @@ mod tests {
         assert_eq!(k1, k2, "same password+salt must derive the same key");
         assert_ne!(k1, k3, "different salt must derive a different key");
         assert_eq!(k1.len(), 32);
+    }
+
+    #[test]
+    fn wrap_round_trips_and_rejects_wrong_key() {
+        let kek = [7u8; 32];
+        let dek = random_bytes::<32>();
+        let wrapped = wrap_key(&kek, &dek).unwrap();
+
+        // Correct key unwraps to the original DEK.
+        let out = unwrap_key(&kek, &wrapped).unwrap();
+        assert_eq!(out, dek);
+
+        // Wrong key fails authentication.
+        let wrong = [8u8; 32];
+        assert!(matches!(unwrap_key(&wrong, &wrapped), Err(VaultError::Auth)));
+
+        // Two wraps of the same DEK differ (random nonce).
+        let wrapped2 = wrap_key(&kek, &dek).unwrap();
+        assert_ne!(wrapped.ct, wrapped2.ct);
+    }
+
+    #[test]
+    fn random_bytes_are_not_constant() {
+        assert_ne!(random_bytes::<32>(), random_bytes::<32>());
     }
 }
