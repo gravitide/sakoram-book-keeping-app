@@ -448,6 +448,10 @@ pub async fn delete_tenant(app: AppHandle, id: String) -> Result<(), String> {
 	write_registry(&app, &reg)?;
 
 	let _ = std::fs::remove_file(tenant_db_path(&app, &tenant.id)?);
+	// Remove encrypted blob + vault metadata if the tenant had at-rest
+	// encryption enabled. Best-effort: same pattern as the logo removal below.
+	let _ = std::fs::remove_file(tenant_enc_path(&app, &tenant.id)?);
+	let _ = std::fs::remove_file(tenant_vault_path(&app, &tenant.id)?);
 	// Remove both logo variants if present (identity + PDF header).
 	if let Some(logo) = &tenant.logo_file {
 		let _ = std::fs::remove_file(logos_dir(&app)?.join(logo));
