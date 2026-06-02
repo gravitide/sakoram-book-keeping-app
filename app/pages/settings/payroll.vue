@@ -135,10 +135,8 @@
 						</UFormField>
 						<UFormField label="Deduct employee EPF first" help="Subtract the 8% EPF before taxing.">
 							<UCheckbox
-								:model-value="payeDeductEpf"
+								:model-value="payeDeductEpf === 1"
 								label="EPF reduces taxable income"
-								:true-value="1"
-								:false-value="0"
 								@update:model-value="(v) => payeDeductEpf = v === true ? 1 : 0"
 							/>
 						</UFormField>
@@ -151,7 +149,7 @@
 						<div
 							v-for="(band, i) in payeBands"
 							:key="i"
-							class="grid grid-cols-[1fr_auto_6rem_auto] gap-2 items-center"
+							class="grid grid-cols-[1fr_auto_8.5rem_auto] gap-2 items-center"
 						>
 							<MoneyInput
 								v-if="band.upToCents !== null"
@@ -177,12 +175,38 @@
 						</UButton>
 					</div>
 
-					<div class="rounded-md border border-(--ui-border) bg-(--ui-bg-muted) p-3 text-sm">
-						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) mb-1">
-							Preview — on {{ formatMoney(payePreviewBase) }} gross
+					<div class="rounded-md border border-(--ui-border) bg-(--ui-bg-muted) p-3 space-y-2 text-sm">
+						<div class="flex items-center justify-between gap-3">
+							<span class="text-xs uppercase tracking-wide text-(--ui-text-muted)">Preview on gross</span>
+							<div class="w-44">
+								<MoneyInput v-model="payePreviewBase" />
+							</div>
 						</div>
-						<div class="tabular-nums">
-							PAYE <span class="font-medium">{{ formatMoney(payePreview) }}</span>
+						<div class="text-xs text-(--ui-text-muted)">
+							Taxable after relief: <span class="tabular-nums">{{ formatMoney(payeBreakdown.taxable) }}</span>
+						</div>
+						<div v-if="payeBreakdown.rows.length" class="space-y-0.5">
+							<div class="grid grid-cols-[auto_1fr_auto] gap-x-4 text-xs text-(--ui-text-muted)">
+								<span>Band</span>
+								<span class="text-right">In band</span>
+								<span class="text-right">Tax</span>
+							</div>
+							<div
+								v-for="(r, i) in payeBreakdown.rows"
+								:key="i"
+								class="grid grid-cols-[auto_1fr_auto] gap-x-4 tabular-nums"
+							>
+								<span>{{ r.label }}</span>
+								<span class="text-right">{{ formatMoney(r.sliceCents) }}</span>
+								<span class="text-right">{{ formatMoney(r.taxCents) }}</span>
+							</div>
+						</div>
+						<div v-else class="text-xs text-(--ui-text-muted) italic">
+							No tax — gross is at or below the relief threshold.
+						</div>
+						<div class="flex items-center justify-between border-t border-(--ui-border) pt-1.5 font-medium tabular-nums">
+							<span>Total PAYE</span>
+							<span>{{ formatMoney(payePreview) }}</span>
 						</div>
 					</div>
 				</div>
@@ -259,11 +283,31 @@
 		payeBands.value.splice(i, 1);
 	};
 
-	const payePreviewBase = 25_000_000; // Rs 250,000 gross
-	const payePreview = computed(() => computePaye(payePreviewBase, {
+	const payePreviewBase = ref<number>(25_000_000); // Rs 250,000 gross
+	const payePreview = computed(() => computePaye(payePreviewBase.value, {
 		reliefCents: payeReliefCents.value,
 		brackets: bandsToBrackets(payeBands.value)
 	}));
+	// Per-band breakdown for the interactive preview: how much of the
+	// taxable income falls in each band and the tax on that slice. The
+	// authoritative total is `payePreview` (computePaye, rounded once).
+	const payeBreakdown = computed(() => {
+		const brackets = bandsToBrackets(payeBands.value);
+		const base = Math.max(0, Math.trunc(payePreviewBase.value));
+		const taxable = Math.max(0, base - Math.max(0, payeReliefCents.value));
+		const rows: { label: string, sliceCents: number, taxCents: number }[] = [];
+		let prev = 0;
+		for (const b of brackets) {
+			if (taxable <= prev) break;
+			const cap = b.upToCents == null ? taxable : Math.min(taxable, b.upToCents);
+			const slice = cap - prev;
+			if (slice > 0) {
+				rows.push({ label: `${b.rateBp / 100}%`, sliceCents: slice, taxCents: Math.round((slice * b.rateBp) / 10000) });
+			}
+			prev = b.upToCents == null ? taxable : b.upToCents;
+		}
+		return { taxable, rows };
+	});
 
 	const initial = ref({
 		start: periodStart.value,
