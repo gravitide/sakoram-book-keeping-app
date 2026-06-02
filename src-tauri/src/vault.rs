@@ -79,10 +79,13 @@ use rand_core::{OsRng, RngCore};
 
 fn encode_recovery_key(bytes: &[u8; 32]) -> String {
     // Uppercase base32, no padding, grouped in 4s with dashes for readability.
+    // We chunk on chars (all single-byte ASCII for base32) to avoid relying on
+    // the non-local invariant that `from_utf8` would need for a safe `.unwrap()`.
     let raw = BASE32_NOPAD.encode(bytes);
-    raw.as_bytes()
+    raw.chars()
+        .collect::<Vec<char>>()
         .chunks(4)
-        .map(|c| std::str::from_utf8(c).unwrap())
+        .map(|c| c.iter().collect::<String>())
         .collect::<Vec<_>>()
         .join("-")
 }
