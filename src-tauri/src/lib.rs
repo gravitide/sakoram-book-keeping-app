@@ -8,6 +8,7 @@ mod pdf;
 mod phone_upload;
 mod tenants;
 mod vault;
+mod vault_fs;
 
 // Multi-tenancy: each business has its own SQLite file under
 // app_data_dir/businesses/. We don't register migrations with
