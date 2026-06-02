@@ -1,10 +1,13 @@
-// Global guard: every navigation must have an active tenant set, OR be
-// going to /welcome. This is the single funnel that ensures every page
-// can safely call getDb() without checking activeTenant first.
+// Global guard: route every navigation based on tenant state.
+//   - no active business        -> /welcome
+//   - active but locked (vault) -> /unlock
+//   - active and open           -> proceed
 //
-// On first navigation we populate the tenants store (which also auto-
-// migrates a legacy single-DB on first run after upgrade).
+// The decision lives in app/lib/tenant-route.ts (pure + unit-tested); this
+// middleware only wires the store state into it. On first navigation we also
+// populate the tenants store (which auto-migrates a legacy single-DB).
 
+import { resolveTenantGuard } from "~/lib/tenant-route";
 import { useTenantsStore } from "~/stores/tenants";
 
 export default defineNuxtRouteMiddleware(async (to) => {
@@ -13,17 +16,18 @@ export default defineNuxtRouteMiddleware(async (to) => {
 		try {
 			await tenants.ensureLoaded();
 		} catch {
-			// Bubble up to /welcome so the user sees a recoverable state
-			// rather than a route crash.
 			if (to.path !== "/welcome") return navigateTo("/welcome");
 			return;
 		}
 	}
 
-	const hasActive = !!tenants.activeTenantId && !!tenants.dbUrl;
-	const isWelcome = to.path === "/welcome";
-
-	if (!hasActive && !isWelcome) {
-		return navigateTo("/welcome");
-	}
+	const result = resolveTenantGuard(
+		{
+			activeId: tenants.activeTenantId,
+			activeLocked: tenants.activeLocked,
+			hasDbUrl: !!tenants.dbUrl
+		},
+		to.path
+	);
+	if (result) return navigateTo(result.redirect);
 });
