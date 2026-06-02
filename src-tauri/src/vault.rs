@@ -454,6 +454,64 @@ mod tests {
     }
 
     #[test]
+    fn truncated_ciphertext_is_rejected() {
+        use std::io::Write;
+
+        let dek = random_bytes::<32>();
+        let dir = std::env::temp_dir()
+            .join(format!("vault-trunc-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let plain = dir.join("plain.bin");
+        let enc = dir.join("plain.enc");
+        let truncated = dir.join("plain.truncated.enc");
+        let out = dir.join("plain.out");
+
+        // Payload: one full chunk + a partial last chunk.
+        let data: Vec<u8> = (0..(CHUNK + 500)).map(|i| (i % 251) as u8).collect();
+        std::fs::File::create(&plain).unwrap().write_all(&data).unwrap();
+        encrypt_file(&plain, &enc, &dek).unwrap();
+
+        // The ciphertext layout is: [19-byte nonce][CHUNK+16 bytes][500+16 bytes].
+        // Chop off the final block to get [19-byte nonce][CHUNK+16 bytes].
+        let full_ct = std::fs::read(&enc).unwrap();
+        let trunc_len = 19 + (CHUNK + 16);
+        assert!(full_ct.len() > trunc_len, "ciphertext shorter than expected");
+        std::fs::write(&truncated, &full_ct[..trunc_len]).unwrap();
+
+        // Decrypting the truncated file must fail — the STREAM tag is missing.
+        assert!(
+            decrypt_file(&truncated, &out, &dek).is_err(),
+            "truncated ciphertext should be rejected"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn exact_chunk_multiple_round_trips() {
+        use std::io::Write;
+
+        let dek = random_bytes::<32>();
+        let dir = std::env::temp_dir()
+            .join(format!("vault-exact-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let plain = dir.join("exact.bin");
+        let enc = dir.join("exact.enc");
+        let out = dir.join("exact.out");
+
+        // Exactly two full chunks — exercises the boundary where every read fills
+        // the buffer and the final block is length zero.
+        let data: Vec<u8> = (0..(CHUNK * 2)).map(|i| (i % 251) as u8).collect();
+        std::fs::File::create(&plain).unwrap().write_all(&data).unwrap();
+
+        encrypt_file(&plain, &enc, &dek).unwrap();
+        decrypt_file(&enc, &out, &dek).unwrap();
+        assert_eq!(std::fs::read(&out).unwrap(), data);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
     fn end_to_end_create_encrypt_recover_decrypt() {
         let dir = std::env::temp_dir().join(format!("vault-e2e-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
