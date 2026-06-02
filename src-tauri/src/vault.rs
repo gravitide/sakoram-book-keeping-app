@@ -68,7 +68,7 @@ pub struct VaultMeta {
 
 use argon2::{Algorithm, Argon2, Params, Version};
 use chacha20poly1305::{
-    aead::{generic_array::GenericArray, stream, Aead, KeyInit},
+    aead::{generic_array::GenericArray, stream, Aead, KeyInit, Payload},
     Key, XChaCha20Poly1305, XNonce,
 };
 use std::fs::File;
@@ -76,6 +76,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use data_encoding::{BASE32_NOPAD, BASE64};
 use rand_core::{OsRng, RngCore};
+use zeroize::Zeroizing;
 
 fn encode_recovery_key(bytes: &[u8; 32]) -> String {
     // Uppercase base32, no padding, grouped in 4s with dashes for readability.
@@ -90,7 +91,7 @@ fn encode_recovery_key(bytes: &[u8; 32]) -> String {
         .join("-")
 }
 
-fn decode_recovery_key(s: &str) -> Result<[u8; 32], VaultError> {
+fn decode_recovery_key(s: &str) -> Result<Zeroizing<[u8; 32]>, VaultError> {
     // Normalise: strip whitespace + dashes, uppercase. Tolerates how a human
     // re-types the grouped key.
     let cleaned: String = s
@@ -101,9 +102,10 @@ fn decode_recovery_key(s: &str) -> Result<[u8; 32], VaultError> {
     let bytes = BASE32_NOPAD
         .decode(cleaned.as_bytes())
         .map_err(|e| VaultError::Encoding(e.to_string()))?;
-    bytes
+    let arr: [u8; 32] = bytes
         .try_into()
-        .map_err(|_| VaultError::Encoding("recovery key wrong length".into()))
+        .map_err(|_| VaultError::Encoding("recovery key wrong length".into()))?;
+    Ok(Zeroizing::new(arr))
 }
 
 fn random_bytes<const N: usize>() -> [u8; N] {
@@ -112,33 +114,27 @@ fn random_bytes<const N: usize>() -> [u8; N] {
     buf
 }
 
-fn wrap_key(wrapping_key: &[u8; 32], dek: &[u8; 32]) -> Result<WrappedKey, VaultError> {
+fn wrap_key(wrapping_key: &[u8; 32], dek: &[u8; 32], aad: &[u8]) -> Result<WrappedKey, VaultError> {
     let cipher = XChaCha20Poly1305::new(Key::from_slice(wrapping_key));
     let nonce = random_bytes::<24>();
     let ct = cipher
-        .encrypt(XNonce::from_slice(&nonce), dek.as_ref())
+        .encrypt(XNonce::from_slice(&nonce), Payload { msg: dek.as_ref(), aad })
         .map_err(|_| VaultError::Crypto)?;
-    Ok(WrappedKey {
-        nonce: BASE64.encode(&nonce),
-        ct: BASE64.encode(&ct),
-    })
+    Ok(WrappedKey { nonce: BASE64.encode(&nonce), ct: BASE64.encode(&ct) })
 }
 
-fn unwrap_key(wrapping_key: &[u8; 32], w: &WrappedKey) -> Result<[u8; 32], VaultError> {
-    let nonce = BASE64
-        .decode(w.nonce.as_bytes())
-        .map_err(|e| VaultError::Encoding(e.to_string()))?;
-    let ct = BASE64
-        .decode(w.ct.as_bytes())
-        .map_err(|e| VaultError::Encoding(e.to_string()))?;
+fn unwrap_key(wrapping_key: &[u8; 32], w: &WrappedKey, aad: &[u8]) -> Result<Zeroizing<[u8; 32]>, VaultError> {
+    let nonce = BASE64.decode(w.nonce.as_bytes()).map_err(|e| VaultError::Encoding(e.to_string()))?;
+    let ct = BASE64.decode(w.ct.as_bytes()).map_err(|e| VaultError::Encoding(e.to_string()))?;
     if nonce.len() != 24 {
         return Err(VaultError::Encoding("bad nonce length".into()));
     }
     let cipher = XChaCha20Poly1305::new(Key::from_slice(wrapping_key));
     let pt = cipher
-        .decrypt(XNonce::from_slice(&nonce), ct.as_ref())
+        .decrypt(XNonce::from_slice(&nonce), Payload { msg: ct.as_ref(), aad })
         .map_err(|_| VaultError::Auth)?;
-    pt.try_into().map_err(|_| VaultError::Crypto)
+    let arr: [u8; 32] = pt.try_into().map_err(|_| VaultError::Crypto)?;
+    Ok(Zeroizing::new(arr))
 }
 
 fn derive_kek(
@@ -147,25 +143,25 @@ fn derive_kek(
     m_cost: u32,
     t_cost: u32,
     p_cost: u32,
-) -> Result<[u8; 32], VaultError> {
+) -> Result<Zeroizing<[u8; 32]>, VaultError> {
     let params = Params::new(m_cost, t_cost, p_cost, Some(32))
         .map_err(|e| VaultError::Kdf(e.to_string()))?;
     let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut kek = [0u8; 32];
+    let mut kek = Zeroizing::new([0u8; 32]);
     argon
-        .hash_password_into(password, salt, &mut kek)
+        .hash_password_into(password, salt, kek.as_mut())
         .map_err(|e| VaultError::Kdf(e.to_string()))?;
     Ok(kek)
 }
 
-pub fn create_vault(password: &str) -> Result<(VaultMeta, String, [u8; 32]), VaultError> {
-    let dek = random_bytes::<32>();
-    let recovery_bytes = random_bytes::<32>();
+pub fn create_vault(password: &str, aad: &[u8]) -> Result<(VaultMeta, String, Zeroizing<[u8; 32]>), VaultError> {
+    let dek = Zeroizing::new(random_bytes::<32>());
+    let recovery_bytes = Zeroizing::new(random_bytes::<32>());
     let salt = random_bytes::<16>();
 
     let kek_pw = derive_kek(password.as_bytes(), &salt, M_COST, T_COST, P_COST)?;
-    let wrapped_by_password = wrap_key(&kek_pw, &dek)?;
-    let wrapped_by_recovery = wrap_key(&recovery_bytes, &dek)?;
+    let wrapped_by_password = wrap_key(&kek_pw, &dek, aad)?;
+    let wrapped_by_recovery = wrap_key(&recovery_bytes, &dek, aad)?;
 
     let meta = VaultMeta {
         version: VAULT_VERSION,
@@ -182,7 +178,7 @@ pub fn create_vault(password: &str) -> Result<(VaultMeta, String, [u8; 32]), Vau
     Ok((meta, encode_recovery_key(&recovery_bytes), dek))
 }
 
-pub fn unlock_with_password(meta: &VaultMeta, password: &str) -> Result<[u8; 32], VaultError> {
+pub fn unlock_with_password(meta: &VaultMeta, password: &str, aad: &[u8]) -> Result<Zeroizing<[u8; 32]>, VaultError> {
     let salt = BASE64
         .decode(meta.kdf.salt.as_bytes())
         .map_err(|e| VaultError::Encoding(e.to_string()))?;
@@ -193,12 +189,12 @@ pub fn unlock_with_password(meta: &VaultMeta, password: &str) -> Result<[u8; 32]
         meta.kdf.t_cost,
         meta.kdf.p_cost,
     )?;
-    unwrap_key(&kek, &meta.wrapped_by_password)
+    unwrap_key(&kek, &meta.wrapped_by_password, aad)
 }
 
-pub fn unlock_with_recovery(meta: &VaultMeta, recovery_key: &str) -> Result<[u8; 32], VaultError> {
+pub fn unlock_with_recovery(meta: &VaultMeta, recovery_key: &str, aad: &[u8]) -> Result<Zeroizing<[u8; 32]>, VaultError> {
     let recovery_bytes = decode_recovery_key(recovery_key)?;
-    unwrap_key(&recovery_bytes, &meta.wrapped_by_recovery)
+    unwrap_key(&recovery_bytes, &meta.wrapped_by_recovery, aad)
 }
 
 // File format: [19-byte STREAM nonce][chunk][chunk]... where each non-final
@@ -275,16 +271,17 @@ pub fn change_password(
     meta: &VaultMeta,
     old_password: &str,
     new_password: &str,
+    aad: &[u8],
 ) -> Result<VaultMeta, VaultError> {
     // Authenticate + recover the DEK with the current password.
-    let dek = unlock_with_password(meta, old_password)?;
+    let dek = unlock_with_password(meta, old_password, aad)?;
 
     // Re-wrap the SAME DEK under a fresh salt + new password. The DB blob is
     // untouched; only the password wrapping changes. Recovery wrapping is
     // carried over verbatim (it wraps the same DEK).
     let salt = random_bytes::<16>();
     let kek = derive_kek(new_password.as_bytes(), &salt, M_COST, T_COST, P_COST)?;
-    let wrapped_by_password = wrap_key(&kek, &dek)?;
+    let wrapped_by_password = wrap_key(&kek, &dek, aad)?;
 
     Ok(VaultMeta {
         version: meta.version,
@@ -311,8 +308,8 @@ mod tests {
         let k1 = derive_kek(b"correct horse", &salt_a, M_COST, T_COST, P_COST).unwrap();
         let k2 = derive_kek(b"correct horse", &salt_a, M_COST, T_COST, P_COST).unwrap();
         let k3 = derive_kek(b"correct horse", &salt_b, M_COST, T_COST, P_COST).unwrap();
-        assert_eq!(k1, k2, "same password+salt must derive the same key");
-        assert_ne!(k1, k3, "different salt must derive a different key");
+        assert_eq!(*k1, *k2, "same password+salt must derive the same key");
+        assert_ne!(*k1, *k3, "different salt must derive a different key");
         assert_eq!(k1.len(), 32);
     }
 
@@ -320,18 +317,18 @@ mod tests {
     fn wrap_round_trips_and_rejects_wrong_key() {
         let kek = [7u8; 32];
         let dek = random_bytes::<32>();
-        let wrapped = wrap_key(&kek, &dek).unwrap();
+        let wrapped = wrap_key(&kek, &dek, b"aad").unwrap();
 
         // Correct key unwraps to the original DEK.
-        let out = unwrap_key(&kek, &wrapped).unwrap();
-        assert_eq!(out, dek);
+        let out = unwrap_key(&kek, &wrapped, b"aad").unwrap();
+        assert_eq!(*out, dek);
 
         // Wrong key fails authentication.
         let wrong = [8u8; 32];
-        assert!(matches!(unwrap_key(&wrong, &wrapped), Err(VaultError::Auth)));
+        assert!(matches!(unwrap_key(&wrong, &wrapped, b"aad"), Err(VaultError::Auth)));
 
         // Two wraps of the same DEK differ (random nonce).
-        let wrapped2 = wrap_key(&kek, &dek).unwrap();
+        let wrapped2 = wrap_key(&kek, &dek, b"aad").unwrap();
         assert_ne!(wrapped.ct, wrapped2.ct);
     }
 
@@ -347,7 +344,7 @@ mod tests {
         // Human-friendly: uppercase base32 in dash-separated groups.
         assert!(encoded.contains('-'));
         let decoded = decode_recovery_key(&encoded).unwrap();
-        assert_eq!(decoded, bytes);
+        assert_eq!(*decoded, bytes);
     }
 
     #[test]
@@ -356,14 +353,14 @@ mod tests {
         let encoded = encode_recovery_key(&bytes);
         // Lowercase + extra spaces/dashes should still decode (user transcription).
         let messy = format!("  {}  ", encoded.to_lowercase().replace('-', " - "));
-        assert_eq!(decode_recovery_key(&messy).unwrap(), bytes);
+        assert_eq!(*decode_recovery_key(&messy).unwrap(), bytes);
         // Garbage fails.
         assert!(decode_recovery_key("not a real key!!!").is_err());
     }
 
     #[test]
     fn create_then_unlock_both_ways() {
-        let (meta, recovery, dek) = create_vault("hunter2").unwrap();
+        let (meta, recovery, dek) = create_vault("hunter2", b"tenant-test").unwrap();
 
         // Metadata shape.
         assert_eq!(meta.version, VAULT_VERSION);
@@ -371,30 +368,44 @@ mod tests {
         assert!(!meta.kdf.salt.is_empty());
 
         // Password unlocks to the same DEK.
-        assert_eq!(unlock_with_password(&meta, "hunter2").unwrap(), dek);
+        assert_eq!(*unlock_with_password(&meta, "hunter2", b"tenant-test").unwrap(), *dek);
         // Recovery key unlocks to the same DEK.
-        assert_eq!(unlock_with_recovery(&meta, &recovery).unwrap(), dek);
+        assert_eq!(*unlock_with_recovery(&meta, &recovery, b"tenant-test").unwrap(), *dek);
 
         // Wrong password is rejected.
-        assert!(matches!(unlock_with_password(&meta, "wrong"), Err(VaultError::Auth)));
+        assert!(matches!(unlock_with_password(&meta, "wrong", b"tenant-test"), Err(VaultError::Auth)));
         // Wrong recovery key is rejected.
         let other = encode_recovery_key(&[0u8; 32]);
-        assert!(matches!(unlock_with_recovery(&meta, &other), Err(VaultError::Auth)));
+        assert!(matches!(unlock_with_recovery(&meta, &other, b"tenant-test"), Err(VaultError::Auth)));
     }
 
     #[test]
     fn change_password_preserves_dek_and_recovery() {
-        let (meta, recovery, dek) = create_vault("old-pass").unwrap();
-        let meta2 = change_password(&meta, "old-pass", "new-pass").unwrap();
+        let (meta, recovery, dek) = create_vault("old-pass", b"tenant-test").unwrap();
+        let meta2 = change_password(&meta, "old-pass", "new-pass", b"tenant-test").unwrap();
 
         // New password unlocks to the SAME DEK (DB never re-encrypted).
-        assert_eq!(unlock_with_password(&meta2, "new-pass").unwrap(), dek);
+        assert_eq!(*unlock_with_password(&meta2, "new-pass", b"tenant-test").unwrap(), *dek);
         // Old password no longer works.
-        assert!(matches!(unlock_with_password(&meta2, "old-pass"), Err(VaultError::Auth)));
+        assert!(matches!(unlock_with_password(&meta2, "old-pass", b"tenant-test"), Err(VaultError::Auth)));
         // Recovery key still works unchanged.
-        assert_eq!(unlock_with_recovery(&meta2, &recovery).unwrap(), dek);
+        assert_eq!(*unlock_with_recovery(&meta2, &recovery, b"tenant-test").unwrap(), *dek);
         // Wrong current password is rejected up front.
-        assert!(matches!(change_password(&meta, "nope", "x"), Err(VaultError::Auth)));
+        assert!(matches!(change_password(&meta, "nope", "x", b"tenant-test"), Err(VaultError::Auth)));
+    }
+
+    #[test]
+    fn wrong_aad_is_rejected() {
+        let (meta, recovery, dek) = create_vault("pw", b"tenant-acme").unwrap();
+        // Correct AAD unlocks.
+        assert_eq!(*unlock_with_password(&meta, "pw", b"tenant-acme").unwrap(), *dek);
+        assert_eq!(*unlock_with_recovery(&meta, &recovery, b"tenant-acme").unwrap(), *dek);
+        // A different AAD (e.g. another tenant's id) is rejected even with the
+        // right password — defeats vault/blob substitution across businesses.
+        assert!(matches!(
+            unlock_with_password(&meta, "pw", b"tenant-other"),
+            Err(VaultError::Auth)
+        ));
     }
 
     #[test]
@@ -524,7 +535,7 @@ mod tests {
         std::fs::write(&db, &contents).unwrap();
 
         // Enable encryption: create vault, encrypt the DB with its DEK.
-        let (meta, recovery, dek) = create_vault("s3cret-pass").unwrap();
+        let (meta, recovery, dek) = create_vault("s3cret-pass", b"tenant-acme").unwrap();
         encrypt_file(&db, &blob, &dek).unwrap();
 
         // Serialise + reload metadata (simulates the vault.json sidecar).
@@ -532,8 +543,8 @@ mod tests {
         let meta_loaded: VaultMeta = serde_json::from_str(&json).unwrap();
 
         // Forgot the password — unlock via recovery key, decrypt the DB.
-        let dek2 = unlock_with_recovery(&meta_loaded, &recovery).unwrap();
-        assert_eq!(dek2, dek);
+        let dek2 = unlock_with_recovery(&meta_loaded, &recovery, b"tenant-acme").unwrap();
+        assert_eq!(*dek2, *dek);
         decrypt_file(&blob, &restored, &dek2).unwrap();
         assert_eq!(std::fs::read(&restored).unwrap(), contents);
 
