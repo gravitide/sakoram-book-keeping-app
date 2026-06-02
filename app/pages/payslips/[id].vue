@@ -144,6 +144,10 @@
 									Apply EPF / ETF
 									<USwitch v-model="statutoryEnabled" />
 								</label>
+								<label v-if="!locked" class="flex items-center gap-2 text-xs text-(--ui-text-muted)">
+									Apply PAYE
+									<USwitch v-model="payeEnabled" />
+								</label>
 								<span class="text-xs text-(--ui-text-muted)">
 									{{ locked ? `Locked — payslip is ${row?.status}` : "Edit until you mark it issued" }}
 								</span>
@@ -156,6 +160,9 @@
 						:statutory-enabled="statutoryEnabled"
 						:rates="statRates"
 						:epf-employee-rate-bp="statRates.epfEmployeeBp"
+						:paye-enabled="payeEnabled"
+						:paye-config="payeConfig"
+						:paye-deduct-epf="payeDeductEpf"
 					/>
 				</UCard>
 
@@ -377,12 +384,13 @@
 </template>
 
 <script setup lang="ts">
+	import type { PayeBracket, PayeConfig } from "~/lib/statutory";
 	import type { EmployeeSnapshot, PayslipLineDraft, PayslipLineRow, PayslipRow } from "~/stores/payslips";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { formatMoney } from "~/lib/money";
 	import { buildPayslipPdfPayload } from "~/lib/payslip-pdf";
-	import { computeStatutory } from "~/lib/statutory";
+	import { computePaye, computeStatutory } from "~/lib/statutory";
 	import { usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
@@ -451,6 +459,7 @@
 	// Per-payslip toggle, defaulting to the row value (seeded from settings
 	// at create). A local ref so the editor toggle can flip it live.
 	const statutoryEnabled = ref<boolean>(false);
+	const payeEnabled = ref<boolean>(false);
 
 	const hydrate = async () => {
 		const r = await store.get(payslipId);
@@ -463,11 +472,12 @@
 		const lines = await store.getLines(payslipId);
 		form.lines = linesToDrafts(lines);
 		statutoryEnabled.value = (r.statutory_enabled ?? 0) === 1;
+		payeEnabled.value = (r.paye_enabled ?? 0) === 1;
 	};
 
 	await hydrate();
 
-	const formSnapshot = computed(() => JSON.stringify({ ...form, statutoryEnabled: statutoryEnabled.value }));
+	const formSnapshot = computed(() => JSON.stringify({ ...form, statutoryEnabled: statutoryEnabled.value, payeEnabled: payeEnabled.value }));
 	const baseline = ref<string>(formSnapshot.value);
 	const dirty = computed(() => formSnapshot.value !== baseline.value);
 	const refreshBaseline = () => {
@@ -482,6 +492,18 @@
 		epfEmployerBp: settingsStore.settings?.epf_employer_rate_bp ?? 1200,
 		etfBp: settingsStore.settings?.etf_rate_bp ?? 300
 	}));
+
+	// PAYE config from settings (parsed once per settings change).
+	const payeConfig = computed<PayeConfig>(() => {
+		let brackets: PayeBracket[] = [];
+		try {
+			brackets = JSON.parse(settingsStore.settings?.paye_brackets ?? "[]") as PayeBracket[];
+		} catch {
+			brackets = [];
+		}
+		return { reliefCents: settingsStore.settings?.paye_relief_cents ?? 15_000_000, brackets };
+	});
+	const payeDeductEpf = computed(() => (settingsStore.settings?.paye_deduct_epf ?? 1) === 1);
 
 	const paidCents = computed(() => row.value ? store.paidCentsFor(row.value.id) : 0);
 	const balanceCents = computed(() => row.value ? store.balanceCentsFor(row.value) : 0);
@@ -529,6 +551,11 @@
 				const stat = statutoryEnabled.value
 					? computeStatutory(liableBase, statRates.value)
 					: { baseCents: 0, epfEmployeeCents: 0, epfEmployerCents: 0, etfCents: 0 };
+				const grossEarnings = form.lines
+					.filter((l) => l.kind === "earning")
+					.reduce((s, l) => s + l.amount_cents, 0);
+				const payeBase = grossEarnings - (payeDeductEpf.value ? stat.epfEmployeeCents : 0);
+				const payeCents = payeEnabled.value ? computePaye(payeBase, payeConfig.value) : 0;
 				await store.update(row.value.id, {
 					period_start: form.period_start ?? row.value.period_start,
 					period_end: form.period_end ?? row.value.period_end,
@@ -540,7 +567,9 @@
 					epf_employee_cents: stat.epfEmployeeCents,
 					epf_employer_cents: stat.epfEmployerCents,
 					etf_cents: stat.etfCents,
-					statutory_enabled: statutoryEnabled.value ? 1 : 0
+					statutory_enabled: statutoryEnabled.value ? 1 : 0,
+					paye_cents: payeCents,
+					paye_enabled: payeEnabled.value ? 1 : 0
 				});
 			}
 			await store.load();

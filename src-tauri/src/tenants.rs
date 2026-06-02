@@ -78,6 +78,7 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(33, "voucher bank id", include_str!("../migrations/0033_voucher_bank_id.sql")),
 	(34, "bank reconciliation", include_str!("../migrations/0034_bank_reconciliation.sql")),
 	(35, "payslip statutory", include_str!("../migrations/0035_payslip_statutory.sql")),
+	(36, "payslip paye", include_str!("../migrations/0036_payslip_paye.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -13,12 +13,13 @@
 // earnings − deductions. v1 has no statutory auto-compute — that
 // can ride on top later.
 
+import type { PayeBracket } from "~/lib/statutory";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { formatRate, sumCents } from "~/lib/money";
 import { allocateDocumentNumber, allocateSpecificDocumentNumber } from "~/lib/numbering";
-import { computeStatutory } from "~/lib/statutory";
+import { computePaye, computeStatutory } from "~/lib/statutory";
 import { useSettingsStore } from "~/stores/settings";
 import { useVouchersStore } from "~/stores/vouchers";
 
@@ -55,6 +56,10 @@ export interface PayslipRow {
 	epf_employer_cents: number
 	etf_cents: number
 	statutory_enabled: number
+	// PAYE / APIT (monthly tax-table). Frozen figure + per-payslip enable
+	// (seeded from company_settings.paye_auto_compute at create).
+	paye_cents: number
+	paye_enabled: number
 	notes: string | null
 	status: PayslipPersistedStatus
 	created_at: string
@@ -293,7 +298,22 @@ export const usePayslipsStore = defineStore("payslips", () => {
 				etfBp: settings.settings?.etf_rate_bp ?? 300
 			})
 			: { baseCents: 0, epfEmployeeCents: 0, epfEmployerCents: 0, etfCents: 0 };
-		const deductionsSeed = stat.epfEmployeeCents;
+		const payeOn = (settings.settings?.paye_auto_compute ?? 0) === 1;
+		let payeBrackets: PayeBracket[] = [];
+		try {
+			payeBrackets = JSON.parse(settings.settings?.paye_brackets ?? "[]") as PayeBracket[];
+		} catch {
+			payeBrackets = [];
+		}
+		const payeDeductEpf = (settings.settings?.paye_deduct_epf ?? 1) === 1;
+		const payeBase = basic - (payeDeductEpf ? stat.epfEmployeeCents : 0);
+		const payeSeed = payeOn
+			? computePaye(payeBase, {
+				reliefCents: settings.settings?.paye_relief_cents ?? 15_000_000,
+				brackets: payeBrackets
+			})
+			: 0;
+		const deductionsSeed = stat.epfEmployeeCents + payeSeed;
 		const netSeed = Math.max(0, basic - deductionsSeed);
 		// Seed the draft with a single Basic earning line equal to the
 		// employee's basic_salary_cents so the user has something concrete
@@ -303,8 +323,9 @@ export const usePayslipsStore = defineStore("payslips", () => {
 				number, fiscal_year, employee_id, employee_snapshot, employee_name,
 				period_start, period_end, pay_date,
 				earnings_cents, deductions_cents, net_cents, status,
-				epf_employee_cents, epf_employer_cents, etf_cents, statutory_enabled
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?)`,
+				epf_employee_cents, epf_employer_cents, etf_cents, statutory_enabled,
+				paye_cents, paye_enabled
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)`,
 			[
 				allocation.number,
 				allocation.fiscalYear,
@@ -320,7 +341,9 @@ export const usePayslipsStore = defineStore("payslips", () => {
 				stat.epfEmployeeCents,
 				stat.epfEmployerCents,
 				stat.etfCents,
-				statutoryOn ? 1 : 0
+				statutoryOn ? 1 : 0,
+				payeSeed,
+				payeOn ? 1 : 0
 			]
 		);
 		if (result.lastInsertId === undefined) throw new Error("createPayslip: no lastInsertId");
@@ -342,13 +365,22 @@ export const usePayslipsStore = defineStore("payslips", () => {
 				[id, `EPF (${formatRate(epfBp)})`, stat.epfEmployeeCents]
 			);
 		}
+		if (payeOn && payeSeed > 0) {
+			await execute(
+				`INSERT INTO payslip_lines (
+					payslip_id, sort_order, kind, label, amount_cents, epf_liable, auto_source
+				) VALUES (?, 2, 'deduction', 'PAYE (APIT)', ?, 0, 'paye')`,
+				[id, payeSeed]
+			);
+		}
 		await load();
 		return id;
 	};
 
 	type PayslipUpdate = Partial<Pick<PayslipRow, | "period_start" | "period_end" | "pay_date"
 		| "earnings_cents" | "deductions_cents" | "net_cents" | "notes"
-		| "epf_employee_cents" | "epf_employer_cents" | "etf_cents" | "statutory_enabled">>;
+		| "epf_employee_cents" | "epf_employer_cents" | "etf_cents" | "statutory_enabled"
+		| "paye_cents" | "paye_enabled">>;
 
 	const UPDATABLE: ReadonlyArray<keyof PayslipUpdate> = [
 		"period_start",
@@ -361,7 +393,9 @@ export const usePayslipsStore = defineStore("payslips", () => {
 		"epf_employee_cents",
 		"epf_employer_cents",
 		"etf_cents",
-		"statutory_enabled"
+		"statutory_enabled",
+		"paye_cents",
+		"paye_enabled"
 	];
 
 	const update = async (id: number, patch: PayslipUpdate): Promise<void> => {

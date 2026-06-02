@@ -102,23 +102,23 @@
 					<UInput
 						v-model="line.label"
 						placeholder="e.g. EPF (8%), PAYE, Salary advance"
-						:disabled="disabled || line.auto_source === 'epf_employee'"
+						:disabled="disabled || line.auto_source === 'epf_employee' || line.auto_source === 'paye'"
 						@input="onChange"
 					/>
 					<MoneyInput
 						v-model="line.amount_cents"
-						:disabled="disabled || line.auto_source === 'epf_employee'"
+						:disabled="disabled || line.auto_source === 'epf_employee' || line.auto_source === 'paye'"
 						@update:model-value="onChange"
 					/>
 					<UButton
-						v-if="line.auto_source === 'epf_employee'"
+						v-if="line.auto_source === 'epf_employee' || line.auto_source === 'paye'"
 						icon="i-lucide-lock"
 						variant="ghost"
 						color="neutral"
 						size="xs"
 						disabled
-						aria-label="Auto-computed from EPF-liable earnings — not editable"
-						title="Auto-computed from EPF-liable earnings"
+						aria-label="Auto-computed — not editable"
+						title="Auto-computed from the statutory settings"
 					/>
 					<UButton
 						v-else
@@ -170,10 +170,10 @@
 </template>
 
 <script setup lang="ts">
-	import type { StatutoryRates } from "~/lib/statutory";
+	import type { PayeConfig, StatutoryRates } from "~/lib/statutory";
 	import type { PayslipLineDraft } from "~/stores/payslips";
 	import { formatMoney, formatRate } from "~/lib/money";
-	import { computeStatutory } from "~/lib/statutory";
+	import { computePaye, computeStatutory } from "~/lib/statutory";
 
 	interface Props {
 		modelValue: PayslipLineDraft[]
@@ -181,12 +181,18 @@
 		statutoryEnabled?: boolean
 		rates?: StatutoryRates
 		epfEmployeeRateBp?: number
+		payeEnabled?: boolean
+		payeConfig?: PayeConfig
+		payeDeductEpf?: boolean
 	}
 	const props = withDefaults(defineProps<Props>(), {
 		disabled: false,
 		statutoryEnabled: false,
 		rates: () => ({ epfEmployeeBp: 800, epfEmployerBp: 1200, etfBp: 300 }),
-		epfEmployeeRateBp: 800
+		epfEmployeeRateBp: 800,
+		payeEnabled: false,
+		payeConfig: () => ({ reliefCents: 15_000_000, brackets: [] }),
+		payeDeductEpf: true
 	});
 	const emit = defineEmits<{ "update:modelValue": [value: PayslipLineDraft[]] }>();
 
@@ -210,27 +216,52 @@
 			.filter((l) => l.kind === "earning" && (l.epf_liable ?? 1) === 1)
 			.reduce((s, l) => s + (l.amount_cents || 0), 0);
 
-	// Insert / update / remove the machine-owned EPF deduction line so it
-	// always reflects current liable earnings. Manual lines are untouched.
-	// No-op while disabled (issued/cancelled payslips are immutable).
+	// Gross = Σ all earning lines (PAYE base, before optional EPF subtraction).
+	const grossEarnings = () =>
+		lines
+			.filter((l) => l.kind === "earning")
+			.reduce((s, l) => s + (l.amount_cents || 0), 0);
+
+	// Insert / update / remove the machine-owned deduction lines so they
+	// always reflect current earnings. Manual lines are untouched. No-op
+	// while disabled (issued/cancelled payslips are immutable). EPF is synced
+	// FIRST because the PAYE base may subtract the computed EPF amount.
 	const syncManagedLine = () => {
 		if (props.disabled) return;
-		const idx = lines.findIndex((l) => l.auto_source === "epf_employee");
-		if (!props.statutoryEnabled) {
-			if (idx !== -1) lines.splice(idx, 1);
-			return;
+
+		// --- EPF (employee) managed deduction line ---
+		const epfIdx = lines.findIndex((l) => l.auto_source === "epf_employee");
+		let epfEmployeeCents = 0;
+		if (props.statutoryEnabled) {
+			epfEmployeeCents = computeStatutory(liableBase(), props.rates).epfEmployeeCents;
 		}
-		const stat = computeStatutory(liableBase(), props.rates);
-		const label = `EPF (${formatRate(props.epfEmployeeRateBp)})`;
-		if (stat.epfEmployeeCents <= 0) {
-			if (idx !== -1) lines.splice(idx, 1);
-			return;
+		if (epfEmployeeCents > 0) {
+			const label = `EPF (${formatRate(props.epfEmployeeRateBp)})`;
+			if (epfIdx === -1) {
+				lines.push({ sort_order: lines.length, kind: "deduction", label, amount_cents: epfEmployeeCents, epf_liable: 0, auto_source: "epf_employee" });
+			} else {
+				lines[epfIdx]!.label = label;
+				lines[epfIdx]!.amount_cents = epfEmployeeCents;
+			}
+		} else if (epfIdx !== -1) {
+			lines.splice(epfIdx, 1);
 		}
-		if (idx === -1) {
-			lines.push({ sort_order: lines.length, kind: "deduction", label, amount_cents: stat.epfEmployeeCents, epf_liable: 0, auto_source: "epf_employee" });
-		} else {
-			lines[idx]!.label = label;
-			lines[idx]!.amount_cents = stat.epfEmployeeCents;
+
+		// --- PAYE (APIT) managed deduction line ---
+		const payeIdx = lines.findIndex((l) => l.auto_source === "paye");
+		let payeCents = 0;
+		if (props.payeEnabled) {
+			const payeBase = grossEarnings() - (props.payeDeductEpf ? epfEmployeeCents : 0);
+			payeCents = computePaye(payeBase, props.payeConfig);
+		}
+		if (payeCents > 0) {
+			if (payeIdx === -1) {
+				lines.push({ sort_order: lines.length, kind: "deduction", label: "PAYE (APIT)", amount_cents: payeCents, epf_liable: 0, auto_source: "paye" });
+			} else {
+				lines[payeIdx]!.amount_cents = payeCents;
+			}
+		} else if (payeIdx !== -1) {
+			lines.splice(payeIdx, 1);
 		}
 	};
 
@@ -250,11 +281,15 @@
 		emit("update:modelValue", lines.map((l) => ({ ...l })));
 	};
 
-	// Recompute the managed EPF line whenever statutory is toggled or
-	// rates change at the parent (e.g. settings update mid-session).
-	watch(() => [props.statutoryEnabled, props.rates] as const, () => {
-		onChange();
-	}, { deep: true });
+	// Recompute the managed lines whenever statutory / PAYE inputs change at
+	// the parent (toggles, rates, bracket table, deduct-EPF flag).
+	watch(
+		() => [props.statutoryEnabled, props.rates, props.payeEnabled, props.payeConfig, props.payeDeductEpf] as const,
+		() => {
+			onChange();
+		},
+		{ deep: true }
+	);
 
 	// UCheckbox models a boolean; we store epf_liable as 0/1 (DB INTEGER
 	// convention). Bridge the two here so the flag stays a clean number and
