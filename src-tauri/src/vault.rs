@@ -204,67 +204,110 @@ pub fn unlock_with_recovery(meta: &VaultMeta, recovery_key: &str, aad: &[u8]) ->
 // its counter + flag, leaving a 19-byte per-file nonce.
 
 pub fn encrypt_file(plaintext: &Path, ciphertext: &Path, dek: &[u8; 32]) -> Result<(), VaultError> {
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(dek));
-    let stream_nonce = random_bytes::<19>();
-    let mut encryptor =
-        stream::EncryptorBE32::from_aead(cipher, GenericArray::from_slice(&stream_nonce));
+    // Write to a temp file in the same directory so the final rename is
+    // same-filesystem (and therefore atomic on both Windows and Unix).
+    // The real destination is never truncated until the rename succeeds.
+    let mut tmp_os = ciphertext.as_os_str().to_owned();
+    tmp_os.push(".tmp");
+    let tmp = std::path::PathBuf::from(tmp_os);
 
-    let mut reader = File::open(plaintext)?;
-    let mut writer = File::create(ciphertext)?;
-    writer.write_all(&stream_nonce)?;
+    let result = (|| -> Result<(), VaultError> {
+        let cipher = XChaCha20Poly1305::new(Key::from_slice(dek));
+        let stream_nonce = random_bytes::<19>();
+        let mut encryptor =
+            stream::EncryptorBE32::from_aead(cipher, GenericArray::from_slice(&stream_nonce));
 
-    let mut buf = Vec::with_capacity(CHUNK);
-    loop {
-        buf.clear();
-        let n = std::io::Read::by_ref(&mut reader).take(CHUNK as u64).read_to_end(&mut buf)?;
-        if n == CHUNK {
-            let ct = encryptor
-                .encrypt_next(buf.as_slice())
-                .map_err(|_| VaultError::Crypto)?;
-            writer.write_all(&ct)?;
-        } else {
-            let ct = encryptor
-                .encrypt_last(buf.as_slice())
-                .map_err(|_| VaultError::Crypto)?;
-            writer.write_all(&ct)?;
-            break;
+        let mut reader = File::open(plaintext)?;
+        let mut writer = File::create(&tmp)?;
+        writer.write_all(&stream_nonce)?;
+
+        let mut buf = Vec::with_capacity(CHUNK);
+        loop {
+            buf.clear();
+            let n = std::io::Read::by_ref(&mut reader).take(CHUNK as u64).read_to_end(&mut buf)?;
+            if n == CHUNK {
+                let ct = encryptor
+                    .encrypt_next(buf.as_slice())
+                    .map_err(|_| VaultError::Crypto)?;
+                writer.write_all(&ct)?;
+            } else {
+                let ct = encryptor
+                    .encrypt_last(buf.as_slice())
+                    .map_err(|_| VaultError::Crypto)?;
+                writer.write_all(&ct)?;
+                break;
+            }
         }
+        // flush() drains the userspace buffer; sync_all() ensures the OS has
+        // committed the bytes to durable storage before we rename over the
+        // previous good blob.
+        writer.flush()?;
+        writer.sync_all()?;
+        drop(writer);
+        // Atomic swap: replaces any existing destination on both Windows and Unix.
+        std::fs::rename(&tmp, ciphertext)?;
+        Ok(())
+    })();
+
+    if result.is_err() {
+        // Best-effort cleanup — never leave a half-written temp next to the real file.
+        let _ = std::fs::remove_file(&tmp);
     }
-    writer.flush()?;
-    Ok(())
+    result
 }
 
 pub fn decrypt_file(ciphertext: &Path, plaintext: &Path, dek: &[u8; 32]) -> Result<(), VaultError> {
-    const ENC_CHUNK: usize = CHUNK + 16; // plaintext chunk + Poly1305 tag
+    // Write to a temp file in the same directory so the final rename is
+    // same-filesystem (and therefore atomic). The real destination DB is
+    // never truncated until the rename succeeds.
+    let mut tmp_os = plaintext.as_os_str().to_owned();
+    tmp_os.push(".tmp");
+    let tmp = std::path::PathBuf::from(tmp_os);
 
-    let mut reader = File::open(ciphertext)?;
-    let mut stream_nonce = [0u8; 19];
-    reader.read_exact(&mut stream_nonce)?;
+    let result = (|| -> Result<(), VaultError> {
+        const ENC_CHUNK: usize = CHUNK + 16; // plaintext chunk + Poly1305 tag
 
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(dek));
-    let mut decryptor =
-        stream::DecryptorBE32::from_aead(cipher, GenericArray::from_slice(&stream_nonce));
+        let mut reader = File::open(ciphertext)?;
+        let mut stream_nonce = [0u8; 19];
+        reader.read_exact(&mut stream_nonce)?;
 
-    let mut writer = File::create(plaintext)?;
-    let mut buf = Vec::with_capacity(ENC_CHUNK);
-    loop {
-        buf.clear();
-        let n = std::io::Read::by_ref(&mut reader).take(ENC_CHUNK as u64).read_to_end(&mut buf)?;
-        if n == ENC_CHUNK {
-            let pt = decryptor
-                .decrypt_next(buf.as_slice())
-                .map_err(|_| VaultError::Auth)?;
-            writer.write_all(&pt)?;
-        } else {
-            let pt = decryptor
-                .decrypt_last(buf.as_slice())
-                .map_err(|_| VaultError::Auth)?;
-            writer.write_all(&pt)?;
-            break;
+        let cipher = XChaCha20Poly1305::new(Key::from_slice(dek));
+        let mut decryptor =
+            stream::DecryptorBE32::from_aead(cipher, GenericArray::from_slice(&stream_nonce));
+
+        let mut writer = File::create(&tmp)?;
+        let mut buf = Vec::with_capacity(ENC_CHUNK);
+        loop {
+            buf.clear();
+            let n = std::io::Read::by_ref(&mut reader).take(ENC_CHUNK as u64).read_to_end(&mut buf)?;
+            if n == ENC_CHUNK {
+                let pt = decryptor
+                    .decrypt_next(buf.as_slice())
+                    .map_err(|_| VaultError::Auth)?;
+                writer.write_all(&pt)?;
+            } else {
+                let pt = decryptor
+                    .decrypt_last(buf.as_slice())
+                    .map_err(|_| VaultError::Auth)?;
+                writer.write_all(&pt)?;
+                break;
+            }
         }
+        // flush() drains the userspace buffer; sync_all() commits to durable
+        // storage before we rename over the existing working DB file.
+        writer.flush()?;
+        writer.sync_all()?;
+        drop(writer);
+        // Atomic swap: replaces any existing destination on both Windows and Unix.
+        std::fs::rename(&tmp, plaintext)?;
+        Ok(())
+    })();
+
+    if result.is_err() {
+        // Best-effort cleanup — never leave a half-written temp next to the real DB.
+        let _ = std::fs::remove_file(&tmp);
     }
-    writer.flush()?;
-    Ok(())
+    result
 }
 
 pub fn change_password(
@@ -518,6 +561,31 @@ mod tests {
         encrypt_file(&plain, &enc, &dek).unwrap();
         decrypt_file(&enc, &out, &dek).unwrap();
         assert_eq!(std::fs::read(&out).unwrap(), data);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn encrypt_overwrites_destination_atomically_no_tmp_left() {
+        let dek = random_bytes::<32>();
+        let dir = std::env::temp_dir().join(format!("vault-atomic-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let plain = dir.join("a.bin");
+        let enc = dir.join("a.bin.enc");
+        let out = dir.join("a.out");
+        std::fs::write(&plain, vec![5u8; CHUNK + 7]).unwrap();
+        // Pre-existing stale destination must be cleanly overwritten.
+        std::fs::write(&enc, b"OLD STALE BLOB").unwrap();
+
+        encrypt_file(&plain, &enc, &dek).unwrap();
+        decrypt_file(&enc, &out, &dek).unwrap();
+        assert_eq!(std::fs::read(&out).unwrap(), vec![5u8; CHUNK + 7]);
+
+        // No leftover .tmp files in the directory.
+        let tmp_left = std::fs::read_dir(&dir).unwrap()
+            .filter_map(|e| e.ok())
+            .any(|e| e.file_name().to_string_lossy().ends_with(".tmp"));
+        assert!(!tmp_left, "no .tmp files should remain after success");
 
         std::fs::remove_dir_all(&dir).ok();
     }
