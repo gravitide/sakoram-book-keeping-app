@@ -152,6 +152,49 @@ fn derive_kek(
     Ok(kek)
 }
 
+pub fn create_vault(password: &str) -> Result<(VaultMeta, String, [u8; 32]), VaultError> {
+    let dek = random_bytes::<32>();
+    let recovery_bytes = random_bytes::<32>();
+    let salt = random_bytes::<16>();
+
+    let kek_pw = derive_kek(password.as_bytes(), &salt, M_COST, T_COST, P_COST)?;
+    let wrapped_by_password = wrap_key(&kek_pw, &dek)?;
+    let wrapped_by_recovery = wrap_key(&recovery_bytes, &dek)?;
+
+    let meta = VaultMeta {
+        version: VAULT_VERSION,
+        kdf: KdfMeta {
+            algorithm: "argon2id".into(),
+            m_cost: M_COST,
+            t_cost: T_COST,
+            p_cost: P_COST,
+            salt: BASE64.encode(&salt),
+        },
+        wrapped_by_password,
+        wrapped_by_recovery,
+    };
+    Ok((meta, encode_recovery_key(&recovery_bytes), dek))
+}
+
+pub fn unlock_with_password(meta: &VaultMeta, password: &str) -> Result<[u8; 32], VaultError> {
+    let salt = BASE64
+        .decode(meta.kdf.salt.as_bytes())
+        .map_err(|e| VaultError::Encoding(e.to_string()))?;
+    let kek = derive_kek(
+        password.as_bytes(),
+        &salt,
+        meta.kdf.m_cost,
+        meta.kdf.t_cost,
+        meta.kdf.p_cost,
+    )?;
+    unwrap_key(&kek, &meta.wrapped_by_password)
+}
+
+pub fn unlock_with_recovery(meta: &VaultMeta, recovery_key: &str) -> Result<[u8; 32], VaultError> {
+    let recovery_bytes = decode_recovery_key(recovery_key)?;
+    unwrap_key(&recovery_bytes, &meta.wrapped_by_recovery)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -211,5 +254,26 @@ mod tests {
         assert_eq!(decode_recovery_key(&messy).unwrap(), bytes);
         // Garbage fails.
         assert!(decode_recovery_key("not a real key!!!").is_err());
+    }
+
+    #[test]
+    fn create_then_unlock_both_ways() {
+        let (meta, recovery, dek) = create_vault("hunter2").unwrap();
+
+        // Metadata shape.
+        assert_eq!(meta.version, VAULT_VERSION);
+        assert_eq!(meta.kdf.algorithm, "argon2id");
+        assert!(!meta.kdf.salt.is_empty());
+
+        // Password unlocks to the same DEK.
+        assert_eq!(unlock_with_password(&meta, "hunter2").unwrap(), dek);
+        // Recovery key unlocks to the same DEK.
+        assert_eq!(unlock_with_recovery(&meta, &recovery).unwrap(), dek);
+
+        // Wrong password is rejected.
+        assert!(matches!(unlock_with_password(&meta, "wrong"), Err(VaultError::Auth)));
+        // Wrong recovery key is rejected.
+        let other = encode_recovery_key(&[0u8; 32]);
+        assert!(matches!(unlock_with_recovery(&meta, &other), Err(VaultError::Auth)));
     }
 }
