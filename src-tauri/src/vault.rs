@@ -65,3 +65,39 @@ pub struct VaultMeta {
     pub wrapped_by_password: WrappedKey,
     pub wrapped_by_recovery: WrappedKey,
 }
+
+use argon2::{Algorithm, Argon2, Params, Version};
+
+fn derive_kek(
+    password: &[u8],
+    salt: &[u8],
+    m_cost: u32,
+    t_cost: u32,
+    p_cost: u32,
+) -> Result<[u8; 32], VaultError> {
+    let params = Params::new(m_cost, t_cost, p_cost, Some(32))
+        .map_err(|e| VaultError::Kdf(e.to_string()))?;
+    let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let mut kek = [0u8; 32];
+    argon
+        .hash_password_into(password, salt, &mut kek)
+        .map_err(|e| VaultError::Kdf(e.to_string()))?;
+    Ok(kek)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kek_is_deterministic_and_salt_sensitive() {
+        let salt_a = [1u8; 16];
+        let salt_b = [2u8; 16];
+        let k1 = derive_kek(b"correct horse", &salt_a, M_COST, T_COST, P_COST).unwrap();
+        let k2 = derive_kek(b"correct horse", &salt_a, M_COST, T_COST, P_COST).unwrap();
+        let k3 = derive_kek(b"correct horse", &salt_b, M_COST, T_COST, P_COST).unwrap();
+        assert_eq!(k1, k2, "same password+salt must derive the same key");
+        assert_ne!(k1, k3, "different salt must derive a different key");
+        assert_eq!(k1.len(), 32);
+    }
+}
