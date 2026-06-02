@@ -49,6 +49,13 @@ export interface CompanySettingsRow {
 	epf_employee_rate_bp: number
 	epf_employer_rate_bp: number
 	etf_rate_bp: number
+	// PAYE / APIT (monthly tax-table). paye_brackets is a JSON array of
+	// { upToCents: number|null, rateBp } — taxable-income bands. See
+	// app/lib/statutory.ts computePaye. Master toggle defaults off.
+	paye_auto_compute: number
+	paye_relief_cents: number
+	paye_deduct_epf: number
+	paye_brackets: string
 	// PDF owner-password protection. `pdf_protect_password` is the owner
 	// password (null/empty = protection off). The five flags are per-type
 	// opt-ins, stored as 0/1 INTEGERs. A document is encrypted only when
@@ -95,6 +102,10 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"epf_employee_rate_bp",
 	"epf_employer_rate_bp",
 	"etf_rate_bp",
+	"paye_auto_compute",
+	"paye_relief_cents",
+	"paye_deduct_epf",
+	"paye_brackets",
 	"pdf_protect_password",
 	"pdf_protect_quote",
 	"pdf_protect_invoice",

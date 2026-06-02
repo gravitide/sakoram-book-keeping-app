@@ -112,14 +112,90 @@
 					</div>
 				</div>
 			</UCard>
+
+			<UCard>
+				<template #header>
+					<div class="flex items-center justify-between">
+						<div class="font-medium">
+							PAYE (APIT)
+						</div>
+						<USwitch v-model="payeOn" />
+					</div>
+					<div class="text-xs text-(--ui-text-muted) mt-1">
+						Monthly income-tax withholding. When on, new payslips auto-add a
+						PAYE deduction computed from the bracket table below. Rates change
+						with the national budget — edit them here when they do.
+					</div>
+				</template>
+
+				<div class="space-y-5" :class="payeOn ? '' : 'opacity-50 pointer-events-none'">
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<UFormField label="Monthly tax-free relief" help="Income below this is untaxed.">
+							<MoneyInput v-model="payeReliefCents" />
+						</UFormField>
+						<UFormField label="Deduct employee EPF first" help="Subtract the 8% EPF before taxing.">
+							<UCheckbox
+								:model-value="payeDeductEpf"
+								label="EPF reduces taxable income"
+								:true-value="1"
+								:false-value="0"
+								@update:model-value="(v) => payeDeductEpf = v === true ? 1 : 0"
+							/>
+						</UFormField>
+					</div>
+
+					<div class="space-y-2">
+						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
+							Tax bands (on taxable income, after relief)
+						</div>
+						<div
+							v-for="(band, i) in payeBands"
+							:key="i"
+							class="grid grid-cols-[1fr_auto_6rem_auto] gap-2 items-center"
+						>
+							<MoneyInput
+								v-if="band.upToCents !== null"
+								v-model="band.upToCents"
+							/>
+							<div v-else class="text-sm text-(--ui-text-muted) italic">
+								Balance (everything above)
+							</div>
+							<span class="text-xs text-(--ui-text-muted)">→</span>
+							<UInputNumber v-model="band.ratePct" :min="0" :max="100" :step="0.1" class="w-full" />
+							<UButton
+								icon="i-lucide-trash-2"
+								variant="ghost"
+								color="neutral"
+								size="xs"
+								:disabled="band.upToCents === null"
+								aria-label="Remove band"
+								@click="removeBand(i)"
+							/>
+						</div>
+						<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-plus" @click="addBand">
+							Add band
+						</UButton>
+					</div>
+
+					<div class="rounded-md border border-(--ui-border) bg-(--ui-bg-muted) p-3 text-sm">
+						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) mb-1">
+							Preview — on {{ formatMoney(payePreviewBase) }} gross
+						</div>
+						<div class="tabular-nums">
+							PAYE <span class="font-medium">{{ formatMoney(payePreview) }}</span>
+						</div>
+					</div>
+				</div>
+			</UCard>
 		</div>
 	</div>
 </template>
 
 <script setup lang="ts">
+	import type { PayeBracket } from "~/lib/statutory";
 	import { formatMoney } from "~/lib/money";
 	import { formatMonthLabel, resolvePayrollCycle } from "~/lib/payroll-cycle";
-	import { computeStatutory } from "~/lib/statutory";
+	import { computePaye, computeStatutory } from "~/lib/statutory";
 	import { useSettingsStore } from "~/stores/settings";
 
 	definePageMeta({ title: "Payroll" });
@@ -149,6 +225,46 @@
 		etfBp: toBp(etfPct.value)
 	}));
 
+	// PAYE config. Bands are edited as { upToCents, ratePct }; converted to
+	// basis points for storage / compute. The last band has upToCents null
+	// (the open "balance" band) and is never removable.
+	interface PayeBandEdit { upToCents: number | null, ratePct: number }
+	const parsePayeBands = (json: string | undefined): PayeBandEdit[] => {
+		try {
+			const arr = JSON.parse(json ?? "[]") as PayeBracket[];
+			if (!Array.isArray(arr) || arr.length === 0) throw new Error("empty");
+			return arr.map((b) => ({ upToCents: b.upToCents, ratePct: b.rateBp / 100 }));
+		} catch {
+			return [{ upToCents: null, ratePct: 0 }];
+		}
+	};
+
+	const payeOn = ref<boolean>((store.settings?.paye_auto_compute ?? 0) === 1);
+	const payeReliefCents = ref<number>(store.settings?.paye_relief_cents ?? 15_000_000);
+	const payeDeductEpf = ref<number>(store.settings?.paye_deduct_epf ?? 1);
+	const payeBands = ref<PayeBandEdit[]>(parsePayeBands(store.settings?.paye_brackets));
+
+	const bandsToBrackets = (bands: PayeBandEdit[]): PayeBracket[] =>
+		bands.map((b) => ({ upToCents: b.upToCents, rateBp: Math.round((b.ratePct || 0) * 100) }));
+	const payeBracketsJson = () => JSON.stringify(bandsToBrackets(payeBands.value));
+
+	const addBand = () => {
+		// Insert a new finite band just before the open "balance" band.
+		const lastFinite = payeBands.value.filter((b) => b.upToCents !== null).at(-1);
+		const seed = (lastFinite?.upToCents ?? payeReliefCents.value) + 5_000_000;
+		payeBands.value.splice(payeBands.value.length - 1, 0, { upToCents: seed, ratePct: 0 });
+	};
+	const removeBand = (i: number) => {
+		if (payeBands.value[i]?.upToCents === null) return; // never remove the balance band
+		payeBands.value.splice(i, 1);
+	};
+
+	const payePreviewBase = 25_000_000; // Rs 250,000 gross
+	const payePreview = computed(() => computePaye(payePreviewBase, {
+		reliefCents: payeReliefCents.value,
+		brackets: bandsToBrackets(payeBands.value)
+	}));
+
 	const initial = ref({
 		start: periodStart.value,
 		end: periodEnd.value,
@@ -156,7 +272,11 @@
 		on: statutoryOn.value,
 		epfEmp: epfEmployeePct.value,
 		epfEr: epfEmployerPct.value,
-		etf: etfPct.value
+		etf: etfPct.value,
+		payeOn: payeOn.value,
+		payeRelief: payeReliefCents.value,
+		payeDeductEpf: payeDeductEpf.value,
+		payeBrackets: payeBracketsJson()
 	});
 
 	const dirty = computed(() =>
@@ -167,6 +287,10 @@
 		|| epfEmployeePct.value !== initial.value.epfEmp
 		|| epfEmployerPct.value !== initial.value.epfEr
 		|| etfPct.value !== initial.value.etf
+		|| payeOn.value !== initial.value.payeOn
+		|| payeReliefCents.value !== initial.value.payeRelief
+		|| payeDeductEpf.value !== initial.value.payeDeductEpf
+		|| payeBracketsJson() !== initial.value.payeBrackets
 	);
 
 	// Preview against today's month so the user sees concrete dates for
@@ -194,7 +318,11 @@
 				statutory_auto_compute: statutoryOn.value ? 1 : 0,
 				epf_employee_rate_bp: toBp(epfEmployeePct.value),
 				epf_employer_rate_bp: toBp(epfEmployerPct.value),
-				etf_rate_bp: toBp(etfPct.value)
+				etf_rate_bp: toBp(etfPct.value),
+				paye_auto_compute: payeOn.value ? 1 : 0,
+				paye_relief_cents: payeReliefCents.value,
+				paye_deduct_epf: payeDeductEpf.value,
+				paye_brackets: payeBracketsJson()
 			});
 			initial.value = {
 				start: periodStart.value,
@@ -203,7 +331,11 @@
 				on: statutoryOn.value,
 				epfEmp: epfEmployeePct.value,
 				epfEr: epfEmployerPct.value,
-				etf: etfPct.value
+				etf: etfPct.value,
+				payeOn: payeOn.value,
+				payeRelief: payeReliefCents.value,
+				payeDeductEpf: payeDeductEpf.value,
+				payeBrackets: payeBracketsJson()
 			};
 			toast.add({ title: "Payroll cycle saved", color: "success", icon: "i-lucide-check" });
 		} catch (err) {
@@ -226,5 +358,9 @@
 		epfEmployeePct.value = initial.value.epfEmp;
 		epfEmployerPct.value = initial.value.epfEr;
 		etfPct.value = initial.value.etf;
+		payeOn.value = initial.value.payeOn;
+		payeReliefCents.value = initial.value.payeRelief;
+		payeDeductEpf.value = initial.value.payeDeductEpf;
+		payeBands.value = parsePayeBands(initial.value.payeBrackets);
 	};
 </script>
