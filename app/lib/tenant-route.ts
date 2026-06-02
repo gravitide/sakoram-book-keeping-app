@@ -4,11 +4,11 @@
 
 export interface TenantGuardState {
 	/** Active tenant id, or null if no business is selected. */
-	activeId: string | null;
+	activeId: string | null
 	/** True when the active business is encrypted AND not currently unlocked. */
-	activeLocked: boolean;
+	activeLocked: boolean
 	/** True when a working DB URL is open (unencrypted, or unlocked). */
-	hasDbUrl: boolean;
+	hasDbUrl: boolean
 }
 
 export type GuardResult = { redirect: string } | null;
