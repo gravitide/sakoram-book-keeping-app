@@ -15,7 +15,7 @@
 		</header>
 
 		<div class="space-y-6 max-w-2xl mx-auto">
-			<UCard>
+			<UCard id="cycle" class="scroll-mt-6">
 				<template #header>
 					<div class="font-medium">
 						Cycle template
@@ -72,7 +72,7 @@
 				</template>
 			</UCard>
 
-			<UCard>
+			<UCard id="statutory" class="scroll-mt-6">
 				<template #header>
 					<div class="flex items-center justify-between">
 						<div class="font-medium">
@@ -113,7 +113,7 @@
 				</div>
 			</UCard>
 
-			<UCard>
+			<UCard id="paye" class="scroll-mt-6">
 				<template #header>
 					<div class="flex items-center justify-between">
 						<div class="font-medium">

@@ -427,7 +427,16 @@
 				// reasons but its natural home in the nav is the Payroll
 				// group — the user is more likely to look for it there
 				// than under Settings.
-				{ to: "/settings/payroll", label: "Settings", icon: "i-lucide-calendar-clock" }
+				{
+					to: "/settings/payroll",
+					label: "Settings",
+					icon: "i-lucide-calendar-clock",
+					sections: [
+						{ hash: "#cycle", label: "Cycle template", icon: "i-lucide-calendar-clock" },
+						{ hash: "#statutory", label: "EPF / ETF", icon: "i-lucide-landmark" },
+						{ hash: "#paye", label: "PAYE (APIT)", icon: "i-lucide-percent" }
+					]
+				}
 			]
 		},
 		{
