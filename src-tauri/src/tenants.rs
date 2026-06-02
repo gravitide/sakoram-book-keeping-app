@@ -89,6 +89,11 @@ pub struct Tenant {
 	pub name: String,
 	/// `{id}.{ext}` if the user has uploaded a logo; None otherwise.
 	pub logo_file: Option<String>,
+	/// True once the user has enabled at-rest encryption for this business.
+	/// `#[serde(default)]` so tenants.json written before this field parses
+	/// (legacy entries are unencrypted).
+	#[serde(default)]
+	pub encrypted: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -117,6 +122,18 @@ fn logos_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
 fn tenant_db_path(app: &AppHandle, tenant_id: &str) -> Result<PathBuf, String> {
 	Ok(businesses_dir(app)?.join(format!("{tenant_id}.db")))
+}
+
+pub fn tenant_enc_path(app: &AppHandle, tenant_id: &str) -> Result<PathBuf, String> {
+	Ok(businesses_dir(app)?.join(format!("{tenant_id}.db.enc")))
+}
+
+pub fn tenant_vault_path(app: &AppHandle, tenant_id: &str) -> Result<PathBuf, String> {
+	Ok(businesses_dir(app)?.join(format!("{tenant_id}.vault.json")))
+}
+
+pub fn tenant_db_path_public(app: &AppHandle, tenant_id: &str) -> Result<PathBuf, String> {
+	tenant_db_path(app, tenant_id)
 }
 
 // ---------- Registry I/O ----------------------------------------------------
@@ -345,7 +362,7 @@ async fn migrate_legacy_db(app: &AppHandle) -> Result<(), String> {
 		break;
 	}
 
-	let tenant = Tenant { id: slug.clone(), name: business_name, logo_file };
+	let tenant = Tenant { id: slug.clone(), name: business_name, logo_file, encrypted: false };
 	let reg = TenantRegistry { active_tenant_id: Some(slug), tenants: vec![tenant] };
 	write_registry(app, &reg)?;
 	Ok(())
@@ -380,7 +397,7 @@ pub async fn create_tenant(app: AppHandle, name: String) -> Result<Tenant, Strin
 	run_migrations(&db_path).await?;
 	seed_fresh_tenant(&db_path, trimmed).await?;
 
-	let tenant = Tenant { id: id.clone(), name: trimmed.to_string(), logo_file: None };
+	let tenant = Tenant { id: id.clone(), name: trimmed.to_string(), logo_file: None, encrypted: false };
 	reg.tenants.push(tenant.clone());
 	if reg.active_tenant_id.is_none() {
 		reg.active_tenant_id = Some(id);
@@ -531,7 +548,7 @@ pub async fn create_tenant_internal(app: &AppHandle, name: &str) -> Result<Tenan
 	run_migrations(&db_path).await?;
 	seed_fresh_tenant(&db_path, trimmed).await?;
 
-	let tenant = Tenant { id: id.clone(), name: trimmed.to_string(), logo_file: None };
+	let tenant = Tenant { id: id.clone(), name: trimmed.to_string(), logo_file: None, encrypted: false };
 	reg.tenants.push(tenant.clone());
 	if reg.active_tenant_id.is_none() {
 		reg.active_tenant_id = Some(id);
@@ -558,4 +575,40 @@ pub fn set_tenant_logo_internal(
 	let tenant = reg.tenants.iter_mut().find(|t| t.id == id).ok_or("Tenant not found")?;
 	tenant.logo_file = logo_file;
 	write_registry(app, &reg)
+}
+
+/// Flip a tenant's `encrypted` flag in the registry.
+pub fn set_tenant_encrypted(app: &AppHandle, id: &str, encrypted: bool) -> Result<(), String> {
+	let mut reg = read_registry(app)?;
+	let tenant = reg.tenants.iter_mut().find(|t| t.id == id).ok_or("Tenant not found")?;
+	tenant.encrypted = encrypted;
+	write_registry(app, &reg)
+}
+
+/// Whether a tenant is marked encrypted.
+pub fn is_tenant_encrypted(app: &AppHandle, id: &str) -> Result<bool, String> {
+	let reg = read_registry(app)?;
+	Ok(reg.tenants.iter().find(|t| t.id == id).map(|t| t.encrypted).unwrap_or(false))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn tenant_encrypted_defaults_false_for_legacy_json() {
+		// A tenants.json written before this field existed must still parse,
+		// with encrypted defaulting to false.
+		let legacy = r#"{"active_tenant_id":"acme","tenants":[{"id":"acme","name":"Acme","logo_file":null}]}"#;
+		let reg: TenantRegistry = serde_json::from_str(legacy).unwrap();
+		assert_eq!(reg.tenants[0].encrypted, false);
+	}
+
+	#[test]
+	fn tenant_encrypted_round_trips() {
+		let t = Tenant { id: "acme".into(), name: "Acme".into(), logo_file: None, encrypted: true };
+		let json = serde_json::to_string(&t).unwrap();
+		let back: Tenant = serde_json::from_str(&json).unwrap();
+		assert!(back.encrypted);
+	}
 }
