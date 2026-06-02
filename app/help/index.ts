@@ -134,8 +134,17 @@ export const HELP_TOPICS: HelpTopic[] = [
 		summary: "Per-employee, per-period pay records. Earnings + deductions, bulk monthly runs, EPF / ETF / PAYE context.",
 		category: "payroll",
 		icon: "i-lucide-file-spreadsheet",
-		relatedSlugs: ["vouchers", "payroll-register"],
+		relatedSlugs: ["statutory-paye", "vouchers", "payroll-register"],
 		component: () => import("./topics/payslips.vue")
+	},
+	{
+		slug: "statutory-paye",
+		title: "EPF, ETF & PAYE",
+		summary: "Sri Lankan statutory payroll, auto-computed: EPF 8/12%, ETF 3%, and the progressive PAYE (APIT) tax table. How to configure and override it.",
+		category: "payroll",
+		icon: "i-lucide-landmark",
+		relatedSlugs: ["payslips", "payroll-register", "vouchers"],
+		component: () => import("./topics/statutory-paye.vue")
 	},
 	// Reports
 	{
@@ -207,7 +216,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 		summary: "Every payslip in a period, in one table — gross, deductions, net, paid. The accountant hand-off.",
 		category: "reports",
 		icon: "i-lucide-clipboard-list",
-		relatedSlugs: ["payslips", "profit-loss", "vouchers"],
+		relatedSlugs: ["payslips", "statutory-paye", "profit-loss", "vouchers"],
 		component: () => import("./topics/payroll-register.vue")
 	}
 ];
