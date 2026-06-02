@@ -3,6 +3,7 @@ use tauri::{
 	menu::{Menu, MenuItem},
 	tray::TrayIconBuilder
 };
+use tauri::Manager;
 mod data_io;
 mod pdf;
 mod phone_upload;
@@ -55,6 +56,7 @@ pub fn run() {
 		.plugin(tauri_plugin_fs::init())
 		.plugin(tauri_plugin_store::Builder::new().build())
 		.manage(phone_upload::PhoneUploadState::default())
+		.manage(vault_fs::VaultSessions::default())
 		.invoke_handler(tauri::generate_handler![
 			pdf::export_quote_pdf,
 			pdf::export_invoice_pdf,
@@ -80,7 +82,21 @@ pub fn run() {
 			phone_upload::cancel_phone_upload,
 			phone_upload::import_document_attachment,
 			phone_upload::clear_document_attachments,
+			vault_fs::tenant_lock_state,
+			vault_fs::enable_tenant_encryption,
+			vault_fs::unlock_tenant,
+			vault_fs::lock_tenant,
+			vault_fs::change_tenant_password,
+			vault_fs::disable_tenant_encryption,
 		])
-		.run(tauri::generate_context!())
-		.expect("error while running tauri application");
+		.build(tauri::generate_context!())
+		.expect("error while building tauri application")
+		.run(|app_handle, event| {
+			if let tauri::RunEvent::ExitRequested { .. } = event {
+				// Seal every unlocked business back to its encrypted blob before
+				// the process dies, so a plaintext working db isn't left behind.
+				let sessions = app_handle.state::<vault_fs::VaultSessions>();
+				let _ = vault_fs::lock_all(app_handle, &sessions);
+			}
+		});
 }
