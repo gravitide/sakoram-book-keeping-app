@@ -449,4 +449,33 @@ mod tests {
 
         std::fs::remove_dir_all(&dir).ok();
     }
+
+    #[test]
+    fn end_to_end_create_encrypt_recover_decrypt() {
+        let dir = std::env::temp_dir().join(format!("vault-e2e-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = dir.join("business.db");
+        let blob = dir.join("business.db.enc");
+        let restored = dir.join("business.restored.db");
+
+        // Stand-in for a SQLite file.
+        let contents: Vec<u8> = (0..200_000u32).map(|i| (i % 256) as u8).collect();
+        std::fs::write(&db, &contents).unwrap();
+
+        // Enable encryption: create vault, encrypt the DB with its DEK.
+        let (meta, recovery, dek) = create_vault("s3cret-pass").unwrap();
+        encrypt_file(&db, &blob, &dek).unwrap();
+
+        // Serialise + reload metadata (simulates the vault.json sidecar).
+        let json = serde_json::to_string(&meta).unwrap();
+        let meta_loaded: VaultMeta = serde_json::from_str(&json).unwrap();
+
+        // Forgot the password — unlock via recovery key, decrypt the DB.
+        let dek2 = unlock_with_recovery(&meta_loaded, &recovery).unwrap();
+        assert_eq!(dek2, dek);
+        decrypt_file(&blob, &restored, &dek2).unwrap();
+        assert_eq!(std::fs::read(&restored).unwrap(), contents);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
 }
