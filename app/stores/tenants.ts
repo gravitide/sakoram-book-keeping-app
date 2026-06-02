@@ -17,6 +17,7 @@ export interface Tenant {
 	id: string
 	name: string
 	logo_file: string | null
+	encrypted?: boolean
 }
 
 export interface TenantRegistry {
@@ -34,17 +35,33 @@ export const useTenantsStore = defineStore("tenants", () => {
 		tenants.value.find((t) => t.id === activeTenantId.value) ?? null
 	);
 
+	// A business is "locked" when it's encrypted and its DB isn't open yet.
+	// refresh()/activate() only set dbUrl once the Rust session reports the
+	// vault as unlocked, so (encrypted && !dbUrl) is an accurate lock signal.
+	const activeLocked = computed<boolean>(() =>
+		!!activeTenant.value?.encrypted && !dbUrl.value
+	);
+
 	/// Force a re-pull from the registry. Use after import/export changes
 	/// the tenant list out-of-band.
 	const refresh = async (): Promise<void> => {
 		const reg = await invoke<TenantRegistry>("list_tenants");
 		tenants.value = reg.tenants;
 		activeTenantId.value = reg.active_tenant_id;
-		// If the registry already has an active tenant (last-saved or the
-		// auto-migrated legacy one), open its DB now so the rest of the
-		// app can immediately read settings/clients/etc.
 		if (activeTenantId.value && !dbUrl.value) {
-			dbUrl.value = await invoke<string>("ensure_tenant_db", { id: activeTenantId.value });
+			const active = tenants.value.find((t) => t.id === activeTenantId.value);
+			if (active?.encrypted) {
+				// Encrypted: only open the DB if the Rust session already holds
+				// the key (e.g. after an unlock + reload). If it's locked, leave
+				// dbUrl null — the middleware routes the user to /unlock. Calling
+				// ensure_tenant_db here would create an empty plaintext DB.
+				const state = await invoke<string>("tenant_lock_state", { id: activeTenantId.value });
+				if (state === "unlocked") {
+					dbUrl.value = await invoke<string>("ensure_tenant_db", { id: activeTenantId.value });
+				}
+			} else {
+				dbUrl.value = await invoke<string>("ensure_tenant_db", { id: activeTenantId.value });
+			}
 		}
 		loaded.value = true;
 	};
@@ -89,10 +106,42 @@ export const useTenantsStore = defineStore("tenants", () => {
 	/// usually `await activate(id); window.location.assign("/")` so every
 	/// store re-hydrates against the new DB cleanly.
 	const activate = async (id: string): Promise<void> => {
+		const prev = activeTenantId.value;
+		// Close the current pool before any re-encryption / file rename.
+		await resetDbCache();
+		// If we're leaving an unlocked encrypted business, seal it back to its
+		// blob (the pool is now closed, so the Windows rename succeeds).
+		if (prev && prev !== id) {
+			const prevTenant = tenants.value.find((t) => t.id === prev);
+			if (prevTenant?.encrypted) {
+				try {
+					await invoke("lock_tenant", { id: prev });
+				} catch { /* best-effort — don't block the switch */ }
+			}
+		}
 		await invoke("set_active_tenant", { id });
+		const target = tenants.value.find((t) => t.id === id);
+		if (target?.encrypted) {
+			// Only open the DB if it's already unlocked in the session; otherwise
+			// leave dbUrl null and let the post-navigation middleware send the
+			// user to /unlock.
+			const state = await invoke<string>("tenant_lock_state", { id });
+			dbUrl.value = state === "unlocked" ? await invoke<string>("ensure_tenant_db", { id }) : null;
+		} else {
+			dbUrl.value = await invoke<string>("ensure_tenant_db", { id });
+		}
+		activeTenantId.value = id;
+	};
+
+	/// Unlock the active encrypted business with a password or recovery key.
+	/// Decrypts the blob to the working DB (Rust), then opens it. Caller
+	/// typically does `await unlock(...); window.location.assign("/")`.
+	const unlock = async (secret: string, useRecovery: boolean): Promise<void> => {
+		const id = activeTenantId.value;
+		if (!id) throw new Error("No business selected to unlock.");
+		await invoke("unlock_tenant", { id, secret, useRecovery });
 		const url = await invoke<string>("ensure_tenant_db", { id });
 		await resetDbCache();
-		activeTenantId.value = id;
 		dbUrl.value = url;
 	};
 
@@ -110,6 +159,7 @@ export const useTenantsStore = defineStore("tenants", () => {
 		tenants,
 		activeTenantId,
 		activeTenant,
+		activeLocked,
 		dbUrl,
 		loaded,
 		ensureLoaded,
@@ -118,6 +168,7 @@ export const useTenantsStore = defineStore("tenants", () => {
 		rename,
 		remove,
 		activate,
+		unlock,
 		setLogoFile,
 		logoPath
 	};
