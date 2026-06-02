@@ -4,8 +4,9 @@
 			selectable; form fields stay selectable via the input rule
 			in main.css. -->
 		<header class="mb-6 max-w-2xl mx-auto">
-			<h1 class="text-2xl font-semibold">
+			<h1 class="text-2xl font-semibold flex items-center gap-3">
 				Payroll
+				<HelpButton slug="statutory-paye" />
 			</h1>
 			<p class="text-sm text-(--ui-text-muted)">
 				The default pay cycle. Once set, the bulk payslip flow and the

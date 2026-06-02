@@ -71,7 +71,9 @@
 					Add <strong>earnings</strong> lines. Sakoram seeds a "Basic" line for you with the employee's basic salary. Add allowances / overtime / bonus as additional earning lines.
 				</li>
 				<li>
-					Add <strong>deductions</strong>. EPF (8% of gross), PAYE (if their income hits the tax threshold), salary advances, etc.
+					Add <strong>deductions</strong>. If you've turned on statutory auto-compute, EPF (and PAYE, if enabled) are already added for you as managed lines — see <NuxtLink to="/help/statutory-paye" class="text-(--ui-primary) hover:underline">
+						EPF, ETF &amp; PAYE
+					</NuxtLink>. Add anything else manually: salary advances, no-pay leave, loan instalments.
 				</li>
 				<li>
 					Click <strong>Mark issued</strong> when the numbers are right. The payslip locks (only notes stay editable).
@@ -106,14 +108,21 @@
 		</HelpSection>
 
 		<HelpSection title="Sri Lankan tax & statutory" icon="i-lucide-landmark">
-			<HelpCallout variant="tax" title="EPF, ETF, PAYE — manual for now">
-				Sakoram doesn't auto-compute the SL statutory deductions yet (it's on the roadmap). For now you enter them as deduction lines manually:
+			<HelpCallout variant="tax" title="EPF, ETF & PAYE are auto-computed">
+				Sakoram works out the SL statutory figures for you once you turn them on under <NuxtLink to="/settings/payroll" class="text-(--ui-primary) hover:underline">
+					Payroll settings
+				</NuxtLink>:
 				<ul class="list-disc pl-5 mt-2 space-y-1">
-					<li><strong>EPF employee:</strong> 8% of gross earnings. Deduction line on the payslip.</li>
-					<li><strong>EPF employer:</strong> 12% of gross. <em>Not on the payslip</em> — it's your liability, not the employee's. Track via a separate bill/voucher to the EPF.</li>
-					<li><strong>ETF:</strong> 3% of gross. Employer-paid, again not on the payslip.</li>
-					<li><strong>PAYE:</strong> depends on monthly income. Use the IRD's published PAYE schedule.</li>
+					<li><strong>EPF employee (8%):</strong> auto-added as a deduction line that reduces net pay.</li>
+					<li><strong>EPF employer (12%):</strong> recorded + printed as your contribution — <em>not</em> deducted from the employee's net.</li>
+					<li><strong>ETF (3%):</strong> employer-paid, recorded + printed, again not deducted from net.</li>
+					<li><strong>PAYE / APIT:</strong> computed from a configurable monthly bracket table (seeded with the SL 2025/26 figures), added as a managed deduction line.</li>
 				</ul>
+				<p class="mt-2">
+					Full walkthrough — rates, the tax table, and per-payslip overrides — in <NuxtLink to="/help/statutory-paye" class="text-(--ui-primary) hover:underline">
+						EPF, ETF &amp; PAYE
+					</NuxtLink>.
+				</p>
 			</HelpCallout>
 			<p>
 				Per-employee bank details (account number, branch, bank name) live on the employee record under <NuxtLink to="/employees" class="text-(--ui-primary) hover:underline">
@@ -124,7 +133,9 @@
 
 		<HelpSection title="Common mistakes" icon="i-lucide-triangle-alert">
 			<HelpCallout variant="warning" title="Don't forget EPF / ETF for new employees">
-				The moment you have an employee, you have EPF + ETF obligations. Missing them on the first month's payslip and "catching up later" creates a mess. Set up the deduction lines from payslip #1.
+				The moment you have an employee, you have EPF + ETF obligations. Turn on statutory auto-compute in <NuxtLink to="/settings/payroll" class="text-(--ui-primary) hover:underline">
+					Payroll settings
+				</NuxtLink> so it's handled from payslip #1 — missing it and "catching up later" creates a mess.
 			</HelpCallout>
 			<HelpCallout variant="warning" title="Don't pay before issuing">
 				The flow is create-draft → issue → pay. Skipping straight to recording a payment voucher without an issued payslip means no audit trail for the employee — they can't refer back to what they were supposed to have earned.
