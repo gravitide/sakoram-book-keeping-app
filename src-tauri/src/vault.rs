@@ -68,9 +68,12 @@ pub struct VaultMeta {
 
 use argon2::{Algorithm, Argon2, Params, Version};
 use chacha20poly1305::{
-    aead::{Aead, KeyInit},
+    aead::{generic_array::GenericArray, stream, Aead, KeyInit},
     Key, XChaCha20Poly1305, XNonce,
 };
+use std::fs::File;
+use std::io::{Read, Write};
+use std::path::Path;
 use data_encoding::{BASE32_NOPAD, BASE64};
 use rand_core::{OsRng, RngCore};
 
@@ -193,6 +196,76 @@ pub fn unlock_with_password(meta: &VaultMeta, password: &str) -> Result<[u8; 32]
 pub fn unlock_with_recovery(meta: &VaultMeta, recovery_key: &str) -> Result<[u8; 32], VaultError> {
     let recovery_bytes = decode_recovery_key(recovery_key)?;
     unwrap_key(&recovery_bytes, &meta.wrapped_by_recovery)
+}
+
+// File format: [19-byte STREAM nonce][chunk][chunk]... where each non-final
+// chunk is CHUNK plaintext bytes + 16-byte tag, and the final chunk is the
+// remaining (0..CHUNK) bytes + tag, sealed with the STREAM "last block" flag.
+// XChaCha20-Poly1305 has a 24-byte nonce; STREAM (BE32) reserves 5 bytes for
+// its counter + flag, leaving a 19-byte per-file nonce.
+
+pub fn encrypt_file(plaintext: &Path, ciphertext: &Path, dek: &[u8; 32]) -> Result<(), VaultError> {
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(dek));
+    let stream_nonce = random_bytes::<19>();
+    let mut encryptor =
+        stream::EncryptorBE32::from_aead(cipher, GenericArray::from_slice(&stream_nonce));
+
+    let mut reader = File::open(plaintext)?;
+    let mut writer = File::create(ciphertext)?;
+    writer.write_all(&stream_nonce)?;
+
+    let mut buf = Vec::with_capacity(CHUNK);
+    loop {
+        buf.clear();
+        let n = std::io::Read::by_ref(&mut reader).take(CHUNK as u64).read_to_end(&mut buf)?;
+        if n == CHUNK {
+            let ct = encryptor
+                .encrypt_next(buf.as_slice())
+                .map_err(|_| VaultError::Crypto)?;
+            writer.write_all(&ct)?;
+        } else {
+            let ct = encryptor
+                .encrypt_last(buf.as_slice())
+                .map_err(|_| VaultError::Crypto)?;
+            writer.write_all(&ct)?;
+            break;
+        }
+    }
+    writer.flush()?;
+    Ok(())
+}
+
+pub fn decrypt_file(ciphertext: &Path, plaintext: &Path, dek: &[u8; 32]) -> Result<(), VaultError> {
+    const ENC_CHUNK: usize = CHUNK + 16; // plaintext chunk + Poly1305 tag
+
+    let mut reader = File::open(ciphertext)?;
+    let mut stream_nonce = [0u8; 19];
+    reader.read_exact(&mut stream_nonce)?;
+
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(dek));
+    let mut decryptor =
+        stream::DecryptorBE32::from_aead(cipher, GenericArray::from_slice(&stream_nonce));
+
+    let mut writer = File::create(plaintext)?;
+    let mut buf = Vec::with_capacity(ENC_CHUNK);
+    loop {
+        buf.clear();
+        let n = std::io::Read::by_ref(&mut reader).take(ENC_CHUNK as u64).read_to_end(&mut buf)?;
+        if n == ENC_CHUNK {
+            let pt = decryptor
+                .decrypt_next(buf.as_slice())
+                .map_err(|_| VaultError::Auth)?;
+            writer.write_all(&pt)?;
+        } else {
+            let pt = decryptor
+                .decrypt_last(buf.as_slice())
+                .map_err(|_| VaultError::Auth)?;
+            writer.write_all(&pt)?;
+            break;
+        }
+    }
+    writer.flush()?;
+    Ok(())
 }
 
 pub fn change_password(
@@ -319,5 +392,61 @@ mod tests {
         assert_eq!(unlock_with_recovery(&meta2, &recovery).unwrap(), dek);
         // Wrong current password is rejected up front.
         assert!(matches!(change_password(&meta, "nope", "x"), Err(VaultError::Auth)));
+    }
+
+    #[test]
+    fn file_round_trips_across_chunk_boundaries() {
+        use std::io::Write;
+
+        let dek = random_bytes::<32>();
+        let dir = std::env::temp_dir().join(format!("vault-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let plain = dir.join("plain.bin");
+        let enc = dir.join("plain.bin.enc");
+        let out = dir.join("plain.out");
+
+        // A payload larger than CHUNK so streaming spans multiple blocks.
+        let data: Vec<u8> = (0..(CHUNK * 2 + 1234)).map(|i| (i % 251) as u8).collect();
+        std::fs::File::create(&plain).unwrap().write_all(&data).unwrap();
+
+        encrypt_file(&plain, &enc, &dek).unwrap();
+        // Ciphertext is not the plaintext.
+        assert_ne!(std::fs::read(&enc).unwrap(), data);
+
+        decrypt_file(&enc, &out, &dek).unwrap();
+        assert_eq!(std::fs::read(&out).unwrap(), data);
+
+        // Wrong DEK fails authentication.
+        let wrong = random_bytes::<32>();
+        let bad = dir.join("bad.out");
+        assert!(decrypt_file(&enc, &bad, &wrong).is_err());
+
+        // A flipped byte fails authentication.
+        let mut ct = std::fs::read(&enc).unwrap();
+        let last = ct.len() - 1;
+        ct[last] ^= 0xFF;
+        let tampered = dir.join("tampered.enc");
+        std::fs::write(&tampered, &ct).unwrap();
+        let bad2 = dir.join("bad2.out");
+        assert!(decrypt_file(&tampered, &bad2, &dek).is_err());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn empty_file_round_trips() {
+        let dek = random_bytes::<32>();
+        let dir = std::env::temp_dir().join(format!("vault-empty-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let plain = dir.join("empty.bin");
+        let enc = dir.join("empty.enc");
+        let out = dir.join("empty.out");
+        std::fs::write(&plain, b"").unwrap();
+
+        encrypt_file(&plain, &enc, &dek).unwrap();
+        decrypt_file(&enc, &out, &dek).unwrap();
+        assert_eq!(std::fs::read(&out).unwrap(), Vec::<u8>::new());
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }
