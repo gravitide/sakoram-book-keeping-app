@@ -40,6 +40,11 @@ pub fn run() {
 
 			Ok(())
 		})
+		// Saves each window's size / position / maximized state on exit and
+		// restores it on the next launch. Default StateFlags cover size,
+		// position and maximized — which is what we want for the main window
+		// (and the help window gets the same treatment for free).
+		.plugin(tauri_plugin_window_state::Builder::default().build())
 		.plugin(tauri_plugin_sql::Builder::default().build())
 		.plugin(tauri_plugin_dialog::init())
 		.plugin(tauri_plugin_shell::init())
