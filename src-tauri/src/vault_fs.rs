@@ -23,8 +23,6 @@ pub enum VaultFsError {
     Io(#[from] std::io::Error),
     #[error("serde: {0}")]
     Serde(String),
-    #[error("{0}")]
-    State(String),
 }
 
 pub struct VaultPaths {
