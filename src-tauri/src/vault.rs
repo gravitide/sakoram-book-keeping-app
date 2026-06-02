@@ -195,6 +195,35 @@ pub fn unlock_with_recovery(meta: &VaultMeta, recovery_key: &str) -> Result<[u8;
     unwrap_key(&recovery_bytes, &meta.wrapped_by_recovery)
 }
 
+pub fn change_password(
+    meta: &VaultMeta,
+    old_password: &str,
+    new_password: &str,
+) -> Result<VaultMeta, VaultError> {
+    // Authenticate + recover the DEK with the current password.
+    let dek = unlock_with_password(meta, old_password)?;
+
+    // Re-wrap the SAME DEK under a fresh salt + new password. The DB blob is
+    // untouched; only the password wrapping changes. Recovery wrapping is
+    // carried over verbatim (it wraps the same DEK).
+    let salt = random_bytes::<16>();
+    let kek = derive_kek(new_password.as_bytes(), &salt, M_COST, T_COST, P_COST)?;
+    let wrapped_by_password = wrap_key(&kek, &dek)?;
+
+    Ok(VaultMeta {
+        version: meta.version,
+        kdf: KdfMeta {
+            algorithm: "argon2id".into(),
+            m_cost: M_COST,
+            t_cost: T_COST,
+            p_cost: P_COST,
+            salt: BASE64.encode(&salt),
+        },
+        wrapped_by_password,
+        wrapped_by_recovery: meta.wrapped_by_recovery.clone(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -275,5 +304,20 @@ mod tests {
         // Wrong recovery key is rejected.
         let other = encode_recovery_key(&[0u8; 32]);
         assert!(matches!(unlock_with_recovery(&meta, &other), Err(VaultError::Auth)));
+    }
+
+    #[test]
+    fn change_password_preserves_dek_and_recovery() {
+        let (meta, recovery, dek) = create_vault("old-pass").unwrap();
+        let meta2 = change_password(&meta, "old-pass", "new-pass").unwrap();
+
+        // New password unlocks to the SAME DEK (DB never re-encrypted).
+        assert_eq!(unlock_with_password(&meta2, "new-pass").unwrap(), dek);
+        // Old password no longer works.
+        assert!(matches!(unlock_with_password(&meta2, "old-pass"), Err(VaultError::Auth)));
+        // Recovery key still works unchanged.
+        assert_eq!(unlock_with_recovery(&meta2, &recovery).unwrap(), dek);
+        // Wrong current password is rejected up front.
+        assert!(matches!(change_password(&meta, "nope", "x"), Err(VaultError::Auth)));
     }
 }
