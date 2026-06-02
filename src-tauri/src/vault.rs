@@ -71,8 +71,34 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit},
     Key, XChaCha20Poly1305, XNonce,
 };
-use data_encoding::BASE64;
+use data_encoding::{BASE32_NOPAD, BASE64};
 use rand_core::{OsRng, RngCore};
+
+fn encode_recovery_key(bytes: &[u8; 32]) -> String {
+    // Uppercase base32, no padding, grouped in 4s with dashes for readability.
+    let raw = BASE32_NOPAD.encode(bytes);
+    raw.as_bytes()
+        .chunks(4)
+        .map(|c| std::str::from_utf8(c).unwrap())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+fn decode_recovery_key(s: &str) -> Result<[u8; 32], VaultError> {
+    // Normalise: strip whitespace + dashes, uppercase. Tolerates how a human
+    // re-types the grouped key.
+    let cleaned: String = s
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '-')
+        .collect::<String>()
+        .to_uppercase();
+    let bytes = BASE32_NOPAD
+        .decode(cleaned.as_bytes())
+        .map_err(|e| VaultError::Encoding(e.to_string()))?;
+    bytes
+        .try_into()
+        .map_err(|_| VaultError::Encoding("recovery key wrong length".into()))
+}
 
 fn random_bytes<const N: usize>() -> [u8; N] {
     let mut buf = [0u8; N];
@@ -164,5 +190,26 @@ mod tests {
     #[test]
     fn random_bytes_are_not_constant() {
         assert_ne!(random_bytes::<32>(), random_bytes::<32>());
+    }
+
+    #[test]
+    fn recovery_key_round_trips() {
+        let bytes = random_bytes::<32>();
+        let encoded = encode_recovery_key(&bytes);
+        // Human-friendly: uppercase base32 in dash-separated groups.
+        assert!(encoded.contains('-'));
+        let decoded = decode_recovery_key(&encoded).unwrap();
+        assert_eq!(decoded, bytes);
+    }
+
+    #[test]
+    fn recovery_key_decode_is_lenient_then_strict() {
+        let bytes = [9u8; 32];
+        let encoded = encode_recovery_key(&bytes);
+        // Lowercase + extra spaces/dashes should still decode (user transcription).
+        let messy = format!("  {}  ", encoded.to_lowercase().replace('-', " - "));
+        assert_eq!(decode_recovery_key(&messy).unwrap(), bytes);
+        // Garbage fails.
+        assert!(decode_recovery_key("not a real key!!!").is_err());
     }
 }
