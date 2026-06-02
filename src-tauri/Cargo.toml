@@ -33,6 +33,16 @@ tauri-plugin-window-state = "2.4.1"
 serde_json = "1"
 thiserror = "2"
 
+# Per-business encryption (src/vault.rs): envelope encryption of a business
+# database. argon2 derives the password key; chacha20poly1305 provides the
+# XChaCha20-Poly1305 AEAD (one-shot for key wrapping, STREAM for the DB file);
+# data-encoding gives us base64 (vault JSON) + base32 (recovery key); rand_core
+# is the OS CSPRNG.
+argon2 = "0.5"
+chacha20poly1305 = { version = "0.10", features = [ "stream" ] }
+rand_core = { version = "0.6", features = [ "getrandom" ] }
+data-encoding = "2"
+
 # Phone-upload feature (src/phone_upload.rs): a small LAN HTTP server so a
 # photo taken on the user's phone can be pushed straight onto an invoice.
 # axum serves the capture page + multipart upload endpoint; local-ip-address
