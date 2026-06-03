@@ -74,8 +74,14 @@
 					click "Use recovery key instead" if you've forgotten it) to open it.
 				</li>
 				<li>
-					<strong>Lock now</strong> (Settings → Security) seals the business and returns you to the unlock
-					screen — handy when you step away from the computer without closing the app.
+					<strong>Quick-lock from the titlebar</strong> — when a protected business is open, a
+					<UIcon name="i-lucide-lock" class="inline-block size-3.5 align-text-bottom" /> lock icon appears
+					at the top of the window, next to the <UIcon name="i-lucide-circle-help" class="inline-block size-3.5 align-text-bottom" />
+					help icon. One click seals the business and drops you on the unlock screen — the fastest way to
+					lock up before stepping away.
+				</li>
+				<li>
+					<strong>Lock now</strong> (Settings → Security) does the same thing from the Security page.
 				</li>
 				<li>
 					<strong>Closing the app</strong> or <strong>switching to another business</strong> automatically
@@ -85,7 +91,8 @@
 			<HelpCallout variant="info" title="It stays unlocked while you're using it">
 				While a business is open, its data is readable on disk so the app can work with it. Encryption
 				protects you when the app is closed or locked. If you're worried about someone using your computer
-				mid-session, use <strong>Lock now</strong> before stepping away.
+				mid-session, click the titlebar <UIcon name="i-lucide-lock" class="inline-block size-3.5 align-text-bottom" />
+				lock button before stepping away.
 			</HelpCallout>
 		</HelpSection>
 
