@@ -9,149 +9,221 @@
 				Security
 			</h1>
 			<p class="text-sm text-(--ui-text-muted)">
-				Password-protect <span class="font-medium">{{ tenants.activeTenant?.name }}</span>
-				by encrypting its database on this computer.
+				How <span class="font-medium">{{ tenants.activeTenant?.name }}</span> is protected — the
+				database password that locks it on this computer, and the separate password that locks
+				its generated PDFs. These are two different things, set independently.
 			</p>
 		</header>
 
-		<div class="space-y-6 max-w-2xl mx-auto">
-			<!-- Status -->
-			<UCard>
-				<div class="flex items-center gap-3">
-					<div
-						class="size-10 rounded-md flex items-center justify-center shrink-0"
-						:class="isEncrypted ? 'bg-(--ui-success)/15' : 'bg-(--ui-bg-muted)'"
-					>
-						<UIcon
-							:name="isEncrypted ? 'i-lucide-shield-check' : 'i-lucide-shield-off'"
-							class="size-5"
-							:class="isEncrypted ? 'text-(--ui-success)' : 'text-(--ui-text-muted)'"
-						/>
-					</div>
-					<div class="min-w-0">
-						<div class="font-medium">
-							{{ isEncrypted ? "Protected" : "Not protected" }}
-						</div>
-						<div class="text-xs text-(--ui-text-muted)">
-							{{ isEncrypted
-								? "This business's database is encrypted at rest and needs a password to open."
-								: "This business's database is stored unencrypted — anyone with access to this computer's files can read it." }}
-						</div>
-					</div>
+		<div class="space-y-10 max-w-2xl mx-auto">
+			<!-- ============ Database encryption ============ -->
+			<section id="encryption" class="scroll-mt-6 space-y-4">
+				<div>
+					<h2 class="text-sm font-semibold flex items-center gap-2">
+						<UIcon name="i-lucide-database" class="size-4 text-(--ui-text-muted)" />
+						Database encryption
+					</h2>
+					<p class="text-xs text-(--ui-text-muted) mt-0.5">
+						Encrypts this business's database file at rest. Opening the business requires this
+						password — protects your data if this computer's files are copied or stolen.
+					</p>
 				</div>
-			</UCard>
 
-			<!-- Enable (shown when the business is not yet encrypted) -->
-			<UCard v-if="!isEncrypted">
-				<template #header>
-					<div class="font-medium">
-						Enable password protection
-					</div>
-				</template>
-				<div class="space-y-4">
-					<div class="text-sm text-(--ui-warning) bg-(--ui-warning)/10 border border-(--ui-warning)/30 rounded p-3 flex gap-2">
-						<UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0 mt-0.5" />
-						<div>
-							You'll see a <span class="font-semibold">recovery key</span> once, right after enabling.
-							Save it somewhere safe. If you forget the password <span class="font-semibold">and</span>
-							lose the recovery key, this business's data is unrecoverable — there's no backdoor.
-						</div>
-					</div>
-					<UFormField label="Password" required>
-						<PasswordInput v-model="enablePw" placeholder="Choose a strong password" :disabled="busy" />
-					</UFormField>
-					<UFormField label="Confirm password" required :error="enableMismatch ? 'Passwords don\'t match' : undefined">
-						<PasswordInput
-							v-model="enablePw2"
-							placeholder="Re-enter the password"
-							:disabled="busy"
-							@enter="onEnable"
-						/>
-					</UFormField>
-					<div class="flex justify-end">
-						<UButton icon="i-lucide-lock" :loading="busy" :disabled="busy || !enablePw || enableMismatch" @click="onEnable">
-							Enable encryption
-						</UButton>
-					</div>
-				</div>
-			</UCard>
-
-			<!-- Manage (shown when the business is encrypted + unlocked) -->
-			<template v-else>
+				<!-- Status -->
 				<UCard>
+					<div class="flex items-center gap-3">
+						<div
+							class="size-10 rounded-md flex items-center justify-center shrink-0"
+							:class="isEncrypted ? 'bg-(--ui-success)/15' : 'bg-(--ui-bg-muted)'"
+						>
+							<UIcon
+								:name="isEncrypted ? 'i-lucide-shield-check' : 'i-lucide-shield-off'"
+								class="size-5"
+								:class="isEncrypted ? 'text-(--ui-success)' : 'text-(--ui-text-muted)'"
+							/>
+						</div>
+						<div class="min-w-0">
+							<div class="font-medium">
+								{{ isEncrypted ? "Protected" : "Not protected" }}
+							</div>
+							<div class="text-xs text-(--ui-text-muted)">
+								{{ isEncrypted
+									? "This business's database is encrypted at rest and needs a password to open."
+									: "This business's database is stored unencrypted — anyone with access to this computer's files can read it." }}
+							</div>
+						</div>
+					</div>
+				</UCard>
+
+				<!-- Enable (shown when the business is not yet encrypted) -->
+				<UCard v-if="!isEncrypted">
 					<template #header>
 						<div class="font-medium">
-							Change password
+							Enable password protection
 						</div>
 					</template>
 					<div class="space-y-4">
-						<UFormField label="Current password" required>
-							<PasswordInput v-model="cpOld" :disabled="busy" />
+						<div class="text-sm text-(--ui-warning) bg-(--ui-warning)/10 border border-(--ui-warning)/30 rounded p-3 flex gap-2">
+							<UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0 mt-0.5" />
+							<div>
+								You'll see a <span class="font-semibold">recovery key</span> once, right after enabling.
+								Save it somewhere safe. If you forget the password <span class="font-semibold">and</span>
+								lose the recovery key, this business's data is unrecoverable — there's no backdoor.
+							</div>
+						</div>
+						<UFormField label="Password" required>
+							<PasswordInput v-model="enablePw" placeholder="Choose a strong password" :disabled="busy" />
 						</UFormField>
-						<UFormField label="New password" required>
-							<PasswordInput v-model="cpNew" :disabled="busy" />
-						</UFormField>
-						<UFormField label="Confirm new password" required :error="cpMismatch ? 'Passwords don\'t match' : undefined">
-							<PasswordInput v-model="cpNew2" :disabled="busy" @enter="onChangePassword" />
+						<UFormField label="Confirm password" required :error="enableMismatch ? 'Passwords don\'t match' : undefined">
+							<PasswordInput
+								v-model="enablePw2"
+								placeholder="Re-enter the password"
+								:disabled="busy"
+								@enter="onEnable"
+							/>
 						</UFormField>
 						<div class="flex justify-end">
-							<UButton
-								variant="outline"
-								icon="i-lucide-key-round"
-								:loading="busy"
-								:disabled="busy || !cpOld || !cpNew || cpMismatch"
-								@click="onChangePassword"
-							>
+							<UButton icon="i-lucide-lock" :loading="busy" :disabled="busy || !enablePw || enableMismatch" @click="onEnable">
+								Enable encryption
+							</UButton>
+						</div>
+					</div>
+				</UCard>
+
+				<!-- Manage (shown when the business is encrypted + unlocked) -->
+				<template v-else>
+					<UCard>
+						<template #header>
+							<div class="font-medium">
 								Change password
+							</div>
+						</template>
+						<div class="space-y-4">
+							<UFormField label="Current password" required>
+								<PasswordInput v-model="cpOld" :disabled="busy" />
+							</UFormField>
+							<UFormField label="New password" required>
+								<PasswordInput v-model="cpNew" :disabled="busy" />
+							</UFormField>
+							<UFormField label="Confirm new password" required :error="cpMismatch ? 'Passwords don\'t match' : undefined">
+								<PasswordInput v-model="cpNew2" :disabled="busy" @enter="onChangePassword" />
+							</UFormField>
+							<div class="flex justify-end">
+								<UButton
+									variant="outline"
+									icon="i-lucide-key-round"
+									:loading="busy"
+									:disabled="busy || !cpOld || !cpNew || cpMismatch"
+									@click="onChangePassword"
+								>
+									Change password
+								</UButton>
+							</div>
+						</div>
+					</UCard>
+
+					<UCard>
+						<template #header>
+							<div class="font-medium">
+								Lock now
+							</div>
+						</template>
+						<div class="flex items-center justify-between gap-4">
+							<p class="text-sm text-(--ui-text-muted)">
+								Seal this business and return to the unlock screen without closing the app.
+							</p>
+							<UButton color="neutral" variant="outline" icon="i-lucide-lock" :disabled="busy" @click="onLockNow">
+								Lock
 							</UButton>
 						</div>
-					</div>
-				</UCard>
+					</UCard>
+
+					<UCard>
+						<template #header>
+							<div class="font-medium text-(--ui-error)">
+								Remove protection
+							</div>
+						</template>
+						<div class="space-y-4">
+							<p class="text-sm text-(--ui-text-muted)">
+								Decrypt this business and store it unencrypted again. Requires the current password.
+							</p>
+							<UFormField label="Current password" required>
+								<PasswordInput v-model="disablePw" :disabled="busy" @enter="onDisable" />
+							</UFormField>
+							<div class="flex justify-end">
+								<UButton
+									color="error"
+									variant="soft"
+									icon="i-lucide-shield-off"
+									:loading="busy"
+									:disabled="busy || !disablePw"
+									@click="onDisable"
+								>
+									Remove encryption
+								</UButton>
+							</div>
+						</div>
+					</UCard>
+				</template>
+			</section>
+
+			<!-- ============ PDF protection ============ -->
+			<section id="pdf-protection" class="scroll-mt-6 space-y-4">
+				<div>
+					<h2 class="text-sm font-semibold flex items-center gap-2">
+						<UIcon name="i-lucide-file-text" class="size-4 text-(--ui-text-muted)" />
+						PDF protection
+					</h2>
+					<p class="text-xs text-(--ui-text-muted) mt-0.5">
+						A separate owner password applied to generated PDFs. Protected documents still open
+						without a prompt, but editing, copying, and annotating are blocked — printing stays
+						allowed. <span class="font-medium">This is unrelated to the database password above.</span>
+					</p>
+				</div>
 
 				<UCard>
-					<template #header>
-						<div class="font-medium">
-							Lock now
-						</div>
-					</template>
-					<div class="flex items-center justify-between gap-4">
-						<p class="text-sm text-(--ui-text-muted)">
-							Seal this business and return to the unlock screen without closing the app.
-						</p>
-						<UButton color="neutral" variant="outline" icon="i-lucide-lock" :disabled="busy" @click="onLockNow">
-							Lock
-						</UButton>
-					</div>
-				</UCard>
-
-				<UCard>
-					<template #header>
-						<div class="font-medium text-(--ui-error)">
-							Remove protection
-						</div>
-					</template>
 					<div class="space-y-4">
-						<p class="text-sm text-(--ui-text-muted)">
-							Decrypt this business and store it unencrypted again. Requires the current password.
-						</p>
-						<UFormField label="Current password" required>
-							<PasswordInput v-model="disablePw" :disabled="busy" @enter="onDisable" />
+						<UFormField label="Owner password" help="Leave blank to disable. Keep it safe — it's needed later to remove restrictions.">
+							<PasswordInput v-model="pdfForm.password" placeholder="No protection" class="max-w-md" />
 						</UFormField>
+
+						<div>
+							<div class="text-xs text-(--ui-text-muted) mb-2">
+								Protect these document types:
+							</div>
+							<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+								<UCheckbox v-model="pdfForm.quote" label="Quotes" />
+								<UCheckbox v-model="pdfForm.invoice" label="Invoices" />
+								<UCheckbox v-model="pdfForm.bill" label="Bills" />
+								<UCheckbox v-model="pdfForm.voucher" label="Vouchers" />
+								<UCheckbox v-model="pdfForm.payslip" label="Payslips" />
+							</div>
+						</div>
+
+						<div
+							v-if="pdfGapWarning"
+							class="flex items-start gap-2 p-3 rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/5 text-sm"
+						>
+							<UIcon name="i-lucide-triangle-alert" class="size-4 mt-0.5 text-(--ui-warning) shrink-0" />
+							<span class="text-(--ui-text-muted)">
+								You've selected document types to protect but haven't set a password — nothing will be encrypted until you enter one above.
+							</span>
+						</div>
+
 						<div class="flex justify-end">
 							<UButton
-								color="error"
-								variant="soft"
-								icon="i-lucide-shield-off"
-								:loading="busy"
-								:disabled="busy || !disablePw"
-								@click="onDisable"
+								icon="i-lucide-save"
+								:loading="settings.saving"
+								:disabled="!pdfDirty"
+								@click="savePdfProtection"
 							>
-								Remove encryption
+								Save
 							</UButton>
 						</div>
 					</div>
 				</UCard>
-			</template>
+			</section>
 		</div>
 
 		<!-- Recovery key — shown ONCE right after enabling. Non-dismissible;
@@ -187,27 +259,33 @@
 </template>
 
 <script setup lang="ts">
-// Security settings for the active business — enable / change-password /
-// lock / disable at-rest encryption, with a one-time recovery-key display.
-// Reachable only when the active business is unlocked (the access guard
-// enforces that), so every action here targets tenants.activeTenantId.
+// Security settings for the active business. Two independent areas:
+//   - #encryption: at-rest database encryption (enable / change-password /
+//     lock / disable), with a one-time recovery-key display. Reachable only
+//     when the business is unlocked (the access guard enforces that).
+//   - #pdf-protection: owner-password protection for generated PDFs (moved
+//     here from /settings/pdf so all of a business's security lives together).
+// The two passwords are unrelated.
 
 	import { invoke } from "@tauri-apps/api/core";
 	import { resetDbCache } from "~/lib/db";
+	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
 
 	definePageMeta({ title: "Security" });
 
 	const tenants = useTenantsStore();
+	const settings = useSettingsStore();
 	const toast = useToast();
 
 	await tenants.ensureLoaded();
+	await settings.ensureLoaded();
 
 	const isEncrypted = computed(() => !!tenants.activeTenant?.encrypted);
 	const busy = ref(false);
 	const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-	// ---- Enable ----
+	// ---- Enable (database encryption) ----
 	const enablePw = ref("");
 	const enablePw2 = ref("");
 	const enableMismatch = computed(() => !!enablePw2.value && enablePw.value !== enablePw2.value);
@@ -223,10 +301,9 @@
 		try {
 			// Close the JS pool first: this checkpoints the WAL into the main db
 			// file and releases the OS handle so Rust gets a complete, flushed db
-			// to encrypt (Windows blocks encrypting an open file). enable_tenant_encryption
-			// writes the blob + vault.json and KEEPS the working db in place, so the
-			// business remains usable immediately — no re-unlock step needed.
-			// The working db is sealed on the next lock (window close or Lock Now).
+			// to encrypt. enable_tenant_encryption writes the blob + vault.json and
+			// KEEPS the working db in place, so the business stays usable immediately
+			// — no re-unlock step. The working db is sealed on the next lock.
 			await resetDbCache();
 			const key = await invoke<string>("enable_tenant_encryption", { id, password: enablePw.value });
 			await tenants.refresh();
@@ -334,6 +411,56 @@
 		} catch (err) {
 			busy.value = false;
 			toast.add({ title: "Could not lock", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });
+		}
+	};
+
+	// ---- PDF protection (owner password on generated PDFs) ----
+	// Moved here from /settings/pdf. Fields live on company_settings; the five
+	// per-type flags are 0/1 INTEGERs modelled as booleans on the form.
+	const pdfForm = reactive({
+		password: "",
+		quote: false,
+		invoice: false,
+		bill: false,
+		voucher: false,
+		payslip: false
+	});
+
+	const hydratePdf = () => {
+		const s = settings.settings;
+		if (!s) return;
+		pdfForm.password = s.pdf_protect_password ?? "";
+		pdfForm.quote = !!s.pdf_protect_quote;
+		pdfForm.invoice = !!s.pdf_protect_invoice;
+		pdfForm.bill = !!s.pdf_protect_bill;
+		pdfForm.voucher = !!s.pdf_protect_voucher;
+		pdfForm.payslip = !!s.pdf_protect_payslip;
+	};
+	hydratePdf();
+
+	const pdfSnapshot = computed(() => JSON.stringify(pdfForm));
+	const pdfBaseline = ref(pdfSnapshot.value);
+	const pdfDirty = computed(() => pdfSnapshot.value !== pdfBaseline.value);
+
+	const pdfGapWarning = computed(() =>
+		!pdfForm.password.trim()
+		&& (pdfForm.quote || pdfForm.invoice || pdfForm.bill || pdfForm.voucher || pdfForm.payslip)
+	);
+
+	const savePdfProtection = async () => {
+		try {
+			await settings.save({
+				pdf_protect_password: pdfForm.password.trim() || null,
+				pdf_protect_quote: pdfForm.quote ? 1 : 0,
+				pdf_protect_invoice: pdfForm.invoice ? 1 : 0,
+				pdf_protect_bill: pdfForm.bill ? 1 : 0,
+				pdf_protect_voucher: pdfForm.voucher ? 1 : 0,
+				pdf_protect_payslip: pdfForm.payslip ? 1 : 0
+			});
+			pdfBaseline.value = pdfSnapshot.value;
+			toast.add({ title: "PDF protection saved", color: "success", icon: "i-lucide-check" });
+		} catch (err) {
+			toast.add({ title: "Save failed", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });
 		}
 	};
 </script>

@@ -472,11 +472,13 @@
 			]
 		},
 		{
-			// Per-tenant business configuration — the data here is part
-			// of the business and travels with the export bundle.
+			// Per-business configuration — the data here belongs to the
+			// business and (mostly) travels with the export bundle. Includes
+			// all security for this business: database encryption + PDF
+			// protection both live on the Security page.
 			to: "/settings",
-			label: "Settings",
-			icon: "i-lucide-settings",
+			label: "Business",
+			icon: "i-lucide-building-2",
 			divider: true,
 			children: [
 				{
@@ -497,18 +499,27 @@
 					sections: [
 						{ hash: "#font", label: "Font", icon: "i-lucide-type" },
 						{ hash: "#header-logo", label: "Header logo", icon: "i-lucide-image" },
-						{ hash: "#footer-notes", label: "Footer notes", icon: "i-lucide-file-text" },
-						{ hash: "#document-protection", label: "Protection", icon: "i-lucide-shield-check" }
+						{ hash: "#footer-notes", label: "Footer notes", icon: "i-lucide-file-text" }
+					]
+				},
+				{
+					to: "/settings/security",
+					label: "Security",
+					icon: "i-lucide-shield-check",
+					sections: [
+						{ hash: "#encryption", label: "Database", icon: "i-lucide-database" },
+						{ hash: "#pdf-protection", label: "PDF protection", icon: "i-lucide-file-text" }
 					]
 				}
 			]
 		},
 		{
-			// Application-level concerns that aren't tied to a single
-			// business — UI preferences and the multi-tenant administration.
+			// App-wide preferences + multi-tenant administration — not tied
+			// to any single business (Appearance is per-machine; Businesses
+			// manages the whole tenant set).
 			to: "/settings/appearance",
-			label: "App",
-			icon: "i-lucide-app-window",
+			label: "Settings",
+			icon: "i-lucide-settings",
 			divider: true,
 			children: [
 				{
@@ -522,7 +533,6 @@
 						{ hash: "#zoom", label: "Zoom", icon: "i-lucide-zoom-in" }
 					]
 				},
-				{ to: "/settings/security", label: "Security", icon: "i-lucide-shield-check" },
 				{ to: "/settings/businesses", label: "Businesses", icon: "i-lucide-briefcase" }
 			]
 		},
