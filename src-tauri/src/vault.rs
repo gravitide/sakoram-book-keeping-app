@@ -310,6 +310,44 @@ pub fn decrypt_file(ciphertext: &Path, plaintext: &Path, dek: &[u8; 32]) -> Resu
     result
 }
 
+/// Random 16-byte salt for passphrase-based export encryption.
+pub fn generate_salt() -> [u8; 16] {
+    random_bytes::<16>()
+}
+
+/// Derive a 32-byte key from an export passphrase + salt (Argon2id, same cost
+/// parameters as the vault). Used for encrypted backup bundles.
+pub fn derive_export_key(passphrase: &str, salt: &[u8]) -> Result<Zeroizing<[u8; 32]>, VaultError> {
+    derive_kek(passphrase.as_bytes(), salt, M_COST, T_COST, P_COST)
+}
+
+/// One-shot AEAD encrypt of an in-memory payload. Output = 24-byte random nonce
+/// followed by the XChaCha20-Poly1305 ciphertext+tag. For backup bundles, which
+/// are built fully in memory anyway.
+pub fn encrypt_bytes(plaintext: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, VaultError> {
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
+    let nonce = random_bytes::<24>();
+    let ct = cipher
+        .encrypt(XNonce::from_slice(&nonce), plaintext)
+        .map_err(|_| VaultError::Crypto)?;
+    let mut out = Vec::with_capacity(24 + ct.len());
+    out.extend_from_slice(&nonce);
+    out.extend_from_slice(&ct);
+    Ok(out)
+}
+
+/// Inverse of `encrypt_bytes`. A wrong key or tampered blob fails authentication.
+pub fn decrypt_bytes(blob: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, VaultError> {
+    if blob.len() < 24 {
+        return Err(VaultError::Encoding("export blob too short".into()));
+    }
+    let (nonce, ct) = blob.split_at(24);
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
+    cipher
+        .decrypt(XNonce::from_slice(nonce), ct)
+        .map_err(|_| VaultError::Auth)
+}
+
 pub fn change_password(
     meta: &VaultMeta,
     old_password: &str,
@@ -588,6 +626,35 @@ mod tests {
         assert!(!tmp_left, "no .tmp files should remain after success");
 
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn export_bytes_round_trip_and_reject_wrong_key() {
+        let salt = generate_salt();
+        let key = derive_export_key("backup-pass", &salt).unwrap();
+        let plaintext = b"some export payload bytes \x00\x01\x02 and more".to_vec();
+
+        let blob = encrypt_bytes(&plaintext, &key).unwrap();
+        assert_ne!(blob, plaintext);
+        // Correct key round-trips.
+        assert_eq!(decrypt_bytes(&blob, &key).unwrap(), plaintext);
+
+        // Wrong passphrase (same salt) is rejected.
+        let wrong = derive_export_key("nope", &salt).unwrap();
+        assert!(matches!(decrypt_bytes(&blob, &wrong), Err(VaultError::Auth)));
+
+        // Tampered ciphertext is rejected.
+        let mut bad = blob.clone();
+        let last = bad.len() - 1;
+        bad[last] ^= 0xFF;
+        assert!(decrypt_bytes(&bad, &key).is_err());
+    }
+
+    #[test]
+    fn export_key_is_salt_sensitive() {
+        let k1 = derive_export_key("pw", &[1u8; 16]).unwrap();
+        let k2 = derive_export_key("pw", &[2u8; 16]).unwrap();
+        assert_ne!(*k1, *k2);
     }
 
     #[test]
