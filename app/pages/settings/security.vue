@@ -178,7 +178,7 @@
 			</template>
 			<template #footer>
 				<div class="flex justify-end w-full">
-					<UButton :disabled="!savedAck" icon="i-lucide-check" @click="showRecovery = false">
+					<UButton :disabled="!savedAck" icon="i-lucide-check" @click="onRecoveryDone">
 						Done
 					</UButton>
 				</div>
@@ -223,14 +223,13 @@
 		busy.value = true;
 		try {
 			// Close the JS pool first: this checkpoints the WAL into the main db
-			// file and releases the OS handle, so Rust can encrypt the complete db
-			// and remove the plaintext copy cleanly (Windows blocks deleting an
-			// open file). enable seeds the session key + writes the blob and
-			// removes the plaintext db, so we re-materialise the working db by
-			// unlocking with the password we just set.
+			// file and releases the OS handle so Rust gets a complete, flushed db
+			// to encrypt (Windows blocks encrypting an open file). enable_tenant_encryption
+			// writes the blob + vault.json and KEEPS the working db in place, so the
+			// business remains usable immediately — no re-unlock step needed.
+			// The working db is sealed on the next lock (window close or Lock Now).
 			await resetDbCache();
 			const key = await invoke<string>("enable_tenant_encryption", { id, password: enablePw.value });
-			await tenants.unlock(enablePw.value, false);
 			await tenants.refresh();
 			recoveryKey.value = key;
 			savedAck.value = false;
@@ -256,6 +255,13 @@
 		} catch {
 			toast.add({ title: "Couldn't copy — select the key and copy it manually", color: "warning", icon: "i-lucide-circle-alert" });
 		}
+	};
+
+	// Hard-reload after the user acknowledges the recovery key. Consistent with
+	// the lock/tenant-switch pattern: wipes all in-memory store state and lets
+	// the middleware re-hydrate from the now-encrypted tenant cleanly.
+	const onRecoveryDone = () => {
+		window.location.assign("/settings/security");
 	};
 
 	// ---- Change password ----
@@ -302,6 +308,7 @@
 			toast.add({ title: "Encryption removed", color: "info", icon: "i-lucide-shield-off" });
 		} catch (err) {
 			const raw = msg(err);
+			disablePw.value = "";
 			toast.add({
 				title: "Could not remove encryption",
 				description: /invalid password|auth/i.test(raw) ? "The password is incorrect." : raw,
