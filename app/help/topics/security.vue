@@ -122,16 +122,36 @@
 			</HelpCallout>
 		</HelpSection>
 
+		<HelpSection title="Backups &amp; restore" icon="i-lucide-archive">
+			<p>
+				Export a full backup of any business from <NuxtLink to="/settings/businesses" class="text-(--ui-primary) hover:underline">
+					Settings → Businesses
+				</NuxtLink> → <strong>Export</strong>. The backup <span class="font-mono text-xs">.zip</span> is
+				self-contained: all your data, uploaded attachments (scans / photos), and your logos.
+			</p>
+			<HelpCallout variant="tip" title="Encrypt the backup">
+				In the export dialog, tick <strong>Encrypt this backup with a password</strong> and choose a password —
+				the <span class="font-mono text-xs">.zip</span> is sealed and needs that same password to import. For an
+				encrypted business it's ticked by default. There's no recovery for the backup password, so if you forget
+				it, just export again.
+			</HelpCallout>
+			<p>
+				To <strong>restore</strong>, use <strong>Import</strong> on that same page — or, if no business is open,
+				the <strong>Import a backup</strong> link on the welcome screen. Pick the
+				<span class="font-mono text-xs">.zip</span>, enter its password if it's encrypted, and it comes back as a
+				new business.
+			</p>
+			<HelpCallout variant="info" title="A restored business opens unencrypted">
+				Backup encryption only protects the <span class="font-mono text-xs">.zip</span> file in transit. The
+				restored business itself is unencrypted — turn database encryption back on from Settings → Security if you
+				want it.
+			</HelpCallout>
+		</HelpSection>
+
 		<HelpSection title="Common mistakes" icon="i-lucide-triangle-alert">
 			<HelpCallout variant="warning" title="Don't lose the recovery key">
 				This is the one that hurts. The recovery key is shown once. If you skip past it and later forget
 				your password, your books are unrecoverable. Save it the moment it appears.
-			</HelpCallout>
-			<HelpCallout variant="tip" title="Encrypt your backups too">
-				When you export a business (Settings → Businesses → Export), tick <strong>Encrypt this backup with a password</strong>
-				in the options dialog before saving. The backup <span class="font-mono text-xs">.zip</span> will be sealed
-				with a password of your choice — you'll need that same password to import it later. There's no recovery for
-				the backup password, so if you forget it, just export again.
 			</HelpCallout>
 			<HelpCallout variant="tip" title="Use a password you'll actually remember">
 				Because there's no password-reset email or support backdoor, pick something memorable (and store
