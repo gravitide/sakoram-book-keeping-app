@@ -419,7 +419,13 @@ pub async fn import_tenant_data(
 	let file = std::fs::File::open(&in_path).map_err(|e| format!("open zip: {e}"))?;
 	let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("read zip: {e}"))?;
 
-	let (data, logo_name, logo_bytes): (Value, Option<String>, Option<Vec<u8>>) = if manifest.encrypted {
+	let (mut data, logo_name, logo_bytes, pdf_header, attachments): (
+		Value,
+		Option<String>,
+		Option<Vec<u8>>,
+		Option<(String, Vec<u8>)>,
+		Vec<(String, Vec<u8>)>,
+	) = if manifest.encrypted {
 		let pass = passphrase
 			.as_deref()
 			.filter(|p| !p.trim().is_empty())
@@ -444,7 +450,29 @@ pub async fn import_tenant_data(
 			.and_then(|v| v.as_str())
 			.map(|b64| BASE64.decode(b64.as_bytes()).map_err(|e| format!("bad logo bytes: {e}")))
 			.transpose()?;
-		(data, logo_name, logo_bytes)
+		let pdf_header = match (
+			payload.get("pdf_header_name").and_then(|v| v.as_str()),
+			payload.get("pdf_header_bytes_b64").and_then(|v| v.as_str()),
+		) {
+			(Some(name), Some(b64)) => Some((
+				name.to_string(),
+				BASE64.decode(b64.as_bytes()).map_err(|e| format!("bad pdf header: {e}"))?,
+			)),
+			_ => None,
+		};
+		let mut attachments: Vec<(String, Vec<u8>)> = Vec::new();
+		if let Some(Value::Array(list)) = payload.get("attachments") {
+			for a in list {
+				let path = a.get("path").and_then(|v| v.as_str()).unwrap_or("");
+				let b64 = a.get("bytes_b64").and_then(|v| v.as_str()).unwrap_or("");
+				if path.is_empty() || b64.is_empty() {
+					continue;
+				}
+				let bytes = BASE64.decode(b64.as_bytes()).map_err(|e| format!("bad attachment: {e}"))?;
+				attachments.push((path.to_string(), bytes));
+			}
+		}
+		(data, logo_name, logo_bytes, pdf_header, attachments)
 	} else {
 		let data: Value = read_zip_json(&mut archive, "data.json")?;
 		let logo_name = manifest.logo_asset.clone();
@@ -452,7 +480,27 @@ pub async fn import_tenant_data(
 			Some(name) => Some(read_zip_bytes(&mut archive, &format!("assets/{name}"))?),
 			None => None,
 		};
-		(data, logo_name, logo_bytes)
+		// PDF header logo (assets/pdf-header.<ext>) and attachment files —
+		// discover by scanning entry names.
+		let mut pdf_header: Option<(String, Vec<u8>)> = None;
+		let mut attachments: Vec<(String, Vec<u8>)> = Vec::new();
+		{
+			let names: Vec<String> = (0..archive.len())
+				.filter_map(|i| archive.by_index(i).ok().map(|f| f.name().to_string()))
+				.collect();
+			for name in names {
+				if let Some(ext) = name.strip_prefix("assets/pdf-header.") {
+					let bytes = read_zip_bytes(&mut archive, &name)?;
+					pdf_header = Some((format!("pdf-header.{ext}"), bytes));
+				} else if let Some(rel) = name.strip_prefix("attachments/") {
+					if !rel.is_empty() && !name.ends_with('/') {
+						let bytes = read_zip_bytes(&mut archive, &name)?;
+						attachments.push((rel.to_string(), bytes));
+					}
+				}
+			}
+		}
+		(data, logo_name, logo_bytes, pdf_header, attachments)
 	};
 	drop(archive);
 
@@ -463,12 +511,13 @@ pub async fn import_tenant_data(
 	match mode.as_str() {
 		"new" => {
 			let name = target_name.unwrap_or_else(|| manifest.business_name.clone());
-			import_as_new_tenant(&app, &name, &data, logo_name.as_deref(), logo_bytes).await
+			import_as_new_tenant(&app, &name, &mut data, logo_name.as_deref(), logo_bytes, &pdf_header, &attachments).await
 		}
 		"replace" => {
 			let id = target_tenant_id
 				.ok_or_else(|| "Replace mode requires a target tenant ID.".to_string())?;
-			import_replace(&app, &id, &data, logo_name.as_deref(), logo_bytes).await
+			rewrite_attachment_paths(&app, &id, &mut data)?;
+			import_replace(&app, &id, &data, logo_name.as_deref(), logo_bytes, &pdf_header, &attachments).await
 		}
 		other => Err(format!("Unknown import mode: {other}")),
 	}
@@ -501,13 +550,18 @@ fn read_zip_bytes<R: Read + Seek>(
 async fn import_as_new_tenant(
 	app: &AppHandle,
 	name: &str,
-	data: &Value,
+	data: &mut Value,
 	logo_name: Option<&str>,
 	logo_bytes: Option<Vec<u8>>,
+	pdf_header: &Option<(String, Vec<u8>)>,
+	attachments: &[(String, Vec<u8>)],
 ) -> Result<tenants::Tenant, String> {
 	// Use the existing create_tenant path — produces a unique slug, a
 	// fresh DB with migrations applied, and a registry entry.
 	let tenant = tenants::create_tenant_internal(app, name).await?;
+
+	// Rewrite attachment paths now that we know the new tenant id.
+	rewrite_attachment_paths(app, &tenant.id, data)?;
 
 	let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
 	let db_path = app_data.join("businesses").join(format!("{}.db", tenant.id));
@@ -538,6 +592,24 @@ async fn import_as_new_tenant(
 		.execute(&pool)
 		.await
 		.map_err(|e| format!("rewrite logo_path: {e}"))?;
+
+	// Restore the PDF header logo + rewrite its settings path.
+	if let Some(new_header_path) = write_pdf_header(app, &tenant.id, pdf_header)? {
+		sqlx::query("UPDATE company_settings SET pdf_header_logo_path = ? WHERE id = 1")
+			.bind(new_header_path)
+			.execute(&pool)
+			.await
+			.map_err(|e| format!("rewrite pdf_header_logo_path: {e}"))?;
+	} else {
+		// No header in the bundle → clear the stale path so the app doesn't
+		// point at a missing file from the exporter's machine.
+		sqlx::query("UPDATE company_settings SET pdf_header_logo_path = NULL WHERE id = 1")
+			.execute(&pool)
+			.await
+			.map_err(|e| format!("clear pdf_header_logo_path: {e}"))?;
+	}
+	write_attachment_files(app, &tenant.id, attachments)?;
+
 	pool.close().await;
 
 	// Sync logo filename + display name into the registry.
@@ -551,6 +623,8 @@ async fn import_replace(
 	data: &Value,
 	logo_name: Option<&str>,
 	logo_bytes: Option<Vec<u8>>,
+	pdf_header: &Option<(String, Vec<u8>)>,
+	attachments: &[(String, Vec<u8>)],
 ) -> Result<tenants::Tenant, String> {
 	let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
 	let db_path = app_data.join("businesses").join(format!("{target_id}.db"));
@@ -564,6 +638,11 @@ async fn import_replace(
 		let old = app_data.join("logos").join(&old_logo);
 		let _ = std::fs::remove_file(&old);
 	}
+
+	// Delete the old attachments dir before writing restored ones.
+	let _ = std::fs::remove_dir_all(
+		app.path().app_data_dir().map_err(|e| e.to_string())?.join("attachments").join(target_id)
+	);
 
 	let pool = open_pool(&db_path).await?;
 	wipe_tenant_data(&pool).await?;
@@ -584,10 +663,88 @@ async fn import_replace(
 		.execute(&pool)
 		.await
 		.map_err(|e| format!("rewrite logo_path: {e}"))?;
+
+	// Restore the PDF header logo + rewrite its settings path.
+	if let Some(new_header_path) = write_pdf_header(app, target_id, pdf_header)? {
+		sqlx::query("UPDATE company_settings SET pdf_header_logo_path = ? WHERE id = 1")
+			.bind(new_header_path)
+			.execute(&pool)
+			.await
+			.map_err(|e| format!("rewrite pdf_header_logo_path: {e}"))?;
+	} else {
+		// No header in the bundle → clear the stale path so the app doesn't
+		// point at a missing file from the exporter's machine.
+		sqlx::query("UPDATE company_settings SET pdf_header_logo_path = NULL WHERE id = 1")
+			.execute(&pool)
+			.await
+			.map_err(|e| format!("clear pdf_header_logo_path: {e}"))?;
+	}
+	write_attachment_files(app, target_id, attachments)?;
+
 	pool.close().await;
 
 	tenants::set_tenant_logo_internal(app, target_id, updated_logo_file)?;
 	Ok(tenants::get_tenant(app, target_id)?)
+}
+
+/// Rewrite each document_attachments row's file_path to point under the given
+/// tenant's attachments dir, and return the absolute path each row maps to so
+/// the caller can drop the bundled bytes there. New path =
+/// <app_data>/attachments/<tenant_id>/<document_type>/<document_id>/<basename>.
+fn rewrite_attachment_paths(app: &AppHandle, tenant_id: &str, data: &mut Value) -> Result<(), String> {
+	let base = app.path().app_data_dir().map_err(|e| e.to_string())?
+		.join("attachments").join(tenant_id);
+	let Some(rows) = data.get_mut("document_attachments").and_then(|v| v.as_array_mut()) else {
+		return Ok(());
+	};
+	for row in rows {
+		let Some(obj) = row.as_object_mut() else { continue };
+		let dtype = obj.get("document_type").and_then(|v| v.as_str()).unwrap_or("").to_string();
+		let did = match obj.get("document_id") {
+			Some(Value::Number(n)) => n.to_string(),
+			Some(Value::String(s)) => s.clone(),
+			_ => continue,
+		};
+		let old = obj.get("file_path").and_then(|v| v.as_str()).unwrap_or("");
+		let Some(basename) = Path::new(old).file_name().and_then(|n| n.to_str()) else { continue };
+		let new_path = base.join(&dtype).join(&did).join(basename);
+		obj.insert("file_path".into(), Value::String(new_path.to_string_lossy().to_string()));
+	}
+	Ok(())
+}
+
+/// Write the bundled attachment files under the tenant's attachments dir, using
+/// the same relative path (`<type>/<id>/<basename>`) they were bundled with.
+fn write_attachment_files(app: &AppHandle, tenant_id: &str, attachments: &[(String, Vec<u8>)]) -> Result<(), String> {
+	if attachments.is_empty() {
+		return Ok(());
+	}
+	let base = app.path().app_data_dir().map_err(|e| e.to_string())?
+		.join("attachments").join(tenant_id);
+	for (rel, bytes) in attachments {
+		// Guard against path traversal in a crafted bundle.
+		if rel.contains("..") {
+			continue;
+		}
+		let dest = base.join(rel);
+		if let Some(parent) = dest.parent() {
+			std::fs::create_dir_all(parent).map_err(|e| format!("mkdir attachments: {e}"))?;
+		}
+		std::fs::write(&dest, bytes).map_err(|e| format!("write attachment {rel}: {e}"))?;
+	}
+	Ok(())
+}
+
+/// Write the PDF header logo under pdf-headers/<tenant>.<ext>, returning its
+/// absolute path so company_settings.pdf_header_logo_path can be rewritten.
+fn write_pdf_header(app: &AppHandle, tenant_id: &str, header: &Option<(String, Vec<u8>)>) -> Result<Option<String>, String> {
+	let Some((name, bytes)) = header else { return Ok(None) };
+	let ext = Path::new(name).extension().and_then(|e| e.to_str()).unwrap_or("png");
+	let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("pdf-headers");
+	std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+	let path = dir.join(format!("{tenant_id}.{ext}"));
+	std::fs::write(&path, bytes).map_err(|e| format!("write pdf header: {e}"))?;
+	Ok(Some(path.to_string_lossy().to_string()))
 }
 
 /// Read the on-disk bytes for every attachment referenced by the dumped
