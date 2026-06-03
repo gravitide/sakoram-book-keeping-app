@@ -263,6 +263,33 @@
 			</div>
 		</UCard>
 
+		<!-- Step 5 — Security (optional) -->
+		<UCard v-if="currentStep === 5">
+			<template #header>
+				<div class="font-medium">
+					Security
+				</div>
+				<p class="text-xs text-(--ui-text-muted) mt-1">
+					Optionally password-protect this business by encrypting its database on this computer. You can also turn this on later in Settings → Security.
+				</p>
+			</template>
+
+			<div class="space-y-4">
+				<div class="text-sm text-(--ui-warning) bg-(--ui-warning)/10 border border-(--ui-warning)/30 rounded p-3 flex gap-2">
+					<UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0 mt-0.5" />
+					<div>
+						If you set a password, you'll see a <span class="font-semibold">recovery key</span> once. Save it somewhere safe — if you forget the password <span class="font-semibold">and</span> lose the recovery key, this business's data is unrecoverable. There's no backdoor.
+					</div>
+				</div>
+				<UFormField label="Password" hint="Leave blank to skip — the business stays unencrypted.">
+					<PasswordInput v-model="encPw" placeholder="Choose a strong password" :disabled="saving" />
+				</UFormField>
+				<UFormField label="Confirm password" :error="encMismatch ? 'Passwords don\'t match' : undefined">
+					<PasswordInput v-model="encPw2" placeholder="Re-enter the password" :disabled="saving" @enter="onNext" />
+				</UFormField>
+			</div>
+		</UCard>
+
 		<!-- Step navigation -->
 		<div class="mt-6 flex items-center justify-between gap-3">
 			<div>
@@ -289,7 +316,7 @@
 
 			<div class="flex items-center gap-2">
 				<UButton
-					v-if="currentStep < 4"
+					v-if="currentStep < 5"
 					variant="ghost"
 					color="neutral"
 					:disabled="saving"
@@ -299,15 +326,45 @@
 				</UButton>
 				<UButton
 					:loading="saving"
-					:disabled="currentStep === 1 && !form.business_name.trim()"
-					:icon="currentStep === 4 ? 'i-lucide-check' : 'i-lucide-arrow-right'"
-					:trailing="currentStep < 4"
+					:disabled="(currentStep === 1 && !form.business_name.trim()) || (currentStep === 5 && encMismatch)"
+					:icon="currentStep === 5 ? 'i-lucide-check' : 'i-lucide-arrow-right'"
+					:trailing="currentStep < 5"
 					@click="onNext"
 				>
-					{{ currentStep === 4 ? "Finish & open dashboard" : "Next" }}
+					{{ currentStep === 5 ? "Finish & open dashboard" : "Next" }}
 				</UButton>
 			</div>
 		</div>
+
+		<!-- Recovery key — shown ONCE if the user set an encryption password
+			on the Security step. Non-dismissible; Done (which opens the
+			dashboard) is gated on the user confirming they saved it. -->
+		<UModal v-model:open="showRecovery" title="Save your recovery key" :dismissible="false" :close="false">
+			<template #body>
+				<div class="space-y-4">
+					<p class="text-sm text-(--ui-text-muted)">
+						This is the <span class="font-medium text-(--ui-text)">only</span> time we'll show this.
+						If you forget your password, this key is the only way back into this business.
+					</p>
+					<div class="bg-(--ui-bg-muted) border border-(--ui-border) rounded-md p-3 font-mono text-sm break-all select-text">
+						{{ recoveryKey }}
+					</div>
+					<div class="flex justify-end">
+						<UButton size="sm" variant="outline" :icon="copied ? 'i-lucide-check' : 'i-lucide-copy'" @click="copyKey">
+							{{ copied ? "Copied" : "Copy" }}
+						</UButton>
+					</div>
+					<UCheckbox v-model="savedAck" label="I've saved my recovery key somewhere safe" />
+				</div>
+			</template>
+			<template #footer>
+				<div class="flex justify-end w-full">
+					<UButton :disabled="!savedAck" icon="i-lucide-check" @click="onRecoveryDone">
+						Open dashboard
+					</UButton>
+				</div>
+			</template>
+		</UModal>
 	</div>
 </template>
 
@@ -321,10 +378,12 @@
 // per-step). If the user closes the app mid-flow, what they entered up
 // to the last Next they pressed is preserved.
 
+	import { invoke } from "@tauri-apps/api/core";
 	import { appDataDir, join } from "@tauri-apps/api/path";
 	import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import CurrencyPicker from "~/components/CurrencyPicker.vue";
+	import { resetDbCache } from "~/lib/db";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -341,15 +400,18 @@
 
 	await settingsStore.ensureLoaded();
 
-	// Step state machine. Hardcoded 4 — keeping `steps` as a typed array
-	// purely for the indicator UI labels.
+	// Step state machine. `steps` is a typed array purely for the indicator
+	// UI labels. Steps 1-4 save settings; step 5 (Security) is the optional
+	// at-rest encryption opt-in handled separately on Finish.
+	type Step = 1 | 2 | 3 | 4 | 5;
 	const steps = [
 		{ label: "Identity" },
 		{ label: "Contact" },
 		{ label: "Money defaults" },
-		{ label: "Banking" }
+		{ label: "Banking" },
+		{ label: "Security" }
 	] as const;
-	const currentStep = ref<1 | 2 | 3 | 4>(1);
+	const currentStep = ref<Step>(1);
 
 	// One reactive form mirroring the company_settings columns we touch.
 	// VAT is stored as basis points (1800 = 18%); the UI shows percent
@@ -461,18 +523,70 @@
 		}
 	};
 
+	// ---- Step 5: optional at-rest encryption -------------------------------
+	const encPw = ref("");
+	const encPw2 = ref("");
+	const encMismatch = computed(() => !!encPw2.value && encPw.value !== encPw2.value);
+	const showRecovery = ref(false);
+	const recoveryKey = ref("");
+	const savedAck = ref(false);
+	const copied = ref(false);
+
+	const finishWithOptionalEncryption = async () => {
+		const pw = encPw.value;
+		// Blank password = skip encryption; just open the dashboard.
+		if (!pw) {
+			window.location.assign("/");
+			return;
+		}
+		if (pw !== encPw2.value) {
+			toast.add({ title: "Passwords don't match", color: "error", icon: "i-lucide-circle-alert" });
+			return;
+		}
+		const id = tenants.activeTenantId;
+		if (!id) {
+			window.location.assign("/");
+			return;
+		}
+		// Close the pool so Rust gets a flushed db to encrypt; enable keeps the
+		// working db in place. We hold on the recovery-key modal before the
+		// dashboard reload so the user can save the key.
+		await resetDbCache();
+		recoveryKey.value = await invoke<string>("enable_tenant_encryption", { id, password: pw });
+		savedAck.value = false;
+		copied.value = false;
+		showRecovery.value = true;
+	};
+
+	const copyKey = async () => {
+		try {
+			await navigator.clipboard.writeText(recoveryKey.value);
+			copied.value = true;
+			setTimeout(() => {
+				copied.value = false;
+			}, 2000);
+		} catch {
+			toast.add({ title: "Couldn't copy — select the key and copy it manually", color: "warning", icon: "i-lucide-circle-alert" });
+		}
+	};
+
+	const onRecoveryDone = () => {
+		window.location.assign("/");
+	};
+
 	const onNext = async () => {
 		if (saving.value) return;
 		saving.value = true;
 		try {
-			await saveStep(currentStep.value);
-			if (currentStep.value === 4) {
-				// Hard reload so every store re-hydrates against the now-
-				// fully-populated tenant — same pattern as tenant switch.
-				window.location.assign("/");
+			if (currentStep.value === 5) {
+				// Final step: optionally enable encryption, then open the
+				// dashboard (the recovery-key modal handles the reload when a
+				// password was set).
+				await finishWithOptionalEncryption();
 				return;
 			}
-			currentStep.value = (currentStep.value + 1) as 1 | 2 | 3 | 4;
+			await saveStep(currentStep.value as 1 | 2 | 3 | 4);
+			currentStep.value = (currentStep.value + 1) as Step;
 		} catch (err) {
 			toast.add({
 				title: "Could not save",
@@ -488,15 +602,15 @@
 	// Skip = advance without writing anything for this step. Whatever
 	// the user typed stays in `form` if they hit Back later.
 	const onSkip = () => {
-		if (currentStep.value < 4) {
-			currentStep.value = (currentStep.value + 1) as 1 | 2 | 3 | 4;
+		if (currentStep.value < 5) {
+			currentStep.value = (currentStep.value + 1) as Step;
 		}
 	};
 
 	const goToStep = (step: number) => {
-		if (step < 1 || step > 4) return;
+		if (step < 1 || step > 5) return;
 		if (step > currentStep.value) return; // only allow going back via the indicator
-		currentStep.value = step as 1 | 2 | 3 | 4;
+		currentStep.value = step as Step;
 	};
 
 	// Escape hatch from step 1 — bail to the dashboard without saving
