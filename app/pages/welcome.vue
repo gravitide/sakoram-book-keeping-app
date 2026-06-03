@@ -164,9 +164,83 @@
 			</div>
 		</div>
 
+		<!-- Import a backup — always available, including when there are no
+			businesses yet (you might be restoring one you removed). Imports as
+			a new business; an encrypted backup prompts for its password. -->
+		<div class="text-center mt-4">
+			<button
+				type="button"
+				class="text-xs text-(--ui-text-muted) hover:text-(--ui-primary) hover:underline disabled:opacity-50 inline-flex items-center gap-1"
+				:disabled="seedingDemo || importing"
+				@click="onImportClick"
+			>
+				<UIcon name="i-lucide-upload" class="size-3" />
+				Import a backup (.zip)
+			</button>
+		</div>
+
 		<div class="text-center text-xs text-(--ui-text-muted) mt-6">
 			v{{ pkg.version }}
 		</div>
+
+		<!-- Import backup modal — new-business mode only (the welcome screen
+			has no active business to "replace"). -->
+		<UModal v-model:open="showImport" title="Import a business backup" :dismissible="!importing" :close="!importing">
+			<template #body>
+				<div v-if="importing" class="py-6 text-center space-y-3">
+					<UIcon name="i-lucide-loader-circle" class="size-8 animate-spin text-(--ui-primary) mx-auto" />
+					<div class="text-sm font-medium">
+						Importing {{ importName.trim() || importManifest?.business_name }}…
+					</div>
+					<div class="text-xs text-(--ui-text-muted)">
+						Restoring the backup — this can take a moment for a large business. Please don't close this window.
+					</div>
+				</div>
+				<div v-else-if="!importManifest" class="text-sm text-(--ui-text-muted)">
+					Reading bundle…
+				</div>
+				<div v-else class="space-y-4">
+					<div class="bg-(--ui-bg-muted) border border-(--ui-border) rounded p-3 text-sm space-y-1">
+						<div class="flex justify-between gap-3">
+							<span class="text-(--ui-text-muted)">Business:</span>
+							<span class="font-medium">{{ importManifest.business_name }}</span>
+						</div>
+						<div class="flex justify-between gap-3">
+							<span class="text-(--ui-text-muted)">Exported on:</span>
+							<span class="tabular-nums">{{ importManifest.exported_at.replace("T", " ").replace("Z", " UTC") }}</span>
+						</div>
+						<div class="flex justify-between gap-3">
+							<span class="text-(--ui-text-muted)">From app version:</span>
+							<span class="tabular-nums">v{{ importManifest.app_version }}</span>
+						</div>
+					</div>
+
+					<UFormField label="Business name">
+						<UInput v-model="importName" :placeholder="importManifest.business_name" />
+						<template #help>
+							This won't change the data — just what the imported business is called.
+						</template>
+					</UFormField>
+
+					<UFormField v-if="importManifest.encrypted" label="Backup password" required>
+						<PasswordInput v-model="importPassphrase" placeholder="Password this backup was encrypted with" @enter="confirmImport" />
+						<template #help>
+							This backup is password-protected. Enter the password used when it was exported.
+						</template>
+					</UFormField>
+				</div>
+			</template>
+			<template #footer>
+				<div class="flex justify-end gap-2 w-full">
+					<UButton color="neutral" variant="outline" :disabled="importing" @click="cancelImport">
+						Cancel
+					</UButton>
+					<UButton :loading="importing" :disabled="!canImport" icon="i-lucide-plus" @click="confirmImport">
+						Import
+					</UButton>
+				</div>
+			</template>
+		</UModal>
 
 		<!-- Full-screen blocking overlay while the demo seed is running.
 			Without this, tenants.create() inserts the partially-seeded
@@ -218,7 +292,9 @@
 // Welcome / business picker — the app's landing screen when no business
 // is active (or when the user navigates here explicitly to switch).
 
-	import { convertFileSrc } from "@tauri-apps/api/core";
+	import type { Tenant } from "~/stores/tenants";
+	import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+	import { open as openDialog } from "@tauri-apps/plugin-dialog";
 	import pkg from "~~/package.json";
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import { createDemoBusiness } from "~/lib/demo-seed";
@@ -351,6 +427,88 @@
 			});
 		} finally {
 			creating.value = false;
+		}
+	};
+
+	// ---- Import a backup ----
+	// Available from the welcome screen so a backup can be restored even when
+	// no business exists (e.g. you removed the one you'd backed up). Always
+	// imports as a NEW business; an encrypted bundle prompts for its password.
+	interface ExportManifest {
+		business_name: string
+		exported_at: string
+		app_version: string
+		encrypted?: boolean
+	}
+
+	const showImport = ref(false);
+	const importing = ref(false);
+	const importPath = ref("");
+	const importManifest = ref<ExportManifest | null>(null);
+	const importName = ref("");
+	const importPassphrase = ref("");
+
+	const canImport = computed(() => {
+		if (!importManifest.value || importing.value) return false;
+		if (importManifest.value.encrypted && !importPassphrase.value) return false;
+		return !!importName.value.trim();
+	});
+
+	const cancelImport = () => {
+		showImport.value = false;
+		importManifest.value = null;
+		importPath.value = "";
+		importName.value = "";
+		importPassphrase.value = "";
+		importing.value = false;
+	};
+
+	const onImportClick = async () => {
+		if (importing.value) return;
+		let chosen: string | null = null;
+		try {
+			const result = await openDialog({
+				multiple: false,
+				filters: [{ name: "Sakoram backup", extensions: ["zip"] }]
+			});
+			if (typeof result === "string") chosen = result;
+			else if (Array.isArray(result) && result.length > 0) chosen = result[0] ?? null;
+		} catch (err) {
+			toast.add({ title: "Could not open file picker", description: err instanceof Error ? err.message : String(err), color: "error", icon: "i-lucide-circle-alert" });
+			return;
+		}
+		if (!chosen) return;
+		try {
+			const manifest = await invoke<ExportManifest>("peek_export_manifest", { inputPath: chosen });
+			importPath.value = chosen;
+			importManifest.value = manifest;
+			importName.value = manifest.business_name;
+			importPassphrase.value = "";
+			// Start a fresh import flow — never inherit a stale "importing"
+			// flag from a previous restore that was navigated away from.
+			importing.value = false;
+			showImport.value = true;
+		} catch (err) {
+			toast.add({ title: "Couldn't read backup", description: err instanceof Error ? err.message : String(err), color: "error", icon: "i-lucide-circle-alert" });
+		}
+	};
+
+	const confirmImport = async () => {
+		if (!importManifest.value || importing.value || !canImport.value) return;
+		importing.value = true;
+		try {
+			const imported = await invoke<Tenant>("import_tenant_data", {
+				inputPath: importPath.value,
+				mode: "new",
+				targetName: importName.value.trim() || importManifest.value.business_name,
+				passphrase: importManifest.value.encrypted ? importPassphrase.value : null
+			});
+			await tenants.refresh();
+			await tenants.activate(imported.id);
+			window.location.assign("/");
+		} catch (err) {
+			importing.value = false;
+			toast.add({ title: "Import failed", description: err instanceof Error ? err.message : String(err), color: "error", icon: "i-lucide-circle-alert" });
 		}
 	};
 </script>

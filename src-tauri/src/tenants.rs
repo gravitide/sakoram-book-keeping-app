@@ -136,6 +136,55 @@ pub fn tenant_db_path_public(app: &AppHandle, tenant_id: &str) -> Result<PathBuf
 	tenant_db_path(app, tenant_id)
 }
 
+/// Remove any leftover DB + sidecar files at a freshly-chosen (not-yet-
+/// registered) tenant slug. Such files are orphans from a crashed or failed
+/// prior create/import: because the slug isn't in the registry, the next
+/// create reuses it and `run_migrations` would re-run on a half-migrated DB —
+/// surfacing errors like "duplicate column name". Called from the create paths
+/// right before migrating so we always start on a clean DB. MUST only be called
+/// for a slug that is NOT a registered tenant.
+fn remove_stale_db_files(app: &AppHandle, tenant_id: &str) {
+	if let Ok(db) = tenant_db_path(app, tenant_id) {
+		let base = db.as_os_str().to_owned();
+		// {id}.db, {id}.db-wal, {id}.db-shm (SQLite WAL sidecars), {id}.db.enc.
+		for suffix in ["", "-wal", "-shm", ".enc"] {
+			let mut p = base.clone();
+			p.push(suffix);
+			let _ = std::fs::remove_file(PathBuf::from(p));
+		}
+	}
+	if let Ok(vault) = tenant_vault_path(app, tenant_id) {
+		let _ = std::fs::remove_file(vault);
+	}
+}
+
+/// Best-effort teardown of a tenant that was created mid-import but whose import
+/// then failed — removes the registry entry plus every file the create/import
+/// may have written (DB + sidecars, logos, PDF header, attachments) so a failed
+/// import never leaves a broken business in the picker. Safe to call with a
+/// tenant id that may or may not be registered.
+pub fn discard_tenant(app: &AppHandle, id: &str) {
+	if let Ok(mut reg) = read_registry(app) {
+		let before = reg.tenants.len();
+		reg.tenants.retain(|t| t.id != id);
+		if reg.active_tenant_id.as_deref() == Some(id) {
+			reg.active_tenant_id = None;
+		}
+		if reg.tenants.len() != before {
+			let _ = write_registry(app, &reg);
+		}
+	}
+	// DB file + WAL/SHM sidecars + encrypted blob + vault metadata.
+	remove_stale_db_files(app, id);
+	if let Ok(app_data) = app.path().app_data_dir() {
+		for ext in &["png", "jpg", "jpeg", "webp", "svg"] {
+			let _ = std::fs::remove_file(app_data.join("logos").join(format!("{id}.{ext}")));
+			let _ = std::fs::remove_file(app_data.join("pdf-headers").join(format!("{id}.{ext}")));
+		}
+		let _ = std::fs::remove_dir_all(app_data.join("attachments").join(id));
+	}
+}
+
 // ---------- Registry I/O ----------------------------------------------------
 
 fn read_registry(app: &AppHandle) -> Result<TenantRegistry, String> {
@@ -394,6 +443,9 @@ pub async fn create_tenant(app: AppHandle, name: String) -> Result<Tenant, Strin
 	let id = unique_slug(&slugify(trimmed), &reg.tenants);
 	let db_path = tenant_db_path(&app, &id)?;
 
+	// Wipe any orphaned leftover at this (unregistered) slug so migrations run
+	// on a clean DB — see remove_stale_db_files.
+	remove_stale_db_files(&app, &id);
 	run_migrations(&db_path).await?;
 	seed_fresh_tenant(&db_path, trimmed).await?;
 
@@ -549,6 +601,9 @@ pub async fn create_tenant_internal(app: &AppHandle, name: &str) -> Result<Tenan
 	let mut reg = read_registry(app)?;
 	let id = unique_slug(&slugify(trimmed), &reg.tenants);
 	let db_path = tenant_db_path(app, &id)?;
+	// Wipe any orphaned leftover at this (unregistered) slug so migrations run
+	// on a clean DB — see remove_stale_db_files.
+	remove_stale_db_files(app, &id);
 	run_migrations(&db_path).await?;
 	seed_fresh_tenant(&db_path, trimmed).await?;
 

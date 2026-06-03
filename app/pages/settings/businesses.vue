@@ -78,7 +78,7 @@
 							:title="`Export ${t.name} as a backup .zip`"
 							:loading="exportingId === t.id"
 							:disabled="exportingId !== null"
-							@click="onExport(t)"
+							@click="askExport(t)"
 						>
 							Export
 						</UButton>
@@ -125,9 +125,18 @@
 		</UModal>
 
 		<!-- Import modal -->
-		<UModal v-model:open="showImport" title="Import a business backup">
+		<UModal v-model:open="showImport" title="Import a business backup" :dismissible="!importing" :close="!importing">
 			<template #body>
-				<div v-if="!importManifest" class="text-sm text-(--ui-text-muted)">
+				<div v-if="importing" class="py-6 text-center space-y-3">
+					<UIcon name="i-lucide-loader-circle" class="size-8 animate-spin text-(--ui-primary) mx-auto" />
+					<div class="text-sm font-medium">
+						{{ importMode === "replace" ? "Overwriting" : "Importing" }} {{ importManifest?.business_name }}…
+					</div>
+					<div class="text-xs text-(--ui-text-muted)">
+						Restoring the backup — this can take a moment for a large business. Please don't close this window.
+					</div>
+				</div>
+				<div v-else-if="!importManifest" class="text-sm text-(--ui-text-muted)">
 					Reading bundle…
 				</div>
 				<div v-else class="space-y-4">
@@ -145,6 +154,13 @@
 							<span class="tabular-nums">v{{ importManifest.app_version }}</span>
 						</div>
 					</div>
+
+					<UFormField v-if="importManifest.encrypted" label="Backup password" required>
+						<PasswordInput v-model="importPassphrase" placeholder="Password this backup was encrypted with" @enter="confirmImport" />
+						<template #help>
+							This backup is password-protected. Enter the password used when it was exported.
+						</template>
+					</UFormField>
 
 					<URadioGroup v-model="importMode" :items="importModeOptions" />
 
@@ -174,7 +190,7 @@
 			</template>
 			<template #footer>
 				<div class="flex justify-end gap-2 w-full">
-					<UButton color="neutral" variant="outline" @click="cancelImport">
+					<UButton color="neutral" variant="outline" :disabled="importing" @click="cancelImport">
 						Cancel
 					</UButton>
 					<UButton
@@ -185,6 +201,52 @@
 						@click="confirmImport"
 					>
 						{{ importMode === "new" ? "Import as new" : "Overwrite" }}
+					</UButton>
+				</div>
+			</template>
+		</UModal>
+
+		<!-- Export options -->
+		<UModal v-model:open="showExportOptions" :title="`Export ${exportTarget?.name ?? ''}`">
+			<template #body>
+				<div class="space-y-4">
+					<UCheckbox v-model="exportEncrypt" label="Encrypt this backup with a password" />
+
+					<template v-if="exportEncrypt">
+						<UFormField label="Backup password" required>
+							<PasswordInput v-model="exportPw" placeholder="Choose a password for this file" />
+						</UFormField>
+						<UFormField label="Confirm password" required :error="exportPwMismatch ? 'Passwords don\'t match' : undefined">
+							<PasswordInput v-model="exportPw2" placeholder="Re-enter the password" @enter="confirmExport" />
+						</UFormField>
+						<p class="text-xs text-(--ui-text-muted)">
+							You'll need this password to import the backup. There's no recovery — if you forget it, just export again.
+						</p>
+					</template>
+
+					<div
+						v-else-if="exportTarget?.encrypted"
+						class="text-sm text-(--ui-warning) bg-(--ui-warning)/10 border border-(--ui-warning)/30 rounded p-3 flex gap-2"
+					>
+						<UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0 mt-0.5" />
+						<span>
+							This business is encrypted, but the backup will <span class="font-semibold">not</span> be —
+							anyone with the file could read its data. Add a password unless you have a reason not to.
+						</span>
+					</div>
+				</div>
+			</template>
+			<template #footer>
+				<div class="flex justify-end gap-2 w-full">
+					<UButton color="neutral" variant="outline" @click="showExportOptions = false">
+						Cancel
+					</UButton>
+					<UButton
+						icon="i-lucide-download"
+						:disabled="exportEncrypt && (!exportPw || exportPwMismatch)"
+						@click="confirmExport"
+					>
+						Export
 					</UButton>
 				</div>
 			</template>
@@ -282,6 +344,7 @@
 		business_name: string
 		tenant_id: string
 		logo_asset: string | null
+		encrypted?: boolean
 	}
 
 	definePageMeta({ title: "Businesses" });
@@ -289,6 +352,7 @@
 	const tenants = useTenantsStore();
 	const router = useRouter();
 	const toast = useToast();
+	const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 	await tenants.ensureLoaded();
 
@@ -437,12 +501,33 @@
 		}
 	};
 
-	// ---- Export ----
+	// ---- Export options (encryption) ----
+	const showExportOptions = ref(false);
+	const exportTarget = ref<Tenant | null>(null);
+	const exportEncrypt = ref(false);
+	const exportPw = ref("");
+	const exportPw2 = ref("");
+	const exportPwMismatch = computed(() => !!exportPw2.value && exportPw.value !== exportPw2.value);
+
+	const askExport = (t: Tenant) => {
+		exportTarget.value = t;
+		// Default ON for an encrypted business; the warning nudges them to keep it.
+		exportEncrypt.value = !!t.encrypted;
+		exportPw.value = "";
+		exportPw2.value = "";
+		showExportOptions.value = true;
+	};
+
 	const exportingId = ref<string | null>(null);
 
-	const onExport = async (t: Tenant) => {
-		if (exportingId.value) return;
-		const defaultName = `${t.id}-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+	const confirmExport = async () => {
+		const t = exportTarget.value;
+		if (!t) return;
+		if (exportEncrypt.value && (!exportPw.value || exportPwMismatch.value)) return;
+		showExportOptions.value = false;
+
+		const suffix = exportEncrypt.value ? "-encrypted" : "";
+		const defaultName = `${t.id}-backup-${new Date().toISOString().slice(0, 10)}${suffix}.zip`;
 		let chosen: string | null = null;
 		try {
 			chosen = await saveDialog({
@@ -450,32 +535,17 @@
 				filters: [{ name: "Sakoram backup", extensions: ["zip"] }]
 			});
 		} catch (err) {
-			toast.add({
-				title: "Could not open save dialog",
-				description: err instanceof Error ? err.message : String(err),
-				color: "error",
-				icon: "i-lucide-circle-alert"
-			});
+			toast.add({ title: "Could not open save dialog", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });
 			return;
 		}
 		if (!chosen) return;
 
 		exportingId.value = t.id;
 		try {
-			await invoke("export_tenant_data", { tenantId: t.id, outputPath: chosen });
-			toast.add({
-				title: `Exported ${t.name}`,
-				description: chosen,
-				color: "success",
-				icon: "i-lucide-check"
-			});
+			await invoke("export_tenant_data", { tenantId: t.id, outputPath: chosen, encrypt: exportEncrypt.value, passphrase: exportEncrypt.value ? exportPw.value : null });
+			toast.add({ title: `Exported ${t.name}`, description: chosen, color: "success", icon: "i-lucide-check" });
 		} catch (err) {
-			toast.add({
-				title: "Export failed",
-				description: err instanceof Error ? err.message : String(err),
-				color: "error",
-				icon: "i-lucide-circle-alert"
-			});
+			toast.add({ title: "Export failed", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });
 		} finally {
 			exportingId.value = null;
 		}
@@ -490,6 +560,8 @@
 	const importNewName = ref("");
 	const importReplaceTargetId = ref<string>("");
 
+	const importPassphrase = ref("");
+
 	const importModeOptions = [
 		{ value: "new", label: "Import as a new business (recommended)" },
 		{ value: "replace", label: "Replace an existing business" }
@@ -501,6 +573,7 @@
 
 	const canImport = computed(() => {
 		if (!importManifest.value || importing.value) return false;
+		if (importManifest.value.encrypted && !importPassphrase.value) return false;
 		if (importMode.value === "new") return true;
 		return !!importReplaceTargetId.value;
 	});
@@ -511,6 +584,8 @@
 		importPath.value = "";
 		importNewName.value = "";
 		importReplaceTargetId.value = "";
+		importPassphrase.value = "";
+		importing.value = false;
 	};
 
 	const onImportClick = async () => {
@@ -542,6 +617,10 @@
 			importNewName.value = manifest.business_name;
 			importMode.value = "new";
 			importReplaceTargetId.value = "";
+			importPassphrase.value = "";
+			// Start a fresh import flow — never inherit a stale "importing"
+			// flag from a previous restore that was navigated away from.
+			importing.value = false;
 			showImport.value = true;
 		} catch (err) {
 			toast.add({
@@ -559,7 +638,8 @@
 		try {
 			const args: Record<string, unknown> = {
 				inputPath: importPath.value,
-				mode: importMode.value
+				mode: importMode.value,
+				passphrase: importManifest.value.encrypted ? importPassphrase.value : null
 			};
 			if (importMode.value === "new") {
 				const name = importNewName.value.trim() || importManifest.value.business_name;
@@ -574,6 +654,7 @@
 			await refreshLogos();
 
 			showImport.value = false;
+			importPassphrase.value = "";
 			toast.add({
 				title: importMode.value === "new" ? "Business imported" : "Business overwritten",
 				description: imported.name,
