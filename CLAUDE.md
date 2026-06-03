@@ -185,6 +185,49 @@ user's existing tenants.
 
 ---
 
+## Per-business encryption (optional, opt-in)
+
+Off by default; unencrypted businesses are unaffected.
+
+- **Crypto core** — `src-tauri/src/vault.rs`: envelope encryption (random DEK
+  encrypts the DB via XChaCha20-Poly1305 STREAM; DEK wrapped by an Argon2id
+  password key AND a one-time recovery key). Tenant id bound as AAD; keys
+  `Zeroizing`. Also `encrypt_bytes`/`decrypt_bytes` for encrypted export bundles.
+- **Orchestration** — `src-tauri/src/vault_fs.rs`: on-disk vault
+  (`{id}.db.enc` blob + `{id}.vault.json`), in-memory session DEK state
+  (`VaultSessions`), and commands `enable_tenant_encryption` / `unlock_tenant`
+  / `lock_tenant` / `disable_tenant_encryption` / `change_tenant_password` /
+  `tenant_lock_state`.
+- **Model: decrypt-on-unlock** — `tauri-plugin-sql` can't be keyed (no
+  SQLCipher). Unlock decrypts the blob to the working `{id}.db`; lock /
+  window-close / tenant-switch reseals + wipes the plaintext. Working file is
+  plaintext while unlocked (accepted trade-off).
+- **Registry/UI:** `tenants.json` per-tenant gains `encrypted: bool` (serde
+  default false). `/unlock` page, guard in `tenant.global.ts`, Security
+  settings page (`/settings/security#encryption`), titlebar quick-lock.
+- **Backups** (`data_io.rs`): export optionally passphrase-seals the payload
+  (`payload.enc`) + bundles attachments + PDF header logo; import rewrites
+  paths and rolls back a failed "new" import.
+
+**Landmines:**
+- **`resetDbCache()` (closes the sql pool) before any op that re-encrypts or
+  renames `.db`** (`lock_tenant`, enable) — Windows can't delete/rename an open
+  file. `activate()` + the lock-on-close plugin already do this.
+- **Never `ensure_tenant_db` for an encrypted-and-locked tenant** — it runs
+  migrations on a missing file and creates an EMPTY plaintext DB (the empty-DB
+  hazard). The tenants store gates `refresh()`/`activate()` on
+  `tenant_lock_state` (returns `unlocked` only when the session holds the key
+  AND `{id}.db` exists).
+- **Enable keeps the working `.db`** (sealed on the next lock) — don't remove
+  the plaintext on enable.
+- **Titlebar lock / lock-on-close gate to the `main` window only** — the help
+  window must never drive the vault lifecycle.
+- **Creating a tenant wipes orphaned leftover DB files first**
+  (`tenants::remove_stale_db_files`) — a half-migrated leftover causes
+  "duplicate column" migration errors on re-import.
+
+---
+
 ## Project layout
 
 ```
@@ -253,6 +296,7 @@ sakoram_app/
 │  │  ├─ DocumentLineEditor.vue       ← bundle/itemized line-item editor for quotes/invoices/bills
 │  │  ├─ PayslipLineEditor.vue        ← two-section earnings/deductions editor with live subtotals + net
 │  │  ├─ MoneyInput.vue               ← integer-cents v-model
+│  │  ├─ PasswordInput.vue            ← UInput wrapper with a show/hide eye toggle; v-model + @enter. Used by every password field (unlock, Security, onboarding, backup import).
 │  │  ├─ PdfPreviewModal.vue          ← chromeless PDF preview (header sr-only, PDFium toolbar suppressed via #toolbar=0). iframe loads from a same-origin blob URL (built from the temp file via tauri-plugin-fs readFile) so the footer "Print" button can call contentWindow.print() without tripping same-origin policy.
 │  │  ├─ PhoneUploadModal.vue         ← QR + LAN-server flow to attach a photo from a phone
 │  │  ├─ AttachmentsCard.vue          ← shared attachments card (local + phone upload) for all document detail pages
@@ -474,6 +518,13 @@ Code-signing requires a CA cert (~$200–400/year), out of scope.
   has a leading template comment outside the root `<div>` — and the
   symptom on subsequent navigations is a blank/empty page after route
   transitions. Comments must live *inside* the root.
+- **`cargo check`/`cargo test` "Blocking waiting for file lock on build
+  directory"** = `tauri:dev` is already running; just wait. While it holds the
+  lock, rust-analyzer may not auto-update `Cargo.lock` on a version bump — edit
+  the `sakoram_billing` version line directly.
+- **TS-server flags `.vue` imports in `app/help/index.ts` as "Cannot find
+  module"** — false positive (Vue SFC resolution); `bun run lint` / the build
+  are the source of truth.
 
 ---
 
