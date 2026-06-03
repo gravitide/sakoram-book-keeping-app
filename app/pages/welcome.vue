@@ -185,7 +185,7 @@
 
 		<!-- Import backup modal — new-business mode only (the welcome screen
 			has no active business to "replace"). -->
-		<UModal v-model:open="showImport" title="Import a business backup" :dismissible="!importing">
+		<UModal v-model:open="showImport" title="Import a business backup" :dismissible="!importing" :close="!importing">
 			<template #body>
 				<div v-if="importing" class="py-6 text-center space-y-3">
 					<UIcon name="i-lucide-loader-circle" class="size-8 animate-spin text-(--ui-primary) mx-auto" />
