@@ -48,9 +48,11 @@ fn read_meta(path: &std::path::Path) -> Result<vault::VaultMeta, VaultFsError> {
 }
 
 /// Encrypt an existing plaintext db: create a vault, write `{enc}` + `{meta}`,
-/// then remove the plaintext `{db}`. Returns the one-time recovery key and the
-/// DEK (so the caller can seed the session — the business stays usable right
-/// after enabling, no immediate re-unlock needed).
+/// and return the one-time recovery key and DEK. The working plaintext db is
+/// intentionally KEPT so the business remains usable without a re-unlock step.
+/// It will be securely removed the next time `lock_at` runs (on window close or
+/// explicit lock). This avoids the data-loss hazard where a failed re-decrypt
+/// after enable would leave the session "unlocked" but with no working db.
 pub fn enable_encryption_at(
     p: &VaultPaths,
     password: &str,
@@ -59,8 +61,6 @@ pub fn enable_encryption_at(
     let (meta, recovery, dek) = vault::create_vault(password, aad)?;
     vault::encrypt_file(&p.db, &p.enc, &dek)?;
     write_meta(&p.meta, &meta)?;
-    // Only remove the plaintext after the blob + meta are safely written.
-    secure_remove(&p.db)?;
     Ok((recovery, dek))
 }
 
@@ -205,7 +205,12 @@ pub fn tenant_lock_state(app: AppHandle, sessions: State<'_, VaultSessions>, id:
     if !tenants::is_tenant_encrypted(&app, &id)? {
         return Ok(LockState::Unencrypted);
     }
-    Ok(if sessions.is_unlocked(&id) { LockState::Unlocked } else { LockState::Locked })
+    let p = paths_for(&app, &id)?;
+    // Both conditions must hold: the session key must be present AND the
+    // working db file must exist on disk. If the db is missing (e.g. the
+    // enable-then-decrypt step failed mid-flight) we route to /unlock so
+    // the working db is re-materialised before the session is used.
+    Ok(if sessions.is_unlocked(&id) && p.db.exists() { LockState::Unlocked } else { LockState::Locked })
 }
 
 #[tauri::command]
@@ -296,15 +301,16 @@ mod tests {
     }
 
     #[test]
-    fn enable_encrypts_and_removes_plaintext() {
+    fn enable_creates_blob_and_keeps_working_db() {
         let (dir, p) = temp_paths("enable");
         let contents = b"a pretend sqlite database".to_vec();
         std::fs::write(&p.db, &contents).unwrap();
 
         let (recovery, _dek) = enable_encryption_at(&p, "pw", b"acme").unwrap();
         assert!(!recovery.is_empty());
-        // Plaintext db is gone; blob + vault.json exist.
-        assert!(!p.db.exists(), "plaintext db must be removed after enabling");
+        // Working db is KEPT; blob + vault.json also exist.
+        assert!(p.db.exists(), "working db must remain after enabling (sealed on next lock)");
+        assert_eq!(std::fs::read(&p.db).unwrap(), contents, "working db bytes must be unchanged");
         assert!(p.enc.exists());
         assert!(p.meta.exists());
         // vault.json is valid VaultMeta JSON.
