@@ -25,6 +25,16 @@
 // extracted logo file under our `logos/` directory — the original path
 // in the bundle was an absolute path on the exporter's machine and would
 // be meaningless here.
+//
+// Accepted trade-offs (documented for reviewers):
+//   - The export/import pipeline builds the whole payload — including all
+//     attachment bytes (base64-encoded in the encrypted case) — in memory.
+//     This is fine at realistic single-user volumes.
+//   - "replace" mode is non-atomic past the wipe point: it deletes the
+//     target tenant's data and attachments before restoring. A crash
+//     mid-restore would leave the tenant in a blank state. This is
+//     consistent with the pre-existing replace behaviour and acceptable
+//     for a single-user desktop app (the user always exports first).
 
 use std::io::{Read, Seek, Write};
 use std::path::{Path, PathBuf};
@@ -722,11 +732,18 @@ fn write_attachment_files(app: &AppHandle, tenant_id: &str, attachments: &[(Stri
 	let base = app.path().app_data_dir().map_err(|e| e.to_string())?
 		.join("attachments").join(tenant_id);
 	for (rel, bytes) in attachments {
-		// Guard against path traversal in a crafted bundle.
-		if rel.contains("..") {
+		// Only allow plain relative components — rejects absolute paths, Windows
+		// drive/UNC prefixes, leading separators, "..", and "." from a crafted bundle
+		// (any of which could otherwise escape `base` via Path::join's absolute-path
+		// replacement). Belt-and-suspenders: confirm the joined path stays under base.
+		let rel_path = std::path::Path::new(rel);
+		if !rel_path.components().all(|c| matches!(c, std::path::Component::Normal(_))) {
 			continue;
 		}
-		let dest = base.join(rel);
+		let dest = base.join(rel_path);
+		if !dest.starts_with(&base) {
+			continue;
+		}
 		if let Some(parent) = dest.parent() {
 			std::fs::create_dir_all(parent).map_err(|e| format!("mkdir attachments: {e}"))?;
 		}
