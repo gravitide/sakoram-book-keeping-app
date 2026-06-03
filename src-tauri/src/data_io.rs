@@ -385,30 +385,60 @@ pub async fn import_tenant_data(
 	mode: String,
 	target_tenant_id: Option<String>,
 	target_name: Option<String>,
+	passphrase: Option<String>,
 ) -> Result<tenants::Tenant, String> {
 	let in_path = PathBuf::from(input_path);
 	let manifest = peek_export_manifest(in_path.to_string_lossy().to_string()).await?;
 
-	// Parse the bundle into memory once. (Bundles are typically small —
-	// JSON of all rows + a logo file.)
 	let file = std::fs::File::open(&in_path).map_err(|e| format!("open zip: {e}"))?;
 	let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("read zip: {e}"))?;
-	let data: Value = read_zip_json(&mut archive, "data.json")?;
-	let logo_bytes = match &manifest.logo_asset {
-		Some(name) => Some(read_zip_bytes(&mut archive, &format!("assets/{name}"))?),
-		None => None,
+
+	let (data, logo_name, logo_bytes): (Value, Option<String>, Option<Vec<u8>>) = if manifest.encrypted {
+		let pass = passphrase
+			.as_deref()
+			.filter(|p| !p.trim().is_empty())
+			.ok_or_else(|| "This backup is password-protected. Enter its password to import.".to_string())?;
+		let salt_b64 = manifest
+			.kdf_salt
+			.as_deref()
+			.ok_or_else(|| "Encrypted bundle is missing its salt.".to_string())?;
+		let salt = BASE64.decode(salt_b64.as_bytes()).map_err(|e| format!("bad salt: {e}"))?;
+		let key = vault::derive_export_key(pass, &salt).map_err(|e| e.to_string())?;
+
+		let blob = read_zip_bytes(&mut archive, "payload.enc")?;
+		let payload_bytes = vault::decrypt_bytes(&blob, &key)
+			.map_err(|_| "Incorrect password for this backup.".to_string())?;
+		let payload: Value =
+			serde_json::from_slice(&payload_bytes).map_err(|e| format!("parse payload: {e}"))?;
+
+		let data = payload.get("data").cloned().unwrap_or(Value::Null);
+		let logo_name = payload.get("logo_name").and_then(|v| v.as_str()).map(|s| s.to_string());
+		let logo_bytes = payload
+			.get("logo_bytes_b64")
+			.and_then(|v| v.as_str())
+			.map(|b64| BASE64.decode(b64.as_bytes()).map_err(|e| format!("bad logo bytes: {e}")))
+			.transpose()?;
+		(data, logo_name, logo_bytes)
+	} else {
+		let data: Value = read_zip_json(&mut archive, "data.json")?;
+		let logo_name = manifest.logo_asset.clone();
+		let logo_bytes = match &manifest.logo_asset {
+			Some(name) => Some(read_zip_bytes(&mut archive, &format!("assets/{name}"))?),
+			None => None,
+		};
+		(data, logo_name, logo_bytes)
 	};
 	drop(archive);
 
 	match mode.as_str() {
 		"new" => {
 			let name = target_name.unwrap_or_else(|| manifest.business_name.clone());
-			import_as_new_tenant(&app, &name, &data, &manifest, logo_bytes).await
+			import_as_new_tenant(&app, &name, &data, logo_name.as_deref(), logo_bytes).await
 		}
 		"replace" => {
 			let id = target_tenant_id
 				.ok_or_else(|| "Replace mode requires a target tenant ID.".to_string())?;
-			import_replace(&app, &id, &data, &manifest, logo_bytes).await
+			import_replace(&app, &id, &data, logo_name.as_deref(), logo_bytes).await
 		}
 		other => Err(format!("Unknown import mode: {other}")),
 	}
@@ -442,7 +472,7 @@ async fn import_as_new_tenant(
 	app: &AppHandle,
 	name: &str,
 	data: &Value,
-	manifest: &ExportManifest,
+	logo_name: Option<&str>,
 	logo_bytes: Option<Vec<u8>>,
 ) -> Result<tenants::Tenant, String> {
 	// Use the existing create_tenant path — produces a unique slug, a
@@ -465,7 +495,7 @@ async fn import_as_new_tenant(
 	}
 
 	// Logo: extract bytes to logos/{tenant_id}.{ext}, point the DB at it.
-	let updated_logo_file = write_logo(app, &tenant.id, manifest, logo_bytes.as_deref()).await?;
+	let updated_logo_file = write_logo(app, &tenant.id, logo_name, logo_bytes.as_deref()).await?;
 	let new_logo_path = updated_logo_file
 		.as_ref()
 		.map(|f| logos_path(app, f))
@@ -489,7 +519,7 @@ async fn import_replace(
 	app: &AppHandle,
 	target_id: &str,
 	data: &Value,
-	manifest: &ExportManifest,
+	logo_name: Option<&str>,
 	logo_bytes: Option<Vec<u8>>,
 ) -> Result<tenants::Tenant, String> {
 	let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -514,7 +544,7 @@ async fn import_replace(
 		}
 	}
 
-	let updated_logo_file = write_logo(app, target_id, manifest, logo_bytes.as_deref()).await?;
+	let updated_logo_file = write_logo(app, target_id, logo_name, logo_bytes.as_deref()).await?;
 	let new_logo_path = updated_logo_file
 		.as_ref()
 		.map(|f| logos_path(app, f))
@@ -539,10 +569,10 @@ fn logos_path(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
 async fn write_logo(
 	app: &AppHandle,
 	tenant_id: &str,
-	manifest: &ExportManifest,
+	logo_name: Option<&str>,
 	bytes: Option<&[u8]>,
 ) -> Result<Option<String>, String> {
-	let (Some(asset_name), Some(bytes)) = (&manifest.logo_asset, bytes) else {
+	let (Some(asset_name), Some(bytes)) = (logo_name, bytes) else {
 		return Ok(None);
 	};
 	let ext = Path::new(asset_name)
