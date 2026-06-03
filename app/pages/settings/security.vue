@@ -7,6 +7,7 @@
 			<h1 class="text-2xl font-semibold flex items-center gap-2">
 				<UIcon name="i-lucide-shield-check" class="size-6 text-(--ui-primary)" />
 				Security
+				<HelpButton slug="security" />
 			</h1>
 			<p class="text-sm text-(--ui-text-muted)">
 				How <span class="font-medium">{{ tenants.activeTenant?.name }}</span> is protected — the
