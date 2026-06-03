@@ -515,7 +515,6 @@
 		const t = exportTarget.value;
 		if (!t) return;
 		if (exportEncrypt.value && (!exportPw.value || exportPwMismatch.value)) return;
-		const passphrase = exportEncrypt.value ? exportPw.value : null;
 		showExportOptions.value = false;
 
 		const suffix = exportEncrypt.value ? "-encrypted" : "";
@@ -534,7 +533,7 @@
 
 		exportingId.value = t.id;
 		try {
-			await invoke("export_tenant_data", { tenantId: t.id, outputPath: chosen, passphrase });
+			await invoke("export_tenant_data", { tenantId: t.id, outputPath: chosen, encrypt: exportEncrypt.value, passphrase: exportEncrypt.value ? exportPw.value : null });
 			toast.add({ title: `Exported ${t.name}`, description: chosen, color: "success", icon: "i-lucide-check" });
 		} catch (err) {
 			toast.add({ title: "Export failed", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });

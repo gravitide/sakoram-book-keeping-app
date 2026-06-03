@@ -6,6 +6,12 @@
 //   data.json         { "<table>": [...rows...], ... }
 //   assets/logo.<ext> the tenant's logo file, if any
 //
+// For ENCRYPTED bundles `manifest.json` stays cleartext (so the import
+// preview can show the business name / timestamp / version without the
+// passphrase) and therefore still reveals those fields. The actual data
+// rows and logo bytes are sealed inside `payload.enc`. This leakage is
+// intentional and documented here as a trade-off.
+//
 // We refuse to import a bundle whose schema_version doesn't match the
 // current schema. A backup made on v0.9.0 (schema 4) won't apply on a
 // future v1.0.0 with new columns until we add a per-version restore
@@ -236,6 +242,7 @@ pub async fn export_tenant_data(
 	app: AppHandle,
 	tenant_id: String,
 	output_path: String,
+	encrypt: bool,
 	passphrase: Option<String>,
 ) -> Result<(), String> {
 	let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -277,7 +284,9 @@ pub async fn export_tenant_data(
 		}
 	}
 
-	let encrypt = passphrase.as_deref().map(|p| !p.trim().is_empty()).unwrap_or(false);
+	if encrypt && passphrase.as_deref().map(|p| p.trim().is_empty()).unwrap_or(true) {
+		return Err("Encryption was requested but no password was provided.".into());
+	}
 
 	// Build the encrypted payload (data + logo) up front if needed.
 	let mut kdf_salt_b64: Option<String> = None;
@@ -429,6 +438,10 @@ pub async fn import_tenant_data(
 		(data, logo_name, logo_bytes)
 	};
 	drop(archive);
+
+	if !data.is_object() {
+		return Err("Backup is malformed — its data is missing or unreadable.".into());
+	}
 
 	match mode.as_str() {
 		"new" => {
