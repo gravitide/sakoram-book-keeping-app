@@ -281,6 +281,20 @@
 	await tenants.ensureLoaded();
 	await settings.ensureLoaded();
 
+	// When navigated to with a #section hash (e.g. the PDF page's "Go to PDF
+	// protection" link → /settings/security#pdf-protection), scroll that
+	// section into view. Deferred past the layout's route-change scroll-to-top
+	// (double rAF) so our anchor scroll wins. The main content scrolls in its
+	// own container, so plain hash navigation doesn't reach it.
+	const route = useRoute();
+	onMounted(() => {
+		const hash = route.hash;
+		if (!hash) return;
+		requestAnimationFrame(() => requestAnimationFrame(() => {
+			document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: "smooth", block: "start" });
+		}));
+	});
+
 	const isEncrypted = computed(() => !!tenants.activeTenant?.encrypted);
 	const busy = ref(false);
 	const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));

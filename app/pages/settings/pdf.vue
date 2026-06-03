@@ -172,12 +172,14 @@
 						title="Document protection"
 						subtitle="Password-protect generated PDFs against editing and copying."
 					>
-						<div class="text-sm text-(--ui-text-muted)">
-							PDF protection moved to
-							<NuxtLink to="/settings/security#pdf-protection" class="text-(--ui-primary) hover:underline font-medium">
-								Security
-							</NuxtLink>, alongside the rest of this business's security settings.
-						</div>
+						<UButton
+							to="/settings/security#pdf-protection"
+							variant="outline"
+							trailing-icon="i-lucide-arrow-right"
+							size="sm"
+						>
+							Go to PDF protection
+						</UButton>
 					</SectionCard>
 				</div>
 			</div>
