@@ -125,9 +125,18 @@
 		</UModal>
 
 		<!-- Import modal -->
-		<UModal v-model:open="showImport" title="Import a business backup">
+		<UModal v-model:open="showImport" title="Import a business backup" :dismissible="!importing">
 			<template #body>
-				<div v-if="!importManifest" class="text-sm text-(--ui-text-muted)">
+				<div v-if="importing" class="py-6 text-center space-y-3">
+					<UIcon name="i-lucide-loader-circle" class="size-8 animate-spin text-(--ui-primary) mx-auto" />
+					<div class="text-sm font-medium">
+						{{ importMode === "replace" ? "Overwriting" : "Importing" }} {{ importManifest?.business_name }}…
+					</div>
+					<div class="text-xs text-(--ui-text-muted)">
+						Restoring the backup — this can take a moment for a large business. Please don't close this window.
+					</div>
+				</div>
+				<div v-else-if="!importManifest" class="text-sm text-(--ui-text-muted)">
 					Reading bundle…
 				</div>
 				<div v-else class="space-y-4">
