@@ -18,13 +18,12 @@
 
 		<div class="bg-(--ui-bg) border border-(--ui-border) rounded-lg p-5 space-y-4">
 			<UFormField v-if="!useRecovery" label="Password" :error="error">
-				<UInput
+				<PasswordInput
 					v-model="password"
-					type="password"
 					placeholder="Business password"
 					autofocus
 					:disabled="busy"
-					@keydown.enter="onSubmit"
+					@enter="onSubmit"
 				/>
 			</UFormField>
 

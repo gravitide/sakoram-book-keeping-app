@@ -58,15 +58,14 @@
 						</div>
 					</div>
 					<UFormField label="Password" required>
-						<UInput v-model="enablePw" type="password" placeholder="Choose a strong password" :disabled="busy" />
+						<PasswordInput v-model="enablePw" placeholder="Choose a strong password" :disabled="busy" />
 					</UFormField>
 					<UFormField label="Confirm password" required :error="enableMismatch ? 'Passwords don\'t match' : undefined">
-						<UInput
+						<PasswordInput
 							v-model="enablePw2"
-							type="password"
 							placeholder="Re-enter the password"
 							:disabled="busy"
-							@keydown.enter="onEnable"
+							@enter="onEnable"
 						/>
 					</UFormField>
 					<div class="flex justify-end">
@@ -87,13 +86,13 @@
 					</template>
 					<div class="space-y-4">
 						<UFormField label="Current password" required>
-							<UInput v-model="cpOld" type="password" :disabled="busy" />
+							<PasswordInput v-model="cpOld" :disabled="busy" />
 						</UFormField>
 						<UFormField label="New password" required>
-							<UInput v-model="cpNew" type="password" :disabled="busy" />
+							<PasswordInput v-model="cpNew" :disabled="busy" />
 						</UFormField>
 						<UFormField label="Confirm new password" required :error="cpMismatch ? 'Passwords don\'t match' : undefined">
-							<UInput v-model="cpNew2" type="password" :disabled="busy" @keydown.enter="onChangePassword" />
+							<PasswordInput v-model="cpNew2" :disabled="busy" @enter="onChangePassword" />
 						</UFormField>
 						<div class="flex justify-end">
 							<UButton
@@ -136,7 +135,7 @@
 							Decrypt this business and store it unencrypted again. Requires the current password.
 						</p>
 						<UFormField label="Current password" required>
-							<UInput v-model="disablePw" type="password" :disabled="busy" @keydown.enter="onDisable" />
+							<PasswordInput v-model="disablePw" :disabled="busy" @enter="onDisable" />
 						</UFormField>
 						<div class="flex justify-end">
 							<UButton
