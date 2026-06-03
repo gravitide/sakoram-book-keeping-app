@@ -522,6 +522,7 @@
 						{ hash: "#zoom", label: "Zoom", icon: "i-lucide-zoom-in" }
 					]
 				},
+				{ to: "/settings/security", label: "Security", icon: "i-lucide-shield-check" },
 				{ to: "/settings/businesses", label: "Businesses", icon: "i-lucide-briefcase" }
 			]
 		},
