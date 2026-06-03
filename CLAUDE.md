@@ -1309,15 +1309,17 @@ Lists                 ← /lists — landing card grid mirroring /reports + /pay
   ├─ Vendors         ← /vendors
   └─ Bill categories ← /categories
 ─── (divider)
-Settings                ← per-tenant business config (exported in backups)
+Business                ← per-business config (mostly exported in backups)
   ├─ Business details
-  └─ PDF
-      ├─ Font                ← third-level in-page #anchors, shown only
-      ├─ Header logo            while /settings/pdf is the active route
-      ├─ Footer notes
-      └─ Protection
+  ├─ PDF
+  │   ├─ Font                ← third-level in-page #anchors, shown only
+  │   ├─ Header logo            while /settings/pdf is the active route
+  │   └─ Footer notes
+  └─ Security             ← all security for this business in one place
+      ├─ Database            ← #encryption — at-rest DB password (per-business vault)
+      └─ PDF protection      ← #pdf-protection — owner password on generated PDFs
 ─── (divider)
-App                     ← UI + multi-tenant administration
+Settings                ← app-wide prefs + multi-tenant administration
   ├─ Appearance
   │   ├─ UI font             ← same in-page #anchor pattern as PDF,
   │   ├─ Theme color            shown only on /settings/appearance
@@ -1328,10 +1330,19 @@ App                     ← UI + multi-tenant administration
 Help                  ← /help — in-app library of bookkeeping explainers + how-to guides. Per-page `?` icon (HelpButton) drops users into the relevant topic via modal; this entry exposes the full library.
 ```
 
-URLs all live under `/settings/*` even for the App group — only the
-sidebar grouping splits them. \`Settings\` items are per-tenant data
-that travels with the export bundle; \`App\` items are UI prefs and
-multi-tenant admin that don't belong to any single business.
+URLs all live under `/settings/*` regardless of group — only the
+sidebar grouping splits them. The **Business** group is per-business
+data/config (mostly travels with the export bundle); the **Settings**
+group is app-wide UI prefs (Appearance, per-machine) + multi-tenant
+admin (Businesses) that don't belong to any single business.
+
+**Security page** (`/settings/security`, Business group) holds *both*
+kinds of business protection, on two `#anchor` sections: `#encryption`
+(at-rest database password — the per-business vault, see "Per-business
+encryption" below) and `#pdf-protection` (owner password applied to
+generated PDFs). The two passwords are unrelated. PDF protection lives
+on `company_settings.pdf_protect_*`; the PDF settings page keeps a
+pointer link to it.
 
 The sidebar nav supports three levels: top-level items, `children`
 (always visible), and an optional third level of `sections` — in-page
@@ -1430,13 +1441,14 @@ persisted to localStorage).
   (AES-256 / R6) applied by the `qpdf` crate as a post-process after
   Typst renders. Owner-password only: the PDF opens with no prompt but
   editing / copying / annotating are blocked, printing stays allowed.
-  Configured at `/settings/pdf` — one owner password + a per-document-type
-  toggle (quote / invoice / bill / voucher / payslip). `lib/pdf.ts`
-  resolves the password from settings and threads it to the matching
-  `export_*_pdf` command; `encrypt_pdf()` in `pdf.rs` does the work.
-- ✅ Settings split into two sidebar groups: **Settings** (per-tenant
-  business config — Company / PDF / Payroll cycle) and **App**
-  (UI prefs + multi-tenant admin — Appearance / Businesses). URLs
+  Configured at `/settings/security#pdf-protection` (Security page) —
+  one owner password + a per-document-type toggle (quote / invoice /
+  bill / voucher / payslip). `lib/pdf.ts` resolves the password from
+  settings and threads it to the matching `export_*_pdf` command;
+  `encrypt_pdf()` in `pdf.rs` does the work.
+- ✅ Settings split into two sidebar groups: **Business** (per-business
+  config — Business details / PDF / Security) and **Settings**
+  (app-wide UI prefs + multi-tenant admin — Appearance / Businesses). URLs
   all stay at `/settings/*`.
 - ✅ Appearance: independent UI/PDF font pickers (5 bundled +
   free-text), 8-color theme palette, **UI zoom** (80–150% in 6

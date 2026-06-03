@@ -46,6 +46,12 @@
 					</div>
 				</div>
 				<UIcon
+					v-if="t.encrypted"
+					name="i-lucide-lock"
+					class="size-4 text-(--ui-text-muted)"
+					title="Password-protected"
+				/>
+				<UIcon
 					v-if="switchingId === t.id"
 					name="i-lucide-loader-circle"
 					class="size-5 text-(--ui-text-muted) animate-spin"

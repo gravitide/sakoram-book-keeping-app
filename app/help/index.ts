@@ -45,6 +45,15 @@ export const HELP_TOPICS: HelpTopic[] = [
 		relatedSlugs: ["invoices", "bills", "vouchers", "profit-loss"],
 		component: () => import("./topics/bookkeeping-basics.vue")
 	},
+	{
+		slug: "security",
+		title: "Security & encryption",
+		summary: "Password-protect a business with at-rest database encryption (+ recovery key), and lock generated PDFs against editing. Two separate protections.",
+		category: "general",
+		icon: "i-lucide-shield-check",
+		relatedSlugs: ["bookkeeping-basics"],
+		component: () => import("./topics/security.vue")
+	},
 	// Documents
 	{
 		slug: "invoices",

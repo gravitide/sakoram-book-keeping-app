@@ -68,6 +68,26 @@
 			<span class="truncate" data-tauri-drag-region>{{ title }}</span>
 		</div>
 
+		<!-- Quick-lock button — only shown when the active business is
+			encrypted AND currently unlocked. One click seals it and bounces
+			to the unlock screen, so the user doesn't have to dig into
+			Settings → Security to step away. Hidden in the docs window
+			(`show-lock-button="false"`) — that window must never drive the
+			vault lifecycle (it would lock the DB out from under the main
+			window). -->
+		<button
+			v-if="showLockButton && canLock"
+			type="button"
+			class="flex items-center justify-center hover:bg-(--ui-bg-accented) transition shrink-0"
+			:class="isMac ? 'w-[36px]' : 'w-[44px]'"
+			title="Lock this business"
+			aria-label="Lock this business"
+			:disabled="locking"
+			@click="onLock"
+		>
+			<UIcon name="i-lucide-lock" class="size-[16px]" />
+		</button>
+
 		<!-- Global help button — always-visible escape hatch to the
 			docs WebviewWindow. Sits left of the OS-control cluster on
 			Windows; on macOS it becomes the rightmost titlebar button
@@ -121,9 +141,11 @@
 </template>
 
 <script setup lang="ts">
+	import { invoke } from "@tauri-apps/api/core";
 	import { getCurrentWindow } from "@tauri-apps/api/window";
 	import sakoramIcon from "~/assets/sakoram-icon.svg?url";
 	import { useHelpWindow } from "~/composables/useHelpWindow";
+	import { resetDbCache } from "~/lib/db";
 	import { useTenantsStore } from "~/stores/tenants";
 
 	withDefaults(defineProps<{
@@ -133,9 +155,13 @@
 		// (clicking Help from inside Help is redundant — focus stays
 		// here).
 		showHelpButton?: boolean
+		// Whether to render the quick-lock icon. Default on; the docs
+		// window flips this off so it can never drive the vault lifecycle.
+		showLockButton?: boolean
 	}>(), {
 		showSidebarToggle: false,
-		showHelpButton: true
+		showHelpButton: true,
+		showLockButton: true
 	});
 
 	// Spawns (or focuses) the docs WebviewWindow. Same composable the
@@ -152,6 +178,33 @@
 	// Platform-conditional bits — see template comment for what changes
 	// on macOS (traffic-light reservation, no right-side controls).
 	const { isMac } = useUserPlatform();
+	const toast = useToast();
+
+	// Quick-lock: only offered when the active business is encrypted AND
+	// currently open. Mirrors the Security page's "Lock now" — close the pool
+	// so the re-encrypt + rename succeed, lock via Rust, then hard-reload so
+	// the middleware sends the now-locked business to /unlock.
+	const canLock = computed(() => !!tenants.activeTenant?.encrypted && !!tenants.dbUrl);
+	const locking = ref(false);
+	const onLock = async () => {
+		if (locking.value) return;
+		const id = tenants.activeTenantId;
+		if (!id) return;
+		locking.value = true;
+		try {
+			await resetDbCache();
+			await invoke("lock_tenant", { id });
+			window.location.assign("/");
+		} catch (err) {
+			locking.value = false;
+			toast.add({
+				title: "Could not lock",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
 
 	// "Can we go back?" derived from Vue Router's history-state position
 	// counter (set on every nav via createWebHistory). Position 0 is the
