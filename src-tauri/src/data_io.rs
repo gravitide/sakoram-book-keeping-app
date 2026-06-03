@@ -270,6 +270,10 @@ pub async fn export_tenant_data(
 	}
 	pool.close().await;
 
+	// Collect attachments + PDF header before sealing the bundle.
+	let attachment_files = collect_attachment_files(&data);
+	let pdf_header = collect_pdf_header(&data);
+
 	// Resolve the logo file (if present).
 	let mut logo_payload: Option<(String, Vec<u8>)> = None;
 	if let Some(logo_file) = &tenant.logo_file {
@@ -300,6 +304,11 @@ pub async fn export_tenant_data(
 			"data": Value::Object(data.clone()),
 			"logo_name": logo_payload.as_ref().map(|(name, _)| name.clone()),
 			"logo_bytes_b64": logo_payload.as_ref().map(|(_, bytes)| BASE64.encode(bytes)),
+			"pdf_header_name": pdf_header.as_ref().map(|(name, _)| name.clone()),
+			"pdf_header_bytes_b64": pdf_header.as_ref().map(|(_, bytes)| BASE64.encode(bytes)),
+			"attachments": attachment_files.iter()
+				.map(|(path, bytes)| serde_json::json!({ "path": path, "bytes_b64": BASE64.encode(bytes) }))
+				.collect::<Vec<_>>(),
 		});
 		let payload_bytes = serde_json::to_vec(&payload).map_err(|e| e.to_string())?;
 		encrypted_blob = Some(vault::encrypt_bytes(&payload_bytes, &key).map_err(|e| e.to_string())?);
@@ -344,6 +353,14 @@ pub async fn export_tenant_data(
 		if let Some((name, bytes)) = logo_payload {
 			zip.start_file(format!("assets/{name}"), opts).map_err(|e| e.to_string())?;
 			zip.write_all(&bytes).map_err(|e| e.to_string())?;
+		}
+		if let Some((name, bytes)) = &pdf_header {
+			zip.start_file(format!("assets/{name}"), opts).map_err(|e| e.to_string())?;
+			zip.write_all(bytes).map_err(|e| e.to_string())?;
+		}
+		for (rel, bytes) in &attachment_files {
+			zip.start_file(format!("attachments/{rel}"), opts).map_err(|e| e.to_string())?;
+			zip.write_all(bytes).map_err(|e| e.to_string())?;
 		}
 	}
 
@@ -571,6 +588,52 @@ async fn import_replace(
 
 	tenants::set_tenant_logo_internal(app, target_id, updated_logo_file)?;
 	Ok(tenants::get_tenant(app, target_id)?)
+}
+
+/// Read the on-disk bytes for every attachment referenced by the dumped
+/// `document_attachments` rows. Returns (relative_path, bytes), where
+/// relative_path = "<document_type>/<document_id>/<basename(file_path)>" — a
+/// tenant-independent key that reconstructs under the new tenant on import.
+/// Files that no longer exist on disk are silently skipped.
+fn collect_attachment_files(data: &serde_json::Map<String, Value>) -> Vec<(String, Vec<u8>)> {
+	let mut out = Vec::new();
+	let Some(Value::Array(rows)) = data.get("document_attachments") else {
+		return out;
+	};
+	for row in rows {
+		let Some(obj) = row.as_object() else { continue };
+		let dtype = obj.get("document_type").and_then(|v| v.as_str()).unwrap_or("");
+		let did = match obj.get("document_id") {
+			Some(Value::Number(n)) => n.to_string(),
+			Some(Value::String(s)) => s.clone(),
+			_ => continue,
+		};
+		let file_path = obj.get("file_path").and_then(|v| v.as_str()).unwrap_or("");
+		if dtype.is_empty() || file_path.is_empty() {
+			continue;
+		}
+		let basename = match Path::new(file_path).file_name().and_then(|n| n.to_str()) {
+			Some(b) => b.to_string(),
+			None => continue,
+		};
+		if let Ok(bytes) = std::fs::read(file_path) {
+			out.push((format!("{dtype}/{did}/{basename}"), bytes));
+		}
+	}
+	out
+}
+
+/// Resolve the PDF header logo (path on company_settings.pdf_header_logo_path)
+/// to (asset_name, bytes), if it exists. asset_name carries just the extension.
+fn collect_pdf_header(data: &serde_json::Map<String, Value>) -> Option<(String, Vec<u8>)> {
+	let settings = data.get("company_settings")?.as_array()?.first()?.as_object()?;
+	let path = settings.get("pdf_header_logo_path").and_then(|v| v.as_str())?;
+	if path.is_empty() {
+		return None;
+	}
+	let ext = Path::new(path).extension().and_then(|e| e.to_str()).unwrap_or("png");
+	let bytes = std::fs::read(path).ok()?;
+	Some((format!("pdf-header.{ext}"), bytes))
 }
 
 fn logos_path(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
