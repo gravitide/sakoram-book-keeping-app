@@ -190,7 +190,7 @@
 			</template>
 			<template #footer>
 				<div class="flex justify-end gap-2 w-full">
-					<UButton color="neutral" variant="outline" @click="cancelImport">
+					<UButton color="neutral" variant="outline" :disabled="importing" @click="cancelImport">
 						Cancel
 					</UButton>
 					<UButton
@@ -585,6 +585,7 @@
 		importNewName.value = "";
 		importReplaceTargetId.value = "";
 		importPassphrase.value = "";
+		importing.value = false;
 	};
 
 	const onImportClick = async () => {
@@ -616,6 +617,10 @@
 			importNewName.value = manifest.business_name;
 			importMode.value = "new";
 			importReplaceTargetId.value = "";
+			importPassphrase.value = "";
+			// Start a fresh import flow — never inherit a stale "importing"
+			// flag from a previous restore that was navigated away from.
+			importing.value = false;
 			showImport.value = true;
 		} catch (err) {
 			toast.add({

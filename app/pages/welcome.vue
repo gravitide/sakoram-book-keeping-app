@@ -460,6 +460,7 @@
 		importPath.value = "";
 		importName.value = "";
 		importPassphrase.value = "";
+		importing.value = false;
 	};
 
 	const onImportClick = async () => {
@@ -483,6 +484,9 @@
 			importManifest.value = manifest;
 			importName.value = manifest.business_name;
 			importPassphrase.value = "";
+			// Start a fresh import flow — never inherit a stale "importing"
+			// flag from a previous restore that was navigated away from.
+			importing.value = false;
 			showImport.value = true;
 		} catch (err) {
 			toast.add({ title: "Couldn't read backup", description: err instanceof Error ? err.message : String(err), color: "error", icon: "i-lucide-circle-alert" });
