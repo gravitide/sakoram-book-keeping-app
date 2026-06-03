@@ -127,10 +127,11 @@
 				This is the one that hurts. The recovery key is shown once. If you skip past it and later forget
 				your password, your books are unrecoverable. Save it the moment it appears.
 			</HelpCallout>
-			<HelpCallout variant="warning" title="Backups aren't encrypted yet">
-				Exporting a business (Settings → Businesses → Export) currently produces an <strong>unencrypted</strong>
-				backup <span class="font-mono text-xs">.zip</span>, even for an encrypted business. Treat exported
-				backups as sensitive and store them somewhere safe.
+			<HelpCallout variant="tip" title="Encrypt your backups too">
+				When you export a business (Settings → Businesses → Export), tick <strong>Encrypt this backup with a password</strong>
+				in the options dialog before saving. The backup <span class="font-mono text-xs">.zip</span> will be sealed
+				with a password of your choice — you'll need that same password to import it later. There's no recovery for
+				the backup password, so if you forget it, just export again.
 			</HelpCallout>
 			<HelpCallout variant="tip" title="Use a password you'll actually remember">
 				Because there's no password-reset email or support backdoor, pick something memorable (and store
