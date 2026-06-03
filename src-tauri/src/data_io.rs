@@ -31,6 +31,8 @@ use sqlx::{Row, SqlitePool};
 use tauri::{AppHandle, Manager};
 
 use crate::tenants;
+use crate::vault;
+use data_encoding::BASE64;
 
 const FORMAT_VERSION: i32 = 1;
 /// Increment when adding migrations beyond what existing exports can carry.
@@ -77,6 +79,13 @@ pub struct ExportManifest {
 	pub tenant_id: String,
 	/// Filename of the bundled logo asset (e.g. "logo.png") or null.
 	pub logo_asset: Option<String>,
+	/// True when the data payload is encrypted (`payload.enc` instead of
+	/// `data.json` + `assets/`). Defaults false for older bundles.
+	#[serde(default)]
+	pub encrypted: bool,
+	/// base64 Argon2id salt for the export passphrase (encrypted bundles only).
+	#[serde(default)]
+	pub kdf_salt: Option<String>,
 }
 
 // ---------- Helpers ---------------------------------------------------------
@@ -227,6 +236,7 @@ pub async fn export_tenant_data(
 	app: AppHandle,
 	tenant_id: String,
 	output_path: String,
+	passphrase: Option<String>,
 ) -> Result<(), String> {
 	let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
 	let db_path = app_data.join("businesses").join(format!("{tenant_id}.db"));
@@ -267,6 +277,26 @@ pub async fn export_tenant_data(
 		}
 	}
 
+	let encrypt = passphrase.as_deref().map(|p| !p.trim().is_empty()).unwrap_or(false);
+
+	// Build the encrypted payload (data + logo) up front if needed.
+	let mut kdf_salt_b64: Option<String> = None;
+	let mut encrypted_blob: Option<Vec<u8>> = None;
+	if encrypt {
+		let pass = passphrase.as_deref().unwrap_or_default();
+		let salt = vault::generate_salt();
+		let key = vault::derive_export_key(pass, &salt).map_err(|e| e.to_string())?;
+
+		let payload = serde_json::json!({
+			"data": Value::Object(data.clone()),
+			"logo_name": logo_payload.as_ref().map(|(name, _)| name.clone()),
+			"logo_bytes_b64": logo_payload.as_ref().map(|(_, bytes)| BASE64.encode(bytes)),
+		});
+		let payload_bytes = serde_json::to_vec(&payload).map_err(|e| e.to_string())?;
+		encrypted_blob = Some(vault::encrypt_bytes(&payload_bytes, &key).map_err(|e| e.to_string())?);
+		kdf_salt_b64 = Some(BASE64.encode(&salt));
+	}
+
 	let manifest = ExportManifest {
 		format: "sakoram-export".into(),
 		format_version: FORMAT_VERSION,
@@ -275,10 +305,13 @@ pub async fn export_tenant_data(
 		exported_at: current_iso_utc(),
 		business_name: tenant.name.clone(),
 		tenant_id: tenant.id.clone(),
-		logo_asset: logo_payload.as_ref().map(|(name, _)| name.clone()),
+		// Encrypted bundles keep the logo inside the encrypted payload, so the
+		// cleartext manifest advertises no logo asset.
+		logo_asset: if encrypt { None } else { logo_payload.as_ref().map(|(name, _)| name.clone()) },
+		encrypted: encrypt,
+		kdf_salt: kdf_salt_b64,
 	};
 
-	// Write the zip.
 	let out_path = PathBuf::from(&output_path);
 	if let Some(parent) = out_path.parent() {
 		std::fs::create_dir_all(parent).ok();
@@ -292,13 +325,17 @@ pub async fn export_tenant_data(
 	zip.write_all(&serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?)
 		.map_err(|e| e.to_string())?;
 
-	zip.start_file("data.json", opts).map_err(|e| e.to_string())?;
-	zip.write_all(&serde_json::to_vec_pretty(&Value::Object(data)).map_err(|e| e.to_string())?)
-		.map_err(|e| e.to_string())?;
-
-	if let Some((name, bytes)) = logo_payload {
-		zip.start_file(format!("assets/{name}"), opts).map_err(|e| e.to_string())?;
-		zip.write_all(&bytes).map_err(|e| e.to_string())?;
+	if let Some(blob) = encrypted_blob {
+		zip.start_file("payload.enc", opts).map_err(|e| e.to_string())?;
+		zip.write_all(&blob).map_err(|e| e.to_string())?;
+	} else {
+		zip.start_file("data.json", opts).map_err(|e| e.to_string())?;
+		zip.write_all(&serde_json::to_vec_pretty(&Value::Object(data)).map_err(|e| e.to_string())?)
+			.map_err(|e| e.to_string())?;
+		if let Some((name, bytes)) = logo_payload {
+			zip.start_file(format!("assets/{name}"), opts).map_err(|e| e.to_string())?;
+			zip.write_all(&bytes).map_err(|e| e.to_string())?;
+		}
 	}
 
 	zip.finish().map_err(|e| format!("finalize zip: {e}"))?;
