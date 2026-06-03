@@ -158,6 +158,33 @@ fn remove_stale_db_files(app: &AppHandle, tenant_id: &str) {
 	}
 }
 
+/// Best-effort teardown of a tenant that was created mid-import but whose import
+/// then failed — removes the registry entry plus every file the create/import
+/// may have written (DB + sidecars, logos, PDF header, attachments) so a failed
+/// import never leaves a broken business in the picker. Safe to call with a
+/// tenant id that may or may not be registered.
+pub fn discard_tenant(app: &AppHandle, id: &str) {
+	if let Ok(mut reg) = read_registry(app) {
+		let before = reg.tenants.len();
+		reg.tenants.retain(|t| t.id != id);
+		if reg.active_tenant_id.as_deref() == Some(id) {
+			reg.active_tenant_id = None;
+		}
+		if reg.tenants.len() != before {
+			let _ = write_registry(app, &reg);
+		}
+	}
+	// DB file + WAL/SHM sidecars + encrypted blob + vault metadata.
+	remove_stale_db_files(app, id);
+	if let Ok(app_data) = app.path().app_data_dir() {
+		for ext in &["png", "jpg", "jpeg", "webp", "svg"] {
+			let _ = std::fs::remove_file(app_data.join("logos").join(format!("{id}.{ext}")));
+			let _ = std::fs::remove_file(app_data.join("pdf-headers").join(format!("{id}.{ext}")));
+		}
+		let _ = std::fs::remove_dir_all(app_data.join("attachments").join(id));
+	}
+}
+
 // ---------- Registry I/O ----------------------------------------------------
 
 fn read_registry(app: &AppHandle) -> Result<TenantRegistry, String> {

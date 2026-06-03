@@ -570,11 +570,35 @@ async fn import_as_new_tenant(
 	// fresh DB with migrations applied, and a registry entry.
 	let tenant = tenants::create_tenant_internal(app, name).await?;
 
+	// Run the actual restore; if anything fails partway, tear the freshly-
+	// created tenant back down so a failed import never leaves a broken
+	// business (registered + empty DB + orphaned files) in the picker.
+	match populate_new_tenant(app, &tenant.id, data, logo_name, logo_bytes, pdf_header, attachments).await {
+		Ok(()) => tenants::get_tenant(app, &tenant.id),
+		Err(e) => {
+			tenants::discard_tenant(app, &tenant.id);
+			Err(e)
+		}
+	}
+}
+
+/// Restore an import bundle into the just-created tenant `tenant_id`. Factored
+/// out of `import_as_new_tenant` so the caller can roll the tenant back if any
+/// step here fails.
+async fn populate_new_tenant(
+	app: &AppHandle,
+	tenant_id: &str,
+	data: &mut Value,
+	logo_name: Option<&str>,
+	logo_bytes: Option<Vec<u8>>,
+	pdf_header: &Option<(String, Vec<u8>)>,
+	attachments: &[(String, Vec<u8>)],
+) -> Result<(), String> {
 	// Rewrite attachment paths now that we know the new tenant id.
-	rewrite_attachment_paths(app, &tenant.id, data)?;
+	rewrite_attachment_paths(app, tenant_id, data)?;
 
 	let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
-	let db_path = app_data.join("businesses").join(format!("{}.db", tenant.id));
+	let db_path = app_data.join("businesses").join(format!("{tenant_id}.db"));
 	let pool = open_pool(&db_path).await?;
 
 	// Brand-new DB has the seeded company_settings row — wipe it before
@@ -589,7 +613,7 @@ async fn import_as_new_tenant(
 	}
 
 	// Logo: extract bytes to logos/{tenant_id}.{ext}, point the DB at it.
-	let updated_logo_file = write_logo(app, &tenant.id, logo_name, logo_bytes.as_deref()).await?;
+	let updated_logo_file = write_logo(app, tenant_id, logo_name, logo_bytes.as_deref()).await?;
 	let new_logo_path = updated_logo_file
 		.as_ref()
 		.map(|f| logos_path(app, f))
@@ -604,7 +628,7 @@ async fn import_as_new_tenant(
 		.map_err(|e| format!("rewrite logo_path: {e}"))?;
 
 	// Restore the PDF header logo + rewrite its settings path.
-	if let Some(new_header_path) = write_pdf_header(app, &tenant.id, pdf_header)? {
+	if let Some(new_header_path) = write_pdf_header(app, tenant_id, pdf_header)? {
 		sqlx::query("UPDATE company_settings SET pdf_header_logo_path = ? WHERE id = 1")
 			.bind(new_header_path)
 			.execute(&pool)
@@ -618,13 +642,13 @@ async fn import_as_new_tenant(
 			.await
 			.map_err(|e| format!("clear pdf_header_logo_path: {e}"))?;
 	}
-	write_attachment_files(app, &tenant.id, attachments)?;
+	write_attachment_files(app, tenant_id, attachments)?;
 
 	pool.close().await;
 
 	// Sync logo filename + display name into the registry.
-	tenants::set_tenant_logo_internal(app, &tenant.id, updated_logo_file)?;
-	Ok(tenants::get_tenant(app, &tenant.id)?)
+	tenants::set_tenant_logo_internal(app, tenant_id, updated_logo_file)?;
+	Ok(())
 }
 
 async fn import_replace(
