@@ -1,5 +1,6 @@
 <template>
 	<div class="select-none">
+		<FeatureLock v-if="licLocked" title="Payslips" tier-label="Premium" feature="payroll" />
 		<!-- Top toolbar row: back link on the left, action cluster on
 			the right. Pinned above the title block so buttons can't
 			collide with the number / status / employee meta as the
@@ -20,6 +21,7 @@
 					size="sm"
 					color="primary"
 					icon="i-lucide-banknote"
+					:disabled="licLocked"
 					@click="recordPayment"
 				>
 					Record payment
@@ -42,7 +44,7 @@
 					color="neutral"
 					variant="outline"
 					icon="i-lucide-send"
-					:disabled="!canIssue"
+					:disabled="!canIssue || licLocked"
 					:loading="busy"
 					@click="markIssued"
 				>
@@ -54,7 +56,7 @@
 					color="neutral"
 					variant="outline"
 					icon="i-lucide-circle-x"
-					:disabled="busy"
+					:disabled="busy || licLocked"
 					@click="cancel"
 				>
 					Cancel
@@ -329,7 +331,7 @@
 					<UButton variant="ghost" color="neutral" :disabled="saving" @click="onDiscard">
 						Discard
 					</UButton>
-					<UButton :loading="saving" :disabled="!dirty" icon="i-lucide-save" @click="onSave">
+					<UButton :loading="saving" :disabled="!dirty || licLocked" icon="i-lucide-save" @click="onSave">
 						{{ locked ? "Save notes" : "Save changes" }}
 					</UButton>
 				</div>
@@ -391,6 +393,7 @@
 	import { formatMoney } from "~/lib/money";
 	import { buildPayslipPdfPayload } from "~/lib/payslip-pdf";
 	import { computePaye, computeStatutory } from "~/lib/statutory";
+	import { useLicenseStore } from "~/stores/license";
 	import { usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
@@ -404,6 +407,8 @@
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
 	const toast = useToast();
+	const license = useLicenseStore();
+	const licLocked = computed(() => !license.hasFeature("payroll"));
 
 	const idParam = String(route.params.id ?? "");
 	const payslipId = Number(idParam);
@@ -720,6 +725,7 @@
 			primary.push({
 				label: "Record payment",
 				icon: "i-lucide-banknote",
+				disabled: licLocked.value,
 				onSelect: recordPayment
 			});
 		}
@@ -735,7 +741,7 @@
 			transitions.push({
 				label: "Mark issued",
 				icon: "i-lucide-send",
-				disabled: !canIssue.value || busy.value,
+				disabled: !canIssue.value || busy.value || licLocked.value,
 				onSelect: markIssued
 			});
 		}
@@ -743,7 +749,7 @@
 			transitions.push({
 				label: "Cancel",
 				icon: "i-lucide-circle-x",
-				disabled: busy.value,
+				disabled: busy.value || licLocked.value,
 				onSelect: cancel
 			});
 		}
