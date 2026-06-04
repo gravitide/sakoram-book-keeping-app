@@ -50,6 +50,11 @@ fn hex_encode(b: &[u8]) -> String {
     b.iter().map(|x| format!("{:02x}", x)).collect()
 }
 
+fn fail(msg: &str) -> ! {
+    eprintln!("error: {msg}");
+    std::process::exit(1);
+}
+
 fn main() {
     let (cmd, opts) = args();
     match cmd.as_str() {
@@ -71,16 +76,24 @@ fn main() {
             let tier = match opts.get("tier").map(String::as_str) {
                 Some("plus") => TIER_PLUS,
                 Some("premium") => TIER_PREMIUM,
-                _ => panic!("--tier must be plus|premium"),
+                _ => fail("--tier must be plus or premium"),
+            };
+            let name = opts.get("name").map(|s| s.trim()).filter(|s| !s.is_empty())
+                .unwrap_or_else(|| fail("--name is required (the buyer name — printed in-app as the sharing deterrent)"));
+            let email = opts.get("email").map(|s| s.trim()).filter(|s| !s.is_empty())
+                .unwrap_or_else(|| fail("--email is required"));
+            let license_id = match opts.get("license-id") {
+                Some(s) => s.parse::<u64>().unwrap_or_else(|_| fail("--license-id must be a number")),
+                None => 0,
             };
             let issued_days = (SystemTime::now().duration_since(UNIX_EPOCH)
                 .unwrap().as_secs() / 86_400) as u32;
             let payload = Payload {
                 tier,
-                license_id: opts.get("license-id").and_then(|s| s.parse().ok()).unwrap_or(0),
+                license_id,
                 issued_days,
-                name: opts.get("name").cloned().unwrap_or_default(),
-                email: opts.get("email").cloned().unwrap_or_default(),
+                name: name.to_string(),
+                email: email.to_string(),
             };
             let key = encode_key(&payload, &sk);
             println!("Key:\n{key}");
