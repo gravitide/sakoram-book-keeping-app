@@ -5,6 +5,7 @@ use tauri::{
 };
 use tauri::Manager;
 mod data_io;
+mod license;
 mod pdf;
 mod phone_upload;
 mod tenants;
