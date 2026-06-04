@@ -28,10 +28,9 @@
 								UI font
 							</div>
 							<div class="text-xs text-(--ui-text-muted) mt-1">
-								Used in the app interface. Five fonts (Inter, Inter Tight,
-								Stack Sans Text, Miriam Libre, Amarna) ship with the app;
-								anything else falls through to what's installed on your
-								system.
+								Used in the app interface. The fonts listed below ship with
+								the app and always render; anything else falls through to
+								what's installed on your system.
 							</div>
 						</template>
 
@@ -50,6 +49,24 @@
 									size="xs"
 									variant="soft"
 									color="primary"
+									:style="{ fontFamily: `'${suggestion}', sans-serif` }"
+									@click="uiFont = suggestion"
+								>
+									{{ suggestion }}
+								</UButton>
+							</div>
+							<div class="text-xs text-(--ui-text-muted) mb-2 flex items-center gap-1.5">
+								<UIcon name="i-lucide-code" class="size-3.5" />
+								Monospaced:
+							</div>
+							<div class="flex flex-wrap gap-2 mb-3">
+								<UButton
+									v-for="suggestion in bundledMonoFonts"
+									:key="suggestion"
+									size="xs"
+									variant="soft"
+									color="primary"
+									:style="{ fontFamily: `'${suggestion}', monospace` }"
 									@click="uiFont = suggestion"
 								>
 									{{ suggestion }}
@@ -295,6 +312,13 @@
 		"Stack Sans Text",
 		"Miriam Libre",
 		"Amarna"
+	];
+	// Bundled monospaced faces — listed under their own sub-heading. Good
+	// for figure-aligned numbers; more will be added over time.
+	const bundledMonoFonts = [
+		"Iosevka Charon Mono",
+		"Martian Mono",
+		"Google Sans Code"
 	];
 	const systemFonts = [
 		"system-ui",

@@ -65,6 +65,11 @@ JOBS: list[tuple[str, str, str, list[tuple[int, str]]]] = [
     ("Amarna.ttf",        "Amarna",          "Amarna",        [(400, "Regular"), (700, "Bold")]),
     ("StackSansText.ttf", "Stack Sans Text", "StackSansText", [(400, "Regular"), (700, "Bold")]),
     ("MiriamLibre.ttf",   "Miriam Libre",    "MiriamLibre",   [(400, "Regular"), (700, "Bold")]),
+    # Monospaced families (offered for figure-aligned numbers). Martian Mono
+    # carries a `wdth` axis too; instance_one() pins every non-wght axis to
+    # its default so the result is a true static (bold renders in Typst).
+    ("GoogleSansCode.ttf", "Google Sans Code", "GoogleSansCode", [(400, "Regular"), (700, "Bold")]),
+    ("MartianMono.ttf",    "Martian Mono",     "MartianMono",    [(400, "Regular"), (700, "Bold")]),
 ]
 
 # Name-table IDs we rewrite so the instanced font reports as the right
@@ -88,7 +93,17 @@ def instance_one(src: Path, family: str, stem: str, weight: int, style: str, out
     """
     print(f"  {stem}-{style}.ttf (family={family!r}, wght={weight})")
     font = TTFont(str(src))
-    instance = instantiateVariableFont(font, {"wght": weight})
+    # Pin EVERY axis so the result is fully static: the requested weight on
+    # `wght`, every other axis (e.g. Martian Mono's `wdth`) at its default.
+    # Leaving an axis unpinned keeps an `fvar` table, and Typst then renders
+    # bold at the regular weight — the exact bug static faces exist to fix.
+    location: dict[str, float] = {"wght": float(weight)}
+    fvar = font.get("fvar")
+    if fvar is not None:
+        for axis in fvar.axes:
+            if axis.axisTag != "wght":
+                location[axis.axisTag] = axis.defaultValue
+    instance = instantiateVariableFont(font, location)
 
     full = f"{family} {style}"
     ps = full.replace(" ", "-")
