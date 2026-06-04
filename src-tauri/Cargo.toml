@@ -1,6 +1,11 @@
 [package]
 name = "sakoram_billing"
-version = "0.111.0"
+# The crate ships a second binary (src/bin/mint_license.rs, the license-key
+# minting tool). Without default-run, `cargo run` — which `tauri dev` invokes —
+# can't pick a binary. Pin the app binary so the tool stays out of the way
+# (mint it explicitly via `cargo run --bin mint_license`).
+default-run = "sakoram_billing"
+version = "0.112.0"
 description = "Sakoram — desktop bookkeeper for quotes, invoices, bills and vouchers"
 authors = [ "Sakoram" ]
 license = "MIT"
@@ -43,6 +48,11 @@ chacha20poly1305 = { version = "0.10", features = [ "stream" ] }
 rand_core = { version = "0.6", features = [ "getrandom" ] }
 data-encoding = "2"
 zeroize = "1"
+
+# License-key signatures (src/license.rs + src/bin/mint_license.rs).
+# Ed25519: the app embeds only the public key and verifies offline; only the
+# private key (kept off-repo) can mint a valid key.
+ed25519-dalek = { version = "2", features = [ "rand_core" ] }
 
 # Phone-upload feature (src/phone_upload.rs): a small LAN HTTP server so a
 # photo taken on the user's phone can be pushed straight onto an invoice.

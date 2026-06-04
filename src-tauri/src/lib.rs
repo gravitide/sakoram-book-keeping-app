@@ -5,6 +5,7 @@ use tauri::{
 };
 use tauri::Manager;
 mod data_io;
+pub mod license;
 mod pdf;
 mod phone_upload;
 mod tenants;
@@ -88,6 +89,9 @@ pub fn run() {
 			vault_fs::lock_tenant,
 			vault_fs::change_tenant_password,
 			vault_fs::disable_tenant_encryption,
+			license::validate_license,
+			license::read_license_state,
+			license::write_license_state,
 		])
 		.build(tauri::generate_context!())
 		.expect("error while building tauri application")
