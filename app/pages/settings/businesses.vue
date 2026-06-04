@@ -269,8 +269,21 @@
 					</div>
 				</div>
 				<p class="text-sm text-(--ui-text-muted) mt-3">
-					Type <span class="font-mono text-(--ui-text)">{{ deleteTarget?.name }}</span> to confirm:
+					Type the business name to confirm — click it to copy:
 				</p>
+				<button
+					type="button"
+					class="mt-1 inline-flex items-center gap-2 rounded-md border border-(--ui-border) bg-(--ui-bg-muted) px-2.5 py-1 font-mono text-sm text-(--ui-text) select-text hover:border-(--ui-primary) transition cursor-pointer"
+					:title="`Copy “${deleteTarget?.name}”`"
+					@click="copyDeleteName"
+				>
+					{{ deleteTarget?.name }}
+					<UIcon
+						:name="deleteNameCopied ? 'i-lucide-check' : 'i-lucide-copy'"
+						class="size-3.5 shrink-0"
+						:class="deleteNameCopied ? 'text-(--ui-success)' : 'text-(--ui-text-muted)'"
+					/>
+				</button>
 				<UInput v-model="deleteConfirmText" :placeholder="deleteTarget?.name" autofocus class="mt-2" />
 			</template>
 			<template #footer>
@@ -466,11 +479,29 @@
 	const showDelete = ref(false);
 	const deleteTarget = ref<Tenant | null>(null);
 	const deleteConfirmText = ref("");
+	const deleteNameCopied = ref(false);
 
 	const askDelete = (t: Tenant) => {
 		deleteTarget.value = t;
 		deleteConfirmText.value = "";
+		deleteNameCopied.value = false;
 		showDelete.value = true;
+	};
+
+	// Click-to-copy the exact business name so the user can paste it into the
+	// confirm field (the page is select-none, so plain selection is awkward).
+	const copyDeleteName = async () => {
+		const name = deleteTarget.value?.name;
+		if (!name) return;
+		try {
+			await navigator.clipboard.writeText(name);
+			deleteNameCopied.value = true;
+			setTimeout(() => {
+				deleteNameCopied.value = false;
+			}, 1500);
+		} catch {
+			// Clipboard blocked — the chip is select-text, so manual copy works.
+		}
 	};
 
 	const confirmDelete = async () => {
