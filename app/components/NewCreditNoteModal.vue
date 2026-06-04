@@ -42,7 +42,7 @@
 					type="submit"
 					form="new-credit-note-form"
 					:loading="creating"
-					:disabled="clientId === null || !docNum.numberValid.value"
+					:disabled="clientId === null || !docNum.numberValid.value || !license.hasFeature('credit_notes')"
 					icon="i-lucide-plus"
 				>
 					Create draft
@@ -60,6 +60,7 @@
 	import type { ClientRow } from "~/stores/clients";
 	import { useClientsStore } from "~/stores/clients";
 	import { useCreditNotesStore } from "~/stores/credit_notes";
+	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
 
 	const props = defineProps<{
@@ -75,6 +76,7 @@
 
 	const router = useRouter();
 	const toast = useToast();
+	const license = useLicenseStore();
 	const settings = useSettingsStore();
 	const clients = useClientsStore();
 	const creditNotes = useCreditNotesStore();
@@ -106,6 +108,10 @@
 	};
 
 	const create = async () => {
+		if (!license.hasFeature("credit_notes")) {
+			await navigateTo("/upgrade?feature=credit_notes");
+			return;
+		}
 		if (clientId.value === null) {
 			toast.add({ title: "Pick a client first", color: "warning", icon: "i-lucide-circle-alert" });
 			return;

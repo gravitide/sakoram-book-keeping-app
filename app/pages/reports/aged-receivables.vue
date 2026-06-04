@@ -1,5 +1,7 @@
 <template>
 	<div class="select-none">
+		<FeatureLock v-if="locked" title="Aged receivables" tier-label="Plus" feature="reports.aged_receivables" />
+
 		<!-- Top toolbar — back link + PDF action. Same layout as P&L /
 			VAT for consistency across the reports module. -->
 		<div class="mb-4 flex items-center justify-between gap-4">
@@ -44,295 +46,297 @@
 			</p>
 		</header>
 
-		<!-- Loading skeleton mirroring the real layout: 3 KPI tiles +
+		<template v-if="!locked">
+			<!-- Loading skeleton mirroring the real layout: 3 KPI tiles +
 			bucket-distribution table + per-client breakdown table. -->
-		<template v-if="isLoading">
-			<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 animate-pulse">
-				<UCard v-for="i in 3" :key="`kpi-skel-${i}`" class="h-full">
+			<template v-if="isLoading">
+				<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 animate-pulse">
+					<UCard v-for="i in 3" :key="`kpi-skel-${i}`" class="h-full">
+						<div class="space-y-3">
+							<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
+							<div class="h-7 w-40 rounded bg-(--ui-bg-muted)" />
+							<div class="h-3 w-32 rounded bg-(--ui-bg-muted)" />
+						</div>
+					</UCard>
+				</div>
+
+				<UCard class="mb-6 animate-pulse">
+					<template #header>
+						<div class="h-3 w-40 rounded bg-(--ui-bg-muted)" />
+					</template>
 					<div class="space-y-3">
-						<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
-						<div class="h-7 w-40 rounded bg-(--ui-bg-muted)" />
-						<div class="h-3 w-32 rounded bg-(--ui-bg-muted)" />
-					</div>
-				</UCard>
-			</div>
-
-			<UCard class="mb-6 animate-pulse">
-				<template #header>
-					<div class="h-3 w-40 rounded bg-(--ui-bg-muted)" />
-				</template>
-				<div class="space-y-3">
-					<div
-						v-for="r in 5"
-						:key="`bk-skel-${r}`"
-						class="grid gap-3 py-2 border-b border-(--ui-border)/40 last:border-0"
-						style="grid-template-columns: 1fr auto auto auto"
-					>
-						<div class="h-3 w-32 rounded bg-(--ui-bg-muted)" />
-						<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
-						<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
-						<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
-					</div>
-				</div>
-			</UCard>
-
-			<div class="animate-pulse">
-				<div class="mb-2 h-3 w-44 rounded bg-(--ui-bg-muted)" />
-				<div class="rounded-lg border border-(--ui-border) p-3 space-y-3">
-					<div
-						v-for="r in 6"
-						:key="`cl-skel-${r}`"
-						class="grid gap-3 py-1"
-						style="grid-template-columns: 1fr repeat(6, auto)"
-					>
-						<div class="h-3 w-32 rounded bg-(--ui-bg-muted)" />
-						<div v-for="c in 6" :key="`c-skel-${r}-${c}`" class="h-3 w-16 rounded bg-(--ui-bg-muted)" />
-					</div>
-				</div>
-			</div>
-		</template>
-
-		<template v-else>
-			<!-- 3-up KPI tiles. Match the P&L / VAT shape: text-2xl on
-				sm + 2xl+, smaller at md/lg where tiles are tight. -->
-			<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-				<UCard class="h-full">
-					<div class="flex items-start justify-between gap-2">
-						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
-							Total outstanding
-						</div>
-						<UIcon name="i-lucide-wallet" class="size-4 text-(--ui-text-muted)" />
-					</div>
-					<div
-						class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
-						:title="formatLKR(totals.totalOutstanding)"
-					>
-						{{ formatLKR(totals.totalOutstanding) }}
-					</div>
-					<div class="mt-1 text-xs text-(--ui-text-muted)">
-						{{ totals.invoiceCount }} open invoice{{ totals.invoiceCount === 1 ? "" : "s" }} · {{ totals.clientCount }} client{{ totals.clientCount === 1 ? "" : "s" }}
-					</div>
-				</UCard>
-
-				<UCard class="h-full">
-					<div class="flex items-start justify-between gap-2">
-						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
-							Overdue
-						</div>
-						<UIcon name="i-lucide-alarm-clock" class="size-4 text-(--ui-error)" />
-					</div>
-					<div
-						class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums text-(--ui-error)"
-						:title="formatLKR(totals.totalOverdue)"
-					>
-						{{ formatLKR(totals.totalOverdue) }}
-					</div>
-					<div class="mt-1 text-xs text-(--ui-text-muted)">
-						{{ totals.overdueCount }} invoice{{ totals.overdueCount === 1 ? "" : "s" }} past due
-					</div>
-				</UCard>
-
-				<UCard class="h-full">
-					<div class="flex items-start justify-between gap-2">
-						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
-							Current (not yet due)
-						</div>
-						<UIcon name="i-lucide-calendar-clock" class="size-4 text-(--ui-success)" />
-					</div>
-					<div
-						class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums text-(--ui-success)"
-						:title="formatLKR(totals.totalCurrent)"
-					>
-						{{ formatLKR(totals.totalCurrent) }}
-					</div>
-					<div class="mt-1 text-xs text-(--ui-text-muted)">
-						{{ totals.currentCount }} invoice{{ totals.currentCount === 1 ? "" : "s" }} still in-window
-					</div>
-				</UCard>
-			</div>
-
-			<!-- Bucket distribution — five rows (Current, 1-30, 31-60,
-				61-90, 90+) with count + total + % of overall outstanding. -->
-			<UCard class="mb-6">
-				<template #header>
-					<div class="app-chrome flex items-center justify-between gap-2 flex-wrap">
-						<div class="app-chrome font-medium">
-							Bucket distribution
-						</div>
-						<div class="text-xs text-(--ui-text-muted)">
-							As of {{ asOfLabel }}
-						</div>
-					</div>
-				</template>
-
-				<table class="w-full text-sm">
-					<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
-						<tr>
-							<th class="py-2 pl-3 pr-2 font-medium">
-								Bucket
-							</th>
-							<th class="py-2 px-2 font-medium text-right w-20">
-								Count
-							</th>
-							<th class="py-2 px-2 font-medium text-right w-40">
-								Amount
-							</th>
-							<th class="py-2 pl-2 pr-3 font-medium text-right w-24">
-								% of total
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr
-							v-for="bucket in BUCKETS"
-							:key="bucket.key"
-							class="border-b border-(--ui-border)/60 last:border-0"
+						<div
+							v-for="r in 5"
+							:key="`bk-skel-${r}`"
+							class="grid gap-3 py-2 border-b border-(--ui-border)/40 last:border-0"
+							style="grid-template-columns: 1fr auto auto auto"
 						>
-							<td class="py-2 pl-3 pr-2">
-								<div class="flex items-center gap-2">
-									<span
-										class="inline-block size-2.5 rounded-sm"
-										:class="bucket.swatch"
-									/>
-									<span :class="bucket.key === 'current' ? '' : 'font-medium'">
-										{{ bucket.label }}
-									</span>
-								</div>
-							</td>
-							<td class="py-2 px-2 text-right tabular-nums text-(--ui-text-muted)">
-								{{ bucketStats[bucket.key].count }}
-							</td>
-							<td
-								class="py-2 px-2 text-right tabular-nums"
-								:class="bucket.tone === 'error' ? 'text-(--ui-error)' : bucket.tone === 'warning' ? 'text-(--ui-warning)' : ''"
-							>
-								{{ formatLKR(bucketStats[bucket.key].amount) }}
-							</td>
-							<td class="py-2 pl-2 pr-3 text-right tabular-nums text-(--ui-text-muted)">
-								{{ pct(bucketStats[bucket.key].amount, totals.totalOutstanding) }}
-							</td>
-						</tr>
-						<tr class="bg-(--ui-bg-muted)/60">
-							<td class="py-3 pl-3 pr-2 font-semibold">
-								Total outstanding
-							</td>
-							<td class="py-3 px-2 text-right tabular-nums font-semibold">
-								{{ totals.invoiceCount }}
-							</td>
-							<td class="py-3 px-2 text-right tabular-nums font-semibold">
-								{{ formatLKR(totals.totalOutstanding) }}
-							</td>
-							<td class="py-3 pl-2 pr-3 text-right tabular-nums font-semibold">
-								100%
-							</td>
-						</tr>
-					</tbody>
-				</table>
-			</UCard>
+							<div class="h-3 w-32 rounded bg-(--ui-bg-muted)" />
+							<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
+							<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
+							<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
+						</div>
+					</div>
+				</UCard>
 
-			<!-- Per-client breakdown — every client with outstanding
+				<div class="animate-pulse">
+					<div class="mb-2 h-3 w-44 rounded bg-(--ui-bg-muted)" />
+					<div class="rounded-lg border border-(--ui-border) p-3 space-y-3">
+						<div
+							v-for="r in 6"
+							:key="`cl-skel-${r}`"
+							class="grid gap-3 py-1"
+							style="grid-template-columns: 1fr repeat(6, auto)"
+						>
+							<div class="h-3 w-32 rounded bg-(--ui-bg-muted)" />
+							<div v-for="c in 6" :key="`c-skel-${r}-${c}`" class="h-3 w-16 rounded bg-(--ui-bg-muted)" />
+						</div>
+					</div>
+				</div>
+			</template>
+
+			<template v-else>
+				<!-- 3-up KPI tiles. Match the P&L / VAT shape: text-2xl on
+				sm + 2xl+, smaller at md/lg where tiles are tight. -->
+				<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+					<UCard class="h-full">
+						<div class="flex items-start justify-between gap-2">
+							<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
+								Total outstanding
+							</div>
+							<UIcon name="i-lucide-wallet" class="size-4 text-(--ui-text-muted)" />
+						</div>
+						<div
+							class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
+							:title="formatLKR(totals.totalOutstanding)"
+						>
+							{{ formatLKR(totals.totalOutstanding) }}
+						</div>
+						<div class="mt-1 text-xs text-(--ui-text-muted)">
+							{{ totals.invoiceCount }} open invoice{{ totals.invoiceCount === 1 ? "" : "s" }} · {{ totals.clientCount }} client{{ totals.clientCount === 1 ? "" : "s" }}
+						</div>
+					</UCard>
+
+					<UCard class="h-full">
+						<div class="flex items-start justify-between gap-2">
+							<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
+								Overdue
+							</div>
+							<UIcon name="i-lucide-alarm-clock" class="size-4 text-(--ui-error)" />
+						</div>
+						<div
+							class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums text-(--ui-error)"
+							:title="formatLKR(totals.totalOverdue)"
+						>
+							{{ formatLKR(totals.totalOverdue) }}
+						</div>
+						<div class="mt-1 text-xs text-(--ui-text-muted)">
+							{{ totals.overdueCount }} invoice{{ totals.overdueCount === 1 ? "" : "s" }} past due
+						</div>
+					</UCard>
+
+					<UCard class="h-full">
+						<div class="flex items-start justify-between gap-2">
+							<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
+								Current (not yet due)
+							</div>
+							<UIcon name="i-lucide-calendar-clock" class="size-4 text-(--ui-success)" />
+						</div>
+						<div
+							class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums text-(--ui-success)"
+							:title="formatLKR(totals.totalCurrent)"
+						>
+							{{ formatLKR(totals.totalCurrent) }}
+						</div>
+						<div class="mt-1 text-xs text-(--ui-text-muted)">
+							{{ totals.currentCount }} invoice{{ totals.currentCount === 1 ? "" : "s" }} still in-window
+						</div>
+					</UCard>
+				</div>
+
+				<!-- Bucket distribution — five rows (Current, 1-30, 31-60,
+				61-90, 90+) with count + total + % of overall outstanding. -->
+				<UCard class="mb-6">
+					<template #header>
+						<div class="app-chrome flex items-center justify-between gap-2 flex-wrap">
+							<div class="app-chrome font-medium">
+								Bucket distribution
+							</div>
+							<div class="text-xs text-(--ui-text-muted)">
+								As of {{ asOfLabel }}
+							</div>
+						</div>
+					</template>
+
+					<table class="w-full text-sm">
+						<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
+							<tr>
+								<th class="py-2 pl-3 pr-2 font-medium">
+									Bucket
+								</th>
+								<th class="py-2 px-2 font-medium text-right w-20">
+									Count
+								</th>
+								<th class="py-2 px-2 font-medium text-right w-40">
+									Amount
+								</th>
+								<th class="py-2 pl-2 pr-3 font-medium text-right w-24">
+									% of total
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr
+								v-for="bucket in BUCKETS"
+								:key="bucket.key"
+								class="border-b border-(--ui-border)/60 last:border-0"
+							>
+								<td class="py-2 pl-3 pr-2">
+									<div class="flex items-center gap-2">
+										<span
+											class="inline-block size-2.5 rounded-sm"
+											:class="bucket.swatch"
+										/>
+										<span :class="bucket.key === 'current' ? '' : 'font-medium'">
+											{{ bucket.label }}
+										</span>
+									</div>
+								</td>
+								<td class="py-2 px-2 text-right tabular-nums text-(--ui-text-muted)">
+									{{ bucketStats[bucket.key].count }}
+								</td>
+								<td
+									class="py-2 px-2 text-right tabular-nums"
+									:class="bucket.tone === 'error' ? 'text-(--ui-error)' : bucket.tone === 'warning' ? 'text-(--ui-warning)' : ''"
+								>
+									{{ formatLKR(bucketStats[bucket.key].amount) }}
+								</td>
+								<td class="py-2 pl-2 pr-3 text-right tabular-nums text-(--ui-text-muted)">
+									{{ pct(bucketStats[bucket.key].amount, totals.totalOutstanding) }}
+								</td>
+							</tr>
+							<tr class="bg-(--ui-bg-muted)/60">
+								<td class="py-3 pl-3 pr-2 font-semibold">
+									Total outstanding
+								</td>
+								<td class="py-3 px-2 text-right tabular-nums font-semibold">
+									{{ totals.invoiceCount }}
+								</td>
+								<td class="py-3 px-2 text-right tabular-nums font-semibold">
+									{{ formatLKR(totals.totalOutstanding) }}
+								</td>
+								<td class="py-3 pl-2 pr-3 text-right tabular-nums font-semibold">
+									100%
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</UCard>
+
+				<!-- Per-client breakdown — every client with outstanding
 				balances, with their bucket distribution + total.
 				Default-sorted by total descending so the worst-aged
 				clients land at the top. Click a row to jump to
 				/invoices pre-filtered to that client. Uses
 				ResizableDataTable for the same column-resize + drag-pan
 				+ sort + Fit page-size UX every other list page has. -->
-			<div class="mb-2 flex items-end justify-between gap-2 flex-wrap">
-				<div>
-					<div class="font-medium">
-						By client
+				<div class="mb-2 flex items-end justify-between gap-2 flex-wrap">
+					<div>
+						<div class="font-medium">
+							By client
+						</div>
+						<div class="text-xs text-(--ui-text-muted) mt-0.5">
+							Click a row to open that client's invoice list pre-filtered. Drag column edges to resize.
+						</div>
 					</div>
-					<div class="text-xs text-(--ui-text-muted) mt-0.5">
-						Click a row to open that client's invoice list pre-filtered. Drag column edges to resize.
+					<div class="text-xs text-(--ui-text-muted)">
+						{{ clientRows.length }} client{{ clientRows.length === 1 ? "" : "s" }} with open balance
 					</div>
 				</div>
-				<div class="text-xs text-(--ui-text-muted)">
-					{{ clientRows.length }} client{{ clientRows.length === 1 ? "" : "s" }} with open balance
+
+				<div v-if="clientRows.length === 0" class="py-10 text-center text-sm text-(--ui-text-muted) border border-dashed border-(--ui-border) rounded-lg">
+					<UIcon name="i-lucide-check-circle-2" class="size-10 mx-auto mb-2 opacity-40 text-(--ui-success)" />
+					<div>Nothing outstanding — all invoices paid.</div>
 				</div>
-			</div>
 
-			<div v-if="clientRows.length === 0" class="py-10 text-center text-sm text-(--ui-text-muted) border border-dashed border-(--ui-border) rounded-lg">
-				<UIcon name="i-lucide-check-circle-2" class="size-10 mx-auto mb-2 opacity-40 text-(--ui-success)" />
-				<div>Nothing outstanding — all invoices paid.</div>
-			</div>
+				<ResizableDataTable
+					v-else
+					:rows="clientRows"
+					state-key="reports-aged-receivables-by-client"
+					data-key="rowKey"
+					default-sort-field="total"
+					:default-sort-order="-1"
+					:default-page-size="50"
+					@row-click="(row) => openClient(row.clientId)"
+				>
+					<Column field="name" header="Client" sortable>
+						<template #body="{ data }">
+							<div class="min-w-[140px] max-w-[260px]">
+								<div class="font-medium truncate">
+									{{ data.name }}
+								</div>
+								<div class="text-xs text-(--ui-text-muted) truncate">
+									{{ data.invoiceCount }} open invoice{{ data.invoiceCount === 1 ? "" : "s" }}
+								</div>
+							</div>
+						</template>
+					</Column>
+					<Column field="current" header="Current" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap" :class="amountClass(data.current, 'neutral')">
+								{{ amountOrDash(data.current) }}
+							</div>
+						</template>
+					</Column>
+					<Column field="b1to30" header="1-30" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap" :class="amountClass(data.b1to30, 'warning')">
+								{{ amountOrDash(data.b1to30) }}
+							</div>
+						</template>
+					</Column>
+					<Column field="b31to60" header="31-60" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap" :class="amountClass(data.b31to60, 'warning')">
+								{{ amountOrDash(data.b31to60) }}
+							</div>
+						</template>
+					</Column>
+					<Column field="b61to90" header="61-90" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap" :class="amountClass(data.b61to90, 'error')">
+								{{ amountOrDash(data.b61to90) }}
+							</div>
+						</template>
+					</Column>
+					<Column field="b90plus" header="90+" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap" :class="amountClass(data.b90plus, 'error')">
+								{{ amountOrDash(data.b90plus) }}
+							</div>
+						</template>
+					</Column>
+					<Column field="total" header="Total" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap font-semibold">
+								{{ formatLKR(data.total) }}
+							</div>
+						</template>
+					</Column>
+				</ResizableDataTable>
+			</template>
 
-			<ResizableDataTable
-				v-else
-				:rows="clientRows"
-				state-key="reports-aged-receivables-by-client"
-				data-key="rowKey"
-				default-sort-field="total"
-				:default-sort-order="-1"
-				:default-page-size="50"
-				@row-click="(row) => openClient(row.clientId)"
-			>
-				<Column field="name" header="Client" sortable>
-					<template #body="{ data }">
-						<div class="min-w-[140px] max-w-[260px]">
-							<div class="font-medium truncate">
-								{{ data.name }}
-							</div>
-							<div class="text-xs text-(--ui-text-muted) truncate">
-								{{ data.invoiceCount }} open invoice{{ data.invoiceCount === 1 ? "" : "s" }}
-							</div>
-						</div>
-					</template>
-				</Column>
-				<Column field="current" header="Current" sortable :style="{ textAlign: 'right' }">
-					<template #body="{ data }">
-						<div class="text-right tabular-nums whitespace-nowrap" :class="amountClass(data.current, 'neutral')">
-							{{ amountOrDash(data.current) }}
-						</div>
-					</template>
-				</Column>
-				<Column field="b1to30" header="1-30" sortable :style="{ textAlign: 'right' }">
-					<template #body="{ data }">
-						<div class="text-right tabular-nums whitespace-nowrap" :class="amountClass(data.b1to30, 'warning')">
-							{{ amountOrDash(data.b1to30) }}
-						</div>
-					</template>
-				</Column>
-				<Column field="b31to60" header="31-60" sortable :style="{ textAlign: 'right' }">
-					<template #body="{ data }">
-						<div class="text-right tabular-nums whitespace-nowrap" :class="amountClass(data.b31to60, 'warning')">
-							{{ amountOrDash(data.b31to60) }}
-						</div>
-					</template>
-				</Column>
-				<Column field="b61to90" header="61-90" sortable :style="{ textAlign: 'right' }">
-					<template #body="{ data }">
-						<div class="text-right tabular-nums whitespace-nowrap" :class="amountClass(data.b61to90, 'error')">
-							{{ amountOrDash(data.b61to90) }}
-						</div>
-					</template>
-				</Column>
-				<Column field="b90plus" header="90+" sortable :style="{ textAlign: 'right' }">
-					<template #body="{ data }">
-						<div class="text-right tabular-nums whitespace-nowrap" :class="amountClass(data.b90plus, 'error')">
-							{{ amountOrDash(data.b90plus) }}
-						</div>
-					</template>
-				</Column>
-				<Column field="total" header="Total" sortable :style="{ textAlign: 'right' }">
-					<template #body="{ data }">
-						<div class="text-right tabular-nums whitespace-nowrap font-semibold">
-							{{ formatLKR(data.total) }}
-						</div>
-					</template>
-				</Column>
-			</ResizableDataTable>
+			<PdfPreviewModal
+				v-model:open="pdf.state.open"
+				:asset-url="pdf.state.assetUrl"
+				:temp-path="pdf.state.tempPath"
+				:suggested-file-name="pdf.state.suggestedFileName"
+				:saving="pdf.state.saving"
+				title="Aged receivables PDF preview"
+				@save="pdf.onSave"
+				@cancel="pdf.onCancel"
+			/>
 		</template>
-
-		<PdfPreviewModal
-			v-model:open="pdf.state.open"
-			:asset-url="pdf.state.assetUrl"
-			:temp-path="pdf.state.tempPath"
-			:suggested-file-name="pdf.state.suggestedFileName"
-			:saving="pdf.state.saving"
-			title="Aged receivables PDF preview"
-			@save="pdf.onSave"
-			@cancel="pdf.onCancel"
-		/>
 	</div>
 </template>
 
@@ -361,8 +365,12 @@
 	import { formatLKR } from "~/lib/money";
 	import { buildAgedReceivablesPdfPayload } from "~/lib/report-pdf";
 	import { useInvoicesStore } from "~/stores/invoices";
+	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
+
+	const license = useLicenseStore();
+	const locked = computed(() => !license.hasFeature("reports.aged_receivables"));
 
 	definePageMeta({ title: "Aged receivables" });
 

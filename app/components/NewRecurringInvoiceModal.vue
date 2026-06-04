@@ -59,7 +59,7 @@
 					type="submit"
 					form="new-recurring-form"
 					:loading="creating"
-					:disabled="!canSubmit"
+					:disabled="!canSubmit || !license.hasFeature('recurring')"
 					icon="i-lucide-plus"
 				>
 					Create template
@@ -78,6 +78,7 @@
 	import type { ClientRow } from "~/stores/clients";
 	import type { RecurringFrequency } from "~/stores/recurring_invoices";
 	import { useClientsStore } from "~/stores/clients";
+	import { useLicenseStore } from "~/stores/license";
 	import { useRecurringInvoicesStore } from "~/stores/recurring_invoices";
 	import { useSettingsStore } from "~/stores/settings";
 
@@ -85,6 +86,7 @@
 
 	const router = useRouter();
 	const toast = useToast();
+	const license = useLicenseStore();
 	const settings = useSettingsStore();
 	const clients = useClientsStore();
 	const recurring = useRecurringInvoicesStore();
@@ -130,6 +132,10 @@
 	};
 
 	const create = async () => {
+		if (!license.hasFeature("recurring")) {
+			await navigateTo("/upgrade?feature=recurring");
+			return;
+		}
 		if (!canSubmit.value) return;
 		const client: ClientRow | undefined = clients.clients.find((c) => c.id === clientId.value);
 		if (!client) {

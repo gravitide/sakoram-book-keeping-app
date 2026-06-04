@@ -1,5 +1,11 @@
 <template>
 	<div class="select-none">
+		<FeatureLock
+			v-if="locked"
+			title="Payroll"
+			tier-label="Premium"
+			feature="payroll"
+		/>
 		<header class="mb-6">
 			<h1 class="text-2xl font-semibold">
 				Payroll
@@ -43,7 +49,12 @@
 </template>
 
 <script setup lang="ts">
+	import { useLicenseStore } from "~/stores/license";
+
 	definePageMeta({ title: "Payroll" });
+
+	const license = useLicenseStore();
+	const locked = computed(() => !license.hasFeature("payroll"));
 
 	interface PayrollTile {
 		to: string
