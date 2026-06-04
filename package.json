@@ -1,7 +1,7 @@
 {
 	"name": "sakoram-billing",
 	"type": "module",
-	"version": "0.108.2",
+	"version": "0.108.3",
 	"private": true,
 	"packageManager": "bun@1.3.6",
 	"description": "Sakoram — desktop bookkeeper for quotes, invoices, bills, vouchers",
