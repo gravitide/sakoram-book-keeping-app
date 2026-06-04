@@ -40,6 +40,14 @@
 								class="my-2 border-t border-(--ui-border)"
 								aria-hidden="true"
 							/>
+							<!-- Section heading: a non-clickable label that groups the items
+								below it by money-flow direction (INCOMING / OUTGOING / BANKING). -->
+							<div
+								v-if="item.heading"
+								class="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-(--ui-text-dimmed) select-none"
+							>
+								{{ item.label }}
+							</div>
 							<!-- Two flavours: navigation items (item.to) render
 							as NuxtLink, action items (item.action) render
 							as a button. The action flavour is currently
@@ -47,7 +55,7 @@
 							separate Tauri WebviewWindow instead of
 							navigating — see useHelpWindow. -->
 							<button
-								v-if="item.action"
+								v-else-if="item.action"
 								type="button"
 								class="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text) cursor-pointer text-left"
 								@click="item.action"
@@ -446,17 +454,23 @@
 
 	interface NavSection { hash: string, label: string, icon: string }
 	interface NavChild { to: string, label: string, icon: string, sections?: NavSection[] }
-	interface NavItem { to?: string, label: string, icon: string, divider?: boolean, children?: NavChild[], action?: () => void }
+	interface NavItem { to?: string, label: string, icon?: string, divider?: boolean, children?: NavChild[], action?: () => void, heading?: boolean }
 
 	const nav: NavItem[] = [
 		{ to: "/", label: "Dashboard", icon: "i-lucide-layout-dashboard" },
 		{ to: "/calendar", label: "Calendar", icon: "i-lucide-calendar-days" },
-		{ to: "/quotes", label: "Quotes", icon: "i-lucide-file-text", divider: true },
+		// Documents grouped by money-flow direction. Incoming = sales side
+		// (clients pay us); Outgoing = purchase side (we pay vendors);
+		// Banking = cash ledger + reconciliation, which cut both ways.
+		{ heading: true, label: "Incoming", divider: true },
+		{ to: "/quotes", label: "Quotes", icon: "i-lucide-file-text" },
 		{ to: "/invoices", label: "Invoices", icon: "i-lucide-receipt" },
 		{ to: "/recurring-invoices", label: "Recurring invoices", icon: "i-lucide-repeat" },
 		{ to: "/credit-notes", label: "Credit notes", icon: "i-lucide-rotate-ccw" },
+		{ heading: true, label: "Outgoing", divider: true },
 		{ to: "/bills", label: "Bills", icon: "i-lucide-file-input" },
 		{ to: "/recurring-bills", label: "Recurring bills", icon: "i-lucide-repeat-2" },
+		{ heading: true, label: "Banking", divider: true },
 		{ to: "/vouchers", label: "Vouchers", icon: "i-lucide-ticket" },
 		{ to: "/reconcile", label: "Reconcile", icon: "i-lucide-scale" },
 		{
