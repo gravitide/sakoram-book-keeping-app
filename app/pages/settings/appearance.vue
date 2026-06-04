@@ -3,12 +3,10 @@
 		<!-- select-none on the page root: static labels and copy aren't
 			selectable; form fields stay selectable via the input rule
 			in main.css. -->
-		<!-- The four cards stack on small screens. At lg+ the UI font
-			card (the tall one — font picker + suggestion chips + live
-			preview) takes the left column on its own; Theme color,
-			Theme, and Zoom stack in the right column. Keeps each
-			column visually balanced height-wise rather than the prior
-			2x2 grid that left a big gap under Theme color. -->
+		<!-- The four cards (UI font, Theme color, Theme, Zoom) stack in a
+			single column up through lg. At xl+ they split into two columns:
+			the tall UI font card on the left, Theme color / Theme / Zoom
+			stacked on the right. -->
 
 		<header class="mb-6 max-w-5xl mx-auto">
 			<h1 class="text-2xl font-semibold">
@@ -22,7 +20,7 @@
 		</header>
 
 		<div class="max-w-5xl mx-auto">
-			<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+			<div class="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
 				<div id="ui-font" class="scroll-mt-6">
 					<UCard>
 						<template #header>
@@ -90,7 +88,8 @@
 					</UCard>
 				</div>
 
-				<!-- Right column: Theme color + Theme + Zoom stacked. -->
+				<!-- Theme color + Theme + Zoom: stacked below the UI font card up
+					to lg, the right column at xl+. -->
 				<div class="space-y-6">
 					<div id="theme-color" class="scroll-mt-6">
 						<UCard>
@@ -169,19 +168,34 @@
 								</div>
 							</template>
 
-							<div class="flex flex-wrap gap-2">
-								<button
-									v-for="z in ZOOM_LEVELS"
-									:key="z"
-									type="button"
-									class="rounded-md border px-3 py-1.5 text-sm transition tabular-nums"
-									:class="zoomLevel === z
-										? 'border-(--ui-primary) bg-(--ui-primary)/10 text-(--ui-primary) font-medium'
-										: 'border-(--ui-border) hover:border-(--ui-text-muted)'"
-									@click="setZoomLevel(z)"
-								>
-									{{ z }}%
-								</button>
+							<div class="px-1 pt-1">
+								<div class="flex items-center justify-between mb-3">
+									<span class="text-xs text-(--ui-text-muted)">Interface scale</span>
+									<span class="text-sm font-medium text-(--ui-primary) tabular-nums">{{ zoomLevel }}%</span>
+								</div>
+								<USlider
+									:model-value="zoomIndex"
+									:min="0"
+									:max="ZOOM_LEVELS.length - 1"
+									:step="1"
+									@update:model-value="onZoomSlide"
+								/>
+								<!-- Marks: one clickable label per discrete step. The thumb
+									snaps to each (sticky positions); the active step is tinted. -->
+								<div class="flex justify-between mt-3">
+									<button
+										v-for="z in ZOOM_LEVELS"
+										:key="z"
+										type="button"
+										class="text-[10px] leading-none tabular-nums transition cursor-pointer"
+										:class="zoomLevel === z
+											? 'text-(--ui-primary) font-semibold'
+											: 'text-(--ui-text-muted) hover:text-(--ui-text)'"
+										@click="setZoomLevel(z)"
+									>
+										{{ z }}
+									</button>
+								</div>
 							</div>
 						</UCard>
 					</div>
@@ -244,6 +258,17 @@
 	// than a per-tenant business field. Sits on this page since it's
 	// part of the same 'how the app looks' bucket the user expects.
 	const { zoomLevel, setZoomLevel } = useUiState();
+	// The zoom slider rides an INDEX into ZOOM_LEVELS, not the raw % value:
+	// the steps are unevenly spaced (…105, 110, 115, 125, 150), so spacing
+	// the thumb stops evenly by index gives one tidy "sticky" position per
+	// level. Map index ↔ level on the way in / out.
+	const zoomIndex = computed(() => Math.max(0, ZOOM_LEVELS.indexOf(zoomLevel.value)));
+	function onZoomSlide(value: number | number[] | undefined): void {
+		const i = Array.isArray(value) ? value[0] : value;
+		if (typeof i !== "number") return;
+		const level = ZOOM_LEVELS[i];
+		if (level !== undefined) setZoomLevel(level);
+	}
 	// Color mode (light / dark / system) — backed by @nuxtjs/color-mode
 	// which persists the choice to localStorage and flips the `.dark`
 	// class on <html> in real time. Per-machine, not per-tenant.
