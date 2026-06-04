@@ -3,12 +3,8 @@
 		<!-- select-none on the page root: static labels and copy aren't
 			selectable; form fields stay selectable via the input rule
 			in main.css. -->
-		<!-- The four cards stack on small screens. At lg+ the UI font
-			card (the tall one — font picker + suggestion chips + live
-			preview) takes the left column on its own; Theme color,
-			Theme, and Zoom stack in the right column. Keeps each
-			column visually balanced height-wise rather than the prior
-			2x2 grid that left a big gap under Theme color. -->
+		<!-- Single-column layout: the four cards (UI font, Theme color, Theme,
+			and Zoom) stack vertically at every breakpoint. -->
 
 		<header class="mb-6 max-w-5xl mx-auto">
 			<h1 class="text-2xl font-semibold">
@@ -22,7 +18,7 @@
 		</header>
 
 		<div class="max-w-5xl mx-auto">
-			<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+			<div class="grid grid-cols-1 gap-6">
 				<div id="ui-font" class="scroll-mt-6">
 					<UCard>
 						<template #header>
@@ -90,7 +86,7 @@
 					</UCard>
 				</div>
 
-				<!-- Right column: Theme color + Theme + Zoom stacked. -->
+				<!-- Theme color + Theme + Zoom, stacked below the UI font card. -->
 				<div class="space-y-6">
 					<div id="theme-color" class="scroll-mt-6">
 						<UCard>
