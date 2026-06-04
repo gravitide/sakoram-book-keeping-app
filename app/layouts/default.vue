@@ -70,7 +70,7 @@
 							</NuxtLink>
 							<button
 								type="button"
-								class="px-1.5 rounded-md text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text) cursor-pointer shrink-0"
+								class="px-1.5 flex items-center justify-center rounded-md text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text) cursor-pointer shrink-0"
 								:aria-label="isGroupCollapsed(item.to) ? `Expand ${item.label}` : `Collapse ${item.label}`"
 								@click="toggleGroup(item.to)"
 							>
