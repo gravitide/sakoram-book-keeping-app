@@ -282,7 +282,7 @@ export const usePayslipsStore = defineStore("payslips", () => {
 			by an earlier deletion. Validates uniqueness before insert.
 			*/
 		sequence?: number
-	}): Promise<number> => {
+	}, opts: { reload?: boolean } = {}): Promise<number> => {
 		const allocation = input.sequence !== undefined
 			? await allocateSpecificDocumentNumber("payslip", input.payDate, input.sequence)
 			: await allocateDocumentNumber("payslip", input.payDate);
@@ -373,7 +373,10 @@ export const usePayslipsStore = defineStore("payslips", () => {
 				[id, payeSeed]
 			);
 		}
-		await load();
+		// Skip the in-memory reload when the caller batches (opts.reload ===
+		// false) — the bulk run refreshes once at the end. Reloading the whole
+		// table after every row made an N-employee payroll O(N × table) in IPC.
+		if (opts.reload !== false) await load();
 		return id;
 	};
 
@@ -447,7 +450,7 @@ export const usePayslipsStore = defineStore("payslips", () => {
 	const canTransition = (from: PayslipPersistedStatus, to: PayslipPersistedStatus): boolean =>
 		TRANSITIONS[from].includes(to);
 
-	const setStatus = async (id: number, next: PayslipPersistedStatus): Promise<void> => {
+	const setStatus = async (id: number, next: PayslipPersistedStatus, opts: { reload?: boolean } = {}): Promise<void> => {
 		const row = await get(id);
 		if (!row) throw new Error("Payslip not found");
 		// Issued + paid is locked: cancellation requires deleting the
@@ -463,7 +466,7 @@ export const usePayslipsStore = defineStore("payslips", () => {
 			"UPDATE payslips SET status = ?, updated_at = datetime('now') WHERE id = ?",
 			[next, id]
 		);
-		await load();
+		if (opts.reload !== false) await load();
 	};
 
 	// Universal delete — same trade-off as bills. Vouchers stay, lose

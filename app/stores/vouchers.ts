@@ -152,7 +152,7 @@ export const useVouchersStore = defineStore("vouchers", () => {
 	const get = async (id: number): Promise<VoucherRow | null> =>
 		selectOne<VoucherRow>("SELECT * FROM vouchers WHERE id = ?", [id]);
 
-	const create = async (input: VoucherInput & { sequence?: number }): Promise<number> => {
+	const create = async (input: VoucherInput & { sequence?: number }, opts: { reload?: boolean } = {}): Promise<number> => {
 		if (input.amount_cents <= 0) {
 			throw new Error("Voucher amount must be positive");
 		}
@@ -187,7 +187,10 @@ export const useVouchersStore = defineStore("vouchers", () => {
 			]
 		);
 		if (result.lastInsertId === undefined) throw new Error("create: no lastInsertId");
-		await load();
+		// Skip the in-memory reload when batching (opts.reload === false) — the
+		// bulk payroll run refreshes vouchers once at the end instead of after
+		// every payment.
+		if (opts.reload !== false) await load();
 		return result.lastInsertId;
 	};
 
