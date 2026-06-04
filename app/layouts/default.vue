@@ -76,6 +76,7 @@
 								>
 									<UIcon :name="item.icon" class="size-4" />
 									{{ item.label }}
+									<UIcon v-if="item.feature && !license.hasFeature(item.feature)" name="i-lucide-lock" class="size-3 text-(--ui-text-dimmed) ml-auto shrink-0" />
 								</NuxtLink>
 								<button
 									type="button"
@@ -99,6 +100,7 @@
 							>
 								<UIcon :name="item.icon" class="size-4" />
 								{{ item.label }}
+								<UIcon v-if="item.feature && !license.hasFeature(item.feature)" name="i-lucide-lock" class="size-3 text-(--ui-text-dimmed) ml-auto shrink-0" />
 							</NuxtLink>
 
 							<!-- Sub-items: collapsible per group via the chevron above. -->
@@ -111,6 +113,7 @@
 									>
 										<UIcon :name="child.icon" class="size-3.5" />
 										{{ child.label }}
+										<UIcon v-if="child.feature && !license.hasFeature(child.feature)" name="i-lucide-lock" class="size-3 text-(--ui-text-dimmed) ml-auto shrink-0" />
 									</NuxtLink>
 
 									<!-- Third level: in-page section anchors. Shown only while
@@ -286,6 +289,7 @@
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import { useHelpWindow } from "~/composables/useHelpWindow";
 	import { isValidThemeColor } from "~/lib/theme";
+	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
 
@@ -311,6 +315,7 @@
 	// version number.
 	const aboutOpen = ref(false);
 
+	const license = useLicenseStore();
 	const settings = useSettingsStore();
 	const tenants = useTenantsStore();
 	const router = useRouter();
@@ -453,8 +458,8 @@
 	};
 
 	interface NavSection { hash: string, label: string, icon: string }
-	interface NavChild { to: string, label: string, icon: string, sections?: NavSection[] }
-	interface NavItem { to?: string, label: string, icon?: string, divider?: boolean, children?: NavChild[], action?: () => void, heading?: boolean }
+	interface NavChild { to: string, label: string, icon: string, sections?: NavSection[], feature?: string }
+	interface NavItem { to?: string, label: string, icon?: string, divider?: boolean, children?: NavChild[], action?: () => void, heading?: boolean, feature?: string }
 
 	const nav: NavItem[] = [
 		{ to: "/", label: "Dashboard", icon: "i-lucide-layout-dashboard" },
@@ -465,14 +470,14 @@
 		{ heading: true, label: "Incoming", divider: true },
 		{ to: "/quotes", label: "Quotes", icon: "i-lucide-file-text" },
 		{ to: "/invoices", label: "Invoices", icon: "i-lucide-receipt" },
-		{ to: "/recurring-invoices", label: "Recurring invoices", icon: "i-lucide-repeat" },
-		{ to: "/credit-notes", label: "Credit notes", icon: "i-lucide-rotate-ccw" },
+		{ to: "/recurring-invoices", label: "Recurring invoices", icon: "i-lucide-repeat", feature: "recurring" },
+		{ to: "/credit-notes", label: "Credit notes", icon: "i-lucide-rotate-ccw", feature: "credit_notes" },
 		{ heading: true, label: "Outgoing", divider: true },
 		{ to: "/bills", label: "Bills", icon: "i-lucide-file-input" },
-		{ to: "/recurring-bills", label: "Recurring bills", icon: "i-lucide-repeat-2" },
+		{ to: "/recurring-bills", label: "Recurring bills", icon: "i-lucide-repeat-2", feature: "recurring" },
 		{ heading: true, label: "Banking", divider: true },
 		{ to: "/vouchers", label: "Vouchers", icon: "i-lucide-ticket" },
-		{ to: "/reconcile", label: "Reconcile", icon: "i-lucide-scale" },
+		{ to: "/reconcile", label: "Reconcile", icon: "i-lucide-scale", feature: "reconcile" },
 		{
 			// `/payroll` is the landing card grid (mirrors `/reports`).
 			// Dashboard lives at `/payroll/dashboard` so the top-level
@@ -481,10 +486,11 @@
 			label: "Payroll",
 			icon: "i-lucide-wallet",
 			divider: true,
+			feature: "payroll",
 			children: [
-				{ to: "/payroll/dashboard", label: "Dashboard", icon: "i-lucide-layout-dashboard" },
-				{ to: "/employees", label: "Employees", icon: "i-lucide-users-round" },
-				{ to: "/payslips", label: "Payslips", icon: "i-lucide-file-spreadsheet" },
+				{ to: "/payroll/dashboard", label: "Dashboard", icon: "i-lucide-layout-dashboard", feature: "payroll" },
+				{ to: "/employees", label: "Employees", icon: "i-lucide-users-round", feature: "payroll" },
+				{ to: "/payslips", label: "Payslips", icon: "i-lucide-file-spreadsheet", feature: "payroll" },
 				// Cycle template (period_start_day / period_end_day /
 				// pay_day) lives at /settings/payroll for historical
 				// reasons but its natural home in the nav is the Payroll
@@ -494,6 +500,7 @@
 					to: "/settings/payroll",
 					label: "Settings",
 					icon: "i-lucide-calendar-clock",
+					feature: "payroll",
 					sections: [
 						{ hash: "#cycle", label: "Cycle template", icon: "i-lucide-calendar-clock" },
 						{ hash: "#statutory", label: "EPF / ETF", icon: "i-lucide-landmark" },
@@ -510,11 +517,11 @@
 			children: [
 				{ to: "/reports/profit-loss", label: "Profit & Loss", icon: "i-lucide-trending-up" },
 				{ to: "/reports/vat", label: "VAT", icon: "i-lucide-percent" },
-				{ to: "/reports/aged-receivables", label: "Aged receivables", icon: "i-lucide-clock" },
-				{ to: "/reports/aged-payables", label: "Aged payables", icon: "i-lucide-clock-alert" },
-				{ to: "/reports/cash-flow", label: "Cash flow", icon: "i-lucide-arrow-left-right" },
-				{ to: "/reports/sales-by-client", label: "Sales by client", icon: "i-lucide-users-round" },
-				{ to: "/reports/expenses-by-vendor", label: "Expenses by vendor", icon: "i-lucide-store" },
+				{ to: "/reports/aged-receivables", label: "Aged receivables", icon: "i-lucide-clock", feature: "reports.aged_receivables" },
+				{ to: "/reports/aged-payables", label: "Aged payables", icon: "i-lucide-clock-alert", feature: "reports.aged_payables" },
+				{ to: "/reports/cash-flow", label: "Cash flow", icon: "i-lucide-arrow-left-right", feature: "reports.cash_flow" },
+				{ to: "/reports/sales-by-client", label: "Sales by client", icon: "i-lucide-users-round", feature: "reports.sales_by_client" },
+				{ to: "/reports/expenses-by-vendor", label: "Expenses by vendor", icon: "i-lucide-store", feature: "reports.expenses_by_vendor" },
 				{ to: "/reports/payroll-register", label: "Payroll register", icon: "i-lucide-clipboard-list" }
 			]
 		},
@@ -596,7 +603,8 @@
 						{ hash: "#zoom", label: "Zoom", icon: "i-lucide-zoom-in" }
 					]
 				},
-				{ to: "/settings/businesses", label: "Businesses", icon: "i-lucide-briefcase" }
+				{ to: "/settings/businesses", label: "Businesses", icon: "i-lucide-briefcase" },
+				{ to: "/settings/license", label: "License", icon: "i-lucide-key-round" }
 			]
 		},
 		{
