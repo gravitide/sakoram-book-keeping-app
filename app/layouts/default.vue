@@ -30,81 +30,116 @@
 					</button>
 				</UDropdownMenu>
 
-				<nav class="flex-1 p-2 space-y-1 overflow-y-auto">
-					<template v-for="item in nav" :key="item.to ?? item.label">
-						<!-- Optional rule above this item to break the list into
+				<OverlayScrollbar class="flex-1 min-h-0">
+					<nav class="p-2 space-y-1">
+						<template v-for="item in nav" :key="item.to ?? item.label">
+							<!-- Optional rule above this item to break the list into
 					logical groups (documents / contacts / settings). -->
-						<div
-							v-if="item.divider"
-							class="my-2 border-t border-(--ui-border)"
-							aria-hidden="true"
-						/>
-						<!-- Two flavours: navigation items (item.to) render
+							<div
+								v-if="item.divider"
+								class="my-2 border-t border-(--ui-border)"
+								aria-hidden="true"
+							/>
+							<!-- Section heading: a non-clickable label that groups the items
+								below it by money-flow direction (INCOMING / OUTGOING / BANKING). -->
+							<div
+								v-if="item.heading"
+								class="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-(--ui-text-dimmed) select-none"
+							>
+								{{ item.label }}
+							</div>
+							<!-- Two flavours: navigation items (item.to) render
 							as NuxtLink, action items (item.action) render
 							as a button. The action flavour is currently
 							only used by the Help item which spawns a
 							separate Tauri WebviewWindow instead of
 							navigating — see useHelpWindow. -->
-						<button
-							v-if="item.action"
-							type="button"
-							class="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text) cursor-pointer text-left"
-							@click="item.action"
-						>
-							<UIcon :name="item.icon" class="size-4" />
-							{{ item.label }}
-						</button>
-						<NuxtLink
-							v-else
-							:to="item.to"
-							class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
-							:active-class="item.children ? '' : '!bg-(--ui-primary)/10 !text-(--ui-primary) font-medium'"
-							exact-active-class="!bg-(--ui-primary)/10 !text-(--ui-primary) font-medium"
-						>
-							<UIcon :name="item.icon" class="size-4" />
-							{{ item.label }}
-						</NuxtLink>
-
-						<!-- Sub-items: render directly under the parent. Always visible
-					(no click-to-expand) because the tree is small enough that
-					discoverability beats compactness here. -->
-						<div v-if="item.children" class="ml-3 pl-3 border-l border-(--ui-border) space-y-1">
-							<template v-for="child in item.children" :key="child.to">
+							<button
+								v-else-if="item.action"
+								type="button"
+								class="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text) cursor-pointer text-left"
+								@click="item.action"
+							>
+								<UIcon :name="item.icon" class="size-4" />
+								{{ item.label }}
+							</button>
+							<!-- Group parent (has children): the label still navigates to
+							its landing page; the chevron on the right (or a double-click on the header) collapses/expands
+							the group's sub-items. Collapsed state is persisted per
+							group (by its `to`) to localStorage. -->
+							<div v-else-if="item.children" class="flex items-stretch" @dblclick="toggleGroup(item.to)">
 								<NuxtLink
-									:to="child.to"
-									class="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
-									active-class="!text-(--ui-primary) font-medium"
+									:to="item.to"
+									class="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
+									active-class=""
+									exact-active-class="!bg-(--ui-primary)/10 !text-(--ui-primary) font-medium"
 								>
-									<UIcon :name="child.icon" class="size-3.5" />
-									{{ child.label }}
+									<UIcon :name="item.icon" class="size-4" />
+									{{ item.label }}
 								</NuxtLink>
+								<button
+									type="button"
+									class="px-1.5 flex items-center justify-center rounded-md text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text) cursor-pointer shrink-0"
+									:aria-label="isGroupCollapsed(item.to) ? `Expand ${item.label}` : `Collapse ${item.label}`"
+									@click="toggleGroup(item.to)"
+								>
+									<UIcon
+										name="i-lucide-chevron-down"
+										class="size-4 transition-transform"
+										:class="isGroupCollapsed(item.to) ? '-rotate-90' : ''"
+									/>
+								</button>
+							</div>
+							<NuxtLink
+								v-else
+								:to="item.to"
+								class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
+								active-class="!bg-(--ui-primary)/10 !text-(--ui-primary) font-medium"
+								exact-active-class="!bg-(--ui-primary)/10 !text-(--ui-primary) font-medium"
+							>
+								<UIcon :name="item.icon" class="size-4" />
+								{{ item.label }}
+							</NuxtLink>
 
-								<!-- Third level: in-page section anchors. Shown only while
+							<!-- Sub-items: collapsible per group via the chevron above. -->
+							<div v-if="item.children && !isGroupCollapsed(item.to)" class="ml-3 pl-3 border-l border-(--ui-border) space-y-1">
+								<template v-for="child in item.children" :key="child.to">
+									<NuxtLink
+										:to="child.to"
+										class="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
+										active-class="!text-(--ui-primary) font-medium"
+									>
+										<UIcon :name="child.icon" class="size-3.5" />
+										{{ child.label }}
+									</NuxtLink>
+
+									<!-- Third level: in-page section anchors. Shown only while
 							the user is on this child's own page, so the Settings
 							group doesn't balloon on every other route. The active
 							section is matched on the URL hash. -->
-								<div
-									v-if="child.sections && route.path === child.to"
-									class="ml-3 pl-3 border-l border-(--ui-border) space-y-0.5 mt-0.5"
-								>
-									<NuxtLink
-										v-for="section in child.sections"
-										:key="section.hash"
-										:to="`${child.to}${section.hash}`"
-										class="flex items-center gap-2 px-3 py-1 rounded-md text-xs hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
-										:class="route.hash === section.hash
-											? '!text-(--ui-primary) font-medium'
-											: 'text-(--ui-text-muted)'"
-										@click="scrollToSection(section.hash)"
+									<div
+										v-if="child.sections && route.path === child.to"
+										class="ml-3 pl-3 border-l border-(--ui-border) space-y-0.5 mt-0.5"
 									>
-										<UIcon :name="section.icon" class="size-3" />
-										{{ section.label }}
-									</NuxtLink>
-								</div>
-							</template>
-						</div>
-					</template>
-				</nav>
+										<NuxtLink
+											v-for="section in child.sections"
+											:key="section.hash"
+											:to="`${child.to}${section.hash}`"
+											class="flex items-center gap-2 px-3 py-1 rounded-md text-xs hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
+											:class="route.hash === section.hash
+												? '!text-(--ui-primary) font-medium'
+												: 'text-(--ui-text-muted)'"
+											@click="scrollToSection(section.hash)"
+										>
+											<UIcon :name="section.icon" class="size-3" />
+											{{ section.label }}
+										</NuxtLink>
+									</div>
+								</template>
+							</div>
+						</template>
+					</nav>
+				</OverlayScrollbar>
 
 				<div class="px-4 py-3 border-t border-(--ui-border) flex items-center justify-between gap-2">
 					<!-- Wordmark replaces the version label as the footer
@@ -395,19 +430,47 @@
 	//
 	// A child may carry `sections`: in-page #anchors rendered as a third
 	// level, shown only when the user is on that child's route.
+	// Collapsible nav groups. Collapsed group keys (the group's `to`) persist
+	// to localStorage so the user's layout survives reloads / tenant switches.
+	const COLLAPSED_GROUPS_KEY = "sidebar-collapsed-groups";
+	const collapsedGroups = ref<Set<string>>(new Set());
+	onMounted(() => {
+		try {
+			const raw = localStorage.getItem(COLLAPSED_GROUPS_KEY);
+			if (raw) collapsedGroups.value = new Set(JSON.parse(raw) as string[]);
+		} catch { /* ignore malformed storage */ }
+	});
+	const isGroupCollapsed = (key?: string): boolean => !!key && collapsedGroups.value.has(key);
+	const toggleGroup = (key?: string): void => {
+		if (!key) return;
+		const next = new Set(collapsedGroups.value);
+		if (next.has(key)) next.delete(key);
+		else next.add(key);
+		collapsedGroups.value = next;
+		try {
+			localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify([...next]));
+		} catch { /* ignore */ }
+	};
+
 	interface NavSection { hash: string, label: string, icon: string }
 	interface NavChild { to: string, label: string, icon: string, sections?: NavSection[] }
-	interface NavItem { to: string, label: string, icon: string, divider?: boolean, children?: NavChild[] }
+	interface NavItem { to?: string, label: string, icon?: string, divider?: boolean, children?: NavChild[], action?: () => void, heading?: boolean }
 
 	const nav: NavItem[] = [
 		{ to: "/", label: "Dashboard", icon: "i-lucide-layout-dashboard" },
 		{ to: "/calendar", label: "Calendar", icon: "i-lucide-calendar-days" },
-		{ to: "/quotes", label: "Quotes", icon: "i-lucide-file-text", divider: true },
+		// Documents grouped by money-flow direction. Incoming = sales side
+		// (clients pay us); Outgoing = purchase side (we pay vendors);
+		// Banking = cash ledger + reconciliation, which cut both ways.
+		{ heading: true, label: "Incoming", divider: true },
+		{ to: "/quotes", label: "Quotes", icon: "i-lucide-file-text" },
 		{ to: "/invoices", label: "Invoices", icon: "i-lucide-receipt" },
-		{ to: "/recurring-invoices", label: "Recurring", icon: "i-lucide-repeat" },
+		{ to: "/recurring-invoices", label: "Recurring invoices", icon: "i-lucide-repeat" },
 		{ to: "/credit-notes", label: "Credit notes", icon: "i-lucide-rotate-ccw" },
+		{ heading: true, label: "Outgoing", divider: true },
 		{ to: "/bills", label: "Bills", icon: "i-lucide-file-input" },
 		{ to: "/recurring-bills", label: "Recurring bills", icon: "i-lucide-repeat-2" },
+		{ heading: true, label: "Banking", divider: true },
 		{ to: "/vouchers", label: "Vouchers", icon: "i-lucide-ticket" },
 		{ to: "/reconcile", label: "Reconcile", icon: "i-lucide-scale" },
 		{
