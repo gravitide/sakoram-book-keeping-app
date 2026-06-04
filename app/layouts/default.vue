@@ -30,106 +30,108 @@
 					</button>
 				</UDropdownMenu>
 
-				<nav class="flex-1 p-2 space-y-1 overflow-y-auto">
-					<template v-for="item in nav" :key="item.to ?? item.label">
-						<!-- Optional rule above this item to break the list into
+				<OverlayScrollbar class="flex-1 min-h-0">
+					<nav class="p-2 space-y-1">
+						<template v-for="item in nav" :key="item.to ?? item.label">
+							<!-- Optional rule above this item to break the list into
 					logical groups (documents / contacts / settings). -->
-						<div
-							v-if="item.divider"
-							class="my-2 border-t border-(--ui-border)"
-							aria-hidden="true"
-						/>
-						<!-- Two flavours: navigation items (item.to) render
+							<div
+								v-if="item.divider"
+								class="my-2 border-t border-(--ui-border)"
+								aria-hidden="true"
+							/>
+							<!-- Two flavours: navigation items (item.to) render
 							as NuxtLink, action items (item.action) render
 							as a button. The action flavour is currently
 							only used by the Help item which spawns a
 							separate Tauri WebviewWindow instead of
 							navigating — see useHelpWindow. -->
-						<button
-							v-if="item.action"
-							type="button"
-							class="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text) cursor-pointer text-left"
-							@click="item.action"
-						>
-							<UIcon :name="item.icon" class="size-4" />
-							{{ item.label }}
-						</button>
-						<!-- Group parent (has children): the label still navigates to
+							<button
+								v-if="item.action"
+								type="button"
+								class="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text) cursor-pointer text-left"
+								@click="item.action"
+							>
+								<UIcon :name="item.icon" class="size-4" />
+								{{ item.label }}
+							</button>
+							<!-- Group parent (has children): the label still navigates to
 							its landing page; the chevron on the right collapses/expands
 							the group's sub-items. Collapsed state is persisted per
 							group (by its `to`) to localStorage. -->
-						<div v-else-if="item.children" class="flex items-stretch">
+							<div v-else-if="item.children" class="flex items-stretch">
+								<NuxtLink
+									:to="item.to"
+									class="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
+									active-class=""
+									exact-active-class="!bg-(--ui-primary)/10 !text-(--ui-primary) font-medium"
+								>
+									<UIcon :name="item.icon" class="size-4" />
+									{{ item.label }}
+								</NuxtLink>
+								<button
+									type="button"
+									class="px-1.5 flex items-center justify-center rounded-md text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text) cursor-pointer shrink-0"
+									:aria-label="isGroupCollapsed(item.to) ? `Expand ${item.label}` : `Collapse ${item.label}`"
+									@click="toggleGroup(item.to)"
+								>
+									<UIcon
+										name="i-lucide-chevron-down"
+										class="size-4 transition-transform"
+										:class="isGroupCollapsed(item.to) ? '-rotate-90' : ''"
+									/>
+								</button>
+							</div>
 							<NuxtLink
+								v-else
 								:to="item.to"
-								class="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
-								active-class=""
+								class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
+								active-class="!bg-(--ui-primary)/10 !text-(--ui-primary) font-medium"
 								exact-active-class="!bg-(--ui-primary)/10 !text-(--ui-primary) font-medium"
 							>
 								<UIcon :name="item.icon" class="size-4" />
 								{{ item.label }}
 							</NuxtLink>
-							<button
-								type="button"
-								class="px-1.5 flex items-center justify-center rounded-md text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text) cursor-pointer shrink-0"
-								:aria-label="isGroupCollapsed(item.to) ? `Expand ${item.label}` : `Collapse ${item.label}`"
-								@click="toggleGroup(item.to)"
-							>
-								<UIcon
-									name="i-lucide-chevron-down"
-									class="size-4 transition-transform"
-									:class="isGroupCollapsed(item.to) ? '-rotate-90' : ''"
-								/>
-							</button>
-						</div>
-						<NuxtLink
-							v-else
-							:to="item.to"
-							class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
-							active-class="!bg-(--ui-primary)/10 !text-(--ui-primary) font-medium"
-							exact-active-class="!bg-(--ui-primary)/10 !text-(--ui-primary) font-medium"
-						>
-							<UIcon :name="item.icon" class="size-4" />
-							{{ item.label }}
-						</NuxtLink>
 
-						<!-- Sub-items: collapsible per group via the chevron above. -->
-						<div v-if="item.children && !isGroupCollapsed(item.to)" class="ml-3 pl-3 border-l border-(--ui-border) space-y-1">
-							<template v-for="child in item.children" :key="child.to">
-								<NuxtLink
-									:to="child.to"
-									class="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
-									active-class="!text-(--ui-primary) font-medium"
-								>
-									<UIcon :name="child.icon" class="size-3.5" />
-									{{ child.label }}
-								</NuxtLink>
+							<!-- Sub-items: collapsible per group via the chevron above. -->
+							<div v-if="item.children && !isGroupCollapsed(item.to)" class="ml-3 pl-3 border-l border-(--ui-border) space-y-1">
+								<template v-for="child in item.children" :key="child.to">
+									<NuxtLink
+										:to="child.to"
+										class="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
+										active-class="!text-(--ui-primary) font-medium"
+									>
+										<UIcon :name="child.icon" class="size-3.5" />
+										{{ child.label }}
+									</NuxtLink>
 
-								<!-- Third level: in-page section anchors. Shown only while
+									<!-- Third level: in-page section anchors. Shown only while
 							the user is on this child's own page, so the Settings
 							group doesn't balloon on every other route. The active
 							section is matched on the URL hash. -->
-								<div
-									v-if="child.sections && route.path === child.to"
-									class="ml-3 pl-3 border-l border-(--ui-border) space-y-0.5 mt-0.5"
-								>
-									<NuxtLink
-										v-for="section in child.sections"
-										:key="section.hash"
-										:to="`${child.to}${section.hash}`"
-										class="flex items-center gap-2 px-3 py-1 rounded-md text-xs hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
-										:class="route.hash === section.hash
-											? '!text-(--ui-primary) font-medium'
-											: 'text-(--ui-text-muted)'"
-										@click="scrollToSection(section.hash)"
+									<div
+										v-if="child.sections && route.path === child.to"
+										class="ml-3 pl-3 border-l border-(--ui-border) space-y-0.5 mt-0.5"
 									>
-										<UIcon :name="section.icon" class="size-3" />
-										{{ section.label }}
-									</NuxtLink>
-								</div>
-							</template>
-						</div>
-					</template>
-				</nav>
+										<NuxtLink
+											v-for="section in child.sections"
+											:key="section.hash"
+											:to="`${child.to}${section.hash}`"
+											class="flex items-center gap-2 px-3 py-1 rounded-md text-xs hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
+											:class="route.hash === section.hash
+												? '!text-(--ui-primary) font-medium'
+												: 'text-(--ui-text-muted)'"
+											@click="scrollToSection(section.hash)"
+										>
+											<UIcon :name="section.icon" class="size-3" />
+											{{ section.label }}
+										</NuxtLink>
+									</div>
+								</template>
+							</div>
+						</template>
+					</nav>
+				</OverlayScrollbar>
 
 				<div class="px-4 py-3 border-t border-(--ui-border) flex items-center justify-between gap-2">
 					<!-- Wordmark replaces the version label as the footer
