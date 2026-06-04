@@ -214,6 +214,15 @@
 								</dd>
 
 								<dt class="text-(--ui-text-muted)">
+									Plan
+								</dt>
+								<dd class="font-medium">
+									{{ ["Basic", "Plus", "Premium"][license.tier] }}
+									<span v-if="license.isTrial" class="text-(--ui-text-muted) font-normal"> · trial, {{ license.trialDaysLeft }} day{{ license.trialDaysLeft === 1 ? "" : "s" }} left</span>
+									<span v-else-if="license.buyerName" class="text-(--ui-text-muted) font-normal"> · licensed to {{ license.buyerName }}</span>
+								</dd>
+
+								<dt class="text-(--ui-text-muted)">
 									Website
 								</dt>
 								<dd>
