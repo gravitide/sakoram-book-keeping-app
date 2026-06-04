@@ -11,7 +11,7 @@ const ZOOM_KEY = "sakoram.ui.zoomLevel";
 // Discrete zoom steps surfaced in the Appearance picker. 100 is the
 // browser-default 16px root font-size; everything else scales the
 // rem cascade (Tailwind / NuxtUI units are rem-based).
-export const ZOOM_LEVELS = [80, 90, 100, 110, 125, 150] as const;
+export const ZOOM_LEVELS = [80, 90, 95, 100, 105, 110, 125, 150] as const;
 export type ZoomLevel = (typeof ZOOM_LEVELS)[number];
 const DEFAULT_ZOOM: ZoomLevel = 100;
 
