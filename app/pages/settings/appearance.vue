@@ -315,7 +315,9 @@
 	// Bundled monospaced faces — listed under their own sub-heading. Good
 	// for figure-aligned numbers; more will be added over time.
 	const bundledMonoFonts = [
-		"Iosevka Charon Mono"
+		"Iosevka Charon Mono",
+		"Martian Mono",
+		"Google Sans Code"
 	];
 	const systemFonts = [
 		"system-ui",

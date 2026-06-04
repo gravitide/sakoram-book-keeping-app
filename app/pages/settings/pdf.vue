@@ -276,7 +276,7 @@
 	const bundledFonts = ["Akt", "Inter", "Inter Tight", "Stack Sans Text", "Miriam Libre", "Amarna"];
 	// Bundled monospaced faces, listed under their own sub-heading. Good for
 	// figure-aligned numbers; more will be added over time.
-	const bundledMonoFonts = ["Iosevka Charon Mono"];
+	const bundledMonoFonts = ["Iosevka Charon Mono", "Martian Mono", "Google Sans Code"];
 
 	const pdfPreviewFontStack = computed(() =>
 		`'${form.pdf_font || "Akt"}', 'Akt', 'Inter', serif`

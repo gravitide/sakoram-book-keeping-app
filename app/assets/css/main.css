@@ -146,6 +146,39 @@
 	src: url("@/assets/fonts/IosevkaCharonMono-Bold.ttf") format("truetype");
 }
 
+/* Martian Mono — bundled monospace (OFL), shipped at its SemiExpanded
+ * default width. Static Regular + Bold so Typst selects bold correctly. */
+@font-face {
+	font-family: "Martian Mono";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url("@/assets/fonts/MartianMono-Regular.ttf") format("truetype");
+}
+@font-face {
+	font-family: "Martian Mono";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url("@/assets/fonts/MartianMono-Bold.ttf") format("truetype");
+}
+
+/* Google Sans Code — bundled monospace (OFL). Static Regular + Bold. */
+@font-face {
+	font-family: "Google Sans Code";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url("@/assets/fonts/GoogleSansCode-Regular.ttf") format("truetype");
+}
+@font-face {
+	font-family: "Google Sans Code";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url("@/assets/fonts/GoogleSansCode-Bold.ttf") format("truetype");
+}
+
 @theme {
 	--font-heading: "Montserrat", sans-serif;
 	--font-sans: "Akt", "Inter", sans-serif;
