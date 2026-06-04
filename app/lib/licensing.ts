@@ -38,3 +38,51 @@ export function hasFeature(tier: Tier, key: string): boolean {
 	const required = FEATURES[key] ?? Tier.Basic;
 	return tier >= required;
 }
+
+export const TRIAL_DAYS = 30;
+
+export interface TrialState { trialStart: string | null, lastSeen: string | null }
+export interface Entitlement {
+	tier: Tier
+	isTrial: boolean
+	trialDaysLeft: number
+	businessLimit: number
+}
+
+function daysBetween(aIso: string, bIso: string): number {
+	const a = Date.parse(`${aIso}T00:00:00Z`);
+	const b = Date.parse(`${bIso}T00:00:00Z`);
+	return Math.round((b - a) / 86_400_000);
+}
+
+// Effective "now" never goes backwards: a rolled-back clock can't buy trial days.
+function effectiveNow(nowIso: string, lastSeenIso: string | null): string {
+	if (!lastSeenIso) return nowIso;
+	return daysBetween(lastSeenIso, nowIso) < 0 ? lastSeenIso : nowIso;
+}
+
+export function trialDaysRemaining(trialStart: string, nowIso: string, lastSeenIso: string | null): number {
+	const eff = effectiveNow(nowIso, lastSeenIso);
+	const elapsed = daysBetween(trialStart, eff);
+	return Math.max(0, TRIAL_DAYS - elapsed);
+}
+
+// `licenseTier` is the verified tier of an entered key, or null if none/invalid.
+export function effectiveEntitlement(
+	licenseTier: Tier | null,
+	trial: TrialState,
+	nowIso: string
+): Entitlement {
+	const trialLeft = trial.trialStart
+		? trialDaysRemaining(trial.trialStart, nowIso, trial.lastSeen)
+		: 0;
+	const trialTier = trialLeft > 0 ? Tier.Premium : null;
+	const candidates = [licenseTier, trialTier].filter((t): t is Tier => t !== null);
+	const tier = candidates.length ? Math.max(...candidates) as Tier : Tier.Basic;
+	return {
+		tier,
+		isTrial: trialTier !== null && tier === Tier.Premium && licenseTier !== Tier.Premium,
+		trialDaysLeft: trialLeft,
+		businessLimit: BUSINESS_LIMITS[tier]
+	};
+}
