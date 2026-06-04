@@ -1,5 +1,6 @@
 <template>
 	<div class="select-none">
+		<FeatureLock v-if="locked" title="Bank reconciliation" tier-label="Plus" feature="reconcile" />
 		<!-- Top toolbar: title + help + import button -->
 		<div class="mb-4 flex items-center justify-between gap-4 flex-wrap">
 			<h1 class="text-2xl font-semibold flex items-center gap-3">
@@ -7,6 +8,7 @@
 				<HelpButton slug="reconciliation" />
 			</h1>
 			<UButton
+				v-if="!locked"
 				size="sm"
 				icon="i-lucide-upload"
 				:disabled="banks.activeBanks.length === 0"
@@ -17,7 +19,7 @@
 		</div>
 
 		<!-- Bank selector + summary -->
-		<UCard class="mb-6">
+		<UCard v-if="!locked" class="mb-6">
 			<template #header>
 				<div class="flex items-center justify-between gap-4 flex-wrap">
 					<UFormField label="Bank account" :ui="{ root: 'w-auto' }">
@@ -66,7 +68,7 @@
 		</UCard>
 
 		<!-- Statement rows table -->
-		<UCard class="mb-6">
+		<UCard v-if="!locked" class="mb-6">
 			<template #header>
 				<div class="app-chrome font-medium">
 					Statement rows
@@ -94,7 +96,7 @@
 		</UCard>
 
 		<!-- Import history -->
-		<UCard v-if="importsForBank.length > 0" class="mb-6">
+		<UCard v-if="!locked && importsForBank.length > 0" class="mb-6">
 			<template #header>
 				<div class="app-chrome font-medium">
 					Imports
@@ -129,7 +131,7 @@
 			haven't been matched to a statement row. Same ResizableDataTable
 			shape every other list page uses (sort, paginate, auto-fit,
 			localStorage column widths) so the rhythm carries through. -->
-		<UCard v-if="unreconciledVouchers.length > 0">
+		<UCard v-if="!locked && unreconciledVouchers.length > 0">
 			<template #header>
 				<div class="flex items-center justify-between gap-3 flex-wrap">
 					<div class="app-chrome font-medium">
@@ -249,6 +251,7 @@
 	import { formatLKR } from "~/lib/money";
 	import { useBankStatementsStore } from "~/stores/bank_statements";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
+	import { useLicenseStore } from "~/stores/license";
 	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Reconcile" });
@@ -258,6 +261,8 @@
 	const store = useBankStatementsStore();
 	const toast = useToast();
 	const router = useRouter();
+	const license = useLicenseStore();
+	const locked = computed(() => !license.hasFeature("reconcile"));
 
 	// Auto-fit hook for the unreconciled-vouchers ResizableDataTable —
 	// same shape every list page exposes (tableRef.autoFit()) so the

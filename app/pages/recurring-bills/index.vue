@@ -1,5 +1,6 @@
 <template>
 	<div class="select-none">
+		<FeatureLock v-if="locked" title="Recurring bills" tier-label="Plus" feature="recurring" />
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
 			<div>
 				<h1 class="text-2xl font-semibold flex items-center gap-3">
@@ -24,6 +25,7 @@
 			</div>
 			<div class="flex items-center gap-2">
 				<UButton
+					v-if="!locked"
 					color="primary"
 					variant="soft"
 					icon="i-lucide-play"
@@ -32,7 +34,7 @@
 				>
 					Generate pending<span v-if="store.pendingCount > 0"> ({{ store.pendingCount }})</span>
 				</UButton>
-				<UButton icon="i-lucide-plus" @click="newTemplate">
+				<UButton v-if="!locked" icon="i-lucide-plus" @click="newTemplate">
 					New recurring
 				</UButton>
 			</div>
@@ -276,6 +278,7 @@
 	import type { RecurringBillRow, RecurringFrequency } from "~/stores/recurring_bills";
 	import { themeHex } from "~/lib/theme";
 	import { useBillCategoriesStore } from "~/stores/bill_categories";
+	import { useLicenseStore } from "~/stores/license";
 	import { useRecurringBillsStore } from "~/stores/recurring_bills";
 	import { useVendorsStore } from "~/stores/vendors";
 
@@ -286,6 +289,8 @@
 	const store = useRecurringBillsStore();
 	const vendorsStore = useVendorsStore();
 	const categoriesStore = useBillCategoriesStore();
+	const license = useLicenseStore();
+	const locked = computed(() => !license.hasFeature("recurring"));
 
 	const { isLoading, runLoad } = usePageLoading();
 	onMounted(() => runLoad(async () => {
