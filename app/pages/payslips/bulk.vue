@@ -528,7 +528,7 @@
 					periodStart: periodStart.value,
 					periodEnd: periodEnd.value,
 					payDate: payDate.value
-				});
+				}, { reload: false });
 				createdCount += 1;
 			} catch (err) {
 				errors.push({
@@ -548,6 +548,7 @@
 			// don't fail the whole run.
 			if (payslipId === null) continue;
 			const created = await store.get(payslipId);
+
 			const netCents = created?.net_cents ?? 0;
 			if (netCents <= 0) {
 				if (autoIssue.value || autoPay.value) {
@@ -563,7 +564,8 @@
 			// Step 2: issue
 			if (autoIssue.value) {
 				try {
-					await store.setStatus(payslipId, "issued");
+					await store.setStatus(payslipId, "issued", { reload: false });
+
 					issuedCount += 1;
 				} catch (err) {
 					errors.push({
@@ -589,7 +591,8 @@
 						related_invoice_id: null,
 						related_bill_id: null,
 						related_payslip_id: payslipId
-					});
+					}, { reload: false });
+
 					paidCount += 1;
 				} catch (err) {
 					errors.push({
@@ -600,6 +603,10 @@
 				}
 			}
 		}
+
+		// One reload at the end instead of after every row (each step ran with
+		// reload:false) so the /payslips list we navigate to is fresh.
+		await Promise.all([store.load(), vouchersStore.load()]);
 
 		creating.value = false;
 		progressMessage.value = "";
