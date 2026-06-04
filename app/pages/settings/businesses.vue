@@ -12,24 +12,31 @@
 					Each business has its own database — clients, document numbers, settings, and PDFs are isolated.
 				</p>
 			</div>
-			<div class="flex gap-2">
-				<UButton
-					color="neutral"
-					variant="outline"
-					icon="i-lucide-sparkles"
-					:loading="seedingDemo"
-					:disabled="seedingDemo"
-					title="Create a new business pre-filled with realistic sample data"
-					@click="onAddDemo"
-				>
-					Add demo business
-				</UButton>
-				<UButton color="neutral" variant="outline" icon="i-lucide-upload" @click="onImportClick">
-					Import
-				</UButton>
-				<UButton icon="i-lucide-plus" @click="goWelcome">
-					Add business
-				</UButton>
+			<div class="flex flex-col items-end gap-2">
+				<div class="flex gap-2">
+					<UButton
+						color="neutral"
+						variant="outline"
+						icon="i-lucide-sparkles"
+						:loading="seedingDemo"
+						:disabled="seedingDemo"
+						title="Create a new business pre-filled with realistic sample data"
+						@click="onAddDemo"
+					>
+						Add demo business
+					</UButton>
+					<UButton color="neutral" variant="outline" icon="i-lucide-upload" @click="onImportClick">
+						Import
+					</UButton>
+					<UButton icon="i-lucide-plus" :disabled="!license.canCreateBusiness(tenants.tenants.length)" @click="goWelcome">
+						Add business
+					</UButton>
+				</div>
+				<p v-if="!license.canCreateBusiness(tenants.tenants.length)" class="text-xs text-(--ui-text-muted)">
+					Basic is limited to 2 businesses — <NuxtLink to="/upgrade?feature=businesses" class="text-(--ui-primary) underline">
+						upgrade
+					</NuxtLink> for more.
+				</p>
 			</div>
 		</header>
 
@@ -346,6 +353,7 @@
 	import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 	import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 	import { createDemoBusiness } from "~/lib/demo-seed";
+	import { useLicenseStore } from "~/stores/license";
 	import { useTenantsStore } from "~/stores/tenants";
 
 	interface ExportManifest {
@@ -363,6 +371,7 @@
 	definePageMeta({ title: "Businesses" });
 
 	const tenants = useTenantsStore();
+	const license = useLicenseStore();
 	const router = useRouter();
 	const toast = useToast();
 	const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -382,7 +391,13 @@
 	};
 	onMounted(refreshLogos);
 
-	const goWelcome = () => router.push("/welcome");
+	const goWelcome = async () => {
+		if (!license.canCreateBusiness(tenants.tenants.length)) {
+			await navigateTo("/upgrade?feature=businesses");
+			return;
+		}
+		router.push("/welcome");
+	};
 
 	// ---- Add demo business ----
 	// Spins up a fresh tenant pre-loaded with ~18 months of clients,
