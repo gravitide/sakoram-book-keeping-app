@@ -22,7 +22,7 @@ describe("hasFeature", () => {
 	});
 });
 
-describe("bUSINESS_LIMITS", () => {
+describe("business limits", () => {
 	it("basic caps at 2; plus/premium unlimited", () => {
 		expect(BUSINESS_LIMITS[Tier.Basic]).toBe(2);
 		expect(BUSINESS_LIMITS[Tier.Plus]).toBe(Number.POSITIVE_INFINITY);
