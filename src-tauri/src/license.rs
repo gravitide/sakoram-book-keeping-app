@@ -8,7 +8,7 @@
 //! key. Sharing a real key is discouraged socially (buyer name in the payload).
 
 use data_encoding::BASE32_NOPAD;
-use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 use serde::Serialize;
 
 const MAGIC: [u8; 4] = *b"SKRM";
@@ -37,6 +37,8 @@ pub struct LicenseInfo {
 fn serialize_payload(p: &Payload) -> Vec<u8> {
     let name = p.name.as_bytes();
     let email = p.email.as_bytes();
+    debug_assert!(name.len() <= 255, "name too long for u8 length prefix");
+    debug_assert!(email.len() <= 255, "email too long for u8 length prefix");
     let mut v = Vec::with_capacity(19 + name.len() + email.len());
     v.extend_from_slice(&MAGIC);
     v.push(FORMAT_VERSION);
@@ -100,7 +102,7 @@ pub fn decode_and_verify(key: &str, vk: &VerifyingKey) -> Result<Payload, String
     if blob.len() < 64 { return Err("too short".into()); }
     let (body, sig_bytes) = blob.split_at(blob.len() - 64);
     let sig = Signature::from_bytes(sig_bytes.try_into().map_err(|_| "bad sig")?);
-    vk.verify(body, &sig).map_err(|_| "signature mismatch".to_string())?;
+    vk.verify_strict(body, &sig).map_err(|_| "signature mismatch".to_string())?;
     deserialize_payload(body)
 }
 
@@ -147,5 +149,30 @@ mod tests {
         let vk = SigningKey::from_bytes(&[7u8; 32]).verifying_key();
         assert!(decode_and_verify("not-a-key", &vk).is_err());
         assert!(decode_and_verify("SAKORAM-PLUS-AAAA", &vk).is_err());
+    }
+
+    #[test]
+    fn deserialize_rejects_inconsistent_lengths() {
+        // Valid header, but name_len points far past the end of the buffer.
+        let mut b = Vec::new();
+        b.extend_from_slice(b"SKRM");
+        b.push(1); // version
+        b.push(TIER_PLUS);
+        b.extend_from_slice(&0u64.to_be_bytes()); // license_id
+        b.extend_from_slice(&0u32.to_be_bytes()); // issued_days
+        b.push(200); // name_len far past the end
+        assert!(deserialize_payload(&b).is_err());
+
+        // Trailing extra byte after zero-length name + email -> length mismatch.
+        let mut c = Vec::new();
+        c.extend_from_slice(b"SKRM");
+        c.push(1);
+        c.push(TIER_PLUS);
+        c.extend_from_slice(&0u64.to_be_bytes());
+        c.extend_from_slice(&0u32.to_be_bytes());
+        c.push(0); // name_len = 0
+        c.push(0); // email_len = 0
+        c.push(0xFF); // extra trailing byte
+        assert!(deserialize_payload(&c).is_err());
     }
 }
