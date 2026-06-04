@@ -88,7 +88,7 @@
 					type="submit"
 					form="new-payslip-form"
 					:loading="creating"
-					:disabled="!canCreate"
+					:disabled="!canCreate || !license.hasFeature('payroll')"
 					icon="i-lucide-plus"
 				>
 					Create payslip
@@ -113,6 +113,7 @@
 	import type { EmployeeRow } from "~/stores/employees";
 	import { nextPayrollCycle } from "~/lib/payroll-cycle";
 	import { useEmployeesStore } from "~/stores/employees";
+	import { useLicenseStore } from "~/stores/license";
 	import { monthBounds, usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
 
@@ -124,6 +125,7 @@
 
 	const router = useRouter();
 	const toast = useToast();
+	const license = useLicenseStore();
 	const store = usePayslipsStore();
 	const employeesStore = useEmployeesStore();
 	const settingsStore = useSettingsStore();
@@ -234,6 +236,10 @@
 	};
 
 	const create = async () => {
+		if (!license.hasFeature("payroll")) {
+			await navigateTo("/upgrade?feature=payroll");
+			return;
+		}
 		if (!canCreate.value || employeeId.value === null) return;
 		const e = picked.value
 			?? employeesStore.employees.find((x) => x.id === employeeId.value)

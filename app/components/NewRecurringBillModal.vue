@@ -57,7 +57,7 @@
 					type="submit"
 					form="new-recurring-bill-form"
 					:loading="creating"
-					:disabled="!canSubmit"
+					:disabled="!canSubmit || !license.hasFeature('recurring')"
 					icon="i-lucide-plus"
 				>
 					Create template
@@ -76,6 +76,7 @@
 
 	import type { RecurringFrequency } from "~/stores/recurring_bills";
 	import type { VendorRow } from "~/stores/vendors";
+	import { useLicenseStore } from "~/stores/license";
 	import { useRecurringBillsStore } from "~/stores/recurring_bills";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVendorsStore } from "~/stores/vendors";
@@ -84,6 +85,7 @@
 
 	const router = useRouter();
 	const toast = useToast();
+	const license = useLicenseStore();
 	const settings = useSettingsStore();
 	const vendors = useVendorsStore();
 	const recurring = useRecurringBillsStore();
@@ -135,6 +137,10 @@
 	};
 
 	const create = async () => {
+		if (!license.hasFeature("recurring")) {
+			await navigateTo("/upgrade?feature=recurring");
+			return;
+		}
 		if (!canSubmit.value) return;
 		// Resolve the picked row — picker emits on select but not on
 		// manual clear; fall back to the store as source of truth.
