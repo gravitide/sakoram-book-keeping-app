@@ -8,6 +8,7 @@
 // populate the tenants store (which auto-migrates a legacy single-DB).
 
 import { resolveTenantGuard } from "~/lib/tenant-route";
+import { useLicenseStore } from "~/stores/license";
 import { useTenantsStore } from "~/stores/tenants";
 
 export default defineNuxtRouteMiddleware(async (to) => {
@@ -19,6 +20,13 @@ export default defineNuxtRouteMiddleware(async (to) => {
 			if (to.path !== "/welcome") return navigateTo("/welcome");
 			return;
 		}
+	}
+
+	const license = useLicenseStore();
+	if (!license.loaded) {
+		try {
+			await license.ensureLoaded();
+		} catch { /* no Tauri (dev web) — stays Basic */ }
 	}
 
 	const result = resolveTenantGuard(
