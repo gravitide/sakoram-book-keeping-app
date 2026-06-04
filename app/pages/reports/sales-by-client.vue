@@ -1,5 +1,7 @@
 <template>
 	<div class="select-none">
+		<FeatureLock v-if="locked" title="Sales by client" tier-label="Plus" feature="reports.sales_by_client" />
+
 		<!-- Top toolbar — back link + PDF action. Same layout as the
 			rest of the reports for consistency. -->
 		<div class="mb-4 flex items-center justify-between gap-4">
@@ -45,251 +47,183 @@
 			</p>
 		</header>
 
-		<!-- Loading skeleton mirroring the real layout. -->
-		<template v-if="isLoading">
-			<UCard class="mb-6 animate-pulse">
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-					<div class="grid grid-cols-2 gap-3">
-						<div class="space-y-2">
-							<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
-							<div class="h-9 rounded bg-(--ui-bg-muted)" />
+		<template v-if="!locked">
+			<!-- Loading skeleton mirroring the real layout. -->
+			<template v-if="isLoading">
+				<UCard class="mb-6 animate-pulse">
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+						<div class="grid grid-cols-2 gap-3">
+							<div class="space-y-2">
+								<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
+								<div class="h-9 rounded bg-(--ui-bg-muted)" />
+							</div>
+							<div class="space-y-2">
+								<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
+								<div class="h-9 rounded bg-(--ui-bg-muted)" />
+							</div>
 						</div>
-						<div class="space-y-2">
-							<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
-							<div class="h-9 rounded bg-(--ui-bg-muted)" />
+						<div class="flex flex-wrap gap-1.5 items-center justify-end">
+							<div
+								v-for="i in 6"
+								:key="`pset-skel-${i}`"
+								class="h-6 w-24 rounded-md bg-(--ui-bg-muted)"
+							/>
 						</div>
 					</div>
-					<div class="flex flex-wrap gap-1.5 items-center justify-end">
-						<div
-							v-for="i in 6"
-							:key="`pset-skel-${i}`"
-							class="h-6 w-24 rounded-md bg-(--ui-bg-muted)"
-						/>
-					</div>
-				</div>
-			</UCard>
+				</UCard>
 
-			<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 animate-pulse">
-				<UCard v-for="i in 3" :key="`kpi-skel-${i}`" class="h-full">
+				<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 animate-pulse">
+					<UCard v-for="i in 3" :key="`kpi-skel-${i}`" class="h-full">
+						<div class="space-y-3">
+							<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
+							<div class="h-7 w-40 rounded bg-(--ui-bg-muted)" />
+							<div class="h-3 w-32 rounded bg-(--ui-bg-muted)" />
+						</div>
+					</UCard>
+				</div>
+
+				<UCard class="mb-6 animate-pulse">
+					<template #header>
+						<div class="h-3 w-28 rounded bg-(--ui-bg-muted)" />
+					</template>
 					<div class="space-y-3">
-						<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
-						<div class="h-7 w-40 rounded bg-(--ui-bg-muted)" />
-						<div class="h-3 w-32 rounded bg-(--ui-bg-muted)" />
+						<div
+							v-for="r in 6"
+							:key="`br-skel-${r}`"
+							class="grid gap-3 py-2 border-b border-(--ui-border)/40 last:border-0"
+							style="grid-template-columns: 1fr auto auto"
+						>
+							<div class="h-3 w-40 rounded bg-(--ui-bg-muted)" />
+							<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
+							<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
+						</div>
 					</div>
 				</UCard>
-			</div>
+			</template>
 
-			<UCard class="mb-6 animate-pulse">
-				<template #header>
-					<div class="h-3 w-28 rounded bg-(--ui-bg-muted)" />
-				</template>
-				<div class="space-y-3">
-					<div
-						v-for="r in 6"
-						:key="`br-skel-${r}`"
-						class="grid gap-3 py-2 border-b border-(--ui-border)/40 last:border-0"
-						style="grid-template-columns: 1fr auto auto"
-					>
-						<div class="h-3 w-40 rounded bg-(--ui-bg-muted)" />
-						<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
-						<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
-					</div>
-				</div>
-			</UCard>
-		</template>
-
-		<template v-else>
-			<!-- Filter strip: from / to dates + preset chips. Default to
+			<template v-else>
+				<!-- Filter strip: from / to dates + preset chips. Default to
 				the current fiscal year on first visit, matching P&L. -->
-			<UCard class="mb-6">
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-					<div class="grid grid-cols-2 gap-3">
-						<UFormField label="From">
-							<DateField v-model="dateFrom" />
-						</UFormField>
-						<UFormField label="To">
-							<DateField v-model="dateTo" :min-value="dateFrom || undefined" />
-						</UFormField>
+				<UCard class="mb-6">
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+						<div class="grid grid-cols-2 gap-3">
+							<UFormField label="From">
+								<DateField v-model="dateFrom" />
+							</UFormField>
+							<UFormField label="To">
+								<DateField v-model="dateTo" :min-value="dateFrom || undefined" />
+							</UFormField>
+						</div>
+						<div class="flex flex-wrap gap-1.5 items-center justify-end">
+							<button
+								v-for="p in DATE_PRESETS"
+								:key="p.key"
+								type="button"
+								class="px-2.5 py-1 text-xs rounded-md border transition cursor-pointer"
+								:class="presetClasses(p.key)"
+								@click="togglePreset(p.key)"
+							>
+								{{ p.label }}
+							</button>
+							<UButton
+								size="xs"
+								variant="ghost"
+								color="neutral"
+								icon="i-lucide-rotate-ccw"
+								@click="resetDates"
+							>
+								Reset
+							</UButton>
+						</div>
 					</div>
-					<div class="flex flex-wrap gap-1.5 items-center justify-end">
-						<button
-							v-for="p in DATE_PRESETS"
-							:key="p.key"
-							type="button"
-							class="px-2.5 py-1 text-xs rounded-md border transition cursor-pointer"
-							:class="presetClasses(p.key)"
-							@click="togglePreset(p.key)"
+				</UCard>
+
+				<!-- Three KPI tiles: Revenue, Clients, Invoices. -->
+				<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+					<UCard class="h-full">
+						<div class="flex items-start justify-between gap-2">
+							<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
+								Total revenue
+							</div>
+							<UIcon name="i-lucide-trending-up" class="size-4 text-(--ui-success)" />
+						</div>
+						<div
+							class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums text-(--ui-success)"
+							:title="formatLKR(totals.revenue)"
 						>
-							{{ p.label }}
-						</button>
-						<UButton
-							size="xs"
-							variant="ghost"
-							color="neutral"
-							icon="i-lucide-rotate-ccw"
-							@click="resetDates"
+							{{ formatLKR(totals.revenue) }}
+						</div>
+						<div class="mt-1 text-xs text-(--ui-text-muted)">
+							{{ totals.invoiceCount }} invoice{{ totals.invoiceCount === 1 ? "" : "s" }} issued
+						</div>
+					</UCard>
+
+					<UCard class="h-full">
+						<div class="flex items-start justify-between gap-2">
+							<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
+								Clients
+							</div>
+							<UIcon name="i-lucide-users-round" class="size-4 text-(--ui-text-muted)" />
+						</div>
+						<div
+							class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
 						>
-							Reset
-						</UButton>
-					</div>
+							{{ totals.clientCount }}
+						</div>
+						<div class="mt-1 text-xs text-(--ui-text-muted)">
+							<template v-if="totals.clientCount === 0">
+								No clients in this period
+							</template>
+							<template v-else>
+								Avg {{ formatLKR(avgPerClient) }} per client
+							</template>
+						</div>
+					</UCard>
+
+					<UCard class="h-full">
+						<div class="flex items-start justify-between gap-2">
+							<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
+								Invoices
+							</div>
+							<UIcon name="i-lucide-receipt" class="size-4 text-(--ui-text-muted)" />
+						</div>
+						<div
+							class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
+						>
+							{{ totals.invoiceCount }}
+						</div>
+						<div class="mt-1 text-xs text-(--ui-text-muted)">
+							<template v-if="totals.invoiceCount === 0">
+								No invoices issued
+							</template>
+							<template v-else>
+								Avg {{ formatLKR(avgPerInvoice) }} per invoice
+							</template>
+						</div>
+					</UCard>
 				</div>
-			</UCard>
 
-			<!-- Three KPI tiles: Revenue, Clients, Invoices. -->
-			<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-				<UCard class="h-full">
-					<div class="flex items-start justify-between gap-2">
-						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
-							Total revenue
-						</div>
-						<UIcon name="i-lucide-trending-up" class="size-4 text-(--ui-success)" />
-					</div>
-					<div
-						class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums text-(--ui-success)"
-						:title="formatLKR(totals.revenue)"
-					>
-						{{ formatLKR(totals.revenue) }}
-					</div>
-					<div class="mt-1 text-xs text-(--ui-text-muted)">
-						{{ totals.invoiceCount }} invoice{{ totals.invoiceCount === 1 ? "" : "s" }} issued
-					</div>
-				</UCard>
-
-				<UCard class="h-full">
-					<div class="flex items-start justify-between gap-2">
-						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
-							Clients
-						</div>
-						<UIcon name="i-lucide-users-round" class="size-4 text-(--ui-text-muted)" />
-					</div>
-					<div
-						class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
-					>
-						{{ totals.clientCount }}
-					</div>
-					<div class="mt-1 text-xs text-(--ui-text-muted)">
-						<template v-if="totals.clientCount === 0">
-							No clients in this period
-						</template>
-						<template v-else>
-							Avg {{ formatLKR(avgPerClient) }} per client
-						</template>
-					</div>
-				</UCard>
-
-				<UCard class="h-full">
-					<div class="flex items-start justify-between gap-2">
-						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
-							Invoices
-						</div>
-						<UIcon name="i-lucide-receipt" class="size-4 text-(--ui-text-muted)" />
-					</div>
-					<div
-						class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
-					>
-						{{ totals.invoiceCount }}
-					</div>
-					<div class="mt-1 text-xs text-(--ui-text-muted)">
-						<template v-if="totals.invoiceCount === 0">
-							No invoices issued
-						</template>
-						<template v-else>
-							Avg {{ formatLKR(avgPerInvoice) }} per invoice
-						</template>
-					</div>
-				</UCard>
-			</div>
-
-			<!-- Per-client breakdown. Sorted by total desc — top clients
+				<!-- Per-client breakdown. Sorted by total desc — top clients
 				lead. ResizableDataTable for the same column-resize +
 				sort + Fit page-size UX every other list page has. Click
 				a row to open /invoices pre-filtered to that client. -->
-			<div class="mb-2 flex items-end justify-between gap-2 flex-wrap">
-				<div>
-					<div class="font-medium">
-						By client
+				<div class="mb-2 flex items-end justify-between gap-2 flex-wrap">
+					<div>
+						<div class="font-medium">
+							By client
+						</div>
+						<div class="text-xs text-(--ui-text-muted) mt-0.5">
+							Click a row to open that client's invoice list pre-filtered. {{ rangeLabel }}.
+						</div>
 					</div>
-					<div class="text-xs text-(--ui-text-muted) mt-0.5">
-						Click a row to open that client's invoice list pre-filtered. {{ rangeLabel }}.
+					<div class="text-xs text-(--ui-text-muted)">
+						{{ clientRows.length }} client{{ clientRows.length === 1 ? "" : "s" }} with revenue
 					</div>
 				</div>
-				<div class="text-xs text-(--ui-text-muted)">
-					{{ clientRows.length }} client{{ clientRows.length === 1 ? "" : "s" }} with revenue
-				</div>
-			</div>
-
-			<div
-				v-if="clientRows.length === 0"
-				class="py-10 text-center text-sm text-(--ui-text-muted) border border-dashed border-(--ui-border) rounded-lg mb-6"
-			>
-				<UIcon name="i-lucide-receipt" class="size-10 mx-auto mb-2 opacity-40" />
-				<div>No invoices issued in this period.</div>
-			</div>
-
-			<ResizableDataTable
-				v-else
-				:rows="clientRows"
-				class="mb-6"
-				state-key="reports-sales-by-client"
-				data-key="rowKey"
-				default-sort-field="total"
-				:default-sort-order="-1"
-				:default-page-size="50"
-				@row-click="(row) => openClient(row.clientId)"
-			>
-				<Column field="name" header="Client" sortable>
-					<template #body="{ data }">
-						<div class="min-w-[140px] max-w-[320px]">
-							<div class="font-medium truncate">
-								{{ data.name }}
-							</div>
-							<div class="text-xs text-(--ui-text-muted) truncate">
-								{{ data.invoiceCount }} invoice{{ data.invoiceCount === 1 ? "" : "s" }}
-							</div>
-						</div>
-					</template>
-				</Column>
-				<Column field="invoiceCount" header="Invoices" sortable :style="{ textAlign: 'right' }">
-					<template #body="{ data }">
-						<div class="text-right tabular-nums whitespace-nowrap text-(--ui-text-muted)">
-							{{ data.invoiceCount }}
-						</div>
-					</template>
-				</Column>
-				<Column field="total" header="Revenue" sortable :style="{ textAlign: 'right' }">
-					<template #body="{ data }">
-						<div class="text-right tabular-nums whitespace-nowrap font-semibold text-(--ui-success)">
-							{{ formatLKR(data.total) }}
-						</div>
-					</template>
-				</Column>
-				<Column field="share" header="% of total" sortable :style="{ textAlign: 'right' }">
-					<template #body="{ data }">
-						<div class="text-right tabular-nums whitespace-nowrap text-(--ui-text-muted)">
-							{{ pct(data.total, totals.revenue) }}
-						</div>
-					</template>
-				</Column>
-			</ResizableDataTable>
-
-			<!-- Drill-down: every issued invoice in the period, sortable.
-				Same shape as the P&L invoice tab so the muscle memory
-				carries across reports. -->
-			<UCard>
-				<template #header>
-					<div class="app-chrome flex items-center justify-between gap-3 flex-wrap">
-						<div class="app-chrome font-medium">
-							Invoices
-						</div>
-						<div class="text-xs text-(--ui-text-muted) tabular-nums">
-							{{ filteredInvoices.length }} · Total <span class="text-(--ui-text) font-medium ml-1">{{ formatLKR(totals.revenue) }}</span>
-						</div>
-					</div>
-				</template>
 
 				<div
-					v-if="filteredInvoices.length === 0"
-					class="py-10 text-center text-sm text-(--ui-text-muted)"
+					v-if="clientRows.length === 0"
+					class="py-10 text-center text-sm text-(--ui-text-muted) border border-dashed border-(--ui-border) rounded-lg mb-6"
 				>
 					<UIcon name="i-lucide-receipt" class="size-10 mx-auto mb-2 opacity-40" />
 					<div>No invoices issued in this period.</div>
@@ -297,55 +231,125 @@
 
 				<ResizableDataTable
 					v-else
-					:rows="filteredInvoices"
-					state-key="reports-sales-by-client-invoices"
-					default-sort-field="issue_date"
+					:rows="clientRows"
+					class="mb-6"
+					state-key="reports-sales-by-client"
+					data-key="rowKey"
+					default-sort-field="total"
 					:default-sort-order="-1"
 					:default-page-size="50"
-					@row-click="(row) => router.push(`/invoices/${row.id}`)"
+					@row-click="(row) => openClient(row.clientId)"
 				>
-					<Column field="number" header="Number" sortable>
+					<Column field="name" header="Client" sortable>
 						<template #body="{ data }">
-							<div class="font-medium tabular-nums whitespace-nowrap">
-								{{ data.number }}
+							<div class="min-w-[140px] max-w-[320px]">
+								<div class="font-medium truncate">
+									{{ data.name }}
+								</div>
+								<div class="text-xs text-(--ui-text-muted) truncate">
+									{{ data.invoiceCount }} invoice{{ data.invoiceCount === 1 ? "" : "s" }}
+								</div>
 							</div>
 						</template>
 					</Column>
-					<Column field="issue_date" header="Date" sortable>
+					<Column field="invoiceCount" header="Invoices" sortable :style="{ textAlign: 'right' }">
 						<template #body="{ data }">
-							<div class="text-(--ui-text-muted) tabular-nums whitespace-nowrap">
-								{{ data.issue_date }}
+							<div class="text-right tabular-nums whitespace-nowrap text-(--ui-text-muted)">
+								{{ data.invoiceCount }}
 							</div>
 						</template>
 					</Column>
-					<Column field="client_name" header="Client" sortable>
+					<Column field="total" header="Revenue" sortable :style="{ textAlign: 'right' }">
 						<template #body="{ data }">
-							<div class="truncate min-w-[140px] max-w-[260px]">
-								{{ data.client_name || "—" }}
+							<div class="text-right tabular-nums whitespace-nowrap font-semibold text-(--ui-success)">
+								{{ formatLKR(data.total) }}
 							</div>
 						</template>
 					</Column>
-					<Column field="subtotal_cents" header="Subtotal" sortable :style="{ textAlign: 'right' }">
+					<Column field="share" header="% of total" sortable :style="{ textAlign: 'right' }">
 						<template #body="{ data }">
-							<div class="text-right tabular-nums whitespace-nowrap">
-								{{ formatLKR(data.subtotal_cents) }}
+							<div class="text-right tabular-nums whitespace-nowrap text-(--ui-text-muted)">
+								{{ pct(data.total, totals.revenue) }}
 							</div>
 						</template>
 					</Column>
 				</ResizableDataTable>
-			</UCard>
-		</template>
 
-		<PdfPreviewModal
-			v-model:open="pdf.state.open"
-			:asset-url="pdf.state.assetUrl"
-			:temp-path="pdf.state.tempPath"
-			:suggested-file-name="pdf.state.suggestedFileName"
-			:saving="pdf.state.saving"
-			title="Sales by client PDF preview"
-			@save="pdf.onSave"
-			@cancel="pdf.onCancel"
-		/>
+				<!-- Drill-down: every issued invoice in the period, sortable.
+				Same shape as the P&L invoice tab so the muscle memory
+				carries across reports. -->
+				<UCard>
+					<template #header>
+						<div class="app-chrome flex items-center justify-between gap-3 flex-wrap">
+							<div class="app-chrome font-medium">
+								Invoices
+							</div>
+							<div class="text-xs text-(--ui-text-muted) tabular-nums">
+								{{ filteredInvoices.length }} · Total <span class="text-(--ui-text) font-medium ml-1">{{ formatLKR(totals.revenue) }}</span>
+							</div>
+						</div>
+					</template>
+
+					<div
+						v-if="filteredInvoices.length === 0"
+						class="py-10 text-center text-sm text-(--ui-text-muted)"
+					>
+						<UIcon name="i-lucide-receipt" class="size-10 mx-auto mb-2 opacity-40" />
+						<div>No invoices issued in this period.</div>
+					</div>
+
+					<ResizableDataTable
+						v-else
+						:rows="filteredInvoices"
+						state-key="reports-sales-by-client-invoices"
+						default-sort-field="issue_date"
+						:default-sort-order="-1"
+						:default-page-size="50"
+						@row-click="(row) => router.push(`/invoices/${row.id}`)"
+					>
+						<Column field="number" header="Number" sortable>
+							<template #body="{ data }">
+								<div class="font-medium tabular-nums whitespace-nowrap">
+									{{ data.number }}
+								</div>
+							</template>
+						</Column>
+						<Column field="issue_date" header="Date" sortable>
+							<template #body="{ data }">
+								<div class="text-(--ui-text-muted) tabular-nums whitespace-nowrap">
+									{{ data.issue_date }}
+								</div>
+							</template>
+						</Column>
+						<Column field="client_name" header="Client" sortable>
+							<template #body="{ data }">
+								<div class="truncate min-w-[140px] max-w-[260px]">
+									{{ data.client_name || "—" }}
+								</div>
+							</template>
+						</Column>
+						<Column field="subtotal_cents" header="Subtotal" sortable :style="{ textAlign: 'right' }">
+							<template #body="{ data }">
+								<div class="text-right tabular-nums whitespace-nowrap">
+									{{ formatLKR(data.subtotal_cents) }}
+								</div>
+							</template>
+						</Column>
+					</ResizableDataTable>
+				</UCard>
+			</template>
+
+			<PdfPreviewModal
+				v-model:open="pdf.state.open"
+				:asset-url="pdf.state.assetUrl"
+				:temp-path="pdf.state.tempPath"
+				:suggested-file-name="pdf.state.suggestedFileName"
+				:saving="pdf.state.saving"
+				title="Sales by client PDF preview"
+				@save="pdf.onSave"
+				@cancel="pdf.onCancel"
+			/>
+		</template>
 	</div>
 </template>
 
@@ -365,7 +369,11 @@
 	import { formatLKR } from "~/lib/money";
 	import { buildSalesByClientPdfPayload } from "~/lib/report-pdf";
 	import { useInvoicesStore } from "~/stores/invoices";
+	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
+
+	const license = useLicenseStore();
+	const locked = computed(() => !license.hasFeature("reports.sales_by_client"));
 
 	definePageMeta({ title: "Sales by client" });
 

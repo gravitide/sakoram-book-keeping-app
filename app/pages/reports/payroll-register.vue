@@ -1,5 +1,7 @@
 <template>
 	<div class="select-none">
+		<FeatureLock v-if="locked" title="Payroll register" tier-label="Premium" feature="payroll" />
+
 		<!-- Top toolbar — back link + PDF action. Same layout as the
 			rest of the reports for consistency. -->
 		<div class="mb-4 flex items-center justify-between gap-4">
@@ -44,340 +46,342 @@
 			</p>
 		</header>
 
-		<!-- Loading skeleton mirroring the real layout. -->
-		<template v-if="isLoading">
-			<UCard class="mb-6 animate-pulse">
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-					<div class="grid grid-cols-2 gap-3">
-						<div class="space-y-2">
-							<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
-							<div class="h-9 rounded bg-(--ui-bg-muted)" />
+		<template v-if="!locked">
+			<!-- Loading skeleton mirroring the real layout. -->
+			<template v-if="isLoading">
+				<UCard class="mb-6 animate-pulse">
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+						<div class="grid grid-cols-2 gap-3">
+							<div class="space-y-2">
+								<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
+								<div class="h-9 rounded bg-(--ui-bg-muted)" />
+							</div>
+							<div class="space-y-2">
+								<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
+								<div class="h-9 rounded bg-(--ui-bg-muted)" />
+							</div>
 						</div>
-						<div class="space-y-2">
-							<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
-							<div class="h-9 rounded bg-(--ui-bg-muted)" />
+						<div class="flex flex-wrap gap-1.5 items-center justify-end">
+							<div
+								v-for="i in 6"
+								:key="`pset-skel-${i}`"
+								class="h-6 w-24 rounded-md bg-(--ui-bg-muted)"
+							/>
 						</div>
 					</div>
-					<div class="flex flex-wrap gap-1.5 items-center justify-end">
-						<div
-							v-for="i in 6"
-							:key="`pset-skel-${i}`"
-							class="h-6 w-24 rounded-md bg-(--ui-bg-muted)"
-						/>
-					</div>
-				</div>
-			</UCard>
+				</UCard>
 
-			<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 animate-pulse">
-				<UCard v-for="i in 3" :key="`kpi-skel-${i}`" class="h-full">
+				<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 animate-pulse">
+					<UCard v-for="i in 3" :key="`kpi-skel-${i}`" class="h-full">
+						<div class="space-y-3">
+							<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
+							<div class="h-7 w-40 rounded bg-(--ui-bg-muted)" />
+							<div class="h-3 w-32 rounded bg-(--ui-bg-muted)" />
+						</div>
+					</UCard>
+				</div>
+
+				<UCard class="mb-6 animate-pulse">
+					<template #header>
+						<div class="h-3 w-28 rounded bg-(--ui-bg-muted)" />
+					</template>
 					<div class="space-y-3">
-						<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
-						<div class="h-7 w-40 rounded bg-(--ui-bg-muted)" />
-						<div class="h-3 w-32 rounded bg-(--ui-bg-muted)" />
-					</div>
-				</UCard>
-			</div>
-
-			<UCard class="mb-6 animate-pulse">
-				<template #header>
-					<div class="h-3 w-28 rounded bg-(--ui-bg-muted)" />
-				</template>
-				<div class="space-y-3">
-					<div
-						v-for="r in 6"
-						:key="`br-skel-${r}`"
-						class="grid gap-3 py-2 border-b border-(--ui-border)/40 last:border-0"
-						style="grid-template-columns: 1fr auto auto auto"
-					>
-						<div class="h-3 w-40 rounded bg-(--ui-bg-muted)" />
-						<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
-						<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
-						<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
-					</div>
-				</div>
-			</UCard>
-		</template>
-
-		<template v-else>
-			<UCard class="mb-6">
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-					<div class="grid grid-cols-2 gap-3">
-						<UFormField label="From">
-							<DateField v-model="dateFrom" />
-						</UFormField>
-						<UFormField label="To">
-							<DateField v-model="dateTo" :min-value="dateFrom || undefined" />
-						</UFormField>
-					</div>
-					<div class="flex flex-wrap gap-1.5 items-center justify-end">
-						<button
-							v-for="p in DATE_PRESETS"
-							:key="p.key"
-							type="button"
-							class="px-2.5 py-1 text-xs rounded-md border transition cursor-pointer"
-							:class="presetClasses(p.key)"
-							@click="togglePreset(p.key)"
+						<div
+							v-for="r in 6"
+							:key="`br-skel-${r}`"
+							class="grid gap-3 py-2 border-b border-(--ui-border)/40 last:border-0"
+							style="grid-template-columns: 1fr auto auto auto"
 						>
-							{{ p.label }}
-						</button>
-						<UButton
-							size="xs"
-							variant="ghost"
-							color="neutral"
-							icon="i-lucide-rotate-ccw"
-							@click="resetDates"
+							<div class="h-3 w-40 rounded bg-(--ui-bg-muted)" />
+							<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
+							<div class="h-3 w-24 rounded bg-(--ui-bg-muted)" />
+							<div class="h-3 w-12 rounded bg-(--ui-bg-muted)" />
+						</div>
+					</div>
+				</UCard>
+			</template>
+
+			<template v-else>
+				<UCard class="mb-6">
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+						<div class="grid grid-cols-2 gap-3">
+							<UFormField label="From">
+								<DateField v-model="dateFrom" />
+							</UFormField>
+							<UFormField label="To">
+								<DateField v-model="dateTo" :min-value="dateFrom || undefined" />
+							</UFormField>
+						</div>
+						<div class="flex flex-wrap gap-1.5 items-center justify-end">
+							<button
+								v-for="p in DATE_PRESETS"
+								:key="p.key"
+								type="button"
+								class="px-2.5 py-1 text-xs rounded-md border transition cursor-pointer"
+								:class="presetClasses(p.key)"
+								@click="togglePreset(p.key)"
+							>
+								{{ p.label }}
+							</button>
+							<UButton
+								size="xs"
+								variant="ghost"
+								color="neutral"
+								icon="i-lucide-rotate-ccw"
+								@click="resetDates"
+							>
+								Reset
+							</UButton>
+						</div>
+					</div>
+				</UCard>
+
+				<!-- Three KPI tiles: Gross earnings, Net pay, Payslips. -->
+				<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+					<UCard class="h-full">
+						<div class="flex items-start justify-between gap-2">
+							<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
+								Gross earnings
+							</div>
+							<UIcon name="i-lucide-wallet" class="size-4 text-(--ui-text-muted)" />
+						</div>
+						<div
+							class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
+							:title="formatLKR(totals.earnings)"
 						>
-							Reset
-						</UButton>
-					</div>
-				</div>
-			</UCard>
-
-			<!-- Three KPI tiles: Gross earnings, Net pay, Payslips. -->
-			<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-				<UCard class="h-full">
-					<div class="flex items-start justify-between gap-2">
-						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
-							Gross earnings
+							{{ formatLKR(totals.earnings) }}
 						</div>
-						<UIcon name="i-lucide-wallet" class="size-4 text-(--ui-text-muted)" />
-					</div>
-					<div
-						class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
-						:title="formatLKR(totals.earnings)"
-					>
-						{{ formatLKR(totals.earnings) }}
-					</div>
-					<div class="mt-1 text-xs text-(--ui-text-muted)">
-						{{ totals.payslipCount }} payslip{{ totals.payslipCount === 1 ? "" : "s" }} · {{ totals.employeeCount }} employee{{ totals.employeeCount === 1 ? "" : "s" }}
-					</div>
-				</UCard>
-
-				<UCard class="h-full">
-					<div class="flex items-start justify-between gap-2">
-						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
-							Net pay
+						<div class="mt-1 text-xs text-(--ui-text-muted)">
+							{{ totals.payslipCount }} payslip{{ totals.payslipCount === 1 ? "" : "s" }} · {{ totals.employeeCount }} employee{{ totals.employeeCount === 1 ? "" : "s" }}
 						</div>
-						<UIcon name="i-lucide-banknote" class="size-4 text-(--ui-success)" />
-					</div>
-					<div
-						class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums text-(--ui-success)"
-						:title="formatLKR(totals.net)"
-					>
-						{{ formatLKR(totals.net) }}
-					</div>
-					<div class="mt-1 text-xs text-(--ui-text-muted)">
-						<template v-if="totals.earnings === 0">
-							No payroll in this period
-						</template>
-						<template v-else>
-							After {{ formatLKR(totals.deductions) }} deductions
-						</template>
-					</div>
-				</UCard>
+					</UCard>
 
-				<UCard class="h-full">
-					<div class="flex items-start justify-between gap-2">
-						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
-							{{ outstanding === 0 ? "Paid out" : "Outstanding" }}
+					<UCard class="h-full">
+						<div class="flex items-start justify-between gap-2">
+							<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
+								Net pay
+							</div>
+							<UIcon name="i-lucide-banknote" class="size-4 text-(--ui-success)" />
 						</div>
-						<UIcon
-							:name="outstanding === 0 ? 'i-lucide-check-circle-2' : 'i-lucide-alarm-clock'"
-							class="size-4"
+						<div
+							class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums text-(--ui-success)"
+							:title="formatLKR(totals.net)"
+						>
+							{{ formatLKR(totals.net) }}
+						</div>
+						<div class="mt-1 text-xs text-(--ui-text-muted)">
+							<template v-if="totals.earnings === 0">
+								No payroll in this period
+							</template>
+							<template v-else>
+								After {{ formatLKR(totals.deductions) }} deductions
+							</template>
+						</div>
+					</UCard>
+
+					<UCard class="h-full">
+						<div class="flex items-start justify-between gap-2">
+							<div class="text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight">
+								{{ outstanding === 0 ? "Paid out" : "Outstanding" }}
+							</div>
+							<UIcon
+								:name="outstanding === 0 ? 'i-lucide-check-circle-2' : 'i-lucide-alarm-clock'"
+								class="size-4"
+								:class="outstanding === 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'"
+							/>
+						</div>
+						<div
+							class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
 							:class="outstanding === 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'"
-						/>
-					</div>
-					<div
-						class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
-						:class="outstanding === 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'"
-						:title="formatLKR(outstanding === 0 ? totals.paid : outstanding)"
-					>
-						{{ formatLKR(outstanding === 0 ? totals.paid : outstanding) }}
-					</div>
-					<div class="mt-1 text-xs text-(--ui-text-muted)">
-						<template v-if="outstanding === 0">
-							All payslips fully paid
-						</template>
-						<template v-else>
-							{{ formatLKR(totals.paid) }} paid so far
-						</template>
-					</div>
-				</UCard>
-			</div>
+							:title="formatLKR(outstanding === 0 ? totals.paid : outstanding)"
+						>
+							{{ formatLKR(outstanding === 0 ? totals.paid : outstanding) }}
+						</div>
+						<div class="mt-1 text-xs text-(--ui-text-muted)">
+							<template v-if="outstanding === 0">
+								All payslips fully paid
+							</template>
+							<template v-else>
+								{{ formatLKR(totals.paid) }} paid so far
+							</template>
+						</div>
+					</UCard>
+				</div>
 
-			<!-- Per-employee breakdown. Sorted by gross earnings desc. -->
-			<div class="mb-2 flex items-end justify-between gap-2 flex-wrap">
-				<div>
-					<div class="font-medium">
-						By employee
+				<!-- Per-employee breakdown. Sorted by gross earnings desc. -->
+				<div class="mb-2 flex items-end justify-between gap-2 flex-wrap">
+					<div>
+						<div class="font-medium">
+							By employee
+						</div>
+						<div class="text-xs text-(--ui-text-muted) mt-0.5">
+							Click a row to open that employee's payslip list pre-filtered. {{ rangeLabel }}.
+						</div>
 					</div>
-					<div class="text-xs text-(--ui-text-muted) mt-0.5">
-						Click a row to open that employee's payslip list pre-filtered. {{ rangeLabel }}.
+					<div class="text-xs text-(--ui-text-muted)">
+						{{ employeeRows.length }} employee{{ employeeRows.length === 1 ? "" : "s" }} on payroll
 					</div>
 				</div>
-				<div class="text-xs text-(--ui-text-muted)">
-					{{ employeeRows.length }} employee{{ employeeRows.length === 1 ? "" : "s" }} on payroll
-				</div>
-			</div>
-
-			<div
-				v-if="employeeRows.length === 0"
-				class="py-10 text-center text-sm text-(--ui-text-muted) border border-dashed border-(--ui-border) rounded-lg mb-6"
-			>
-				<UIcon name="i-lucide-file-spreadsheet" class="size-10 mx-auto mb-2 opacity-40" />
-				<div>No payslips issued in this period.</div>
-			</div>
-
-			<ResizableDataTable
-				v-else
-				:rows="employeeRows"
-				class="mb-6"
-				state-key="reports-payroll-register-by-employee"
-				data-key="rowKey"
-				default-sort-field="earnings"
-				:default-sort-order="-1"
-				:default-page-size="50"
-				@row-click="(row) => openEmployee(row.employeeId)"
-			>
-				<Column field="name" header="Employee" sortable>
-					<template #body="{ data }">
-						<div class="min-w-[140px] max-w-[320px]">
-							<div class="font-medium truncate">
-								{{ data.name }}
-							</div>
-							<div class="text-xs text-(--ui-text-muted) truncate">
-								{{ data.payslipCount }} payslip{{ data.payslipCount === 1 ? "" : "s" }}
-							</div>
-						</div>
-					</template>
-				</Column>
-				<Column field="earnings" header="Gross" sortable :style="{ textAlign: 'right' }">
-					<template #body="{ data }">
-						<div class="text-right tabular-nums whitespace-nowrap">
-							{{ formatLKR(data.earnings) }}
-						</div>
-					</template>
-				</Column>
-				<Column field="deductions" header="Deductions" sortable :style="{ textAlign: 'right' }">
-					<template #body="{ data }">
-						<div class="text-right tabular-nums whitespace-nowrap" :class="data.deductions === 0 ? 'text-(--ui-text-muted)' : 'text-(--ui-error)'">
-							{{ data.deductions === 0 ? "—" : `− ${formatLKR(data.deductions)}` }}
-						</div>
-					</template>
-				</Column>
-				<Column field="net" header="Net" sortable :style="{ textAlign: 'right' }">
-					<template #body="{ data }">
-						<div class="text-right tabular-nums whitespace-nowrap font-semibold text-(--ui-success)">
-							{{ formatLKR(data.net) }}
-						</div>
-					</template>
-				</Column>
-				<Column field="paid" header="Paid" sortable :style="{ textAlign: 'right' }">
-					<template #body="{ data }">
-						<div class="text-right tabular-nums whitespace-nowrap" :class="paidClass(data.net, data.paid)">
-							{{ formatLKR(data.paid) }}
-						</div>
-					</template>
-				</Column>
-			</ResizableDataTable>
-
-			<!-- Drill-down: every payslip in the period. Default sort is
-				employee asc then period desc — when the page is filtered
-				to a single month, the natural read is "everyone, one row
-				each". Columns: Number / Employee / Period / Gross /
-				Deductions / Net / Paid. -->
-			<UCard>
-				<template #header>
-					<div class="app-chrome flex items-center justify-between gap-3 flex-wrap">
-						<div class="app-chrome font-medium">
-							Payslips
-						</div>
-						<div class="text-xs text-(--ui-text-muted) tabular-nums">
-							{{ filteredPayslips.length }} · Net <span class="text-(--ui-text) font-medium ml-1">{{ formatLKR(totals.net) }}</span>
-						</div>
-					</div>
-				</template>
 
 				<div
-					v-if="filteredPayslips.length === 0"
-					class="py-10 text-center text-sm text-(--ui-text-muted)"
+					v-if="employeeRows.length === 0"
+					class="py-10 text-center text-sm text-(--ui-text-muted) border border-dashed border-(--ui-border) rounded-lg mb-6"
 				>
 					<UIcon name="i-lucide-file-spreadsheet" class="size-10 mx-auto mb-2 opacity-40" />
-					<div>No payslips in this period.</div>
+					<div>No payslips issued in this period.</div>
 				</div>
 
 				<ResizableDataTable
 					v-else
-					:rows="payslipRows"
-					state-key="reports-payroll-register-payslips"
-					default-sort-field="_employee"
-					:default-sort-order="1"
+					:rows="employeeRows"
+					class="mb-6"
+					state-key="reports-payroll-register-by-employee"
+					data-key="rowKey"
+					default-sort-field="earnings"
+					:default-sort-order="-1"
 					:default-page-size="50"
-					@row-click="(row) => router.push(`/payslips/${row.id}`)"
+					@row-click="(row) => openEmployee(row.employeeId)"
 				>
-					<Column field="number" header="Number" sortable>
+					<Column field="name" header="Employee" sortable>
 						<template #body="{ data }">
-							<div class="font-medium tabular-nums whitespace-nowrap">
-								{{ data.number }}
+							<div class="min-w-[140px] max-w-[320px]">
+								<div class="font-medium truncate">
+									{{ data.name }}
+								</div>
+								<div class="text-xs text-(--ui-text-muted) truncate">
+									{{ data.payslipCount }} payslip{{ data.payslipCount === 1 ? "" : "s" }}
+								</div>
 							</div>
 						</template>
 					</Column>
-					<Column field="_employee" header="Employee" sortable>
-						<template #body="{ data }">
-							<div class="truncate min-w-[140px] max-w-[260px]">
-								{{ data.employee_name || "—" }}
-							</div>
-						</template>
-					</Column>
-					<Column field="period_end" header="Period end" sortable>
-						<template #body="{ data }">
-							<div class="text-(--ui-text-muted) tabular-nums whitespace-nowrap">
-								{{ data.period_end }}
-							</div>
-						</template>
-					</Column>
-					<Column field="earnings_cents" header="Gross" sortable :style="{ textAlign: 'right' }">
+					<Column field="earnings" header="Gross" sortable :style="{ textAlign: 'right' }">
 						<template #body="{ data }">
 							<div class="text-right tabular-nums whitespace-nowrap">
-								{{ formatLKR(data.earnings_cents) }}
+								{{ formatLKR(data.earnings) }}
 							</div>
 						</template>
 					</Column>
-					<Column field="deductions_cents" header="Deductions" sortable :style="{ textAlign: 'right' }">
+					<Column field="deductions" header="Deductions" sortable :style="{ textAlign: 'right' }">
 						<template #body="{ data }">
-							<div class="text-right tabular-nums whitespace-nowrap" :class="data.deductions_cents === 0 ? 'text-(--ui-text-muted)' : 'text-(--ui-error)'">
-								{{ data.deductions_cents === 0 ? "—" : `− ${formatLKR(data.deductions_cents)}` }}
+							<div class="text-right tabular-nums whitespace-nowrap" :class="data.deductions === 0 ? 'text-(--ui-text-muted)' : 'text-(--ui-error)'">
+								{{ data.deductions === 0 ? "—" : `− ${formatLKR(data.deductions)}` }}
 							</div>
 						</template>
 					</Column>
-					<Column field="net_cents" header="Net" sortable :style="{ textAlign: 'right' }">
+					<Column field="net" header="Net" sortable :style="{ textAlign: 'right' }">
 						<template #body="{ data }">
 							<div class="text-right tabular-nums whitespace-nowrap font-semibold text-(--ui-success)">
-								{{ formatLKR(data.net_cents) }}
+								{{ formatLKR(data.net) }}
 							</div>
 						</template>
 					</Column>
-					<Column field="_paid" header="Paid" sortable :style="{ textAlign: 'right' }">
+					<Column field="paid" header="Paid" sortable :style="{ textAlign: 'right' }">
 						<template #body="{ data }">
-							<div class="text-right tabular-nums whitespace-nowrap" :class="paidClass(data.net_cents, data._paid)">
-								{{ formatLKR(data._paid) }}
+							<div class="text-right tabular-nums whitespace-nowrap" :class="paidClass(data.net, data.paid)">
+								{{ formatLKR(data.paid) }}
 							</div>
 						</template>
 					</Column>
 				</ResizableDataTable>
-			</UCard>
-		</template>
 
-		<PdfPreviewModal
-			v-model:open="pdf.state.open"
-			:asset-url="pdf.state.assetUrl"
-			:temp-path="pdf.state.tempPath"
-			:suggested-file-name="pdf.state.suggestedFileName"
-			:saving="pdf.state.saving"
-			title="Payroll register PDF preview"
-			@save="pdf.onSave"
-			@cancel="pdf.onCancel"
-		/>
+				<!-- Drill-down: every payslip in the period. Default sort is
+				employee asc then period desc — when the page is filtered
+				to a single month, the natural read is "everyone, one row
+				each". Columns: Number / Employee / Period / Gross /
+				Deductions / Net / Paid. -->
+				<UCard>
+					<template #header>
+						<div class="app-chrome flex items-center justify-between gap-3 flex-wrap">
+							<div class="app-chrome font-medium">
+								Payslips
+							</div>
+							<div class="text-xs text-(--ui-text-muted) tabular-nums">
+								{{ filteredPayslips.length }} · Net <span class="text-(--ui-text) font-medium ml-1">{{ formatLKR(totals.net) }}</span>
+							</div>
+						</div>
+					</template>
+
+					<div
+						v-if="filteredPayslips.length === 0"
+						class="py-10 text-center text-sm text-(--ui-text-muted)"
+					>
+						<UIcon name="i-lucide-file-spreadsheet" class="size-10 mx-auto mb-2 opacity-40" />
+						<div>No payslips in this period.</div>
+					</div>
+
+					<ResizableDataTable
+						v-else
+						:rows="payslipRows"
+						state-key="reports-payroll-register-payslips"
+						default-sort-field="_employee"
+						:default-sort-order="1"
+						:default-page-size="50"
+						@row-click="(row) => router.push(`/payslips/${row.id}`)"
+					>
+						<Column field="number" header="Number" sortable>
+							<template #body="{ data }">
+								<div class="font-medium tabular-nums whitespace-nowrap">
+									{{ data.number }}
+								</div>
+							</template>
+						</Column>
+						<Column field="_employee" header="Employee" sortable>
+							<template #body="{ data }">
+								<div class="truncate min-w-[140px] max-w-[260px]">
+									{{ data.employee_name || "—" }}
+								</div>
+							</template>
+						</Column>
+						<Column field="period_end" header="Period end" sortable>
+							<template #body="{ data }">
+								<div class="text-(--ui-text-muted) tabular-nums whitespace-nowrap">
+									{{ data.period_end }}
+								</div>
+							</template>
+						</Column>
+						<Column field="earnings_cents" header="Gross" sortable :style="{ textAlign: 'right' }">
+							<template #body="{ data }">
+								<div class="text-right tabular-nums whitespace-nowrap">
+									{{ formatLKR(data.earnings_cents) }}
+								</div>
+							</template>
+						</Column>
+						<Column field="deductions_cents" header="Deductions" sortable :style="{ textAlign: 'right' }">
+							<template #body="{ data }">
+								<div class="text-right tabular-nums whitespace-nowrap" :class="data.deductions_cents === 0 ? 'text-(--ui-text-muted)' : 'text-(--ui-error)'">
+									{{ data.deductions_cents === 0 ? "—" : `− ${formatLKR(data.deductions_cents)}` }}
+								</div>
+							</template>
+						</Column>
+						<Column field="net_cents" header="Net" sortable :style="{ textAlign: 'right' }">
+							<template #body="{ data }">
+								<div class="text-right tabular-nums whitespace-nowrap font-semibold text-(--ui-success)">
+									{{ formatLKR(data.net_cents) }}
+								</div>
+							</template>
+						</Column>
+						<Column field="_paid" header="Paid" sortable :style="{ textAlign: 'right' }">
+							<template #body="{ data }">
+								<div class="text-right tabular-nums whitespace-nowrap" :class="paidClass(data.net_cents, data._paid)">
+									{{ formatLKR(data._paid) }}
+								</div>
+							</template>
+						</Column>
+					</ResizableDataTable>
+				</UCard>
+			</template>
+
+			<PdfPreviewModal
+				v-model:open="pdf.state.open"
+				:asset-url="pdf.state.assetUrl"
+				:temp-path="pdf.state.tempPath"
+				:suggested-file-name="pdf.state.suggestedFileName"
+				:saving="pdf.state.saving"
+				title="Payroll register PDF preview"
+				@save="pdf.onSave"
+				@cancel="pdf.onCancel"
+			/>
+		</template>
 	</div>
 </template>
 
@@ -400,9 +404,13 @@
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { formatLKR } from "~/lib/money";
 	import { buildPayrollRegisterPdfPayload } from "~/lib/report-pdf";
+	import { useLicenseStore } from "~/stores/license";
 	import { usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
+
+	const license = useLicenseStore();
+	const locked = computed(() => !license.hasFeature("payroll"));
 
 	definePageMeta({ title: "Payroll register" });
 
