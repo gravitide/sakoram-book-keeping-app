@@ -49,6 +49,7 @@
 									size="xs"
 									variant="soft"
 									color="primary"
+									:style="{ fontFamily: `'${suggestion}', sans-serif` }"
 									@click="uiFont = suggestion"
 								>
 									{{ suggestion }}

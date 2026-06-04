@@ -45,6 +45,7 @@
 										size="xs"
 										variant="soft"
 										color="primary"
+										:style="{ fontFamily: `'${suggestion}', sans-serif` }"
 										@click="form.pdf_font = suggestion"
 									>
 										{{ suggestion }}
