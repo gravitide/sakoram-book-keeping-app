@@ -38,13 +38,30 @@
 								<div class="text-xs text-(--ui-text-muted) mb-2">
 									Bundled fonts:
 								</div>
-								<div class="flex flex-wrap gap-2">
+								<div class="flex flex-wrap gap-2 mb-3">
 									<UButton
 										v-for="suggestion in bundledFonts"
 										:key="suggestion"
 										size="xs"
 										variant="soft"
 										color="primary"
+										@click="form.pdf_font = suggestion"
+									>
+										{{ suggestion }}
+									</UButton>
+								</div>
+								<div class="text-xs text-(--ui-text-muted) mb-2 flex items-center gap-1.5">
+									<UIcon name="i-lucide-code" class="size-3.5" />
+									Monospaced:
+								</div>
+								<div class="flex flex-wrap gap-2">
+									<UButton
+										v-for="suggestion in bundledMonoFonts"
+										:key="suggestion"
+										size="xs"
+										variant="soft"
+										color="primary"
+										:style="{ fontFamily: `'${suggestion}', monospace` }"
 										@click="form.pdf_font = suggestion"
 									>
 										{{ suggestion }}
@@ -256,7 +273,10 @@
 	// any face installed on their machine, but only the bundled faces are
 	// guaranteed to render identically across machines. Iosevka Charon Mono
 	// is the bundled monospace (good for figure-aligned numbers).
-	const bundledFonts = ["Akt", "Inter", "Inter Tight", "Stack Sans Text", "Miriam Libre", "Amarna", "Iosevka Charon Mono"];
+	const bundledFonts = ["Akt", "Inter", "Inter Tight", "Stack Sans Text", "Miriam Libre", "Amarna"];
+	// Bundled monospaced faces, listed under their own sub-heading. Good for
+	// figure-aligned numbers; more will be added over time.
+	const bundledMonoFonts = ["Iosevka Charon Mono"];
 
 	const pdfPreviewFontStack = computed(() =>
 		`'${form.pdf_font || "Akt"}', 'Akt', 'Inter', serif`

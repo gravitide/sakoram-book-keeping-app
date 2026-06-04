@@ -54,6 +54,23 @@
 									{{ suggestion }}
 								</UButton>
 							</div>
+							<div class="text-xs text-(--ui-text-muted) mb-2 flex items-center gap-1.5">
+								<UIcon name="i-lucide-code" class="size-3.5" />
+								Monospaced:
+							</div>
+							<div class="flex flex-wrap gap-2 mb-3">
+								<UButton
+									v-for="suggestion in bundledMonoFonts"
+									:key="suggestion"
+									size="xs"
+									variant="soft"
+									color="primary"
+									:style="{ fontFamily: `'${suggestion}', monospace` }"
+									@click="uiFont = suggestion"
+								>
+									{{ suggestion }}
+								</UButton>
+							</div>
 							<div class="text-xs text-(--ui-text-muted) mb-2">
 								System fonts (only if installed):
 							</div>
@@ -293,7 +310,11 @@
 		"Inter Tight",
 		"Stack Sans Text",
 		"Miriam Libre",
-		"Amarna",
+		"Amarna"
+	];
+	// Bundled monospaced faces — listed under their own sub-heading. Good
+	// for figure-aligned numbers; more will be added over time.
+	const bundledMonoFonts = [
 		"Iosevka Charon Mono"
 	];
 	const systemFonts = [
