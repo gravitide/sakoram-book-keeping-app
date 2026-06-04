@@ -3,8 +3,10 @@
 		<!-- select-none on the page root: static labels and copy aren't
 			selectable; form fields stay selectable via the input rule
 			in main.css. -->
-		<!-- Single-column layout: the four cards (UI font, Theme color, Theme,
-			and Zoom) stack vertically at every breakpoint. -->
+		<!-- The four cards (UI font, Theme color, Theme, Zoom) stack in a
+			single column up through lg. At xl+ they split into two columns:
+			the tall UI font card on the left, Theme color / Theme / Zoom
+			stacked on the right. -->
 
 		<header class="mb-6 max-w-5xl mx-auto">
 			<h1 class="text-2xl font-semibold">
@@ -18,7 +20,7 @@
 		</header>
 
 		<div class="max-w-5xl mx-auto">
-			<div class="grid grid-cols-1 gap-6">
+			<div class="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
 				<div id="ui-font" class="scroll-mt-6">
 					<UCard>
 						<template #header>
@@ -86,7 +88,8 @@
 					</UCard>
 				</div>
 
-				<!-- Theme color + Theme + Zoom, stacked below the UI font card. -->
+				<!-- Theme color + Theme + Zoom: stacked below the UI font card up
+					to lg, the right column at xl+. -->
 				<div class="space-y-6">
 					<div id="theme-color" class="scroll-mt-6">
 						<UCard>
