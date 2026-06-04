@@ -106,6 +106,23 @@ pub fn decode_and_verify(key: &str, vk: &VerifyingKey) -> Result<Payload, String
     deserialize_payload(body)
 }
 
+/// Your Ed25519 public key (hex, 32 bytes). Generated once via
+/// `mint_license keygen`. Safe to be public — it can only verify, not sign.
+pub const EMBEDDED_PUBLIC_KEY: &str = "73a60e5fc362f4e193c4ea7ab9f1c89338f9b4416d2e02ec94f4fab22f9fb431";
+
+fn embedded_vk() -> VerifyingKey {
+    let bytes = (0..EMBEDDED_PUBLIC_KEY.len()).step_by(2)
+        .map(|i| u8::from_str_radix(&EMBEDDED_PUBLIC_KEY[i..i + 2], 16).unwrap())
+        .collect::<Vec<u8>>();
+    VerifyingKey::from_bytes(&bytes.try_into().expect("32-byte public key")).expect("valid key")
+}
+
+/// Verify a key string against the embedded public key and return tier info.
+pub fn validate(key: &str) -> Result<LicenseInfo, String> {
+    let p = decode_and_verify(key, &embedded_vk())?;
+    Ok(LicenseInfo { tier: p.tier, license_id: p.license_id, name: p.name, email: p.email })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -149,6 +166,13 @@ mod tests {
         let vk = SigningKey::from_bytes(&[7u8; 32]).verifying_key();
         assert!(decode_and_verify("not-a-key", &vk).is_err());
         assert!(decode_and_verify("SAKORAM-PLUS-AAAA", &vk).is_err());
+    }
+
+    #[test]
+    fn validates_a_real_minted_key() {
+        let info = validate("SAKORAM-PREMIUM-KNFV-ETIB-AIAA-AAAA-AAAA-AAIA-ABII-ACSU-MVZX-IICC-OV4W-K4QG-ORAH-QLTM-NOIL-EYQK-KFL7-QV2O-HL4N-BXGH-34T7-FULY-YMOF-YT3R-M4JT-UDUM-4BRG-JTEC-WQV3-Q47T-EWBJ-IDLS-MSDH-SDUW-AJVZ-4QWZ-ATRV-NXU7-2NFM-F3IB").expect("real key validates");
+        assert_eq!(info.tier, TIER_PREMIUM);
+        assert_eq!(info.email, "t@x.lk");
     }
 
     #[test]

@@ -28,3 +28,8 @@ src-tauri/binaries/*.exe
 
 # Local Claude Code overrides (personal permission allowlist)
 .claude/settings.local.json
+
+# License signing private key — must never be committed.
+*.signing.key
+license-signing.key
+*.lic
