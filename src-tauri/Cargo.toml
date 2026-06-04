@@ -47,7 +47,7 @@ zeroize = "1"
 # License-key signatures (src/license.rs + src/bin/mint_license.rs).
 # Ed25519: the app embeds only the public key and verifies offline; only the
 # private key (kept off-repo) can mint a valid key.
-ed25519-dalek = "2"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
 
 # Phone-upload feature (src/phone_upload.rs): a small LAN HTTP server so a
 # photo taken on the user's phone can be pushed straight onto an invoice.
