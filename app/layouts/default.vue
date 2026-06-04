@@ -54,21 +54,46 @@
 							<UIcon :name="item.icon" class="size-4" />
 							{{ item.label }}
 						</button>
+						<!-- Group parent (has children): the label still navigates to
+							its landing page; the chevron on the right collapses/expands
+							the group's sub-items. Collapsed state is persisted per
+							group (by its `to`) to localStorage. -->
+						<div v-else-if="item.children" class="flex items-stretch">
+							<NuxtLink
+								:to="item.to"
+								class="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
+								active-class=""
+								exact-active-class="!bg-(--ui-primary)/10 !text-(--ui-primary) font-medium"
+							>
+								<UIcon :name="item.icon" class="size-4" />
+								{{ item.label }}
+							</NuxtLink>
+							<button
+								type="button"
+								class="px-1.5 rounded-md text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text) cursor-pointer shrink-0"
+								:aria-label="isGroupCollapsed(item.to) ? `Expand ${item.label}` : `Collapse ${item.label}`"
+								@click="toggleGroup(item.to)"
+							>
+								<UIcon
+									name="i-lucide-chevron-down"
+									class="size-4 transition-transform"
+									:class="isGroupCollapsed(item.to) ? '-rotate-90' : ''"
+								/>
+							</button>
+						</div>
 						<NuxtLink
 							v-else
 							:to="item.to"
 							class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
-							:active-class="item.children ? '' : '!bg-(--ui-primary)/10 !text-(--ui-primary) font-medium'"
+							active-class="!bg-(--ui-primary)/10 !text-(--ui-primary) font-medium"
 							exact-active-class="!bg-(--ui-primary)/10 !text-(--ui-primary) font-medium"
 						>
 							<UIcon :name="item.icon" class="size-4" />
 							{{ item.label }}
 						</NuxtLink>
 
-						<!-- Sub-items: render directly under the parent. Always visible
-					(no click-to-expand) because the tree is small enough that
-					discoverability beats compactness here. -->
-						<div v-if="item.children" class="ml-3 pl-3 border-l border-(--ui-border) space-y-1">
+						<!-- Sub-items: collapsible per group via the chevron above. -->
+						<div v-if="item.children && !isGroupCollapsed(item.to)" class="ml-3 pl-3 border-l border-(--ui-border) space-y-1">
 							<template v-for="child in item.children" :key="child.to">
 								<NuxtLink
 									:to="child.to"
@@ -395,16 +420,38 @@
 	//
 	// A child may carry `sections`: in-page #anchors rendered as a third
 	// level, shown only when the user is on that child's route.
+	// Collapsible nav groups. Collapsed group keys (the group's `to`) persist
+	// to localStorage so the user's layout survives reloads / tenant switches.
+	const COLLAPSED_GROUPS_KEY = "sidebar-collapsed-groups";
+	const collapsedGroups = ref<Set<string>>(new Set());
+	onMounted(() => {
+		try {
+			const raw = localStorage.getItem(COLLAPSED_GROUPS_KEY);
+			if (raw) collapsedGroups.value = new Set(JSON.parse(raw) as string[]);
+		} catch { /* ignore malformed storage */ }
+	});
+	const isGroupCollapsed = (key?: string): boolean => !!key && collapsedGroups.value.has(key);
+	const toggleGroup = (key?: string): void => {
+		if (!key) return;
+		const next = new Set(collapsedGroups.value);
+		if (next.has(key)) next.delete(key);
+		else next.add(key);
+		collapsedGroups.value = next;
+		try {
+			localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify([...next]));
+		} catch { /* ignore */ }
+	};
+
 	interface NavSection { hash: string, label: string, icon: string }
 	interface NavChild { to: string, label: string, icon: string, sections?: NavSection[] }
-	interface NavItem { to: string, label: string, icon: string, divider?: boolean, children?: NavChild[] }
+	interface NavItem { to?: string, label: string, icon: string, divider?: boolean, children?: NavChild[], action?: () => void }
 
 	const nav: NavItem[] = [
 		{ to: "/", label: "Dashboard", icon: "i-lucide-layout-dashboard" },
 		{ to: "/calendar", label: "Calendar", icon: "i-lucide-calendar-days" },
 		{ to: "/quotes", label: "Quotes", icon: "i-lucide-file-text", divider: true },
 		{ to: "/invoices", label: "Invoices", icon: "i-lucide-receipt" },
-		{ to: "/recurring-invoices", label: "Recurring", icon: "i-lucide-repeat" },
+		{ to: "/recurring-invoices", label: "Recurring invoices", icon: "i-lucide-repeat" },
 		{ to: "/credit-notes", label: "Credit notes", icon: "i-lucide-rotate-ccw" },
 		{ to: "/bills", label: "Bills", icon: "i-lucide-file-input" },
 		{ to: "/recurring-bills", label: "Recurring bills", icon: "i-lucide-repeat-2" },
