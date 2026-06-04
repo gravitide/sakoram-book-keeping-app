@@ -253,9 +253,10 @@
 
 	// Same curated list the Appearance page used. The Typst template falls
 	// through these for any missing glyph; free-text input lets the user pick
-	// any face installed on their machine, but only the bundled five are
-	// guaranteed to render identically across machines.
-	const bundledFonts = ["Akt", "Inter", "Inter Tight", "Stack Sans Text", "Miriam Libre", "Amarna"];
+	// any face installed on their machine, but only the bundled faces are
+	// guaranteed to render identically across machines. Iosevka Charon Mono
+	// is the bundled monospace (good for figure-aligned numbers).
+	const bundledFonts = ["Akt", "Inter", "Inter Tight", "Stack Sans Text", "Miriam Libre", "Amarna", "Iosevka Charon Mono"];
 
 	const pdfPreviewFontStack = computed(() =>
 		`'${form.pdf_font || "Akt"}', 'Akt', 'Inter', serif`

@@ -128,6 +128,24 @@
 	src: url("@/assets/fonts/Akt-Bold.ttf") format("truetype");
 }
 
+/* Iosevka Charon Mono — bundled monospace (OFL). Two static faces so
+ * Typst selects bold correctly (a variable TTF would render bold at the
+ * regular weight). Offered for monospaced number display. */
+@font-face {
+	font-family: "Iosevka Charon Mono";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url("@/assets/fonts/IosevkaCharonMono-Regular.ttf") format("truetype");
+}
+@font-face {
+	font-family: "Iosevka Charon Mono";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url("@/assets/fonts/IosevkaCharonMono-Bold.ttf") format("truetype");
+}
+
 @theme {
 	--font-heading: "Montserrat", sans-serif;
 	--font-sans: "Akt", "Inter", sans-serif;
