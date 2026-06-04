@@ -9,7 +9,9 @@
 
 use data_encoding::BASE32_NOPAD;
 use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use tauri::Manager;
 
 const MAGIC: [u8; 4] = *b"SKRM";
 const FORMAT_VERSION: u8 = 1;
@@ -121,6 +123,44 @@ fn embedded_vk() -> VerifyingKey {
 pub fn validate(key: &str) -> Result<LicenseInfo, String> {
     let p = decode_and_verify(key, &embedded_vk())?;
     Ok(LicenseInfo { tier: p.tier, license_id: p.license_id, name: p.name, email: p.email })
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LicenseState {
+    /// The entered key string, or null. Tier is always re-derived by verifying.
+    pub license_key: Option<String>,
+    /// ISO date (YYYY-MM-DD) the trial started; set on first read if absent.
+    pub trial_start: Option<String>,
+    /// Max ISO date ever observed — clock-rollback guard.
+    pub last_seen_date: Option<String>,
+}
+
+fn state_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join("license.json"))
+}
+
+#[tauri::command]
+pub fn read_license_state(app: tauri::AppHandle) -> Result<LicenseState, String> {
+    let path = state_path(&app)?;
+    if !path.exists() {
+        return Ok(LicenseState::default());
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&raw).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn write_license_state(app: tauri::AppHandle, state: LicenseState) -> Result<(), String> {
+    let path = state_path(&app)?;
+    let raw = serde_json::to_string_pretty(&state).map_err(|e| e.to_string())?;
+    std::fs::write(&path, raw).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn validate_license(key: String) -> Result<LicenseInfo, String> {
+    validate(&key)
 }
 
 #[cfg(test)]
