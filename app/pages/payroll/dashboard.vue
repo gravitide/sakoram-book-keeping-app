@@ -2,6 +2,12 @@
 	<div class="select-none">
 		<!-- select-none on the page root: the payroll dashboard is a
 			glanceable overview, not data the user copies out. -->
+		<FeatureLock
+			v-if="locked"
+			title="Payroll dashboard"
+			tier-label="Premium"
+			feature="payroll"
+		/>
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
 			<div>
 				<h1 class="text-2xl font-semibold">
@@ -16,231 +22,233 @@
 			</div>
 		</header>
 
-		<!-- Upcoming cycle hero. The most important thing on the page: it
+		<template v-if="!locked">
+			<!-- Upcoming cycle hero. The most important thing on the page: it
 			tells the user when they should next be processing payroll
 			and gives them a one-click jump into the bulk page. -->
-		<UCard class="mb-6">
-			<template #header>
-				<div class="flex items-center justify-between gap-3">
-					<div class="flex items-center gap-2">
-						<UIcon name="i-lucide-calendar-clock" class="size-4 text-(--ui-primary)" />
-						<span class="font-medium">Upcoming pay cycle</span>
+			<UCard class="mb-6">
+				<template #header>
+					<div class="flex items-center justify-between gap-3">
+						<div class="flex items-center gap-2">
+							<UIcon name="i-lucide-calendar-clock" class="size-4 text-(--ui-primary)" />
+							<span class="font-medium">Upcoming pay cycle</span>
+						</div>
+						<UBadge
+							:color="urgency.color"
+							variant="subtle"
+							size="sm"
+						>
+							{{ urgency.label }}
+						</UBadge>
 					</div>
-					<UBadge
-						:color="urgency.color"
-						variant="subtle"
-						size="sm"
-					>
-						{{ urgency.label }}
-					</UBadge>
-				</div>
-			</template>
+				</template>
 
-			<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-				<div>
-					<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
-						Next pay date
+				<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+					<div>
+						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
+							Next pay date
+						</div>
+						<div class="mt-1 text-2xl font-semibold tabular-nums">
+							{{ next.cycle.payDate }}
+						</div>
+						<div class="mt-1 text-xs text-(--ui-text-muted)">
+							{{ formatMonthLabel(next.year, next.month) }}
+						</div>
 					</div>
-					<div class="mt-1 text-2xl font-semibold tabular-nums">
-						{{ next.cycle.payDate }}
+					<div>
+						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
+							Period
+						</div>
+						<div class="mt-1 text-sm tabular-nums">
+							{{ next.cycle.periodStart }}
+						</div>
+						<div class="text-xs text-(--ui-text-muted)">
+							to {{ next.cycle.periodEnd }}
+						</div>
 					</div>
-					<div class="mt-1 text-xs text-(--ui-text-muted)">
-						{{ formatMonthLabel(next.year, next.month) }}
+					<div>
+						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
+							Est. total payout
+						</div>
+						<div class="mt-1 text-2xl font-semibold tabular-nums">
+							{{ formatLKR(estimatedTotal) }}
+						</div>
+						<div class="mt-1 text-xs text-(--ui-text-muted)">
+							{{ activeEmployeeCount }} active employee{{ activeEmployeeCount === 1 ? "" : "s" }}
+						</div>
 					</div>
 				</div>
-				<div>
-					<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
-						Period
-					</div>
-					<div class="mt-1 text-sm tabular-nums">
-						{{ next.cycle.periodStart }}
-					</div>
-					<div class="text-xs text-(--ui-text-muted)">
-						to {{ next.cycle.periodEnd }}
-					</div>
-				</div>
-				<div>
-					<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
-						Est. total payout
-					</div>
-					<div class="mt-1 text-2xl font-semibold tabular-nums">
-						{{ formatLKR(estimatedTotal) }}
-					</div>
-					<div class="mt-1 text-xs text-(--ui-text-muted)">
-						{{ activeEmployeeCount }} active employee{{ activeEmployeeCount === 1 ? "" : "s" }}
-					</div>
-				</div>
-			</div>
 
-			<template #footer>
-				<div class="flex items-center justify-between gap-4 flex-wrap">
-					<div class="text-xs text-(--ui-text-muted) tabular-nums">
-						<span class="font-medium text-(--ui-text)">{{ cycleCreatedCount }} / {{ activeEmployeeCount }}</span> payslips created
-						<span v-if="cycleCreatedCount > 0">
-							· <span class="text-(--ui-success)">{{ cyclePaidCount }} paid</span>
-							<span v-if="cyclePartialCount > 0"> · <span class="text-(--ui-warning)">{{ cyclePartialCount }} partial</span></span>
-							<span v-if="cycleUnpaidCount > 0"> · <span>{{ cycleUnpaidCount }} unpaid</span></span>
-						</span>
+				<template #footer>
+					<div class="flex items-center justify-between gap-4 flex-wrap">
+						<div class="text-xs text-(--ui-text-muted) tabular-nums">
+							<span class="font-medium text-(--ui-text)">{{ cycleCreatedCount }} / {{ activeEmployeeCount }}</span> payslips created
+							<span v-if="cycleCreatedCount > 0">
+								· <span class="text-(--ui-success)">{{ cyclePaidCount }} paid</span>
+								<span v-if="cyclePartialCount > 0"> · <span class="text-(--ui-warning)">{{ cyclePartialCount }} partial</span></span>
+								<span v-if="cycleUnpaidCount > 0"> · <span>{{ cycleUnpaidCount }} unpaid</span></span>
+							</span>
+						</div>
+						<div class="flex gap-2">
+							<NuxtLink to="/settings/payroll">
+								<UButton size="sm" color="neutral" variant="outline" icon="i-lucide-calendar-clock">
+									Cycle settings
+								</UButton>
+							</NuxtLink>
+							<NuxtLink to="/payslips/bulk">
+								<UButton size="sm" icon="i-lucide-play">
+									{{ cycleCreatedCount === 0 ? "Run payroll" : "Continue run" }}
+								</UButton>
+							</NuxtLink>
+						</div>
 					</div>
-					<div class="flex gap-2">
-						<NuxtLink to="/settings/payroll">
-							<UButton size="sm" color="neutral" variant="outline" icon="i-lucide-calendar-clock">
-								Cycle settings
-							</UButton>
-						</NuxtLink>
-						<NuxtLink to="/payslips/bulk">
-							<UButton size="sm" icon="i-lucide-play">
-								{{ cycleCreatedCount === 0 ? "Run payroll" : "Continue run" }}
-							</UButton>
-						</NuxtLink>
-					</div>
-				</div>
-			</template>
-		</UCard>
-
-		<!-- Headcount KPI strip. Tiny by design — the chart and recent
-			runs below are the substance of the page. -->
-		<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-			<UCard>
-				<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
-					Active employees
-				</div>
-				<div class="mt-1 text-2xl font-semibold tabular-nums">
-					{{ activeEmployeeCount }}
-				</div>
-				<div class="mt-1 text-xs text-(--ui-text-muted)">
-					{{ archivedEmployeeCount }} archived
-				</div>
+				</template>
 			</UCard>
-			<!-- Outstanding payroll tile is the actionable one: clicking
+
+			<!-- Headcount KPI strip. Tiny by design — the chart and recent
+			runs below are the substance of the page. -->
+			<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+				<UCard>
+					<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
+						Active employees
+					</div>
+					<div class="mt-1 text-2xl font-semibold tabular-nums">
+						{{ activeEmployeeCount }}
+					</div>
+					<div class="mt-1 text-xs text-(--ui-text-muted)">
+						{{ archivedEmployeeCount }} archived
+					</div>
+				</UCard>
+				<!-- Outstanding payroll tile is the actionable one: clicking
 				jumps to /payslips with the unpaid+partial chips
 				preset, so the user lands directly on the rows that
 				need attention. Matches the dashboard KPI tile
 				prefilter pattern. -->
-			<NuxtLink to="/payslips" class="block group" @click="prefilterOutstanding">
-				<UCard class="h-full transition group-hover:border-(--ui-primary)">
+				<NuxtLink to="/payslips" class="block group" @click="prefilterOutstanding">
+					<UCard class="h-full transition group-hover:border-(--ui-primary)">
+						<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
+							Outstanding payroll
+						</div>
+						<div class="mt-1 text-2xl font-semibold tabular-nums">
+							{{ formatLKR(outstandingPayroll) }}
+						</div>
+						<div class="mt-1 text-xs text-(--ui-text-muted)">
+							{{ outstandingPayslips.length }} payslip{{ outstandingPayslips.length === 1 ? "" : "s" }} need attention
+						</div>
+					</UCard>
+				</NuxtLink>
+				<UCard>
 					<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
-						Outstanding payroll
+						Paid this year
 					</div>
 					<div class="mt-1 text-2xl font-semibold tabular-nums">
-						{{ formatLKR(outstandingPayroll) }}
+						{{ formatLKR(paidThisYear) }}
 					</div>
 					<div class="mt-1 text-xs text-(--ui-text-muted)">
-						{{ outstandingPayslips.length }} payslip{{ outstandingPayslips.length === 1 ? "" : "s" }} need attention
+						Across {{ paidThisYearCount }} payment{{ paidThisYearCount === 1 ? "" : "s" }}
 					</div>
 				</UCard>
-			</NuxtLink>
-			<UCard>
-				<div class="text-xs uppercase tracking-wide text-(--ui-text-muted)">
-					Paid this year
-				</div>
-				<div class="mt-1 text-2xl font-semibold tabular-nums">
-					{{ formatLKR(paidThisYear) }}
-				</div>
-				<div class="mt-1 text-xs text-(--ui-text-muted)">
-					Across {{ paidThisYearCount }} payment{{ paidThisYearCount === 1 ? "" : "s" }}
-				</div>
-			</UCard>
-		</div>
+			</div>
 
-		<!-- 12-month chart of salaries paid -->
-		<UCard class="mb-6">
-			<template #header>
-				<div class="font-medium">
-					Month-on-month salaries paid
-				</div>
-				<div class="text-xs text-(--ui-text-muted) mt-1">
-					Sum of payment vouchers attributed to a payslip, by voucher date.
-				</div>
-			</template>
-			<MonthlySalaryPaidChart :vouchers="vouchersStore.vouchers" />
-		</UCard>
-
-		<!-- Recent runs + outstanding side-by-side on wide screens; stack
-			on narrow. Both link into the payslips list with a filter. -->
-		<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-			<UCard>
-				<template #header>
-					<div class="flex items-center justify-between gap-2">
-						<div class="font-medium">
-							Recent runs
-						</div>
-						<NuxtLink to="/payslips" class="text-xs text-(--ui-text-muted) hover:text-(--ui-text)">
-							View all
-						</NuxtLink>
-					</div>
-				</template>
-				<div v-if="recentRuns.length === 0" class="py-8 text-center text-sm text-(--ui-text-muted)">
-					No payroll runs yet.
-				</div>
-				<ul v-else class="divide-y divide-(--ui-border)">
-					<li
-						v-for="r in recentRuns"
-						:key="r.month"
-						class="py-2.5 flex items-center justify-between gap-3"
-					>
-						<div class="min-w-0">
-							<div class="font-medium truncate">
-								{{ r.label }}
-							</div>
-							<div class="text-xs text-(--ui-text-muted)">
-								{{ r.employeeCount }} employee{{ r.employeeCount === 1 ? "" : "s" }} · {{ r.paidCount }} of {{ r.employeeCount }} paid
-							</div>
-						</div>
-						<div class="text-right tabular-nums shrink-0">
-							<div class="font-medium">
-								{{ formatLKR(r.netTotal) }}
-							</div>
-							<UBadge
-								:color="r.paidCount === r.employeeCount ? 'success' : 'warning'"
-								variant="subtle"
-								size="sm"
-							>
-								{{ r.paidCount === r.employeeCount ? "✓ Complete" : `${r.employeeCount - r.paidCount} pending` }}
-							</UBadge>
-						</div>
-					</li>
-				</ul>
-			</UCard>
-
-			<UCard>
+			<!-- 12-month chart of salaries paid -->
+			<UCard class="mb-6">
 				<template #header>
 					<div class="font-medium">
-						Outstanding
+						Month-on-month salaries paid
 					</div>
 					<div class="text-xs text-(--ui-text-muted) mt-1">
-						Issued payslips that aren't fully paid yet.
+						Sum of payment vouchers attributed to a payslip, by voucher date.
 					</div>
 				</template>
-				<div v-if="outstandingPayslips.length === 0" class="py-8 text-center text-sm text-(--ui-text-muted)">
-					<UIcon name="i-lucide-check-circle-2" class="size-8 mx-auto mb-2 text-(--ui-success) opacity-70" />
-					Everything's settled.
-				</div>
-				<ul v-else class="divide-y divide-(--ui-border)">
-					<NuxtLink
-						v-for="p in outstandingPayslips.slice(0, 6)"
-						:key="p.id"
-						:to="`/payslips/${p.id}`"
-						class="py-2.5 flex items-center justify-between gap-3 hover:bg-(--ui-bg-muted) rounded-md px-2 -mx-2"
-					>
-						<div class="min-w-0">
-							<div class="font-medium truncate">
-								{{ p.number }} · {{ employeeNameFor(p) }}
-							</div>
-							<div class="text-xs text-(--ui-text-muted) tabular-nums">
-								{{ p.period_start }} → {{ p.period_end }}
-							</div>
-						</div>
-						<div class="text-right tabular-nums shrink-0">
-							<div class="font-medium">
-								{{ formatLKR(payslipsStore.balanceCentsFor(p)) }}
-							</div>
-							<StatusBadge :status="payslipsStore.derivedStatus(p)" />
-						</div>
-					</NuxtLink>
-				</ul>
+				<MonthlySalaryPaidChart :vouchers="vouchersStore.vouchers" />
 			</UCard>
-		</div>
+
+			<!-- Recent runs + outstanding side-by-side on wide screens; stack
+			on narrow. Both link into the payslips list with a filter. -->
+			<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+				<UCard>
+					<template #header>
+						<div class="flex items-center justify-between gap-2">
+							<div class="font-medium">
+								Recent runs
+							</div>
+							<NuxtLink to="/payslips" class="text-xs text-(--ui-text-muted) hover:text-(--ui-text)">
+								View all
+							</NuxtLink>
+						</div>
+					</template>
+					<div v-if="recentRuns.length === 0" class="py-8 text-center text-sm text-(--ui-text-muted)">
+						No payroll runs yet.
+					</div>
+					<ul v-else class="divide-y divide-(--ui-border)">
+						<li
+							v-for="r in recentRuns"
+							:key="r.month"
+							class="py-2.5 flex items-center justify-between gap-3"
+						>
+							<div class="min-w-0">
+								<div class="font-medium truncate">
+									{{ r.label }}
+								</div>
+								<div class="text-xs text-(--ui-text-muted)">
+									{{ r.employeeCount }} employee{{ r.employeeCount === 1 ? "" : "s" }} · {{ r.paidCount }} of {{ r.employeeCount }} paid
+								</div>
+							</div>
+							<div class="text-right tabular-nums shrink-0">
+								<div class="font-medium">
+									{{ formatLKR(r.netTotal) }}
+								</div>
+								<UBadge
+									:color="r.paidCount === r.employeeCount ? 'success' : 'warning'"
+									variant="subtle"
+									size="sm"
+								>
+									{{ r.paidCount === r.employeeCount ? "✓ Complete" : `${r.employeeCount - r.paidCount} pending` }}
+								</UBadge>
+							</div>
+						</li>
+					</ul>
+				</UCard>
+
+				<UCard>
+					<template #header>
+						<div class="font-medium">
+							Outstanding
+						</div>
+						<div class="text-xs text-(--ui-text-muted) mt-1">
+							Issued payslips that aren't fully paid yet.
+						</div>
+					</template>
+					<div v-if="outstandingPayslips.length === 0" class="py-8 text-center text-sm text-(--ui-text-muted)">
+						<UIcon name="i-lucide-check-circle-2" class="size-8 mx-auto mb-2 text-(--ui-success) opacity-70" />
+						Everything's settled.
+					</div>
+					<ul v-else class="divide-y divide-(--ui-border)">
+						<NuxtLink
+							v-for="p in outstandingPayslips.slice(0, 6)"
+							:key="p.id"
+							:to="`/payslips/${p.id}`"
+							class="py-2.5 flex items-center justify-between gap-3 hover:bg-(--ui-bg-muted) rounded-md px-2 -mx-2"
+						>
+							<div class="min-w-0">
+								<div class="font-medium truncate">
+									{{ p.number }} · {{ employeeNameFor(p) }}
+								</div>
+								<div class="text-xs text-(--ui-text-muted) tabular-nums">
+									{{ p.period_start }} → {{ p.period_end }}
+								</div>
+							</div>
+							<div class="text-right tabular-nums shrink-0">
+								<div class="font-medium">
+									{{ formatLKR(payslipsStore.balanceCentsFor(p)) }}
+								</div>
+								<StatusBadge :status="payslipsStore.derivedStatus(p)" />
+							</div>
+						</NuxtLink>
+					</ul>
+				</UCard>
+			</div>
+		</template>
 	</div>
 </template>
 
@@ -255,6 +263,7 @@
 	import { formatLKR } from "~/lib/money";
 	import { formatMonthLabel, nextPayrollCycle } from "~/lib/payroll-cycle";
 	import { useEmployeesStore } from "~/stores/employees";
+	import { useLicenseStore } from "~/stores/license";
 	import { usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
@@ -265,6 +274,8 @@
 	const employeesStore = useEmployeesStore();
 	const payslipsStore = usePayslipsStore();
 	const vouchersStore = useVouchersStore();
+	const license = useLicenseStore();
+	const locked = computed(() => !license.hasFeature("payroll"));
 
 	await Promise.all([
 		settingsStore.ensureLoaded(),

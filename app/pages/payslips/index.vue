@@ -2,6 +2,12 @@
 	<div class="select-none">
 		<!-- select-none on the page root: this list is for navigating to
 			payslips, not copying cell text out of the table. -->
+		<FeatureLock
+			v-if="locked"
+			title="Payslips"
+			tier-label="Premium"
+			feature="payroll"
+		/>
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
 			<div>
 				<h1 class="text-2xl font-semibold flex items-center gap-3">
@@ -21,7 +27,7 @@
 					</template>
 				</p>
 			</div>
-			<div class="flex items-center gap-2">
+			<div v-if="!locked" class="flex items-center gap-2">
 				<UButton
 					icon="i-lucide-users"
 					variant="soft"
@@ -172,9 +178,10 @@
 
 			<!-- Selection action bar — renders above the table whenever any
 				row is ticked. PrimeVue's selection model lives in
-				`selectedRows`; we surface a count + Clear + Generate PDFs. -->
+				`selectedRows`; we surface a count + Clear + Generate PDFs.
+				Hidden when locked (payroll is a Premium feature). -->
 			<div
-				v-if="selectedRows.length > 0 && !store.loading && !store.error"
+				v-if="selectedRows.length > 0 && !store.loading && !store.error && !locked"
 				class="mb-3 flex items-center justify-between gap-3 px-3 py-2 rounded-md border border-(--ui-primary)/30 bg-(--ui-primary)/10 text-sm"
 			>
 				<div>
@@ -356,6 +363,7 @@
 	import { buildPayslipPdfPayload } from "~/lib/payslip-pdf";
 	import { resolveProtectPassword } from "~/lib/pdf";
 	import { useEmployeesStore } from "~/stores/employees";
+	import { useLicenseStore } from "~/stores/license";
 	import { monthBounds, usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
@@ -370,6 +378,8 @@
 	const vouchersStore = useVouchersStore();
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
+	const license = useLicenseStore();
+	const locked = computed(() => !license.hasFeature("payroll"));
 
 	// Loading state owned by `usePageLoading` — see the composable for
 	// the rAF-yield trick that ensures the skeleton actually paints.
