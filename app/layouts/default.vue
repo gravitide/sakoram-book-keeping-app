@@ -56,10 +56,10 @@
 								{{ item.label }}
 							</button>
 							<!-- Group parent (has children): the label still navigates to
-							its landing page; the chevron on the right collapses/expands
+							its landing page; the chevron on the right (or a double-click on the header) collapses/expands
 							the group's sub-items. Collapsed state is persisted per
 							group (by its `to`) to localStorage. -->
-							<div v-else-if="item.children" class="flex items-stretch">
+							<div v-else-if="item.children" class="flex items-stretch" @dblclick="toggleGroup(item.to)">
 								<NuxtLink
 									:to="item.to"
 									class="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
