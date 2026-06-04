@@ -522,7 +522,7 @@
 				{ to: "/reports/cash-flow", label: "Cash flow", icon: "i-lucide-arrow-left-right", feature: "reports.cash_flow" },
 				{ to: "/reports/sales-by-client", label: "Sales by client", icon: "i-lucide-users-round", feature: "reports.sales_by_client" },
 				{ to: "/reports/expenses-by-vendor", label: "Expenses by vendor", icon: "i-lucide-store", feature: "reports.expenses_by_vendor" },
-				{ to: "/reports/payroll-register", label: "Payroll register", icon: "i-lucide-clipboard-list" }
+				{ to: "/reports/payroll-register", label: "Payroll register", icon: "i-lucide-clipboard-list", feature: "payroll" }
 			]
 		},
 		{
