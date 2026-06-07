@@ -64,9 +64,11 @@ describe("effectiveEntitlement", () => {
 		expect(e.tier).toBe(Tier.Plus);
 		expect(e.isTrial).toBe(false);
 	});
-	it("a valid key during trial uses the higher of key/Premium-trial", () => {
+	it("a valid license supersedes the trial (paying customers aren't on trial)", () => {
 		const e = effectiveEntitlement(Tier.Plus, trialActive, "2026-06-05");
-		expect(e.tier).toBe(Tier.Premium);
+		expect(e.tier).toBe(Tier.Plus);
+		expect(e.isTrial).toBe(false);
+		expect(e.trialDaysLeft).toBe(0);
 	});
 	it("exposes businessLimit for the effective tier", () => {
 		expect(effectiveEntitlement(null, trialExpired, "2026-09-01").businessLimit).toBe(2);
