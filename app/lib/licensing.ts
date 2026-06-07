@@ -73,15 +73,26 @@ export function effectiveEntitlement(
 	trial: TrialState,
 	nowIso: string
 ): Entitlement {
+	// A valid license supersedes the trial entirely: a paying customer is no
+	// longer "on trial". Their tier is exactly what they bought (even if that's
+	// below the Premium trial — they chose that plan), and the trial banner
+	// goes away. Only when there's NO license do we grant the Premium trial.
+	if (licenseTier !== null) {
+		return {
+			tier: licenseTier,
+			isTrial: false,
+			trialDaysLeft: 0,
+			businessLimit: BUSINESS_LIMITS[licenseTier]
+		};
+	}
 	const trialLeft = trial.trialStart
 		? trialDaysRemaining(trial.trialStart, nowIso, trial.lastSeen)
 		: 0;
-	const trialTier = trialLeft > 0 ? Tier.Premium : null;
-	const candidates = [licenseTier, trialTier].filter((t): t is Tier => t !== null);
-	const tier = candidates.length ? Math.max(...candidates) as Tier : Tier.Basic;
+	const onTrial = trialLeft > 0;
+	const tier = onTrial ? Tier.Premium : Tier.Basic;
 	return {
 		tier,
-		isTrial: trialTier !== null && tier === Tier.Premium && licenseTier !== Tier.Premium,
+		isTrial: onTrial,
 		trialDaysLeft: trialLeft,
 		businessLimit: BUSINESS_LIMITS[tier]
 	};
