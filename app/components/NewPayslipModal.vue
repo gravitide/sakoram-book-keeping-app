@@ -11,7 +11,7 @@
 				</p>
 				<div class="space-y-4">
 					<UFormField label="Employee" required>
-						<EmployeePicker v-model="employeeId" required @select="onPick" />
+						<EmployeePicker v-model="employeeId" required @select="onPick" @create-new="openModel = false" />
 					</UFormField>
 					<p class="text-xs text-(--ui-text-muted)">
 						Don't see them? <NuxtLink

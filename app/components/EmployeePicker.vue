@@ -48,9 +48,13 @@
 					</button>
 				</div>
 				<div class="p-2 border-t border-(--ui-border) flex justify-between">
-					<NuxtLink to="/employees/new" class="text-xs text-(--ui-primary) hover:underline">
+					<button
+						type="button"
+						class="text-xs text-(--ui-primary) hover:underline"
+						@click="createNew"
+					>
 						+ New employee
-					</NuxtLink>
+					</button>
 					<button
 						v-if="modelValue !== null && !required"
 						type="button"
@@ -78,6 +82,7 @@
 	const emit = defineEmits<{
 		"update:modelValue": [value: number | null]
 		select: [employee: EmployeeRow]
+		createNew: []
 	}>();
 
 	const store = useEmployeesStore();
@@ -110,5 +115,15 @@
 
 	const clear = () => {
 		emit("update:modelValue", null);
+	};
+
+	// "+ New employee" — close the popover, ask the host modal to close (so
+	// the dialog dismisses cleanly), then navigate. Without closing the modal
+	// first it stays stuck over the new-employee page.
+	const createNew = async () => {
+		open.value = false;
+		emit("createNew");
+		await nextTick();
+		await navigateTo("/employees/new");
 	};
 </script>

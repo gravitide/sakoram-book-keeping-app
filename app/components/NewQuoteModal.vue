@@ -14,7 +14,7 @@
 				</p>
 				<div class="space-y-4">
 					<UFormField label="Client" required>
-						<ClientPicker v-model="clientId" />
+						<ClientPicker v-model="clientId" @create-new="openModel = false" />
 					</UFormField>
 
 					<!-- Number is editable so the user can fill a gap left by
