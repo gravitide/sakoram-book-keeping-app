@@ -21,7 +21,7 @@
 					</UFormField>
 
 					<UFormField label="Vendor" required>
-						<VendorPicker v-model="vendorId" required @select="onPick" />
+						<VendorPicker v-model="vendorId" required @select="onPick" @create-new="openModel = false" />
 					</UFormField>
 
 					<div class="grid grid-cols-2 gap-3">

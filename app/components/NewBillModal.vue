@@ -14,6 +14,7 @@
 							v-model="vendorId"
 							required
 							@select="onPick"
+							@create-new="openModel = false"
 						/>
 					</UFormField>
 					<p class="text-xs text-(--ui-text-muted)">

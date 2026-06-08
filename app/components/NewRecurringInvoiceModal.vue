@@ -23,7 +23,7 @@
 					</UFormField>
 
 					<UFormField label="Client" required>
-						<ClientPicker v-model="clientId" />
+						<ClientPicker v-model="clientId" @create-new="openModel = false" />
 					</UFormField>
 
 					<div class="grid grid-cols-2 gap-3">
