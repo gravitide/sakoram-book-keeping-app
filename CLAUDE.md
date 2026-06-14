@@ -228,6 +228,42 @@ Off by default; unencrypted businesses are unaffected.
 
 ---
 
+## Licensing & feature tiers
+
+Commercial 3-tier model, fully offline. Spec/plan:
+`docs/superpowers/{specs,plans}/2026-06-04-licensing-tiers.*`.
+
+- **Tiers:** Basic (free) < Plus < Premium. Fresh install = 30-day full
+  **Premium trial** → then free **Basic**; a paid key unlocks Plus/Premium
+  permanently (perpetual one-time purchase).
+- **Keys = offline Ed25519-signed tokens.** `src-tauri/src/license.rs` holds
+  the embedded **public** key + `validate()`; only the **private** key
+  (off-repo at `~/.sakoram/license-signing.key`, gitignored `*.signing.key` /
+  `*.lic`) can mint one. Forge-proof, but the client-side gate is an accepted
+  soft deterrent (we don't fight binary patching). Buyer name/email embedded
+  as a sharing deterrent.
+- **Mint:** `scripts/mint-license.sh <plus|premium> "Name" email` (wraps the
+  `mint_license` bin; auto-IDs + CSV ledger under `~/.sakoram`). Keypair via
+  `cargo run --bin mint_license -- keygen`; paste the printed key into
+  `EMBEDDED_PUBLIC_KEY` in `license.rs`.
+- **Per-install, not per-tenant:** state lives in
+  `{app_data_dir}/license.json` (`license_key` + `trial_start` +
+  `last_seen_date` clock-rollback guard) — NOT a tenant DB, no migration.
+  Delete it + restart the app to reset trial/license for testing.
+- **`app/lib/licensing.ts` is the source of truth:** `Tier` enum, the
+  **`FEATURES` feature→min-tier registry**, `hasFeature`, trial math, and
+  `effectiveEntitlement` (**a valid license supersedes the trial** — a paying
+  customer is never "on trial"). Pure + unit-tested. `app/stores/license.ts`
+  loads it at startup (warmed in `tenant.global.ts`).
+- **Gating (client-side, view-only on downgrade):** nav items carry an
+  optional `feature` (lock badge in `default.vue`); `<FeatureLock>` /
+  `<UpgradeButton>` banners + hidden create actions on paid pages (existing
+  data stays viewable); `New*Modal` submits + higher-tier detail edits gated;
+  Basic capped at 2 businesses (gates creation only). UI: `/upgrade` +
+  `/settings/license`.
+
+---
+
 ## Project layout
 
 ```
@@ -342,6 +378,7 @@ sakoram_app/
 │  │  ├─ validation.ts                ← Zod schemas for UI ↔ DB boundary; currently settings + clients only.
 │  │  ├─ date-parse.ts                ← parseStatementDate(raw, format) for bank reconciliation CSV imports. Supports YYYY-MM-DD / DD/MM/YYYY / DD-MM-YYYY / DD-MMM-YYYY with Date-roundtrip validation (Feb 31 → null). Pure function, fully unit-tested.
 │  │  ├─ reconcile-match.ts           ← pure scored matcher used by bank reconciliation. ±1 day = 100, ±2 = 90, ±3 = 80; +20 for shared reference token. No Pinia / Vue deps so it's trivially testable.
+│  │  ├─ licensing.ts                 ← tier registry (FEATURES) + hasFeature + trial math + effectiveEntitlement (license supersedes trial)
 │  │  └─ theme.ts                     ← THEME_COLORS palette (name → hex)
 │  ├─ middleware/
 │  │  └─ tenant.global.ts             ← redirect to /welcome if no active tenant
@@ -367,6 +404,7 @@ sakoram_app/
 │     ├─ recurring_invoices.ts        ← invoice TEMPLATES that materialise as draft invoices on a user-initiated cadence. generateOne(id) clones lines with recomputed totals and advances next_issue_date.
 │     ├─ recurring_bills.ts           ← vendor-side mirror of recurring_invoices; generated bills land in status `unpaid` (not draft — bills have no draft state).
 │     ├─ bank_statements.ts           ← imported bank statement rows + imports table. linkMatch / unlinkMatch run as two sequential auto-commits per the connection-pool caveat. suggestMatchesFor wraps the pure matcher in app/lib/reconcile-match.ts.
+│     ├─ license.ts                   ← per-install entitlement store (tier/trial); loaded at startup via tenant.global.ts
 │     └─ tenants.ts                   ← bridges JS to Rust tenant registry
 └─ src-tauri/
    ├─ Cargo.toml                      ← Rust deps (tauri 2.10, sqlx 0.8, zip 2, qpdf 0.3 vendored)
@@ -393,7 +431,9 @@ sakoram_app/
       ├─ tenants.rs                   ← tenant registry, per-DB migration runner, legacy migration
       ├─ pdf.rs                       ← export_*_pdf commands (quote/invoice/bill/voucher/payslip), copy_file, open_path
       ├─ phone_upload.rs              ← LAN HTTP server (axum) for phone→invoice photo uploads + import_invoice_attachment
-      └─ data_io.rs                   ← export_tenant_data / import_tenant_data (.zip bundles)
+      ├─ data_io.rs                   ← export_tenant_data / import_tenant_data (.zip bundles)
+      ├─ license.rs                   ← Ed25519 license-key verify + license.json trial state + commands (per-install)
+      └─ bin/mint_license.rs          ← local key-minting CLI (keygen + mint); NOT bundled into the app
 .github/
 └─ workflows/
    ├─ release-windows.yml             ← Windows MSI + NSIS build, triggered by tag push or manual dispatch. Also mirrors installers to Cloudflare R2 (when secrets configured).
@@ -757,7 +797,18 @@ The statics are generated from upstream variable files via
 `scripts/instance-fonts.py` (run with `uv run scripts/instance-fonts.py`
 — the script's PEP 723 header resolves fontTools into an ephemeral env,
 no global install required). Add a new family by dropping the variable
-TTF into `src-tauri/fonts/`, appending a `JOBS` entry, and re-running.
+TTF into `src-tauri/fonts/`, appending a `JOBS` entry, and re-running. The
+script pins **every** axis to its default (not just `wght`), so multi-axis
+variable fonts (e.g. Martian Mono's `wdth`) instance to true statics — a
+partially-pinned font keeps an `fvar` and Typst then renders bold at the
+regular weight. Verify a new font's bold with
+`typst fonts --font-path src-tauri/fonts --variants` (both 400 + 700 indexed,
+no `fvar`). Some Google Fonts ship static per-weight files already (Iosevka
+Charon Mono), others variable (Martian Mono, Google Sans Code) — check
+`gh api repos/google/fonts/contents/ofl/<family>`. Bundled **monospaced**
+families (Iosevka Charon Mono, Martian Mono, Google Sans Code) are offered for
+figure-aligned numbers; the UI/PDF font pickers split bundled fonts into a
+"Monospaced" sub-section and render each chip in its own face.
 
 `app/assets/fonts/*.ttf` — referenced from `app/assets/css/main.css`
 via `@font-face` (one declaration per weight, `format("truetype")`),
@@ -2074,6 +2125,18 @@ the next "feels native" win.
   `src-tauri/src/lib.rs` `invoke_handler!`. The error message ("command X
   not allowed") looks like a permissions issue but is just a missing
   registration.
+- **A second `src/bin/*.rs` binary breaks `tauri dev`** unless
+  `default-run = "sakoram_billing"` is set in `Cargo.toml` `[package]` —
+  `tauri dev` runs `cargo run`, which is ambiguous with >1 binary
+  (`mint_license` + the app). `cargo build` / `cargo test` pass anyway; only
+  `cargo run` / `tauri dev` surface it (error: "could not determine which
+  binary to run").
+- **Before merging any old/leftover branch, diff it against main**
+  (`git diff --stat main..<branch>`). Two abandoned early-project branches
+  (`docs/per-business-encryption-spec`, `style/appearance-2col`) predate most
+  of the codebase and would DELETE thousands of lines (license / vault /
+  reports) if merged. Don't merge a branch you didn't create this session
+  without checking the diff.
 - **The `bun run dev` script** runs Nuxt only — no Tauri shell, so
   Tauri-specific APIs (fs, dialog, invoke) will fail. Always use
   `tauri:dev` for full app testing.
