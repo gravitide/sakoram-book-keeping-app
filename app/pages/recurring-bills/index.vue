@@ -275,7 +275,9 @@
 </template>
 
 <script setup lang="ts">
-	import type { RecurringBillRow, RecurringFrequency } from "~/stores/recurring_bills";
+	import type { RecurringBillRow } from "~/stores/recurring_bills";
+	// RecurringFrequency is owned by the recurring_invoices store (#249).
+	import type { RecurringFrequency } from "~/stores/recurring_invoices";
 	import { themeHex } from "~/lib/theme";
 	import { useBillCategoriesStore } from "~/stores/bill_categories";
 	import { useLicenseStore } from "~/stores/license";

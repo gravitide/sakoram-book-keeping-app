@@ -387,7 +387,10 @@
 	import { buildCategorySnapshot, useBillCategoriesStore } from "~/stores/bill_categories";
 	import { useBillsStore } from "~/stores/bills";
 	import { useLicenseStore } from "~/stores/license";
-	import { advanceDate, useRecurringBillsStore } from "~/stores/recurring_bills";
+	import { useRecurringBillsStore } from "~/stores/recurring_bills";
+	// advanceDate is owned by the recurring_invoices store (single source of
+	// truth — see #249); import it from there, not via recurring_bills.
+	import { advanceDate } from "~/stores/recurring_invoices";
 	import { useVendorsStore } from "~/stores/vendors";
 
 	definePageMeta({ title: "Recurring bill" });
