@@ -14,6 +14,9 @@
 			state-storage="local"
 			:state-key="stateKey"
 			paginator
+			:lazy="server"
+			:total-records="server ? total : undefined"
+			:first="server ? lazyFirst : undefined"
 			:rows="effectiveRows"
 			:rows-per-page-options="rowsPerPageOptions"
 			current-page-report-template="Showing {first} to {last} of {totalRecords}"
@@ -23,6 +26,8 @@
 			class="text-sm"
 			:table-style="tableStyle"
 			:context-menu="!!rowActions"
+			@page="onPage"
+			@sort="onSort"
 			@row-click="onRowClickInternal"
 			@row-contextmenu="onRowContextMenu"
 			@update:selection="(value: T[] | T | null) => emit('update:selection', Array.isArray(value) ? value : [])"
@@ -113,7 +118,7 @@
 </template>
 
 <script setup lang="ts" generic="T extends Record<string, unknown>">
-	import type { DataTableRowClickEvent, DataTableRowContextMenuEvent } from "primevue/datatable";
+	import type { DataTablePageEvent, DataTableRowClickEvent, DataTableRowContextMenuEvent, DataTableSortEvent } from "primevue/datatable";
 	import type { MenuItem } from "primevue/menuitem";
 	import { useDragToScroll } from "~/composables/useDragToScroll";
 
@@ -172,6 +177,15 @@
 		// Once the user picks any value from the dropdown that pick
 		// wins on subsequent visits — this prop is only the seed.
 		defaultPageSize?: number | "fit"
+		// When provided, the table runs in SERVER mode: `rows` is the
+		// current page only, `total` is the full DB row count, and the
+		// table emits `request` whenever the user pages or sorts (or the
+		// page size changes) so the parent can fetch the next page via
+		// `useServerTable`. Undefined (default, every existing caller) =
+		// CLIENT mode: paginate/sort the full `rows` array in memory as
+		// before. This prop is the only thing that flips the behaviour, so
+		// untouched callers are byte-for-byte unchanged.
+		total?: number
 	}
 
 	const props = withDefaults(defineProps<Props>(), {
@@ -190,12 +204,14 @@
 		rowsPerPageOptions: () => [10, 15, 25, 50, 100],
 		selectable: false,
 		selection: () => [],
-		defaultPageSize: "fit"
+		defaultPageSize: "fit",
+		total: undefined
 	});
 
 	const emit = defineEmits<{
 		rowClick: [row: T]
 		"update:selection": [rows: T[]]
+		request: [payload: { first: number, rows: number, sortField: string | null, sortOrder: 1 | -1 }]
 	}>();
 
 	// Strip persisted layout + paging state on every page entry:
@@ -313,6 +329,48 @@
 	const effectiveRows = computed<number>(() =>
 		pageSizeChoice.value === "fit" ? fitCount.value : pageSizeChoice.value
 	);
+
+	// --- Server (lazy) mode -----------------------------------------------
+	// Opt-in via the `total` prop: the parent owns the data through
+	// useServerTable and we just surface PrimeVue's page/sort events as a
+	// single normalised `request`. Everything below is a no-op in client mode.
+	const server = computed(() => props.total !== undefined);
+
+	// Controlled row offset for lazy mode (two-way with the paginator).
+	const lazyFirst = ref(0);
+
+	function emitRequest(e: { first?: number, rows?: number, sortField?: string | null, sortOrder?: number | null }) {
+		lazyFirst.value = e.first ?? 0;
+		emit("request", {
+			first: e.first ?? 0,
+			rows: e.rows ?? effectiveRows.value,
+			sortField: (e.sortField as string | null) ?? props.defaultSortField ?? null,
+			sortOrder: e.sortOrder === 1 ? 1 : -1
+		});
+	}
+
+	function onPage(e: DataTablePageEvent) {
+		if (server.value) emitRequest({ first: e.first, rows: e.rows });
+	}
+	function onSort(e: DataTableSortEvent) {
+		// A sort always returns to page 1. `sortField` can be a getter fn in
+		// PrimeVue's typings — we only ever pass string field names, so coerce.
+		if (!server.value) return;
+		const sf = typeof e.sortField === "string" ? e.sortField : null;
+		const so = typeof e.sortOrder === "number" ? e.sortOrder : null;
+		emitRequest({ first: 0, rows: effectiveRows.value, sortField: sf, sortOrder: so });
+	}
+
+	// Our custom page-size picker drives `:rows` directly; PrimeVue doesn't
+	// emit @page for a programmatic rows change, so in server mode we must
+	// re-request (reset to page 1) when the effective page size changes. This
+	// also fires once shortly after mount when `fitCount` resolves from the
+	// viewport, syncing the server page size to the fitted row count — the
+	// parent's `useServerTable` already did the very first fetch eagerly.
+	watch(effectiveRows, (n, old) => {
+		if (!server.value || n === old) return;
+		emitRequest({ first: 0, rows: n, sortField: props.defaultSortField ?? null, sortOrder: props.defaultSortOrder });
+	});
 
 	// Build the dropdown options. The "Fit" entry shows the resolved
 	// count so the user can see what the auto-sizing arrived at.

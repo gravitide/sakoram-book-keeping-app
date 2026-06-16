@@ -10,6 +10,7 @@
 //   expired   → (terminal)
 //   converted → (terminal)
 
+import type { QuoteListFilters } from "~/lib/quote-query";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
@@ -155,6 +156,19 @@ export const useQuotesStore = defineStore("quotes", () => {
 		validFrom.value = null;
 		validTo.value = null;
 	};
+
+	// Packaged filter snapshot for the server-side list query — fed to
+	// `buildQuoteWhere` (app/lib/quote-query.ts) on the paginated quotes page.
+	// Mirror of the `filtered` predicates below, in object form.
+	const listFilters = computed<QuoteListFilters>(() => ({
+		search: search.value,
+		statusFilters: statusFilters.value,
+		clientFilter: clientFilter.value,
+		issuedFrom: issuedFrom.value,
+		issuedTo: issuedTo.value,
+		validFrom: validFrom.value,
+		validTo: validTo.value
+	}));
 
 	const filtered = computed(() => {
 		const q = search.value.trim().toLowerCase();
@@ -605,6 +619,25 @@ export const useQuotesStore = defineStore("quotes", () => {
 		return result.rowsAffected;
 	};
 
+	// Per-status totals straight from the DB (one grouped query) for the
+	// list-page header summary, so the server-paginated page doesn't need
+	// every row in memory just to count them.
+	const fetchStatusCounts = async (): Promise<Record<QuoteStatus, number>> => {
+		const rows = await select<{ status: QuoteStatus, n: number }>(
+			"SELECT status, COUNT(*) AS n FROM quotes GROUP BY status"
+		);
+		const out: Record<QuoteStatus, number> = {
+			draft: 0,
+			sent: 0,
+			accepted: 0,
+			rejected: 0,
+			expired: 0,
+			converted: 0
+		};
+		for (const r of rows) out[r.status] = r.n;
+		return out;
+	};
+
 	return {
 		quotes,
 		loading,
@@ -620,6 +653,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 		validTo,
 		hasDateFilters,
 		clearDateFilters,
+		listFilters,
 		filtered,
 		loaded,
 		load,
@@ -635,6 +669,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 		deleteDraft,
 		remove,
 		expireOverdue,
+		fetchStatusCounts,
 		buildClientSnapshot,
 		resolveBankForDraft
 	};

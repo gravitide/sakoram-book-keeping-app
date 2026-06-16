@@ -16,7 +16,7 @@
 				<p class="text-sm text-(--ui-text-muted)">
 					<span v-if="isLoading">Loading…</span>
 					<template v-else>
-						{{ store.quotes.length }} total · {{ counts.draft }} draft · {{ counts.sent }} sent · {{ counts.accepted }} accepted
+						{{ totalCount }} total · {{ counts.draft }} draft · {{ counts.sent }} sent · {{ counts.accepted }} accepted
 					</template>
 				</p>
 			</div>
@@ -166,7 +166,7 @@
 				the summary stays right-aligned. Hidden during loading
 				/ error to avoid a confusing 0 readout. -->
 			<div
-				v-if="!store.loading && !store.error"
+				v-if="!isLoading && table.total.value > 0"
 				class="flex justify-between items-center gap-3 flex-wrap text-sm text-(--ui-text-muted) tabular-nums mb-3"
 			>
 				<UButton
@@ -180,20 +180,17 @@
 					Auto-fit columns
 				</UButton>
 				<div class="flex items-center gap-3 ml-auto">
-					<span v-if="hasAnyFilter" class="text-xs text-(--ui-text-muted)">{{ store.filtered.length }} of {{ store.quotes.length }} shown</span>
-					<StatChip label="Total" :value="formatLKR(filteredTotal)" />
+					<span class="text-xs text-(--ui-text-muted)">Showing {{ table.rows.value.length }} of {{ table.total.value }}</span>
+					<StatChip label="Total" :value="formatLKR(table.sumCents.value)" />
 				</div>
 			</div>
 
-			<div v-if="store.loading" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-if="table.loading.value && table.rows.value.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				Loading quotes…
 			</div>
-			<div v-else-if="store.error" class="py-12 text-center text-sm text-(--ui-error)">
-				{{ store.error }}
-			</div>
-			<div v-else-if="store.filtered.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-else-if="table.total.value === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				<UIcon name="i-lucide-file-text" class="size-10 mx-auto mb-2 opacity-50" />
-				<div v-if="store.quotes.length === 0">
+				<div v-if="!hasAnyFilter">
 					No quotes yet. Click <span class="font-medium">New quote</span> to start.
 				</div>
 				<div v-else>
@@ -204,11 +201,13 @@
 			<ResizableDataTable
 				v-else
 				ref="tableRef"
-				:rows="rows"
+				:rows="table.rows.value"
+				:total="table.total.value"
 				state-key="quotes-table"
 				:row-actions="itemsFor"
 				default-sort-field="issue_date"
 				:default-sort-order="-1"
+				@request="table.onRequest"
 				@row-click="(row) => router.push(`/quotes/${row.id}`)"
 			>
 				<Column field="number" header="Number" sortable>
@@ -288,6 +287,7 @@
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { formatLKR } from "~/lib/money";
 	import { buildQuotePdfPayload } from "~/lib/quote-pdf";
+	import { buildQuoteWhere, resolveQuoteSortColumn } from "~/lib/quote-query";
 	import { useClientsStore } from "~/stores/clients";
 	import { canTransition, useQuotesStore } from "~/stores/quotes";
 	import { useSettingsStore } from "~/stores/settings";
@@ -301,37 +301,59 @@
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
 
-	// Loading state owned by `usePageLoading` — see the composable for
-	// the rAF-yield trick that ensures the skeleton actually paints.
-	// expireOverdue() runs after the stores hydrate.
+	// Server-paginated table: page / sort / filter all hit the DB rather
+	// than loading every quote into memory. The store's filter refs stay
+	// the source of truth (cross-doc "View quotes" still sets
+	// store.clientFilter etc.); `buildQuoteWhere` turns them into SQL.
+	const table = useServerTable<QuoteRow>({
+		query: () => ({
+			from: "quotes",
+			where: buildQuoteWhere(store.listFilters),
+			sumExpr: "SUM(total_cents)"
+		}),
+		resolveSortColumn: resolveQuoteSortColumn,
+		defaultOrderBy: "datetime(created_at) DESC",
+		deps: () => store.listFilters,
+		initialSortField: "issue_date",
+		initialSortOrder: -1
+	});
+
+	// Per-status header counts via a grouped query (not the full row set),
+	// refreshed on mount + after any mutation that changes a quote's status.
+	const statusCounts = ref<Record<QuoteStatus, number>>({
+		draft: 0,
+		sent: 0,
+		accepted: 0,
+		rejected: 0,
+		expired: 0,
+		converted: 0
+	});
+	const totalCount = computed(() =>
+		Object.values(statusCounts.value).reduce((a, b) => a + b, 0)
+	);
+	const refreshCounts = async () => {
+		statusCounts.value = await store.fetchStatusCounts();
+	};
+
+	// Initial hydrate: clients (filter dropdown) + settings (PDF), expire
+	// overdue quotes, load header counts. The table fetches its own first
+	// page eagerly via useServerTable, so this gate is just the page chrome.
 	const { isLoading, runLoad } = usePageLoading();
 	onMounted(() => runLoad(async () => {
 		await Promise.all([
-			store.ensureLoaded(),
 			clientsStore.ensureLoaded(),
 			settingsStore.ensureLoaded()
 		]);
-		// Auto-expire any sent quotes past valid_until — silently
-		// non-fatal if it fails.
+		// Auto-expire any sent quotes past valid_until — silently non-fatal.
 		await store.expireOverdue().catch(() => { /* */ });
+		await refreshCounts();
+		// expireOverdue may have flipped sent→expired after the table's first
+		// eager fetch — re-sync the grid so it reflects the change.
+		await table.reload();
 	}));
 
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();
-
-	// `client_name` is now a real column on `quotes` (denormalised at
-	// write time from client_snapshot — see migration 0028) so the
-	// table reads + sorts off it directly. No JSON.parse per row,
-	// which used to be the most expensive part of every filter
-	// change at heavy demo scale.
-	const rows = computed<QuoteRow[]>(() => store.filtered);
-
-	// Sum of total_cents across the currently visible (filtered) rows.
-	// Reflects whatever the active filters narrow the list to, so the
-	// header readout matches the slice the user is looking at.
-	const filteredTotal = computed(() =>
-		store.filtered.reduce((sum, q) => sum + q.total_cents, 0)
-	);
 
 	// Drives <NewQuoteModal>; the New button below opens it. Auto-opens
 	// on mount when the route carries ?new=1 (dashboard New > Quote
@@ -466,18 +488,9 @@
 			? "bg-(--ui-info)/15 border-(--ui-info)/40 text-(--ui-info)"
 			: inactiveChip;
 
-	const counts = computed(() => {
-		const c: Record<QuoteStatus, number> = {
-			draft: 0,
-			sent: 0,
-			accepted: 0,
-			rejected: 0,
-			expired: 0,
-			converted: 0
-		};
-		for (const q of store.quotes) c[q.status]++;
-		return c;
-	});
+	// Header chip counts come straight from the grouped status-count query
+	// (statusCounts), refreshed on mount + after mutations.
+	const counts = computed(() => statusCounts.value);
 
 	// --- Row actions: PDF preview + transitions + duplicate ------------------
 
@@ -521,6 +534,8 @@
 		try {
 			await store.setStatus(q.id, target);
 			toast.add({ title: `${q.number} marked as ${target}`, color: "info", icon: "i-lucide-check" });
+			await table.reload();
+			await refreshCounts();
 		} catch (err) {
 			toast.add({
 				title: "Action failed",
