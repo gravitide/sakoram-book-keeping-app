@@ -16,7 +16,7 @@
 		"test:watch": "vitest",
 		"bump": "bumpp",
 		"tauri": "tauri",
-		"tauri:dev": "npx tsx scripts/tauri-dev.ts",
+		"tauri:dev": "tsx scripts/tauri-dev.ts",
 		"tauri:dev:ios": "tauri ios dev",
 		"tauri:dev:android": "tauri android dev",
 		"tauri:build": "tauri build",
@@ -58,6 +58,7 @@
 		"bumpp": "^10.4.0",
 		"eslint": "^9.39.2",
 		"nuxt-svgo": "^4.2.6",
+		"tsx": "^4.22.4",
 		"typescript": "^5.9.3",
 		"vitest": "^4.1.5"
 	},
