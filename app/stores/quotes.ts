@@ -10,6 +10,7 @@
 //   expired   → (terminal)
 //   converted → (terminal)
 
+import type { QuoteListFilters } from "~/lib/quote-query";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
@@ -155,6 +156,19 @@ export const useQuotesStore = defineStore("quotes", () => {
 		validFrom.value = null;
 		validTo.value = null;
 	};
+
+	// Packaged filter snapshot for the server-side list query — fed to
+	// `buildQuoteWhere` (app/lib/quote-query.ts) on the paginated quotes page.
+	// Mirror of the `filtered` predicates below, in object form.
+	const listFilters = computed<QuoteListFilters>(() => ({
+		search: search.value,
+		statusFilters: statusFilters.value,
+		clientFilter: clientFilter.value,
+		issuedFrom: issuedFrom.value,
+		issuedTo: issuedTo.value,
+		validFrom: validFrom.value,
+		validTo: validTo.value
+	}));
 
 	const filtered = computed(() => {
 		const q = search.value.trim().toLowerCase();
@@ -620,6 +634,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 		validTo,
 		hasDateFilters,
 		clearDateFilters,
+		listFilters,
 		filtered,
 		loaded,
 		load,
