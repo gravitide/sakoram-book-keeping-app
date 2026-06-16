@@ -54,6 +54,17 @@ zeroize = "1"
 # private key (kept off-repo) can mint a valid key.
 ed25519-dalek = { version = "2", features = [ "rand_core" ] }
 
+# Trial-reset hardening (src/license.rs): the trial-start date is also written
+# to the OS credential store (Windows Credential Manager / macOS Keychain) via
+# `keyring`, bound to a stable per-machine id (`machine-uid`). This out-of-band
+# marker survives deleting the app-data folder, so the trial can't be re-armed
+# by wiping license.json. Best-effort — failures degrade to license.json only.
+keyring = { version = "3", features = [
+	"apple-native",
+	"windows-native"
+] }
+machine-uid = "0.5"
+
 # Phone-upload feature (src/phone_upload.rs): a small LAN HTTP server so a
 # photo taken on the user's phone can be pushed straight onto an invoice.
 # axum serves the capture page + multipart upload endpoint; local-ip-address
