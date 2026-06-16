@@ -9,6 +9,7 @@
 
 use data_encoding::BASE32_NOPAD;
 use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
+use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::Manager;
@@ -141,21 +142,99 @@ fn state_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("license.json"))
 }
 
+// --- Out-of-band trial marker (keyring) ---------------------------------
+//
+// The trial-start date also lives in the OS credential store (Windows
+// Credential Manager / macOS Keychain), bound to a stable per-machine id.
+// This survives deleting the app-data folder, so wiping license.json can't
+// re-arm the trial. Everything here is best-effort: any keyring failure (e.g.
+// an unsigned macOS build whose Keychain prompt is declined) degrades silently
+// to the license.json-only behaviour.
+
+const KEYRING_SERVICE: &str = "com.sakoram.billing";
+const KEYRING_USER: &str = "trial-marker";
+
+#[derive(Serialize, Deserialize)]
+struct TrialMarker {
+    trial_start: String,
+    machine_id: String,
+}
+
+fn machine_id() -> String {
+    machine_uid::get().unwrap_or_else(|_| "unknown".into())
+}
+
+/// Read the trial-start date from the credential store, but only if the marker
+/// was written by THIS machine (so a credential copied from another machine is
+/// ignored). Returns None on any error / absence.
+fn read_trial_marker() -> Option<String> {
+    let entry = Entry::new(KEYRING_SERVICE, KEYRING_USER).ok()?;
+    let raw = entry.get_password().ok()?;
+    let marker: TrialMarker = serde_json::from_str(&raw).ok()?;
+    if marker.machine_id != machine_id() {
+        return None;
+    }
+    Some(marker.trial_start)
+}
+
+/// Persist the trial-start date to the credential store (best-effort). The
+/// recorded date only ever moves EARLIER — a later date never overwrites an
+/// existing (earlier) marker, so the trial can't be re-armed.
+fn write_trial_marker(trial_start: &str) {
+    if let Some(existing) = read_trial_marker() {
+        if existing.as_str() <= trial_start {
+            return;
+        }
+    }
+    if let Ok(entry) = Entry::new(KEYRING_SERVICE, KEYRING_USER) {
+        let marker = TrialMarker {
+            trial_start: trial_start.to_string(),
+            machine_id: machine_id(),
+        };
+        if let Ok(raw) = serde_json::to_string(&marker) {
+            let _ = entry.set_password(&raw);
+        }
+    }
+}
+
+/// The earliest known trial-start across license.json and the keyring marker
+/// (ISO `YYYY-MM-DD` compares chronologically as a string), or None if neither
+/// has one (a genuinely fresh install — the JS side then seeds today). Pure.
+fn earliest_trial_start(json_start: Option<&str>, marker_start: Option<&str>) -> Option<String> {
+    [json_start, marker_start].into_iter().flatten().min().map(str::to_string)
+}
+
 #[tauri::command]
 pub fn read_license_state(app: tauri::AppHandle) -> Result<LicenseState, String> {
     let path = state_path(&app)?;
-    if !path.exists() {
-        return Ok(LicenseState::default());
+    let mut state: LicenseState = if path.exists() {
+        let raw = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&raw).map_err(|e| e.to_string())?
+    } else {
+        LicenseState::default()
+    };
+
+    // Harden the trial against app-data deletion: the earliest start known to
+    // either license.json or the keyring marker wins, so deleting license.json
+    // can't re-arm the trial. (The marker is (re)written in write_license_state,
+    // which the JS side always calls right after this.)
+    if let Some(effective) = earliest_trial_start(state.trial_start.as_deref(), read_trial_marker().as_deref()) {
+        state.trial_start = Some(effective);
     }
-    let raw = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&raw).map_err(|e| e.to_string())
+    Ok(state)
 }
 
 #[tauri::command]
 pub fn write_license_state(app: tauri::AppHandle, state: LicenseState) -> Result<(), String> {
     let path = state_path(&app)?;
     let raw = serde_json::to_string_pretty(&state).map_err(|e| e.to_string())?;
-    std::fs::write(&path, raw).map_err(|e| e.to_string())
+    std::fs::write(&path, raw).map_err(|e| e.to_string())?;
+    // Mirror trial_start into the out-of-band keyring marker (only ever moves
+    // earlier — see write_trial_marker) so it survives app-data deletion.
+    if let Some(ts) = state.trial_start.as_deref() {
+        write_trial_marker(ts);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -166,6 +245,17 @@ pub fn validate_license(key: String) -> Result<LicenseInfo, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn earliest_trial_start_picks_oldest() {
+        assert_eq!(earliest_trial_start(None, None), None);
+        assert_eq!(earliest_trial_start(Some("2026-05-01"), None).as_deref(), Some("2026-05-01"));
+        // license.json deleted but the keyring marker remembers -> reset defeated
+        assert_eq!(earliest_trial_start(None, Some("2026-05-01")).as_deref(), Some("2026-05-01"));
+        // both present -> the earliest start wins (either order)
+        assert_eq!(earliest_trial_start(Some("2026-06-01"), Some("2026-05-01")).as_deref(), Some("2026-05-01"));
+        assert_eq!(earliest_trial_start(Some("2026-05-01"), Some("2026-06-01")).as_deref(), Some("2026-05-01"));
+    }
 
     fn sample() -> Payload {
         Payload { tier: TIER_PREMIUM, license_id: 1042, issued_days: 20000,

@@ -34,6 +34,9 @@ export const useLicenseStore = defineStore("license", () => {
 
 	async function ensureLoaded() {
 		if (loaded.value) return;
+		// Rust reconciles trial_start against the out-of-band keyring marker (so
+		// deleting license.json can't re-arm the trial); we seed today below if
+		// it's a genuinely fresh install.
 		const st = await invoke<LicenseState>("read_license_state");
 		const today = todayIso();
 		const seededStart = st.trial_start ?? today;
