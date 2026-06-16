@@ -58,16 +58,19 @@ export function buildQuoteWhere(f: QuoteListFilters): { sql: string, params: unk
 	return { sql: clauses.join(" AND "), params };
 }
 
-// Synthetic list sort fields -> real columns. Anything not in here falls back
-// to the default ORDER BY — this is also the SQL-injection guard: only
-// allow-listed column names ever reach the ORDER BY clause.
+// Sortable list columns -> the real DB column to ORDER BY. The quotes list
+// columns bind real field names (client_name / status / project_title are all
+// columns post-migration 0028), so this is mostly an identity map — but it
+// doubles as the SQL-injection guard: only allow-listed names ever reach the
+// ORDER BY clause; anything else falls back to the default order.
 export const QUOTE_SORT_COLUMNS: Record<string, string> = {
 	number: "number",
-	_client: "client_name",
-	_status: "status",
+	client_name: "client_name",
+	project_title: "project_title",
 	issue_date: "issue_date",
 	valid_until: "valid_until",
-	total_cents: "total_cents"
+	total_cents: "total_cents",
+	status: "status"
 };
 
 export function resolveQuoteSortColumn(field: string | null): string | null {

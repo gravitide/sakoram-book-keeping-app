@@ -55,15 +55,14 @@ describe("buildQuoteWhere", () => {
 });
 
 describe("resolveQuoteSortColumn", () => {
-	it("maps synthetic fields to real columns", () => {
-		expect(resolveQuoteSortColumn("_client")).toBe("client_name");
-		expect(resolveQuoteSortColumn("_status")).toBe("status");
-	});
-	it("passes real columns through", () => {
+	it("allows every sortable list column", () => {
+		expect(resolveQuoteSortColumn("client_name")).toBe("client_name");
+		expect(resolveQuoteSortColumn("status")).toBe("status");
+		expect(resolveQuoteSortColumn("project_title")).toBe("project_title");
 		expect(resolveQuoteSortColumn("issue_date")).toBe("issue_date");
 		expect(resolveQuoteSortColumn("total_cents")).toBe("total_cents");
 	});
-	it("returns null for unknown / null fields", () => {
+	it("returns null for unknown / null fields (injection guard)", () => {
 		expect(resolveQuoteSortColumn("hacky; DROP TABLE")).toBeNull();
 		expect(resolveQuoteSortColumn(null)).toBeNull();
 	});

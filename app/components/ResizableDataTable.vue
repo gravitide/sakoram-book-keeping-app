@@ -363,21 +363,13 @@
 
 	// Our custom page-size picker drives `:rows` directly; PrimeVue doesn't
 	// emit @page for a programmatic rows change, so in server mode we must
-	// re-request (reset to page 1) when the effective page size changes.
+	// re-request (reset to page 1) when the effective page size changes. This
+	// also fires once shortly after mount when `fitCount` resolves from the
+	// viewport, syncing the server page size to the fitted row count — the
+	// parent's `useServerTable` already did the very first fetch eagerly.
 	watch(effectiveRows, (n, old) => {
 		if (!server.value || n === old) return;
 		emitRequest({ first: 0, rows: n, sortField: props.defaultSortField ?? null, sortOrder: props.defaultSortOrder });
-	});
-
-	// Initial page fetch on mount in server mode (client mode does nothing).
-	onMounted(() => {
-		if (!server.value) return;
-		emit("request", {
-			first: 0,
-			rows: effectiveRows.value,
-			sortField: props.defaultSortField ?? null,
-			sortOrder: props.defaultSortOrder ?? -1
-		});
 	});
 
 	// Build the dropdown options. The "Fit" entry shows the resolved

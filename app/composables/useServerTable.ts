@@ -40,7 +40,10 @@ export interface UseServerTableOptions {
 	initialSortOrder?: 1 | -1
 }
 
-export function useServerTable<Row extends Record<string, unknown>>(opts: UseServerTableOptions) {
+// `Row` is unconstrained so concrete row interfaces (e.g. QuoteRow, which has
+// no index signature) can be passed directly — matching how the list pages
+// type their rows. The DB `select<Row>` accepts any shape.
+export function useServerTable<Row>(opts: UseServerTableOptions) {
 	const rows = ref<Row[]>([]) as Ref<Row[]>;
 	const total = ref(0);
 	const sumCents = ref(0);
@@ -115,6 +118,13 @@ export function useServerTable<Row extends Record<string, unknown>>(opts: UseSer
 			fetchPage();
 		}, opts.debounceMs ?? 200);
 	}, { deep: true });
+
+	// Eager initial fetch (page 1), undebounced — the data is available
+	// independent of whether the consuming `ResizableDataTable` is mounted
+	// yet, so a page can keep the table behind a `v-if total > 0` and still
+	// resolve to its empty state. Subsequent filter changes go through the
+	// debounced watch above; page/sort/page-size changes go through onRequest.
+	fetchPage();
 
 	return {
 		rows,

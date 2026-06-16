@@ -619,6 +619,25 @@ export const useQuotesStore = defineStore("quotes", () => {
 		return result.rowsAffected;
 	};
 
+	// Per-status totals straight from the DB (one grouped query) for the
+	// list-page header summary, so the server-paginated page doesn't need
+	// every row in memory just to count them.
+	const fetchStatusCounts = async (): Promise<Record<QuoteStatus, number>> => {
+		const rows = await select<{ status: QuoteStatus, n: number }>(
+			"SELECT status, COUNT(*) AS n FROM quotes GROUP BY status"
+		);
+		const out: Record<QuoteStatus, number> = {
+			draft: 0,
+			sent: 0,
+			accepted: 0,
+			rejected: 0,
+			expired: 0,
+			converted: 0
+		};
+		for (const r of rows) out[r.status] = r.n;
+		return out;
+	};
+
 	return {
 		quotes,
 		loading,
@@ -650,6 +669,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 		deleteDraft,
 		remove,
 		expireOverdue,
+		fetchStatusCounts,
 		buildClientSnapshot,
 		resolveBankForDraft
 	};
