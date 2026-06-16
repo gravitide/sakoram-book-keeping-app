@@ -52,6 +52,26 @@ export const useBillCategoriesStore = defineStore("bill_categories", () => {
 	const activeCount = computed(() => categories.value.filter((c) => c.is_archived === 0).length);
 	const archivedCount = computed(() => categories.value.filter((c) => c.is_archived === 1).length);
 
+	// Packaged filter snapshot for the server-paginated list page.
+	const listFilters = computed(() => ({
+		search: search.value,
+		showArchived: showArchived.value
+	}));
+
+	// Active/archived totals from one grouped query for the list-page header.
+	const fetchArchivedCounts = async (): Promise<{ active: number, archived: number }> => {
+		const rows = await select<{ is_archived: number, n: number }>(
+			"SELECT is_archived, COUNT(*) AS n FROM bill_categories GROUP BY is_archived"
+		);
+		let active = 0;
+		let archived = 0;
+		for (const r of rows) {
+			if (r.is_archived === 1) archived = r.n;
+			else active = r.n;
+		}
+		return { active, archived };
+	};
+
 	// See app/stores/invoices.ts for the `loaded` / `ensureLoaded`
 	// rationale — same pattern across every collection store.
 	const loaded = ref(false);
@@ -131,6 +151,8 @@ export const useBillCategoriesStore = defineStore("bill_categories", () => {
 		filtered,
 		activeCount,
 		archivedCount,
+		listFilters,
+		fetchArchivedCounts,
 		loaded,
 		load,
 		ensureLoaded,
