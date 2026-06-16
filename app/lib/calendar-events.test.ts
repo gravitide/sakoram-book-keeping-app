@@ -4,7 +4,7 @@ import {
 	buildInvoiceEvent,
 	buildPayslipEvent,
 	buildQuoteEvent,
-	computeGridWindow,
+	computeGridWindow
 } from "./calendar-events";
 
 describe("computeGridWindow", () => {
@@ -26,7 +26,7 @@ describe("buildInvoiceEvent", () => {
 		due_date: "2026-06-20",
 		client_name: "Acme",
 		total_cents: 10000,
-		paid_cents: 4000,
+		paid_cents: 4000
 	};
 
 	it("builds an event for a partially-paid invoice", () => {
@@ -40,7 +40,7 @@ describe("buildInvoiceEvent", () => {
 			amountCents: 10000,
 			balanceCents: 6000,
 			href: "/invoices/7",
-			overdue: false,
+			overdue: false
 		});
 	});
 

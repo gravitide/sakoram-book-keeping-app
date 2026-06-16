@@ -51,7 +51,7 @@ export const todayISO = (): string => toISO(new Date());
  * 41 days later (6 rows x 7 cols). `month0` is 0-based (0 = January). Local
  * date components only — DST-safe for date-only values.
  */
-export function computeGridWindow(year: number, month0: number): { from: string; to: string } {
+export function computeGridWindow(year: number, month0: number): { from: string, to: string } {
 	const firstOfMonth = new Date(year, month0, 1);
 	const startDow = firstOfMonth.getDay(); // 0 = Sunday
 	const start = new Date(year, month0, 1 - startDow);
