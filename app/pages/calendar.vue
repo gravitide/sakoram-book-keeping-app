@@ -6,11 +6,10 @@
 			<div class="min-w-0 flex-1">
 				<h1 class="text-2xl font-semibold flex items-center gap-3">
 					Calendar
-					<!-- Inline spinner while the four stores are hydrating
-						from the DB on first visit. Sits in the title row,
-						not as an overlay, so the page stays interactive
-						and sidebar nav keeps working while the data
-						loads in the background. -->
+					<!-- Inline spinner while the first window fetch runs on
+						first visit. Sits in the title row, not as an overlay,
+						so the page stays interactive and sidebar nav keeps
+						working while the data loads in the background. -->
 					<UIcon
 						v-if="isLoading"
 						name="i-lucide-loader-circle"
@@ -30,7 +29,7 @@
 			the real calendar's layout (filter chip strip + summary
 			pill + 6×7 day grid). Mirrors the dashboard's approach:
 			page reads as "loading" rather than "broken" while the
-			four stores hydrate. Drops the moment isLoading flips. -->
+			first window fetch runs. Drops the moment isLoading flips. -->
 		<UCard v-if="isLoading" class="animate-pulse">
 			<template #header>
 				<div class="flex items-center gap-2 flex-wrap">
@@ -122,7 +121,7 @@
 				<StatChip label="Shown" color="neutral" :value="String(visibleEvents.length)" />
 			</div>
 
-			<UpcomingCalendar density="full" :kind-filter="kindFilter" />
+			<UpcomingCalendar density="full" :kind-filter="kindFilter" :calendar="calendar" />
 		</UCard>
 	</div>
 </template>
@@ -130,44 +129,29 @@
 <script setup lang="ts">
 	import type { CalendarEventKind } from "~/composables/useCalendarEvents";
 	import { CALENDAR_EVENT_KINDS, EVENT_KIND_META, useCalendarEvents } from "~/composables/useCalendarEvents";
-	import { useBillsStore } from "~/stores/bills";
-	import { useInvoicesStore } from "~/stores/invoices";
-	import { usePayslipsStore } from "~/stores/payslips";
-	import { useQuotesStore } from "~/stores/quotes";
 
 	definePageMeta({ title: "Calendar" });
 
-	// Pre-warm every store the calendar reads from. Load runs in
-	// onMounted (not top-level await) so the route transition isn't
-	// blocked while data hydrates — page mounts instantly with a
-	// spinner in the header, user can click another sidebar entry at
-	// any moment. ensureLoaded() is a no-op when a store is already
-	// populated (a list page mounted earlier in the same tenant
-	// session), so revisits to /calendar are effectively free.
-	const invoicesStore = useInvoicesStore();
-	const billsStore = useBillsStore();
-	const quotesStore = useQuotesStore();
-	const payslipsStore = usePayslipsStore();
-
-	// Page loading is owned by `usePageLoading` — see the composable
-	// for the requestAnimationFrame-yield trick that ensures the
-	// skeleton paints before the data load fires AND stays painted
-	// while Vue prepares the real-content render (UpcomingCalendar's
-	// 42 cells of pills, etc).
-	const { isLoading, runLoad } = usePageLoading();
-	onMounted(() => runLoad(async () => {
-		await Promise.all([
-			invoicesStore.ensureLoaded(),
-			billsStore.ensureLoaded(),
-			quotesStore.ensureLoaded(),
-			payslipsStore.ensureLoaded()
-		]);
-	}));
-
-	// Filter set drives which kinds the calendar component renders.
-	// Empty = show all (matches the composable's contract). We seed it
-	// empty so the page lands with everything visible.
+	// Filter set drives which kinds the calendar renders. Empty = show all
+	// (matches the composable's contract). We seed it empty so the page
+	// lands with everything visible.
 	const kindFilter = ref(new Set<CalendarEventKind>());
+
+	// One shared windowed calendar instance owns the month cursor and the
+	// per-month DB fetch. Both this page (chip counts + summary) AND the
+	// grid component below read from it, so they agree on the visible month
+	// and the data is fetched exactly once per navigation. The calendar
+	// queries scoped to the visible 42-day window — no store bulk-load here.
+	const calendar = useCalendarEvents(kindFilter);
+
+	// Skeleton shows until the first window fetch resolves, then never again:
+	// month navigation refetches (calendar.loading toggles) must NOT collapse
+	// the whole card back to the skeleton.
+	const firstLoadDone = ref(false);
+	watch(calendar.loading, (l) => {
+		if (!l) firstLoadDone.value = true;
+	}, { immediate: true });
+	const isLoading = computed(() => !firstLoadDone.value);
 
 	const toggleKind = (k: CalendarEventKind) => {
 		const next = new Set(kindFilter.value);
@@ -180,20 +164,18 @@
 		kindFilter.value = new Set();
 	};
 
-	// Per-kind counts use an UNFILTERED view so the chip badges always
-	// show the full set ("how many of each are there"), not just the
-	// filtered view. The visible/overdue summary line below uses the
-	// filtered events.
-	const allKinds = useCalendarEvents();
+	// Per-kind counts read the window-scoped, kind-UNfiltered arrays so each
+	// chip badge always shows its own kind's count for the visible month
+	// ("how many of each are due this month"), regardless of which chips are
+	// toggled. The visible/overdue summary below uses the filtered events.
 	const countsByKind = computed<Record<CalendarEventKind, number>>(() => ({
-		invoice: allKinds.invoiceEvents.value.length,
-		bill: allKinds.billEvents.value.length,
-		quote: allKinds.quoteEvents.value.length,
-		payslip: allKinds.payslipEvents.value.length
+		invoice: calendar.invoiceEvents.value.length,
+		bill: calendar.billEvents.value.length,
+		quote: calendar.quoteEvents.value.length,
+		payslip: calendar.payslipEvents.value.length
 	}));
 
-	const filtered = useCalendarEvents(kindFilter);
-	const visibleEvents = computed(() => filtered.allEvents.value);
+	const visibleEvents = computed(() => calendar.allEvents.value);
 	const overdueCount = computed(() => visibleEvents.value.filter((e) => e.overdue).length);
 
 	// Chip visual state: when the filter set is empty every chip is

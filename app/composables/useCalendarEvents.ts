@@ -1,196 +1,150 @@
-// Calendar event aggregation for `UpcomingCalendar.vue`.
+// Range-driven calendar event aggregation for `UpcomingCalendar.vue`.
 //
-// Pulls due dates from the invoice / bill / quote / payslip stores
-// and surfaces them as a unified list of `CalendarEvent` objects
-// keyed by ISO date. The calendar component reads
-// `eventsByDate.get('YYYY-MM-DD')` to render per-day pills.
+// Owns the visible month cursor and fetches ONLY the events whose date falls
+// in the 42-cell grid window via per-source date-bounded queries (each with a
+// correlated voucher-sum subquery for paid-state). No store arrays are read,
+// so the calendar no longer needs invoices/bills/quotes/payslips/vouchers
+// bulk-loaded. Pure logic (grid math, builders, kind meta) lives in
+// `~/lib/calendar-events`.
 //
-// Extending: each event source is a small function that takes nothing
-// and returns `CalendarEvent[]`. Adding a new source = write the
-// function + push it into the `sources` array. The kind discriminator
-// + EVENT_KIND_META table cover labelling, colours and icons.
+// Kind filtering is applied JS-side over the already-fetched window, so toggling
+// filter chips is instant and never re-queries. A month navigation changes the
+// window range and triggers a refetch.
 
-import { useBillsStore } from "~/stores/bills";
-import { useInvoicesStore } from "~/stores/invoices";
-import { usePayslipsStore } from "~/stores/payslips";
-import { useQuotesStore } from "~/stores/quotes";
+import type {
+	BillEventRow,
+	CalendarEvent,
+	CalendarEventKind,
+	InvoiceEventRow,
+	PayslipEventRow,
+	QuoteEventRow
+} from "~/lib/calendar-events";
+import {
+	buildBillEvent,
+	buildInvoiceEvent,
+	buildPayslipEvent,
+	buildQuoteEvent,
+	computeGridWindow,
+	todayISO
+} from "~/lib/calendar-events";
+import { select } from "~/lib/db";
 
-export type CalendarEventKind = "invoice" | "bill" | "quote" | "payslip";
+// Re-export so existing importers (`UpcomingCalendar.vue`, `calendar.vue`)
+// keep resolving these from the composable.
+export type { CalendarEvent, CalendarEventKind, EventKindMeta } from "~/lib/calendar-events";
+export { CALENDAR_EVENT_KINDS, EVENT_KIND_META } from "~/lib/calendar-events";
 
-export interface CalendarEvent {
-	/**
-	 * Stable id; combines kind + source row id so it stays unique
-	 * across kinds (e.g. invoice 12 vs bill 12).
-	 */
-	id: string
-	/** ISO YYYY-MM-DD — the due date / valid-until / pay date. */
-	date: string
-	kind: CalendarEventKind
-	/** Document number, e.g. "INV-2026-0012". */
-	title: string
-	/** Counterparty name from the snapshot — client / vendor / employee. */
-	party: string
-	/** Document total in cents (for display in the day modal). */
-	amountCents: number
-	/** Outstanding balance in cents — 0 when nothing's left to settle. */
-	balanceCents: number
-	/** Detail-page route for click-through. */
-	href: string
-	/** Convenience: due-date is before today AND balance > 0. */
-	overdue: boolean
+async function fetchInvoiceEvents(from: string, to: string, today: string): Promise<CalendarEvent[]> {
+	const rows = await select<InvoiceEventRow>(
+		`SELECT i.id, i.number, i.due_date, i.client_name, i.total_cents,
+		        COALESCE((SELECT SUM(v.amount_cents) FROM vouchers v
+		                  WHERE v.related_invoice_id = i.id AND v.voucher_type = 'receipt'), 0) AS paid_cents
+		 FROM invoices i
+		 WHERE i.status = 'sent' AND i.due_date BETWEEN ? AND ?`,
+		[from, to]
+	);
+	return rows.map((r) => buildInvoiceEvent(r, today)).filter((e): e is CalendarEvent => e !== null);
 }
 
-export interface EventKindMeta {
-	label: string
-	icon: string
-	/** CSS-variable name suffix on `--ui-<color>` — drives pill bg + text. */
-	color: "success" | "warning" | "info" | "primary"
+async function fetchBillEvents(from: string, to: string, today: string): Promise<CalendarEvent[]> {
+	const rows = await select<BillEventRow>(
+		`SELECT b.id, b.number, b.due_date, b.vendor_name, b.total_cents,
+		        COALESCE((SELECT SUM(v.amount_cents) FROM vouchers v
+		                  WHERE v.related_bill_id = b.id AND v.voucher_type = 'payment'), 0) AS paid_cents
+		 FROM bills b
+		 WHERE b.status = 'open' AND b.due_date BETWEEN ? AND ?`,
+		[from, to]
+	);
+	return rows.map((r) => buildBillEvent(r, today)).filter((e): e is CalendarEvent => e !== null);
 }
 
-export const EVENT_KIND_META: Record<CalendarEventKind, EventKindMeta> = {
-	invoice: { label: "Receivable", icon: "i-lucide-receipt", color: "success" },
-	bill: { label: "Payable", icon: "i-lucide-file-input", color: "warning" },
-	quote: { label: "Quote expires", icon: "i-lucide-file-text", color: "info" },
-	payslip: { label: "Payslip", icon: "i-lucide-file-spreadsheet", color: "primary" }
-};
+async function fetchQuoteEvents(from: string, to: string, today: string): Promise<CalendarEvent[]> {
+	const rows = await select<QuoteEventRow>(
+		`SELECT q.id, q.number, q.valid_until, q.client_name, q.total_cents
+		 FROM quotes q
+		 WHERE q.status = 'sent' AND q.valid_until BETWEEN ? AND ?`,
+		[from, to]
+	);
+	return rows.map((r) => buildQuoteEvent(r, today));
+}
 
-export const CALENDAR_EVENT_KINDS: CalendarEventKind[] = ["invoice", "bill", "quote", "payslip"];
-
-const todayISO = (): string => {
-	const d = new Date();
-	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
+async function fetchPayslipEvents(from: string, to: string, today: string): Promise<CalendarEvent[]> {
+	const rows = await select<PayslipEventRow>(
+		`SELECT p.id, p.number, p.pay_date, p.employee_name, p.net_cents,
+		        COALESCE((SELECT SUM(v.amount_cents) FROM vouchers v
+		                  WHERE v.related_payslip_id = p.id AND v.voucher_type = 'payment'), 0) AS paid_cents
+		 FROM payslips p
+		 WHERE p.status = 'issued' AND p.pay_date BETWEEN ? AND ?`,
+		[from, to]
+	);
+	return rows.map((r) => buildPayslipEvent(r, today)).filter((e): e is CalendarEvent => e !== null);
+}
 
 /**
- * Returns events from all sources, optionally filtered by kind.
- * `kindFilter` is reactive — pass a Set ref to drive filter chips.
- * When omitted (or empty), every kind shows.
+ * Range-driven calendar events. Owns the month cursor; fetches only the
+ * visible 42-day window. `kindFilter` is reactive — pass a Set ref to drive
+ * filter chips. When omitted (or empty), every kind shows.
  */
 export const useCalendarEvents = (kindFilter?: Ref<Set<CalendarEventKind>>) => {
-	const invoicesStore = useInvoicesStore();
-	const billsStore = useBillsStore();
-	const quotesStore = useQuotesStore();
-	const payslipsStore = usePayslipsStore();
+	const now = new Date();
+	const cursorYear = ref(now.getFullYear());
+	const cursorMonth = ref(now.getMonth()); // 0-based
 
-	const today = computed(() => todayISO());
+	const shiftMonth = (delta: number) => {
+		const d = new Date(cursorYear.value, cursorMonth.value + delta, 1);
+		cursorYear.value = d.getFullYear();
+		cursorMonth.value = d.getMonth();
+	};
+	const goToday = () => {
+		const n = new Date();
+		cursorYear.value = n.getFullYear();
+		cursorMonth.value = n.getMonth();
+	};
 
-	// --- Per-source emitters -------------------------------------------
-	// Each one inspects its store, drops paid / cancelled items, and
-	// emits CalendarEvent rows. Wrapped as plain computeds so Pinia
-	// reactivity flows through to the calendar UI.
-
-	const invoiceEvents = computed<CalendarEvent[]>(() => {
-		const out: CalendarEvent[] = [];
-		for (const i of invoicesStore.invoices) {
-			const ds = invoicesStore.derivedStatus(i, today.value);
-			// Drop draft / cancelled / paid — those don't need attention.
-			if (ds !== "sent" && ds !== "partial" && ds !== "overdue") continue;
-			const balance = invoicesStore.balanceCentsFor(i);
-			if (balance <= 0) continue;
-			out.push({
-				id: `invoice:${i.id}`,
-				date: i.due_date,
-				kind: "invoice",
-				title: i.number,
-				party: i.client_name || "—",
-				amountCents: i.total_cents,
-				balanceCents: balance,
-				href: `/invoices/${i.id}`,
-				overdue: ds === "overdue"
-			});
-		}
-		return out;
+	const monthLabel = computed(() =>
+		new Date(cursorYear.value, cursorMonth.value, 1)
+			.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+	);
+	const isCurrentMonth = computed(() => {
+		const n = new Date();
+		return cursorYear.value === n.getFullYear() && cursorMonth.value === n.getMonth();
 	});
 
-	const billEvents = computed<CalendarEvent[]>(() => {
-		const out: CalendarEvent[] = [];
-		for (const b of billsStore.bills) {
-			const ds = billsStore.derivedStatus(b, today.value);
-			if (ds !== "unpaid" && ds !== "partial" && ds !== "overdue") continue;
-			const balance = billsStore.balanceCentsFor(b);
-			if (balance <= 0) continue;
-			out.push({
-				id: `bill:${b.id}`,
-				date: b.due_date,
-				kind: "bill",
-				title: b.number,
-				party: b.vendor_name || "—",
-				amountCents: b.total_cents,
-				balanceCents: balance,
-				href: `/bills/${b.id}`,
-				overdue: ds === "overdue"
-			});
+	const windowRange = computed(() => computeGridWindow(cursorYear.value, cursorMonth.value));
+
+	const windowEvents = ref<CalendarEvent[]>([]);
+	const loading = ref(false);
+
+	async function fetchWindow() {
+		const { from, to } = windowRange.value;
+		const today = todayISO();
+		loading.value = true;
+		try {
+			const [inv, bill, quote, pay] = await Promise.all([
+				fetchInvoiceEvents(from, to, today),
+				fetchBillEvents(from, to, today),
+				fetchQuoteEvents(from, to, today),
+				fetchPayslipEvents(from, to, today)
+			]);
+			windowEvents.value = [...inv, ...bill, ...quote, ...pay];
+		} finally {
+			loading.value = false;
 		}
-		return out;
-	});
+	}
 
-	// Quotes show their valid_until as an "expiring" event — only when
-	// the quote is still in play (sent, not yet accepted / rejected /
-	// converted / expired). Past-dated entries get the overdue flag so
-	// they render in red.
-	const quoteEvents = computed<CalendarEvent[]>(() => {
-		const out: CalendarEvent[] = [];
-		for (const q of quotesStore.quotes) {
-			if (q.status !== "sent") continue;
-			out.push({
-				id: `quote:${q.id}`,
-				date: q.valid_until,
-				kind: "quote",
-				title: q.number,
-				party: q.client_name || "—",
-				amountCents: q.total_cents,
-				balanceCents: q.total_cents,
-				href: `/quotes/${q.id}`,
-				overdue: q.valid_until < today.value
-			});
-		}
-		return out;
-	});
+	watch(windowRange, fetchWindow, { immediate: true });
 
-	// Payslips don't have an "overdue" derived state (the store keeps it
-	// at unpaid/partial after pay_date passes), so we derive it here by
-	// comparing pay_date to today — matches the UX convention of the
-	// other types.
-	const payslipEvents = computed<CalendarEvent[]>(() => {
-		const out: CalendarEvent[] = [];
-		for (const p of payslipsStore.payslips) {
-			const ds = payslipsStore.derivedStatus(p);
-			if (ds !== "unpaid" && ds !== "partial") continue;
-			const balance = payslipsStore.balanceCentsFor(p);
-			if (balance <= 0) continue;
-			out.push({
-				id: `payslip:${p.id}`,
-				date: p.pay_date,
-				kind: "payslip",
-				title: p.number,
-				party: p.employee_name || "—",
-				amountCents: p.net_cents,
-				balanceCents: balance,
-				href: `/payslips/${p.id}`,
-				overdue: p.pay_date < today.value
-			});
-		}
-		return out;
-	});
-
-	// Order matters only for stable rendering of pills inside a day:
-	// invoices first (most common "what's due"), then bills, quotes,
-	// payslips. The calendar component re-sorts by overdue + amount
-	// when picking which to show in the preview slots.
-	const sources = [invoiceEvents, billEvents, quoteEvents, payslipEvents];
-
+	// --- kind filtering: JS-side over the fetched window (no re-query) ---
 	const allEvents = computed<CalendarEvent[]>(() => {
-		const out: CalendarEvent[] = [];
 		const allow = kindFilter?.value;
 		const skip = (k: CalendarEventKind) => allow && allow.size > 0 && !allow.has(k);
-		for (const src of sources) {
-			for (const e of src.value) {
-				if (skip(e.kind)) continue;
-				out.push(e);
-			}
-		}
-		return out;
+		return windowEvents.value.filter((e) => !skip(e.kind));
 	});
+
+	const invoiceEvents = computed(() => windowEvents.value.filter((e) => e.kind === "invoice"));
+	const billEvents = computed(() => windowEvents.value.filter((e) => e.kind === "bill"));
+	const quoteEvents = computed(() => windowEvents.value.filter((e) => e.kind === "quote"));
+	const payslipEvents = computed(() => windowEvents.value.filter((e) => e.kind === "payslip"));
 
 	const eventsByDate = computed<Map<string, CalendarEvent[]>>(() => {
 		const m = new Map<string, CalendarEvent[]>();
@@ -199,9 +153,6 @@ export const useCalendarEvents = (kindFilter?: Ref<Set<CalendarEventKind>>) => {
 			if (list) list.push(e);
 			else m.set(e.date, [e]);
 		}
-		// Per-day ordering: overdue first (red pills bunch at top),
-		// then bigger balance first (so the user sees the largest
-		// outstanding pieces before the "+N more" cutoff).
 		for (const list of m.values()) {
 			list.sort((a, b) => {
 				if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
@@ -212,11 +163,23 @@ export const useCalendarEvents = (kindFilter?: Ref<Set<CalendarEventKind>>) => {
 	});
 
 	return {
+		// data (window-scoped)
 		eventsByDate,
 		allEvents,
 		invoiceEvents,
 		billEvents,
 		quoteEvents,
-		payslipEvents
+		payslipEvents,
+		// month cursor + nav
+		cursorYear,
+		cursorMonth,
+		shiftMonth,
+		goToday,
+		monthLabel,
+		isCurrentMonth,
+		windowRange,
+		// status
+		loading,
+		reload: fetchWindow
 	};
 };

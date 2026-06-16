@@ -210,9 +210,16 @@
 		density?: "full" | "compact"
 		/** Reactive set of kinds to include. Empty / undefined = show all. */
 		kindFilter?: Set<CalendarEventKind>
+		/**
+		 * Shared calendar instance from the parent. When supplied (the
+		 * /calendar page), this grid + the page's chip counts agree on one
+		 * visible month and fetch once. Omitted (dashboard embed) = self-manage.
+		 */
+		calendar?: ReturnType<typeof useCalendarEvents>
 	}>(), {
 		density: "full",
-		kindFilter: undefined
+		kindFilter: undefined,
+		calendar: undefined
 	});
 
 	const router = useRouter();
@@ -233,41 +240,22 @@
 		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 	};
 
-	// Anchor month state: year + 0-indexed month. We use plain numbers
-	// rather than ISO strings so month arithmetic doesn't have to wrap
-	// year boundaries manually — `new Date(year, month + delta, 1)`
-	// auto-normalises.
-	const today = new Date();
-	const cursorYear = ref(today.getFullYear());
-	const cursorMonth = ref(today.getMonth());
-
-	const shiftMonth = (delta: number) => {
-		const d = new Date(cursorYear.value, cursorMonth.value + delta, 1);
-		cursorYear.value = d.getFullYear();
-		cursorMonth.value = d.getMonth();
-	};
-
-	const goToday = () => {
-		const now = new Date();
-		cursorYear.value = now.getFullYear();
-		cursorMonth.value = now.getMonth();
-	};
-
-	const isCurrentMonth = computed(() => {
-		const now = new Date();
-		return cursorYear.value === now.getFullYear() && cursorMonth.value === now.getMonth();
-	});
-
-	const monthLabel = computed(() =>
-		new Date(cursorYear.value, cursorMonth.value, 1)
-			.toLocaleDateString("en-US", { month: "long", year: "numeric" })
-	);
-
-	// Event data — reactive to filter changes. The composable handles
-	// kind filtering when a non-empty set is provided; we just thread the
-	// prop through.
+	// Anchor month state + windowed event data both come from one calendar
+	// instance now (the composable owns the cursor + the per-month fetch).
+	// Prop-or-self: the /calendar page supplies a shared instance so its chip
+	// counts and this grid agree on the visible month and fetch once; the
+	// dashboard embed passes nothing and we self-manage.
 	const filterRef = computed(() => props.kindFilter ?? new Set<CalendarEventKind>());
-	const { eventsByDate } = useCalendarEvents(filterRef);
+	const calendar = props.calendar ?? useCalendarEvents(filterRef);
+	const {
+		eventsByDate,
+		cursorYear,
+		cursorMonth,
+		shiftMonth,
+		goToday,
+		monthLabel,
+		isCurrentMonth
+	} = calendar;
 
 	// One cell per grid slot: 6 rows × 7 cols. Leading days come from the
 	// previous month so the first row starts on Sunday; trailing days fill
