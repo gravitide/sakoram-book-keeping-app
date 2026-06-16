@@ -27,6 +27,7 @@
 
 import type { VendorSnapshot } from "~/stores/bills";
 import type { PricingMode } from "~/stores/quotes";
+import type { RecurringFrequency } from "~/stores/recurring_invoices";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
@@ -34,14 +35,10 @@ import { computeLineTotals } from "~/lib/money";
 import { allocateDocumentNumber } from "~/lib/numbering";
 import { useBillCategoriesStore } from "~/stores/bill_categories";
 import { useBillsStore } from "~/stores/bills";
+// RecurringFrequency + advanceDate are owned by the recurring_invoices store
+// (single source of truth) — importing them here avoids duplicate auto-imports.
 import { advanceDate } from "~/stores/recurring_invoices";
 import { useSettingsStore } from "~/stores/settings";
-
-// Re-export advanceDate so callers that import RecurringFrequency from
-// here can also reach the date helper from the same module.
-export { advanceDate } from "~/stores/recurring_invoices";
-
-export type RecurringFrequency = "weekly" | "monthly" | "quarterly" | "yearly";
 
 export interface RecurringBillRow {
 	id: number

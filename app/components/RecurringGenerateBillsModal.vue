@@ -86,7 +86,8 @@
 // 'open' / derived 'unpaid' the moment they're generated — they're
 // real liabilities on your books straight away.
 
-	import type { RecurringBillRow, RecurringFrequency } from "~/stores/recurring_bills";
+	import type { RecurringBillRow } from "~/stores/recurring_bills";
+	import type { RecurringFrequency } from "~/stores/recurring_invoices";
 	import { useRecurringBillsStore } from "~/stores/recurring_bills";
 
 	const openModel = defineModel<boolean>("open", { default: false });
