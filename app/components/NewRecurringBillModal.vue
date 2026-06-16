@@ -74,7 +74,7 @@
 // need to mint the row; line items + payment terms + VAT + category
 // live on the detail page.
 
-	import type { RecurringFrequency } from "~/stores/recurring_bills";
+	import type { RecurringFrequency } from "~/stores/recurring_invoices";
 	import type { VendorRow } from "~/stores/vendors";
 	import { useLicenseStore } from "~/stores/license";
 	import { useRecurringBillsStore } from "~/stores/recurring_bills";

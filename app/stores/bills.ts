@@ -16,6 +16,7 @@
 // /vouchers/new?bill=N. Editing or deleting a voucher automatically
 // reflects on the bill's derived presentation; no cache to keep in sync.
 
+import type { PricingMode } from "~/stores/quotes";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
@@ -32,8 +33,6 @@ export type BillPersistedStatus = "open" | "cancelled";
 // from the bill's persisted status + sum of linked payment vouchers +
 // today's date vs due_date.
 export type BillStatus = "unpaid" | "partial" | "paid" | "overdue" | "cancelled";
-
-export type PricingMode = "bundle" | "itemized";
 
 export interface BillRow {
 	id: number
