@@ -19,7 +19,7 @@
 				<p class="text-sm text-(--ui-text-muted) tabular-nums">
 					<span v-if="isLoading">Loading…</span>
 					<template v-else>
-						{{ store.creditNotes.length }} total · {{ formatLKR(store.totalIssuedCents) }} issued
+						{{ headerStats.total }} total · {{ formatLKR(headerStats.issuedCents) }} issued
 					</template>
 				</p>
 			</div>
@@ -88,7 +88,7 @@
 			<!-- Table action bar — Auto-fit on the left, filtered total on
 				the right. Same shape as the other list pages. -->
 			<div
-				v-if="!store.loading && !store.error"
+				v-if="!isLoading && table.total.value > 0"
 				class="flex justify-between items-center gap-3 flex-wrap text-sm text-(--ui-text-muted) tabular-nums mb-3"
 			>
 				<UButton
@@ -102,20 +102,17 @@
 					Auto-fit columns
 				</UButton>
 				<div class="flex items-center gap-3 ml-auto">
-					<span v-if="hasAnyFilter" class="text-xs text-(--ui-text-muted)">{{ store.filtered.length }} of {{ store.creditNotes.length }} shown</span>
-					<StatChip label="Total" :value="formatLKR(filteredTotal)" />
+					<span class="text-xs text-(--ui-text-muted)">Showing {{ table.rows.value.length }} of {{ table.total.value }}</span>
+					<StatChip label="Total" :value="formatLKR(table.sumCents.value)" />
 				</div>
 			</div>
 
-			<div v-if="store.loading" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-if="table.loading.value && table.rows.value.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				Loading credit notes…
 			</div>
-			<div v-else-if="store.error" class="py-12 text-center text-sm text-(--ui-error)">
-				{{ store.error }}
-			</div>
-			<div v-else-if="store.filtered.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-else-if="table.total.value === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				<UIcon name="i-lucide-rotate-ccw" class="size-10 mx-auto mb-2 opacity-50" />
-				<div v-if="store.creditNotes.length === 0">
+				<div v-if="!hasAnyFilter">
 					No credit notes yet. Click <span class="font-medium">New credit note</span> to start.
 				</div>
 				<div v-else>
@@ -126,10 +123,12 @@
 			<ResizableDataTable
 				v-else
 				ref="tableRef"
-				:rows="store.filtered"
+				:rows="table.rows.value"
+				:total="table.total.value"
 				state-key="credit-notes-table"
 				default-sort-field="issue_date"
 				:default-sort-order="-1"
+				@request="table.onRequest"
 				@row-click="(row) => router.push(`/credit-notes/${row.id}`)"
 			>
 				<Column field="number" header="Number" sortable>
@@ -180,7 +179,8 @@
 </template>
 
 <script setup lang="ts">
-	import type { CreditNoteStatus } from "~/stores/credit_notes";
+	import type { CreditNoteRow, CreditNoteStatus } from "~/stores/credit_notes";
+	import { andClauses, eqClause, inClause, likeClause, makeSortResolver, rangeClause } from "~/lib/list-query";
 	import { formatLKR } from "~/lib/money";
 	import { useClientsStore } from "~/stores/clients";
 	import { useCreditNotesStore } from "~/stores/credit_notes";
@@ -194,12 +194,43 @@
 	const license = useLicenseStore();
 	const locked = computed(() => !license.hasFeature("credit_notes"));
 
+	// Server-paginated: status / client / search hit the DB. Filter refs stay
+	// on the store so cross-doc navigation + stickiness keep working.
+	const table = useServerTable<CreditNoteRow>({
+		query: () => ({
+			from: "credit_notes",
+			where: andClauses([
+				inClause("status", store.statusFilters),
+				eqClause("client_id", store.clientFilter),
+				rangeClause("issue_date", store.issuedFrom, store.issuedTo),
+				likeClause(store.search, ["number", "project_title", "client_name"])
+			]),
+			sumExpr: "SUM(total_cents)"
+		}),
+		resolveSortColumn: makeSortResolver({
+			number: "number",
+			client_name: "client_name COLLATE NOCASE",
+			project_title: "project_title COLLATE NOCASE",
+			issue_date: "issue_date",
+			total_cents: "total_cents",
+			status: "status"
+		}),
+		defaultOrderBy: "datetime(created_at) DESC",
+		deps: () => store.listFilters,
+		initialSortField: "issue_date",
+		initialSortOrder: -1
+	});
+
+	// Grand-total count + issued-credit sum for the header (one query).
+	const headerStats = ref({ total: 0, issuedCents: 0 });
+	const refreshStats = async () => {
+		headerStats.value = await store.fetchHeaderStats();
+	};
+
 	const { isLoading, runLoad } = usePageLoading();
 	onMounted(() => runLoad(async () => {
-		await Promise.all([
-			store.ensureLoaded(),
-			clientsStore.ensureLoaded()
-		]);
+		await clientsStore.ensureLoaded();
+		await refreshStats();
 	}));
 
 	const STATUSES: CreditNoteStatus[] = ["draft", "issued", "cancelled"];
@@ -229,10 +260,6 @@
 			.map((c) => ({ label: c.name, value: c.id }))
 	]);
 
-	const filteredTotal = computed(() =>
-		store.filtered.reduce((sum, r) => sum + r.total_cents, 0)
-	);
-
 	const hasAnyFilter = computed(() =>
 		store.search.trim() !== ""
 		|| store.statusFilters.length > 0
@@ -259,6 +286,16 @@
 		newIssueDate.value = null;
 		newOpen.value = true;
 	};
+
+	// The create modal writes to the store + may navigate to the new note. If
+	// it closes without navigating (cancel, or stay), refetch so the grid +
+	// header stats reflect any new row.
+	watch(newOpen, (open) => {
+		if (!open) {
+			void table.reload();
+			void refreshStats();
+		}
+	});
 
 	const route = useRoute();
 	onMounted(() => {

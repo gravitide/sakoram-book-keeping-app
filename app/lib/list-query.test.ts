@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { andClauses, likeClause, makeSortResolver } from "./list-query";
+import { andClauses, eqClause, inClause, likeClause, makeSortResolver, rangeClause } from "./list-query";
 
 describe("likeClause", () => {
 	it("returns an empty fragment for blank search", () => {
@@ -30,6 +30,44 @@ describe("andClauses", () => {
 
 	it("yields an empty fragment when everything is empty", () => {
 		expect(andClauses([{ sql: "", params: [] }])).toEqual({ sql: "", params: [] });
+	});
+});
+
+describe("inClause", () => {
+	it("is empty for an empty value list", () => {
+		expect(inClause("status", [])).toEqual({ sql: "", params: [] });
+	});
+	it("builds IN with one placeholder per value", () => {
+		expect(inClause("status", ["draft", "sent"])).toEqual({
+			sql: "status IN (?, ?)",
+			params: ["draft", "sent"]
+		});
+	});
+});
+
+describe("eqClause", () => {
+	it("is empty for the 'all' sentinel or null", () => {
+		expect(eqClause("client_id", "all")).toEqual({ sql: "", params: [] });
+		expect(eqClause("client_id", null)).toEqual({ sql: "", params: [] });
+	});
+	it("binds a concrete value", () => {
+		expect(eqClause("client_id", 7)).toEqual({ sql: "client_id = ?", params: [7] });
+	});
+});
+
+describe("rangeClause", () => {
+	it("is empty when both bounds are null", () => {
+		expect(rangeClause("issue_date", null, null)).toEqual({ sql: "", params: [] });
+	});
+	it("builds each side independently", () => {
+		expect(rangeClause("issue_date", "2026-01-01", null)).toEqual({
+			sql: "issue_date >= ?",
+			params: ["2026-01-01"]
+		});
+		expect(rangeClause("issue_date", "2026-01-01", "2026-03-31")).toEqual({
+			sql: "issue_date >= ? AND issue_date <= ?",
+			params: ["2026-01-01", "2026-03-31"]
+		});
 	});
 });
 
