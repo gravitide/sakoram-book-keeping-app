@@ -8,7 +8,7 @@
 					Bill categories
 				</h1>
 				<p class="text-sm text-(--ui-text-muted)">
-					{{ store.activeCount }} active · {{ store.archivedCount }} archived
+					{{ archivedCounts.active }} active · {{ archivedCounts.archived }} archived
 				</p>
 			</div>
 			<UButton icon="i-lucide-plus" @click="openCreate">
@@ -41,15 +41,12 @@
 				</div>
 			</template>
 
-			<div v-if="store.loading" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-if="table.loading.value && table.rows.value.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				Loading categories…
 			</div>
-			<div v-else-if="store.error" class="py-12 text-center text-sm text-(--ui-error)">
-				{{ store.error }}
-			</div>
-			<div v-else-if="store.filtered.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-else-if="table.total.value === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				<UIcon name="i-lucide-tags" class="size-10 mx-auto mb-2 opacity-50" />
-				<div v-if="store.categories.length === 0">
+				<div v-if="!hasFilter">
 					No categories yet. Click <span class="font-medium">New category</span> to add the first one.
 				</div>
 				<div v-else>
@@ -60,11 +57,13 @@
 			<ResizableDataTable
 				v-else
 				ref="tableRef"
-				:rows="rows"
+				:rows="table.rows.value"
+				:total="table.total.value"
 				state-key="categories-table"
 				:row-actions="itemsFor"
 				default-sort-field="name"
 				:default-sort-order="1"
+				@request="table.onRequest"
 				@row-click="openEdit"
 			>
 				<Column field="name" header="Name" sortable>
@@ -119,6 +118,7 @@
 
 <script setup lang="ts">
 	import type { BillCategoryRow } from "~/stores/bill_categories";
+	import { andClauses, likeClause, makeSortResolver } from "~/lib/list-query";
 	import { themeHex } from "~/lib/theme";
 	import { useBillCategoriesStore } from "~/stores/bill_categories";
 	import { useBillsStore } from "~/stores/bills";
@@ -127,35 +127,63 @@
 
 	const router = useRouter();
 	const store = useBillCategoriesStore();
-	// Bills are loaded purely to count how many sit in each category and
-	// to power the "Show bills" action's filter handoff.
+	// Kept only for the "Show bills" action's filter handoff (we set its
+	// filter refs before navigating). No longer loaded — the per-category
+	// bill count is computed in SQL by the list query's subquery below.
 	const billsStore = useBillsStore();
 	const toast = useToast();
 
-	await Promise.all([store.load(), billsStore.load()]);
+	// Row view-model: the per-category bill count comes back as `_billCount`
+	// from a correlated COUNT subquery (see the table query), so PrimeVue can
+	// sort on it as a top-level field without loading every bill.
+	interface CategoryRowVM extends BillCategoryRow {
+		_billCount: number
+	}
+
+	const table = useServerTable<CategoryRowVM>({
+		query: () => ({
+			from: "bill_categories c",
+			columns: "c.*, (SELECT COUNT(*) FROM bills b WHERE b.category_id = c.id) AS _billCount",
+			where: andClauses([
+				{ sql: "is_archived = ?", params: [store.showArchived ? 1 : 0] },
+				likeClause(store.search, ["name"])
+			])
+		}),
+		resolveSortColumn: makeSortResolver({
+			name: "name COLLATE NOCASE",
+			color: "color",
+			icon: "icon",
+			_billCount: "_billCount"
+		}),
+		defaultOrderBy: "name COLLATE NOCASE ASC",
+		deps: () => store.listFilters,
+		initialSortField: "name",
+		initialSortOrder: 1
+	});
+
+	const archivedCounts = ref({ active: 0, archived: 0 });
+	const refreshCounts = async () => {
+		archivedCounts.value = await store.fetchArchivedCounts();
+	};
+	onMounted(refreshCounts);
+
+	const hasFilter = computed(() => store.search.trim() !== "" || store.showArchived);
 
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();
 
-	// Helper hoisted via `function` so the row computed below can close
-	// over it without hitting the temporal-dead-zone — see CLAUDE.md
-	// list-view notes.
-	function billCountFor(categoryId: number): number {
-		return billsStore.bills.filter((b) => b.category_id === categoryId).length;
-	}
-
-	// View-model: every sortable PrimeVue column needs the value on a
-	// top-level field, so we attach the derived bill count as `_billCount`.
-	// Underscored to keep it out of the way of any future schema fields.
-	interface CategoryRowVM extends BillCategoryRow {
-		_billCount: number
-	}
-	const rows = computed<CategoryRowVM[]>(() =>
-		store.filtered.map((c) => ({ ...c, _billCount: billCountFor(c.id) }))
-	);
-
 	const modalOpen = ref(false);
 	const editingRow = ref<BillCategoryRow | null>(null);
+
+	// The CategoryFormModal writes directly to the store and closes. In
+	// server mode the grid won't react to that, so refetch the page + counts
+	// whenever the modal closes (a plain cancel just re-runs the same query).
+	watch(modalOpen, (open) => {
+		if (!open) {
+			void table.reload();
+			void refreshCounts();
+		}
+	});
 
 	const openCreate = () => {
 		editingRow.value = null;
@@ -176,6 +204,8 @@
 				color: "info",
 				icon: goingToArchive ? "i-lucide-archive" : "i-lucide-archive-restore"
 			});
+			await table.reload();
+			await refreshCounts();
 		} catch (err) {
 			toast.add({
 				title: "Action failed",

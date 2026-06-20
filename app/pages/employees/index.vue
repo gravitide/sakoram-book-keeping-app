@@ -14,7 +14,7 @@
 					Employees
 				</h1>
 				<p class="text-sm text-(--ui-text-muted)">
-					{{ store.activeCount }} active · {{ store.archivedCount }} archived
+					{{ archivedCounts.active }} active · {{ archivedCounts.archived }} archived
 				</p>
 			</div>
 			<UButton v-if="!locked" icon="i-lucide-plus" @click="newEmployee">
@@ -47,15 +47,12 @@
 				</div>
 			</template>
 
-			<div v-if="store.loading" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-if="table.loading.value && table.rows.value.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				Loading employees…
 			</div>
-			<div v-else-if="store.error" class="py-12 text-center text-sm text-(--ui-error)">
-				{{ store.error }}
-			</div>
-			<div v-else-if="store.filtered.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-else-if="table.total.value === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				<UIcon name="i-lucide-users-round" class="size-10 mx-auto mb-2 opacity-50" />
-				<div v-if="store.employees.length === 0">
+				<div v-if="!hasFilter">
 					No employees yet. Click <span class="font-medium">New employee</span> to add the first one.
 				</div>
 				<div v-else>
@@ -66,11 +63,13 @@
 			<ResizableDataTable
 				v-else
 				ref="tableRef"
-				:rows="store.filtered"
+				:rows="table.rows.value"
+				:total="table.total.value"
 				state-key="employees-table"
 				:row-actions="itemsFor"
 				default-sort-field="full_name"
 				:default-sort-order="1"
+				@request="table.onRequest"
 				@row-click="(row) => router.push(`/employees/${row.id}`)"
 			>
 				<!-- Name first so it's the leading (clickable) column on
@@ -133,6 +132,7 @@
 
 <script setup lang="ts">
 	import type { EmployeeRow } from "~/stores/employees";
+	import { andClauses, likeClause, makeSortResolver } from "~/lib/list-query";
 	import { formatMoney } from "~/lib/money";
 	import { useEmployeesStore } from "~/stores/employees";
 	import { useLicenseStore } from "~/stores/license";
@@ -145,7 +145,37 @@
 	const license = useLicenseStore();
 	const locked = computed(() => !license.hasFeature("payroll"));
 
-	await store.load();
+	// Server-paginated: search + the archived toggle hit the DB.
+	const SEARCH_COLUMNS = ["full_name", "employee_number", "email", "designation", "phone", "nic"];
+	const table = useServerTable<EmployeeRow>({
+		query: () => ({
+			from: "employees",
+			where: andClauses([
+				{ sql: "is_archived = ?", params: [store.showArchived ? 1 : 0] },
+				likeClause(store.search, SEARCH_COLUMNS)
+			])
+		}),
+		resolveSortColumn: makeSortResolver({
+			full_name: "full_name COLLATE NOCASE",
+			employee_number: "employee_number COLLATE NOCASE",
+			designation: "designation COLLATE NOCASE",
+			nic: "nic COLLATE NOCASE",
+			phone: "phone",
+			basic_salary_cents: "basic_salary_cents"
+		}),
+		defaultOrderBy: "full_name COLLATE NOCASE ASC",
+		deps: () => store.listFilters,
+		initialSortField: "full_name",
+		initialSortOrder: 1
+	});
+
+	const archivedCounts = ref({ active: 0, archived: 0 });
+	const refreshCounts = async () => {
+		archivedCounts.value = await store.fetchArchivedCounts();
+	};
+	onMounted(refreshCounts);
+
+	const hasFilter = computed(() => store.search.trim() !== "" || store.showArchived);
 
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();
@@ -161,6 +191,8 @@
 				color: "info",
 				icon: goingToArchive ? "i-lucide-archive" : "i-lucide-archive-restore"
 			});
+			await table.reload();
+			await refreshCounts();
 		} catch (err) {
 			toast.add({
 				title: "Action failed",

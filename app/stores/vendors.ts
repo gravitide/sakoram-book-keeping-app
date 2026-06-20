@@ -72,6 +72,28 @@ export const useVendorsStore = defineStore("vendors", () => {
 	const activeCount = computed(() => vendors.value.filter((v) => v.is_archived === 0).length);
 	const archivedCount = computed(() => vendors.value.filter((v) => v.is_archived === 1).length);
 
+	// Packaged filter snapshot for the server-paginated list page (consumed by
+	// the page's buildWhere via likeClause + an is_archived clause).
+	const listFilters = computed(() => ({
+		search: search.value,
+		showArchived: showArchived.value
+	}));
+
+	// Active/archived totals straight from the DB (one grouped query) for the
+	// list-page header, so the paginated page doesn't load every row to count.
+	const fetchArchivedCounts = async (): Promise<{ active: number, archived: number }> => {
+		const rows = await select<{ is_archived: number, n: number }>(
+			"SELECT is_archived, COUNT(*) AS n FROM vendors GROUP BY is_archived"
+		);
+		let active = 0;
+		let archived = 0;
+		for (const r of rows) {
+			if (r.is_archived === 1) archived = r.n;
+			else active = r.n;
+		}
+		return { active, archived };
+	};
+
 	// See app/stores/invoices.ts for the `loaded` / `ensureLoaded`
 	// rationale — same pattern across every collection store.
 	const loaded = ref(false);
@@ -161,6 +183,8 @@ export const useVendorsStore = defineStore("vendors", () => {
 		filtered,
 		activeCount,
 		archivedCount,
+		listFilters,
+		fetchArchivedCounts,
 		loaded,
 		load,
 		ensureLoaded,

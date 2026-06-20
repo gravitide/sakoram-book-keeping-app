@@ -8,7 +8,7 @@
 					Vendors
 				</h1>
 				<p class="text-sm text-(--ui-text-muted)">
-					{{ store.activeCount }} active · {{ store.archivedCount }} archived
+					{{ archivedCounts.active }} active · {{ archivedCounts.archived }} archived
 				</p>
 			</div>
 			<UButton icon="i-lucide-plus" @click="newVendor">
@@ -41,15 +41,12 @@
 				</div>
 			</template>
 
-			<div v-if="store.loading" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-if="table.loading.value && table.rows.value.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				Loading vendors…
 			</div>
-			<div v-else-if="store.error" class="py-12 text-center text-sm text-(--ui-error)">
-				{{ store.error }}
-			</div>
-			<div v-else-if="store.filtered.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-else-if="table.total.value === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				<UIcon name="i-lucide-store" class="size-10 mx-auto mb-2 opacity-50" />
-				<div v-if="store.vendors.length === 0">
+				<div v-if="!hasFilter">
 					No vendors yet. Click <span class="font-medium">New vendor</span> to add the first one.
 				</div>
 				<div v-else>
@@ -60,11 +57,13 @@
 			<ResizableDataTable
 				v-else
 				ref="tableRef"
-				:rows="store.filtered"
+				:rows="table.rows.value"
+				:total="table.total.value"
 				state-key="vendors-table"
 				:row-actions="itemsFor"
 				default-sort-field="name"
 				:default-sort-order="1"
+				@request="table.onRequest"
 				@row-click="(row) => router.push(`/vendors/${row.id}`)"
 			>
 				<Column field="name" header="Name" sortable>
@@ -112,6 +111,7 @@
 
 <script setup lang="ts">
 	import type { VendorRow } from "~/stores/vendors";
+	import { andClauses, likeClause, makeSortResolver } from "~/lib/list-query";
 	import { useBillsStore } from "~/stores/bills";
 	import { useVendorsStore } from "~/stores/vendors";
 
@@ -122,7 +122,40 @@
 	const toast = useToast();
 	const router = useRouter();
 
-	await store.load();
+	// Server-paginated: search + the archived toggle hit the DB. Filter refs
+	// stay on the store so navigating away/back is sticky.
+	const SEARCH_COLUMNS = ["name", "email", "contact_person", "phone", "tax_id"];
+	const table = useServerTable<VendorRow>({
+		query: () => ({
+			from: "vendors",
+			where: andClauses([
+				{ sql: "is_archived = ?", params: [store.showArchived ? 1 : 0] },
+				likeClause(store.search, SEARCH_COLUMNS)
+			])
+		}),
+		resolveSortColumn: makeSortResolver({
+			name: "name COLLATE NOCASE",
+			contact_person: "contact_person COLLATE NOCASE",
+			email: "email COLLATE NOCASE",
+			phone: "phone",
+			tax_id: "tax_id"
+		}),
+		defaultOrderBy: "name COLLATE NOCASE ASC",
+		deps: () => store.listFilters,
+		initialSortField: "name",
+		initialSortOrder: 1
+	});
+
+	// Active/archived header counts from a grouped query, refreshed after
+	// archive/restore mutations.
+	const archivedCounts = ref({ active: 0, archived: 0 });
+	const refreshCounts = async () => {
+		archivedCounts.value = await store.fetchArchivedCounts();
+	};
+	onMounted(refreshCounts);
+
+	// Empty-state wording: distinguish "nothing here yet" from "filters hid it".
+	const hasFilter = computed(() => store.search.trim() !== "" || store.showArchived);
 
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();
@@ -138,6 +171,8 @@
 				color: "info",
 				icon: goingToArchive ? "i-lucide-archive" : "i-lucide-archive-restore"
 			});
+			await table.reload();
+			await refreshCounts();
 		} catch (err) {
 			toast.add({
 				title: "Action failed",
