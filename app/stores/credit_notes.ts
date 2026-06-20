@@ -163,6 +163,25 @@ export const useCreditNotesStore = defineStore("credit_notes", () => {
 		return sum;
 	});
 
+	// Packaged filter snapshot for the server-paginated list page (drives the
+	// page's buildWhere + the useServerTable refetch dependency).
+	const listFilters = computed(() => ({
+		search: search.value,
+		statusFilters: statusFilters.value,
+		clientFilter: clientFilter.value,
+		issuedFrom: issuedFrom.value,
+		issuedTo: issuedTo.value
+	}));
+
+	// Header stats (grand total count + issued-credit sum) from one query, so
+	// the paginated page doesn't load every row to show them.
+	const fetchHeaderStats = async (): Promise<{ total: number, issuedCents: number }> => {
+		const rows = await select<{ total: number, issued: number }>(
+			"SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN status = 'issued' THEN total_cents ELSE 0 END), 0) AS issued FROM credit_notes"
+		);
+		return { total: rows[0]?.total ?? 0, issuedCents: rows[0]?.issued ?? 0 };
+	};
+
 	const loaded = ref(false);
 	let pendingLoad: Promise<void> | null = null;
 
@@ -439,6 +458,8 @@ export const useCreditNotesStore = defineStore("credit_notes", () => {
 		issuedTo,
 		hasDateFilters,
 		clearDateFilters,
+		listFilters,
+		fetchHeaderStats,
 		filtered,
 		totalIssuedCents,
 		loaded,

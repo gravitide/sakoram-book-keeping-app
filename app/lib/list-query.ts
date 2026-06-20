@@ -36,6 +36,36 @@ export function andClauses(parts: SqlFragment[]): SqlFragment {
 }
 
 /**
+ * `column IN (?, ?, ...)` for a multi-select filter. Empty values = no filter
+ * (an empty fragment), matching the list-page convention that an empty filter
+ * set means "show everything".
+ */
+export function inClause(column: string, values: Array<string | number>): SqlFragment {
+	if (values.length === 0) return { sql: "", params: [] };
+	return { sql: `${column} IN (${values.map(() => "?").join(", ")})`, params: [...values] };
+}
+
+/**
+ * `column = ?` for a single-select FK filter that uses the `"all"` sentinel
+ * for "no narrowing" (and treats null the same). Anything else binds as-is.
+ */
+export function eqClause(column: string, value: number | "all" | null): SqlFragment {
+	if (value === "all" || value === null) return { sql: "", params: [] };
+	return { sql: `${column} = ?`, params: [value] };
+}
+
+/**
+ * Inclusive bounds: `column >= ? AND column <= ?`, each side optional
+ * (null = unbounded). Both null = empty fragment.
+ */
+export function rangeClause(column: string, from: string | null, to: string | null): SqlFragment {
+	const parts: SqlFragment[] = [];
+	if (from) parts.push({ sql: `${column} >= ?`, params: [from] });
+	if (to) parts.push({ sql: `${column} <= ?`, params: [to] });
+	return andClauses(parts);
+}
+
+/**
  * Build a sort-field resolver from an allow-list. Pass either:
  *   - a `string[]` of column names (each maps to itself), or
  *   - a `Record<field, expression>` when the ORDER-BY expression differs from
