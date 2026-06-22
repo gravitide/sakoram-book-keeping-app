@@ -208,6 +208,15 @@ export const usePayslipsStore = defineStore("payslips", () => {
 		return { total: rows[0]?.total ?? 0, outstandingCents: rows[0]?.outstanding ?? 0 };
 	};
 
+	// Distinct YYYY-MM months present in the payslip table, newest first —
+	// powers the list page's month picker without loading every row.
+	const fetchAvailableMonths = async (): Promise<string[]> => {
+		const rows = await select<{ ym: string }>(
+			"SELECT DISTINCT substr(period_start, 1, 7) AS ym FROM payslips ORDER BY ym DESC"
+		);
+		return rows.map((r) => r.ym);
+	};
+
 	// See app/stores/invoices.ts for the `loaded` / `ensureLoaded`
 	// rationale + shared pendingLoad — same pattern: skip refetching
 	// when already populated, share a single in-flight promise across
@@ -507,6 +516,7 @@ export const usePayslipsStore = defineStore("payslips", () => {
 		clearDateFilters,
 		listFilters,
 		fetchHeaderStats,
+		fetchAvailableMonths,
 		filtered,
 		outstandingTotal,
 		loaded,

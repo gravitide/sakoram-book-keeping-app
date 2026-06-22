@@ -22,8 +22,8 @@
 				<p class="text-sm text-(--ui-text-muted)">
 					<span v-if="isLoading">Loading…</span>
 					<template v-else>
-						{{ store.payslips.length }} total · outstanding balance
-						<span class="font-medium tabular-nums">{{ formatMoney(store.outstandingTotal) }}</span>
+						{{ headerStats.total }} total · outstanding balance
+						<span class="font-medium tabular-nums">{{ formatMoney(headerStats.outstandingCents) }}</span>
 					</template>
 				</p>
 			</div>
@@ -141,7 +141,7 @@
 				the left, net-pay total on the right. Mirrors the
 				pattern on the other list pages. -->
 			<div
-				v-if="!store.loading && !store.error"
+				v-if="!isLoading && table.total.value > 0"
 				class="flex justify-between items-center gap-3 flex-wrap text-sm text-(--ui-text-muted) tabular-nums mb-3"
 			>
 				<UButton
@@ -155,20 +155,17 @@
 					Auto-fit columns
 				</UButton>
 				<div class="flex items-center gap-3 ml-auto">
-					<span v-if="anyFilterActive" class="text-xs text-(--ui-text-muted)">{{ store.filtered.length }} of {{ store.payslips.length }} shown</span>
-					<StatChip label="Total" :value="formatMoney(filteredTotal)" />
+					<span class="text-xs text-(--ui-text-muted)">Showing {{ table.rows.value.length }} of {{ table.total.value }}</span>
+					<StatChip label="Total" :value="formatMoney(table.sumCents.value)" />
 				</div>
 			</div>
 
-			<div v-if="store.loading" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-if="table.loading.value && table.rows.value.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				Loading payslips…
 			</div>
-			<div v-else-if="store.error" class="py-12 text-center text-sm text-(--ui-error)">
-				{{ store.error }}
-			</div>
-			<div v-else-if="store.filtered.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-else-if="table.total.value === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				<UIcon name="i-lucide-file-spreadsheet" class="size-10 mx-auto mb-2 opacity-50" />
-				<div v-if="store.payslips.length === 0">
+				<div v-if="!anyFilterActive">
 					No payslips yet. Click <span class="font-medium">New payslip</span> to issue the first one.
 				</div>
 				<div v-else>
@@ -181,7 +178,7 @@
 				`selectedRows`; we surface a count + Clear + Generate PDFs.
 				Hidden when locked (payroll is a Premium feature). -->
 			<div
-				v-if="selectedRows.length > 0 && !store.loading && !store.error && !locked"
+				v-if="selectedRows.length > 0 && !isLoading && !locked"
 				class="mb-3 flex items-center justify-between gap-3 px-3 py-2 rounded-md border border-(--ui-primary)/30 bg-(--ui-primary)/10 text-sm"
 			>
 				<div>
@@ -209,15 +206,17 @@
 			</div>
 
 			<ResizableDataTable
-				v-if="!store.loading && !store.error && store.filtered.length > 0"
+				v-if="table.total.value > 0"
 				ref="tableRef"
 				v-model:selection="selectedRows"
-				:rows="rows"
+				:rows="table.rows.value"
+				:total="table.total.value"
 				state-key="payslips-table"
 				:row-actions="itemsFor"
 				default-sort-field="period_start"
 				:default-sort-order="-1"
 				selectable
+				@request="table.onRequest"
 				@row-click="(row) => router.push(`/payslips/${row.id}`)"
 			>
 				<Column field="number" header="Number" sortable>
@@ -359,6 +358,8 @@
 	import { open as openDialog } from "@tauri-apps/plugin-dialog";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
+	import { payslipDerivedFrom } from "~/lib/derived-status";
+	import { andClauses, eqClause, inClause, likeClause, makeSortResolver } from "~/lib/list-query";
 	import { formatMoney } from "~/lib/money";
 	import { buildPayslipPdfPayload } from "~/lib/payslip-pdf";
 	import { resolveProtectPassword } from "~/lib/pdf";
@@ -366,7 +367,6 @@
 	import { useLicenseStore } from "~/stores/license";
 	import { monthBounds, usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
-	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Payslips" });
 
@@ -375,22 +375,57 @@
 	const toast = useToast();
 	const store = usePayslipsStore();
 	const employeesStore = useEmployeesStore();
-	const vouchersStore = useVouchersStore();
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
 	const license = useLicenseStore();
 	const locked = computed(() => !license.hasFeature("payroll"));
+
+	// Each row carries derived `_paid` / `_balance` / `_status` from the SQL
+	// subquery, so neither all payslips NOR all vouchers load in memory.
+	type PayslipRowVM = PayslipRow & { _paid: number, _balance: number, _status: PayslipStatus };
+
+	const table = useServerTable<PayslipRowVM>({
+		query: () => ({
+			from: payslipDerivedFrom(""),
+			where: andClauses([
+				inClause("_status", store.statusFilters),
+				eqClause("employee_id", store.employeeFilter),
+				store.periodFrom ? { sql: "period_start >= ?", params: [store.periodFrom] } : { sql: "", params: [] },
+				store.periodTo ? { sql: "period_end <= ?", params: [store.periodTo] } : { sql: "", params: [] },
+				likeClause(store.search, ["number", "employee_name"])
+			]),
+			sumExpr: "SUM(net_cents)"
+		}),
+		resolveSortColumn: makeSortResolver({
+			number: "number",
+			employee_name: "employee_name COLLATE NOCASE",
+			period_start: "period_start",
+			pay_date: "pay_date",
+			net_cents: "net_cents",
+			_status: "_status"
+		}),
+		defaultOrderBy: "period_start DESC",
+		deps: () => store.listFilters,
+		initialSortField: "period_start",
+		initialSortOrder: -1
+	});
+
+	const headerStats = ref({ total: 0, outstandingCents: 0 });
+	const availableMonths = ref<string[]>([]);
+	const refreshStats = async () => {
+		headerStats.value = await store.fetchHeaderStats();
+		availableMonths.value = await store.fetchAvailableMonths();
+	};
 
 	// Loading state owned by `usePageLoading` — see the composable for
 	// the rAF-yield trick that ensures the skeleton actually paints.
 	const { isLoading, runLoad } = usePageLoading();
 	onMounted(() => runLoad(async () => {
 		await Promise.all([
-			store.ensureLoaded(),
 			employeesStore.ensureLoaded(),
-			vouchersStore.ensureLoaded(),
 			settingsStore.ensureLoaded()
 		]);
+		await refreshStats();
 	}));
 
 	// Optional ?employee=ID query — used by the "View payslips" action on
@@ -416,6 +451,15 @@
 		newPayslipPreselectId.value = preselect;
 		newPayslipOpen.value = true;
 	};
+
+	// The create modal writes a payslip + may navigate to it. On close,
+	// refetch so the grid + header + month picker reflect any new row.
+	watch(newPayslipOpen, (open) => {
+		if (!open) {
+			void table.reload();
+			void refreshStats();
+		}
+	});
 	onMounted(() => {
 		if (route.query.new === "1") {
 			openNewPayslip(queryEmployeeId);
@@ -425,26 +469,6 @@
 
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();
-
-	// `employee_name` is now a real column on `payslips` (denormalised
-	// at write time — see migration 0028) so we read it straight off
-	// the row instead of JSON-parsing the snapshot per render.
-	// Derived status still needs a per-row computation.
-	interface PayslipRowVM extends PayslipRow {
-		_status: PayslipStatus
-	}
-	const rows = computed<PayslipRowVM[]>(() =>
-		store.filtered.map((r) => ({
-			...r,
-			_status: store.derivedStatus(r)
-		}))
-	);
-
-	// Sum of net_cents across the currently visible (filtered) rows —
-	// total payroll committed for the slice the user is looking at.
-	const filteredTotal = computed(() =>
-		store.filtered.reduce((sum, p) => sum + p.net_cents, 0)
-	);
 
 	// PrimeVue's selection model holds row references; the bulk-PDF logic
 	// below derives IDs as needed. With `data-key="id"` (set by
@@ -473,10 +497,7 @@
 	// year of empty options on a fresh tenant, and we always include
 	// the month the user is most likely about to issue a payslip in.
 	const monthOptions = computed(() => {
-		const months = new Set<string>(); // "YYYY-MM"
-		for (const p of store.payslips) {
-			months.add(p.period_start.slice(0, 7));
-		}
+		const months = new Set<string>(availableMonths.value); // "YYYY-MM"
 		const today = new Date();
 		months.add(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`);
 		const sorted = Array.from(months).sort().reverse();
@@ -565,7 +586,7 @@
 
 	// --- Row actions: PDF preview + Mark issued -----------------------------
 
-	const currentPayslip = ref<PayslipRow | null>(null);
+	const currentPayslip = ref<PayslipRowVM | null>(null);
 	const currentLines = ref<PayslipLineDraft[]>([]);
 	const pdf = usePdfPreview({
 		command: "export_payslip_pdf",
@@ -576,15 +597,15 @@
 				lines: currentLines.value,
 				settings: settingsStore.settings,
 				currency: currency.value,
-				paidCents: store.paidCentsFor(currentPayslip.value.id),
-				balanceCents: store.balanceCentsFor(currentPayslip.value)
+				paidCents: currentPayslip.value._paid,
+				balanceCents: currentPayslip.value._balance
 			});
 		},
 		fileName: () => `${currentPayslip.value?.number ?? "payslip"}.pdf`,
 		title: "Payslip PDF preview"
 	});
 
-	const onPdfClick = async (r: PayslipRow) => {
+	const onPdfClick = async (r: PayslipRowVM) => {
 		currentPayslip.value = r;
 		try {
 			const rows = await store.getLines(r.id);
@@ -614,6 +635,8 @@
 		try {
 			await store.setStatus(r.id, "issued");
 			toast.add({ title: `${r.number} issued`, color: "success", icon: "i-lucide-send" });
+			await table.reload();
+			await refreshStats();
 		} catch (err) {
 			toast.add({
 				title: "Could not issue",
@@ -710,13 +733,11 @@
 		// from store.payslips by id so we get the canonical row reference
 		// (PrimeVue's selection array can hold stale refs across reloads,
 		// but `data-key="id"` keeps the IDs accurate).
-		const selectedIds = new Set(selectedRows.value.map((r) => r.id));
-		const targets: PayslipRow[] = [];
-		for (const p of store.payslips) {
-			if (selectedIds.has(p.id)) targets.push(p);
-		}
-		// Sort by number for predictable filename order.
-		targets.sort((a, b) => a.number.localeCompare(b.number));
+		// The selected rows already carry `_paid` / `_balance` from the list
+		// query, so we export them directly (no full store.payslips array).
+		const targets: PayslipRowVM[] = selectedRows.value
+			.slice()
+			.sort((a, b) => a.number.localeCompare(b.number));
 
 		bulkPdf.modalOpen = true;
 		bulkPdf.running = true;
@@ -750,8 +771,8 @@
 					lines,
 					settings: settingsStore.settings,
 					currency: currency.value,
-					paidCents: store.paidCentsFor(row.id),
-					balanceCents: store.balanceCentsFor(row)
+					paidCents: row._paid,
+					balanceCents: row._balance
 				});
 
 				const outputPath = await join(folder, `${safeName(row.number)}.pdf`);
