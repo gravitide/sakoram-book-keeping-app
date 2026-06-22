@@ -20,6 +20,7 @@ import type { PricingMode } from "~/stores/quotes";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
+import { billDerivedFrom, deriveBillStatus } from "~/lib/derived-status";
 import { computeLineTotals, sumCents } from "~/lib/money";
 import { allocateDocumentNumber, allocateSpecificDocumentNumber } from "~/lib/numbering";
 import { purgeDocumentAttachments } from "~/stores/document_attachments";
@@ -178,14 +179,8 @@ export const useBillsStore = defineStore("bills", () => {
 	/// 'cancelled' is sticky — never overridden by payment math. Otherwise
 	/// 'paid' takes precedence over 'overdue' (a paid-late bill is paid),
 	/// then 'overdue', then 'partial', then 'unpaid'.
-	const derivedStatus = (bill: BillRow, now: string = todayISO()): BillStatus => {
-		if (bill.status === "cancelled") return "cancelled";
-		const paid = paidCentsFor(bill.id);
-		if (paid >= bill.total_cents && bill.total_cents > 0) return "paid";
-		if (bill.due_date < now) return "overdue";
-		if (paid > 0) return "partial";
-		return "unpaid";
-	};
+	const derivedStatus = (bill: BillRow, now: string = todayISO()): BillStatus =>
+		deriveBillStatus(bill.status, paidCentsFor(bill.id), bill.total_cents, bill.due_date, now);
 
 	const filtered = computed(() => {
 		const today = todayISO();
@@ -231,6 +226,34 @@ export const useBillsStore = defineStore("bills", () => {
 		const today = todayISO();
 		return bills.value.filter((r) => derivedStatus(r, today) === "overdue").length;
 	});
+
+	// Packaged filter snapshot for the server-paginated list page.
+	const listFilters = computed(() => ({
+		search: search.value,
+		statusFilters: statusFilters.value,
+		vendorFilter: vendorFilter.value,
+		categoryFilter: categoryFilter.value,
+		issuedFrom: issuedFrom.value,
+		issuedTo: issuedTo.value,
+		dueFrom: dueFrom.value,
+		dueTo: dueTo.value
+	}));
+
+	// Grand total count + global outstanding in one wrapped query over the
+	// derived-status subquery.
+	const fetchHeaderStats = async (): Promise<{ total: number, outstandingCents: number, overdueCount: number }> => {
+		const rows = await select<{ total: number, outstanding: number, overdue: number }>(
+			`SELECT COUNT(*) AS total,
+			        COALESCE(SUM(CASE WHEN _status IN ('unpaid','partial','overdue') THEN _balance ELSE 0 END), 0) AS outstanding,
+			        SUM(CASE WHEN _status = 'overdue' THEN 1 ELSE 0 END) AS overdue
+			 FROM ${billDerivedFrom(todayISO())}`
+		);
+		return {
+			total: rows[0]?.total ?? 0,
+			outstandingCents: rows[0]?.outstanding ?? 0,
+			overdueCount: rows[0]?.overdue ?? 0
+		};
+	};
 
 	// See app/stores/invoices.ts for the `loaded` / `ensureLoaded`
 	// rationale + shared pendingLoad — same pattern: skip refetching
@@ -518,6 +541,8 @@ export const useBillsStore = defineStore("bills", () => {
 		dueTo,
 		hasDateFilters,
 		clearDateFilters,
+		listFilters,
+		fetchHeaderStats,
 		filtered,
 		outstandingTotal,
 		overdueCount,

@@ -16,9 +16,9 @@
 				<p class="text-sm text-(--ui-text-muted) tabular-nums">
 					<span v-if="isLoading">Loading…</span>
 					<template v-else>
-						{{ store.bills.length }} total · {{ formatLKR(store.outstandingTotal) }} outstanding
-						<span v-if="store.overdueCount > 0" class="text-(--ui-error)">
-							· {{ store.overdueCount }} overdue
+						{{ headerStats.total }} total · {{ formatLKR(headerStats.outstandingCents) }} outstanding
+						<span v-if="headerStats.overdueCount > 0" class="text-(--ui-error)">
+							· {{ headerStats.overdueCount }} overdue
 						</span>
 					</template>
 				</p>
@@ -176,7 +176,7 @@
 			<!-- Table action bar + filtered-rows summary; Auto-fit on
 				the left, totals on the right. -->
 			<div
-				v-if="!store.loading && !store.error"
+				v-if="!isLoading && table.total.value > 0"
 				class="flex justify-between items-center gap-3 flex-wrap text-sm text-(--ui-text-muted) tabular-nums mb-3"
 			>
 				<UButton
@@ -190,20 +190,17 @@
 					Auto-fit columns
 				</UButton>
 				<div class="flex items-center gap-3 ml-auto">
-					<span v-if="hasAnyFilter" class="text-xs text-(--ui-text-muted)">{{ store.filtered.length }} of {{ store.bills.length }} shown</span>
-					<StatChip label="Total" :value="formatLKR(filteredTotal)" />
+					<span class="text-xs text-(--ui-text-muted)">Showing {{ table.rows.value.length }} of {{ table.total.value }}</span>
+					<StatChip label="Total" :value="formatLKR(table.sumCents.value)" />
 				</div>
 			</div>
 
-			<div v-if="store.loading" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-if="table.loading.value && table.rows.value.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				Loading bills…
 			</div>
-			<div v-else-if="store.error" class="py-12 text-center text-sm text-(--ui-error)">
-				{{ store.error }}
-			</div>
-			<div v-else-if="store.filtered.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-else-if="table.total.value === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				<UIcon name="i-lucide-file-input" class="size-10 mx-auto mb-2 opacity-50" />
-				<div v-if="store.bills.length === 0">
+				<div v-if="!hasAnyFilter">
 					No bills yet. Click <span class="font-medium">New bill</span> to record one.
 				</div>
 				<div v-else>
@@ -214,7 +211,7 @@
 			<!-- Selection action bar — renders above the table whenever any
 				row is ticked. Surfaces a count + Clear + Generate PDFs. -->
 			<div
-				v-if="selectedRows.length > 0 && !store.loading && !store.error"
+				v-if="selectedRows.length > 0 && !isLoading"
 				class="mb-3 flex items-center justify-between gap-3 px-3 py-2 rounded-md border border-(--ui-primary)/30 bg-(--ui-primary)/10 text-sm"
 			>
 				<div>
@@ -242,15 +239,17 @@
 			</div>
 
 			<ResizableDataTable
-				v-if="!store.loading && !store.error && store.filtered.length > 0"
+				v-if="table.total.value > 0"
 				ref="tableRef"
 				v-model:selection="selectedRows"
-				:rows="rows"
+				:rows="table.rows.value"
+				:total="table.total.value"
 				state-key="bills-table"
 				:row-actions="itemsFor"
 				default-sort-field="issue_date"
 				:default-sort-order="-1"
 				selectable
+				@request="table.onRequest"
 				@row-click="(row) => router.push(`/bills/${row.id}`)"
 			>
 				<Column field="number" header="Number" sortable>
@@ -430,6 +429,9 @@
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { buildBillPdfPayload } from "~/lib/bill-pdf";
+	import { todayISO } from "~/lib/calendar-events";
+	import { billDerivedFrom } from "~/lib/derived-status";
+	import { andClauses, eqClause, inClause, likeClause, makeSortResolver, rangeClause } from "~/lib/list-query";
 	import { formatLKR } from "~/lib/money";
 	import { resolveProtectPassword } from "~/lib/pdf";
 	import { themeHex } from "~/lib/theme";
@@ -437,7 +439,6 @@
 	import { useBillsStore } from "~/stores/bills";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVendorsStore } from "~/stores/vendors";
-	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Bills" });
 
@@ -449,47 +450,60 @@
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
 
-	// Loading state owned by `usePageLoading` — see the composable for
-	// the rAF-yield trick that ensures the skeleton actually paints.
-	const vouchersStore = useVouchersStore();
+	// Each row carries the derived `_paid` / `_balance` / `_status` from the
+	// SQL subquery, so neither all bills NOR all vouchers load in memory — the
+	// gate, single PDF, and bulk PDF read those fields straight off the row.
+	type BillRowVM = BillRow & { _paid: number, _balance: number, _status: BillStatus };
+
+	const table = useServerTable<BillRowVM>({
+		query: () => ({
+			from: billDerivedFrom(todayISO()),
+			where: andClauses([
+				inClause("_status", store.statusFilters),
+				eqClause("vendor_id", store.vendorFilter),
+				store.categoryFilter === "uncategorised"
+					? { sql: "category_id IS NULL", params: [] }
+					: eqClause("category_id", store.categoryFilter),
+				rangeClause("issue_date", store.issuedFrom, store.issuedTo),
+				rangeClause("due_date", store.dueFrom, store.dueTo),
+				likeClause(store.search, ["number", "vendor_name", "vendor_invoice_number", "category_name"])
+			]),
+			sumExpr: "SUM(total_cents)"
+		}),
+		resolveSortColumn: makeSortResolver({
+			number: "number",
+			vendor_name: "vendor_name COLLATE NOCASE",
+			vendor_invoice_number: "vendor_invoice_number",
+			category_name: "category_name COLLATE NOCASE",
+			issue_date: "issue_date",
+			due_date: "due_date",
+			total_cents: "total_cents",
+			_balance: "_balance",
+			_status: "_status"
+		}),
+		defaultOrderBy: "datetime(created_at) DESC",
+		deps: () => store.listFilters,
+		initialSortField: "issue_date",
+		initialSortOrder: -1
+	});
+
+	const headerStats = ref({ total: 0, outstandingCents: 0, overdueCount: 0 });
+	const refreshStats = async () => {
+		headerStats.value = await store.fetchHeaderStats();
+	};
+
 	const { isLoading, runLoad } = usePageLoading();
 	onMounted(() => runLoad(async () => {
 		await Promise.all([
-			store.ensureLoaded(),
 			vendorsStore.ensureLoaded(),
 			categoriesStore.ensureLoaded(),
-			vouchersStore.ensureLoaded(),
 			settingsStore.ensureLoaded()
 		]);
+		await refreshStats();
 	}));
 
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();
-
-	// `vendor_name` + `category_name/color/icon` are now real columns on
-	// `bills` (denormalised at write time — see migration 0028) so we
-	// read them straight off each row. No JSON.parse per row, which used
-	// to be the most expensive part of every filter change at heavy
-	// demo scale (1000+ bills × 2 snapshot parses each).
-	// Balance + derived status still need per-row computation; they
-	// stay on a view-model with `_…` field names.
-	interface BillRowVM extends BillRow {
-		_balance: number
-		_status: BillStatus
-	}
-	const rows = computed<BillRowVM[]>(() =>
-		store.filtered.map((b) => ({
-			...b,
-			_balance: store.balanceCentsFor(b),
-			_status: store.derivedStatus(b)
-		}))
-	);
-
-	// Sum of total_cents across the currently visible (filtered) rows.
-	// Tracks whatever the active filters narrow the list to.
-	const filteredTotal = computed(() =>
-		store.filtered.reduce((sum, b) => sum + b.total_cents, 0)
-	);
 
 	// Drives <NewBillModal>; the New button opens it. Auto-opens when
 	// the route carries ?new=1 (dashboard New > Bill shortcut or
@@ -501,6 +515,15 @@
 		newBillIssueDate.value = null;
 		newBillOpen.value = true;
 	};
+
+	// The create modal writes a bill + may navigate to it. On close, refetch
+	// so the grid + header reflect any new row when it doesn't navigate away.
+	watch(newBillOpen, (open) => {
+		if (!open) {
+			void table.reload();
+			void refreshStats();
+		}
+	});
 	const route = useRoute();
 	onMounted(() => {
 		if (route.query.new === "1") {
@@ -652,7 +675,7 @@
 	// usePdfPreview holds a temp file and exposes open/save/cancel hooks.
 	// The builder closes over `currentBill` + `currentLines`, both set just
 	// before opening so the preview matches the row the user clicked from.
-	const currentBill = ref<BillRow | null>(null);
+	const currentBill = ref<BillRowVM | null>(null);
 	const currentLines = ref<BillLineRow[]>([]);
 	const pdf = usePdfPreview({
 		command: "export_bill_pdf",
@@ -663,14 +686,14 @@
 				lines: currentLines.value,
 				settings: settingsStore.settings,
 				currency: currency.value,
-				paidCents: store.paidCentsFor(currentBill.value.id)
+				paidCents: currentBill.value._paid
 			});
 		},
 		fileName: () => `${currentBill.value?.number ?? "bill"}.pdf`,
 		title: "Bill PDF preview"
 	});
 
-	const onPdfClick = async (b: BillRow) => {
+	const onPdfClick = async (b: BillRowVM) => {
 		currentBill.value = b;
 		try {
 			currentLines.value = await store.getLines(b.id);
@@ -764,15 +787,13 @@
 		}
 		if (!folder) return; // cancelled
 
-		// Snapshot the selection — if the user keeps clicking around while
-		// it runs, we still process exactly what they kicked off. Resolve
-		// from store.bills by id for the canonical row reference.
-		const selectedIds = new Set(selectedRows.value.map((r) => r.id));
-		const targets: BillRow[] = [];
-		for (const b of store.bills) {
-			if (selectedIds.has(b.id)) targets.push(b);
-		}
-		targets.sort((a, b) => a.number.localeCompare(b.number));
+		// Snapshot the selection — if the user keeps clicking around while it
+		// runs, we still process exactly what they kicked off. The selected
+		// rows already carry `_paid` from the list query, so we export them
+		// directly (no need for the full store.bills array).
+		const targets: BillRowVM[] = selectedRows.value
+			.slice()
+			.sort((a, b) => a.number.localeCompare(b.number));
 
 		bulkPdf.modalOpen = true;
 		bulkPdf.running = true;
@@ -799,7 +820,7 @@
 					lines: lineRows,
 					settings: settingsStore.settings,
 					currency: currency.value,
-					paidCents: store.paidCentsFor(row.id)
+					paidCents: row._paid
 				});
 
 				const outputPath = await join(folder, `${safeName(row.number)}.pdf`);
