@@ -14,7 +14,7 @@
 					<HelpButton slug="customer-statements" />
 				</h1>
 				<p class="text-sm text-(--ui-text-muted)">
-					{{ store.activeCount }} active · {{ store.archivedCount }} archived
+					{{ clientStats.active }} active · {{ clientStats.archived }} archived
 				</p>
 			</div>
 			<UButton icon="i-lucide-plus" @click="newClient">
@@ -60,17 +60,16 @@
 						>
 							Has outstanding
 							<span
-								v-if="outstandingClientCount > 0"
+								v-if="clientStats.outstandingClients > 0"
 								class="ml-1 text-[10px] opacity-75 tabular-nums"
 							>
-								({{ outstandingClientCount }})
+								({{ clientStats.outstandingClients }})
 							</span>
 						</UButton>
-						<div v-if="store.outstandingOnly || filteredOutstanding > 0" class="ml-auto">
+						<div v-if="store.outstandingOnly" class="ml-auto">
 							<StatChip
-								v-if="store.outstandingOnly"
 								label="Outstanding"
-								:value="fmt(filteredOutstanding)"
+								:value="fmt(table.sumCents.value)"
 								color="error"
 							/>
 						</div>
@@ -78,19 +77,16 @@
 				</div>
 			</template>
 
-			<div v-if="store.loading" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-if="table.loading.value && table.rows.value.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				Loading clients…
 			</div>
-			<div v-else-if="store.error" class="py-12 text-center text-sm text-(--ui-error)">
-				{{ store.error }}
-			</div>
-			<div v-else-if="displayedRows.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-else-if="table.total.value === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				<UIcon name="i-lucide-users" class="size-10 mx-auto mb-2 opacity-50" />
-				<div v-if="store.clients.length === 0">
-					No clients yet. Click <span class="font-medium">New client</span> to add the first one.
+				<div v-if="store.outstandingOnly">
+					No clients with outstanding invoices. Everyone's paid up.
 				</div>
-				<div v-else-if="store.outstandingOnly">
-					No clients with outstanding invoices. Either everyone's paid up, or invoices haven't loaded yet.
+				<div v-else-if="!hasFilter">
+					No clients yet. Click <span class="font-medium">New client</span> to add the first one.
 				</div>
 				<div v-else>
 					No clients match your filters.
@@ -100,11 +96,13 @@
 			<ResizableDataTable
 				v-else
 				ref="tableRef"
-				:rows="displayedRows"
+				:rows="table.rows.value"
+				:total="table.total.value"
 				state-key="clients-table"
 				:row-actions="itemsFor"
 				:default-sort-field="store.outstandingOnly ? '_outstanding' : 'name'"
 				:default-sort-order="store.outstandingOnly ? -1 : 1"
+				@request="table.onRequest"
 				@row-click="(row) => router.push(`/clients/${row.id}`)"
 			>
 				<Column field="name" header="Name" sortable>
@@ -169,6 +167,8 @@
 <script setup lang="ts">
 	import type { ClientRow } from "~/stores/clients";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
+	import { clientDerivedFrom } from "~/lib/derived-status";
+	import { andClauses, likeClause, makeSortResolver } from "~/lib/list-query";
 	import { formatMoney } from "~/lib/money";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
@@ -177,89 +177,60 @@
 	definePageMeta({ title: "Clients" });
 
 	const store = useClientsStore();
-	// Quote / invoice stores serve two purposes here:
-	//   1. Hand off a client filter before navigating to /quotes or
-	//      /invoices (the row actions and detail-page shortcuts).
-	//   2. Read invoice balances so we can show an "Outstanding"
-	//      column on each row and gate the new "Has outstanding"
-	//      chip filter against that data.
+	// Quote / invoice stores are kept only to hand off a client filter before
+	// navigating to /quotes or /invoices (the row actions). Neither is loaded —
+	// the Outstanding column comes from the clientDerivedFrom SQL subquery.
 	const quotesStore = useQuotesStore();
 	const invoicesStore = useInvoicesStore();
 	const toast = useToast();
 	const router = useRouter();
 
-	// Load clients up-front (page suspended). Invoices load in parallel
-	// but aren't awaited — the Outstanding column reads from a Map that
-	// starts empty and fills in once invoices arrive. Worst case: a
-	// brief moment where every row shows "—" before the column lights
-	// up with numbers. Better than blocking the page on the invoices
-	// query for what's primarily a contact list.
-	await store.load();
-	void invoicesStore.ensureLoaded();
-
-	const tableRef = ref<{ autoFit: () => void } | null>(null);
-	const autoFitColumns = () => tableRef.value?.autoFit();
-
-	// Map<client_id, outstanding cents> — sum of every open invoice's
-	// balance for that client. "Open" means derivedStatus is sent /
-	// partial / overdue (drafts and cancelled don't count; fully-paid
-	// fall off naturally because their balance is 0). Computed in one
-	// pass over invoices to avoid O(N×M) when rendering thousands of
-	// client rows.
-	const outstandingByClient = computed<Map<number, number>>(() => {
-		const map = new Map<number, number>();
-		for (const inv of invoicesStore.invoices) {
-			const ds = invoicesStore.derivedStatus(inv);
-			if (ds !== "sent" && ds !== "partial" && ds !== "overdue") continue;
-			const balance = invoicesStore.balanceCentsFor(inv);
-			if (balance <= 0) continue;
-			map.set(inv.client_id, (map.get(inv.client_id) ?? 0) + balance);
-		}
-		return map;
-	});
-
 	const currency = useActiveCurrency();
 	const fmt = (cents: number) => formatMoney(cents, currency.value);
 
-	// View-model row — synthesises `_outstanding` on each ClientRow so
-	// the table can sort by amount via PrimeVue's by-field sorting.
-	// Underscore-prefix matches the convention on other list pages
-	// (e.g. _status / _client on document tables).
-	interface ClientRowVM extends ClientRow {
-		_outstanding: number
-	}
+	// `_outstanding` (Σ open-invoice balances) is computed in SQL by the
+	// clientDerivedFrom subquery, so the page needs neither all clients nor
+	// all invoices in memory. The "Outstanding only" toggle filters
+	// `_outstanding > 0` and flips the default sort to amount-desc.
+	type ClientRowVM = ClientRow & { _outstanding: number };
 
-	const displayedRows = computed<ClientRowVM[]>(() => {
-		const map = outstandingByClient.value;
-		const base = store.filtered.map((c) => ({
-			...c,
-			_outstanding: map.get(c.id) ?? 0
-		}));
-		if (!store.outstandingOnly) return base;
-		return base
-			.filter((c) => c._outstanding > 0)
-			// When the chip is on, default-sort by amount desc so the
-			// biggest receivable lands at the top — collections-chasing
-			// is the use case here. PrimeVue's sortable column can
-			// override this once the user clicks a header.
-			.sort((a, b) => b._outstanding - a._outstanding);
+	const table = useServerTable<ClientRowVM>({
+		query: () => ({
+			from: clientDerivedFrom(),
+			where: andClauses([
+				{ sql: "is_archived = ?", params: [store.showArchived ? 1 : 0] },
+				store.outstandingOnly ? { sql: "_outstanding > 0", params: [] } : { sql: "", params: [] },
+				likeClause(store.search, ["name", "email", "contact_person", "phone", "tax_id"])
+			]),
+			sumExpr: "SUM(_outstanding)"
+		}),
+		resolveSortColumn: makeSortResolver({
+			name: "name COLLATE NOCASE",
+			contact_person: "contact_person COLLATE NOCASE",
+			email: "email COLLATE NOCASE",
+			phone: "phone",
+			tax_id: "tax_id",
+			_outstanding: "_outstanding"
+		}),
+		// Collections view (outstanding-only) leads with the biggest balance;
+		// the plain contact list sorts by name. A function so it re-reads the
+		// toggle on each fetch.
+		defaultOrderBy: () => (store.outstandingOnly ? "_outstanding DESC" : "name COLLATE NOCASE ASC"),
+		deps: () => store.listFilters,
+		initialSortOrder: 1
 	});
 
-	// Filtered-row total — sum of outstanding across the rows currently
-	// visible. Matches the StatChip pattern on the document lists.
-	const filteredOutstanding = computed(() =>
-		displayedRows.value.reduce((sum, r) => sum + r._outstanding, 0)
-	);
+	// Header active/archived counts + "Has outstanding" chip badge count.
+	const clientStats = ref({ active: 0, archived: 0, outstandingClients: 0 });
+	const refreshStats = async () => {
+		clientStats.value = await store.fetchClientStats();
+	};
+	onMounted(refreshStats);
 
-	// Count of clients with > 0 outstanding, for the chip's badge.
-	const outstandingClientCount = computed(() => {
-		let n = 0;
-		for (const c of store.clients) {
-			if (c.is_archived === 1) continue;
-			if ((outstandingByClient.value.get(c.id) ?? 0) > 0) n += 1;
-		}
-		return n;
-	});
+	const hasFilter = computed(() => store.search.trim() !== "" || store.showArchived || store.outstandingOnly);
+
+	const tableRef = ref<{ autoFit: () => void } | null>(null);
+	const autoFitColumns = () => tableRef.value?.autoFit();
 
 	const newClient = () => router.push("/clients/new");
 
@@ -272,6 +243,8 @@
 				color: "info",
 				icon: goingToArchive ? "i-lucide-archive" : "i-lucide-archive-restore"
 			});
+			await table.reload();
+			await refreshStats();
 		} catch (err) {
 			toast.add({
 				title: "Action failed",

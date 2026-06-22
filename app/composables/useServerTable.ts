@@ -32,7 +32,12 @@ export interface ServerTableRequest {
 export interface UseServerTableOptions {
 	query: () => ServerTableQuery
 	resolveSortColumn: (field: string | null) => string | null
-	defaultOrderBy: string
+	/**
+	 * ORDER BY used when no/unresolvable sort field. A function is re-read on
+	 *  every fetch, so it can depend on reactive filter state (e.g. clients'
+	 *  "outstanding only" toggle flipping the default sort).
+	 */
+	defaultOrderBy: string | (() => string)
 	deps: () => unknown
 	debounceMs?: number
 	initialPageSize?: number
@@ -58,7 +63,7 @@ export function useServerTable<Row>(opts: UseServerTableOptions) {
 
 	const buildOrderBy = (): string => {
 		const col = opts.resolveSortColumn(sortField.value);
-		if (!col) return opts.defaultOrderBy;
+		if (!col) return typeof opts.defaultOrderBy === "function" ? opts.defaultOrderBy() : opts.defaultOrderBy;
 		return `${col} ${sortOrder.value === 1 ? "ASC" : "DESC"}`;
 	};
 

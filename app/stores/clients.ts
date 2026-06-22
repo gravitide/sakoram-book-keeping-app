@@ -7,6 +7,7 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
+import { clientDerivedFrom } from "~/lib/derived-status";
 
 export interface ClientRow {
 	id: number
@@ -77,6 +78,31 @@ export const useClientsStore = defineStore("clients", () => {
 
 	const activeCount = computed(() => clients.value.filter((c) => c.is_archived === 0).length);
 	const archivedCount = computed(() => clients.value.filter((c) => c.is_archived === 1).length);
+
+	// Packaged filter snapshot for the server-paginated list page.
+	const listFilters = computed(() => ({
+		search: search.value,
+		showArchived: showArchived.value,
+		outstandingOnly: outstandingOnly.value
+	}));
+
+	// Header + chip stats in two grouped queries: active/archived counts and
+	// the number of clients with a positive outstanding balance.
+	const fetchClientStats = async (): Promise<{ active: number, archived: number, outstandingClients: number }> => {
+		const archRows = await select<{ is_archived: number, n: number }>(
+			"SELECT is_archived, COUNT(*) AS n FROM clients GROUP BY is_archived"
+		);
+		const outRows = await select<{ n: number }>(
+			`SELECT COUNT(*) AS n FROM ${clientDerivedFrom()} WHERE _outstanding > 0`
+		);
+		let active = 0;
+		let archived = 0;
+		for (const r of archRows) {
+			if (r.is_archived === 1) archived = r.n;
+			else active = r.n;
+		}
+		return { active, archived, outstandingClients: outRows[0]?.n ?? 0 };
+	};
 
 	// See app/stores/invoices.ts for the `loaded` / `ensureLoaded`
 	// rationale — same pattern across every collection store.
@@ -168,6 +194,8 @@ export const useClientsStore = defineStore("clients", () => {
 		filtered,
 		activeCount,
 		archivedCount,
+		listFilters,
+		fetchClientStats,
 		loaded,
 		load,
 		ensureLoaded,
