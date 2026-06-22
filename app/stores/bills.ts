@@ -241,13 +241,18 @@ export const useBillsStore = defineStore("bills", () => {
 
 	// Grand total count + global outstanding in one wrapped query over the
 	// derived-status subquery.
-	const fetchHeaderStats = async (): Promise<{ total: number, outstandingCents: number }> => {
-		const rows = await select<{ total: number, outstanding: number }>(
+	const fetchHeaderStats = async (): Promise<{ total: number, outstandingCents: number, overdueCount: number }> => {
+		const rows = await select<{ total: number, outstanding: number, overdue: number }>(
 			`SELECT COUNT(*) AS total,
-			        COALESCE(SUM(CASE WHEN _status IN ('unpaid','partial','overdue') THEN _balance ELSE 0 END), 0) AS outstanding
+			        COALESCE(SUM(CASE WHEN _status IN ('unpaid','partial','overdue') THEN _balance ELSE 0 END), 0) AS outstanding,
+			        SUM(CASE WHEN _status = 'overdue' THEN 1 ELSE 0 END) AS overdue
 			 FROM ${billDerivedFrom(todayISO())}`
 		);
-		return { total: rows[0]?.total ?? 0, outstandingCents: rows[0]?.outstanding ?? 0 };
+		return {
+			total: rows[0]?.total ?? 0,
+			outstandingCents: rows[0]?.outstanding ?? 0,
+			overdueCount: rows[0]?.overdue ?? 0
+		};
 	};
 
 	// See app/stores/invoices.ts for the `loaded` / `ensureLoaded`
