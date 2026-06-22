@@ -83,6 +83,19 @@ export function billDerivedFrom(today: string): string {
 		+ `FROM bills b ${paidJoinOn("related_bill_id", "payment")}b.id) sub`;
 }
 
+// Clients with a computed `_outstanding` = Σ open-invoice balances (matches the
+// clients page: invoices with persisted status 'sent' and a positive balance —
+// i.e. derived sent / partial / overdue). The "Outstanding only" toggle filters
+// `_outstanding > 0` and the page sorts on it.
+export function clientDerivedFrom(): string {
+	const paid = "COALESCE(vp.paid, 0)";
+	return `(SELECT c.*, COALESCE((`
+		+ `SELECT SUM(i.total_cents - ${paid}) FROM invoices i `
+		+ `${paidJoinOn("related_invoice_id", "receipt")}i.id `
+		+ `WHERE i.client_id = c.id AND i.status = 'sent' AND (i.total_cents - ${paid}) > 0`
+		+ `), 0) AS _outstanding FROM clients c) sub`;
+}
+
 export function payslipDerivedFrom(_today: string): string {
 	const paid = "COALESCE(vp.paid, 0)";
 	return `(SELECT p.*, ${paid} AS _paid, (p.net_cents - ${paid}) AS _balance, `

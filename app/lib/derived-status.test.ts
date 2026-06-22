@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	billDerivedFrom,
+	clientDerivedFrom,
 	deriveBillStatus,
 	deriveInvoiceStatus,
 	derivePayslipStatus,
@@ -69,5 +70,14 @@ describe("fROM builders", () => {
 		expect(sql).toContain("FROM payslips p");
 		expect(sql).not.toContain("overdue");
 		expect(sql).not.toContain("due_date");
+	});
+
+	it("client FROM exposes _outstanding over open ('sent', balance>0) invoices", () => {
+		const sql = clientDerivedFrom();
+		expect(sql).toContain("AS _outstanding");
+		expect(sql).toContain("FROM clients c");
+		expect(sql).toContain("i.status = 'sent'");
+		expect(sql).toContain("voucher_type = 'receipt'");
+		expect(sql.trim().endsWith(") sub")).toBe(true);
 	});
 });
