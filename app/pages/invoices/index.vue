@@ -20,9 +20,9 @@
 				<p class="text-sm text-(--ui-text-muted) tabular-nums">
 					<span v-if="isLoading">Loading…</span>
 					<template v-else>
-						{{ store.invoices.length }} total · {{ formatLKR(store.outstandingTotal) }} outstanding
-						<span v-if="store.overdueCount > 0" class="text-(--ui-error)">
-							· {{ store.overdueCount }} overdue
+						{{ headerStats.total }} total · {{ formatLKR(headerStats.outstandingCents) }} outstanding
+						<span v-if="headerStats.overdueCount > 0" class="text-(--ui-error)">
+							· {{ headerStats.overdueCount }} overdue
 						</span>
 					</template>
 				</p>
@@ -162,7 +162,7 @@
 			<!-- Table action bar + filtered-rows summary; Auto-fit on
 				the left, totals on the right. -->
 			<div
-				v-if="!store.loading && !store.error"
+				v-if="!isLoading && table.total.value > 0"
 				class="flex justify-between items-center gap-3 flex-wrap text-sm text-(--ui-text-muted) tabular-nums mb-3"
 			>
 				<UButton
@@ -176,20 +176,17 @@
 					Auto-fit columns
 				</UButton>
 				<div class="flex items-center gap-3 ml-auto">
-					<span v-if="hasAnyFilter" class="text-xs text-(--ui-text-muted)">{{ store.filtered.length }} of {{ store.invoices.length }} shown</span>
-					<StatChip label="Total" :value="formatLKR(filteredTotal)" />
+					<span class="text-xs text-(--ui-text-muted)">Showing {{ table.rows.value.length }} of {{ table.total.value }}</span>
+					<StatChip label="Total" :value="formatLKR(table.sumCents.value)" />
 				</div>
 			</div>
 
-			<div v-if="store.loading" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-if="table.loading.value && table.rows.value.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				Loading invoices…
 			</div>
-			<div v-else-if="store.error" class="py-12 text-center text-sm text-(--ui-error)">
-				{{ store.error }}
-			</div>
-			<div v-else-if="store.filtered.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
+			<div v-else-if="table.total.value === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 				<UIcon name="i-lucide-receipt" class="size-10 mx-auto mb-2 opacity-50" />
-				<div v-if="store.invoices.length === 0">
+				<div v-if="!hasAnyFilter">
 					No invoices yet. Click <span class="font-medium">New invoice</span> to start.
 				</div>
 				<div v-else>
@@ -205,11 +202,13 @@
 			<ResizableDataTable
 				v-else
 				ref="tableRef"
-				:rows="rows"
+				:rows="table.rows.value"
+				:total="table.total.value"
 				state-key="invoices-table"
 				:row-actions="itemsFor"
 				default-sort-field="issue_date"
 				:default-sort-order="-1"
+				@request="table.onRequest"
 				@row-click="(row) => router.push(`/invoices/${row.id}`)"
 			>
 				<Column field="number" header="Number" sortable>
@@ -308,12 +307,14 @@
 	import type { InvoiceLineRow, InvoiceRow, InvoiceStatus } from "~/stores/invoices";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
+	import { todayISO } from "~/lib/calendar-events";
+	import { invoiceDerivedFrom } from "~/lib/derived-status";
 	import { buildInvoicePdfPayload } from "~/lib/invoice-pdf";
+	import { andClauses, eqClause, inClause, likeClause, makeSortResolver, rangeClause } from "~/lib/list-query";
 	import { formatLKR } from "~/lib/money";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { useSettingsStore } from "~/stores/settings";
-	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Invoices" });
 
@@ -321,55 +322,56 @@
 	const toast = useToast();
 	const store = useInvoicesStore();
 	const clientsStore = useClientsStore();
-	const vouchersStore = useVouchersStore();
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
 
-	// Loading state owned by `usePageLoading` — see the composable for
-	// the requestAnimationFrame-yield trick. Required so the skeleton
-	// actually paints to pixels on warm-store revisits + heavy first
-	// renders, instead of being committed and immediately replaced
-	// inside a single animation frame.
+	// Each row carries the derived `_paid` / `_balance` / `_status` from the
+	// SQL subquery, so the page needs neither all invoices NOR all vouchers in
+	// memory — the gate + PDF read those fields straight off the row.
+	type InvoiceRowVM = InvoiceRow & { _paid: number, _balance: number, _status: InvoiceStatus };
+
+	const table = useServerTable<InvoiceRowVM>({
+		query: () => ({
+			from: invoiceDerivedFrom(todayISO()),
+			where: andClauses([
+				inClause("_status", store.statusFilters),
+				eqClause("client_id", store.clientFilter),
+				rangeClause("issue_date", store.issuedFrom, store.issuedTo),
+				rangeClause("due_date", store.dueFrom, store.dueTo),
+				likeClause(store.search, ["number", "project_title", "client_name"])
+			]),
+			sumExpr: "SUM(total_cents)"
+		}),
+		resolveSortColumn: makeSortResolver({
+			number: "number",
+			client_name: "client_name COLLATE NOCASE",
+			project_title: "project_title COLLATE NOCASE",
+			issue_date: "issue_date",
+			due_date: "due_date",
+			total_cents: "total_cents",
+			_balance: "_balance",
+			_status: "_status"
+		}),
+		defaultOrderBy: "datetime(created_at) DESC",
+		deps: () => store.listFilters,
+		initialSortField: "issue_date",
+		initialSortOrder: -1
+	});
+
+	// Header: grand total count + global outstanding + overdue count (one query).
+	const headerStats = ref({ total: 0, outstandingCents: 0, overdueCount: 0 });
+	const refreshStats = async () => {
+		headerStats.value = await store.fetchHeaderStats();
+	};
+
 	const { isLoading, runLoad } = usePageLoading();
 	onMounted(() => runLoad(async () => {
 		await Promise.all([
-			store.ensureLoaded(),
 			clientsStore.ensureLoaded(),
-			vouchersStore.ensureLoaded(),
 			settingsStore.ensureLoaded()
 		]);
+		await refreshStats();
 	}));
-
-	const balanceOf = (i: InvoiceRow) => store.balanceCentsFor(i);
-
-	// PrimeVue DataTable expects each row to expose every sortable
-	// field as a plain top-level property. `client_name` is now a real
-	// column on `invoices` (denormalised at write time from
-	// client_snapshot — see migration 0028) so we can read it directly
-	// off the row. Balance + derived status still need to be computed
-	// per row, so they get attached as `_…` view-model fields.
-	//
-	// Skipping the snapshot JSON.parse here is the whole point of the
-	// migration: at heavy demo scale (~800 invoices) parsing 800
-	// snapshots on every store mutation was a ~100ms tax on each
-	// keystroke in the search box / chip toggle.
-	interface InvoiceRowVM extends InvoiceRow {
-		_balance: number
-		_status: InvoiceStatus
-	}
-	const rows = computed<InvoiceRowVM[]>(() =>
-		store.filtered.map((i) => ({
-			...i,
-			_balance: store.balanceCentsFor(i),
-			_status: store.derivedStatus(i)
-		}))
-	);
-
-	// Sum of total_cents across the currently visible (filtered) rows.
-	// Tracks whatever the active filters narrow the list to.
-	const filteredTotal = computed(() =>
-		store.filtered.reduce((sum, i) => sum + i.total_cents, 0)
-	);
 
 	// `ResizableDataTable` exposes `autoFit()` for the Auto-fit columns
 	// button in the filter strip. Everything else (drag-pan, sort/page
@@ -391,6 +393,15 @@
 		newInvoiceIssueDate.value = null;
 		newInvoiceOpen.value = true;
 	};
+
+	// The create modal writes a draft + may navigate to it. On close, refetch
+	// so the grid + header reflect any new row when it doesn't navigate away.
+	watch(newInvoiceOpen, (open) => {
+		if (!open) {
+			void table.reload();
+			void refreshStats();
+		}
+	});
 
 	// Auto-open if the route asked for it (e.g. dashboard New > Invoice
 	// menu or calendar Create-on-this-day). Clear the query params once
@@ -517,7 +528,7 @@
 
 	// --- Row actions: PDF preview + transitions + record payment ----
 
-	const currentInvoice = ref<InvoiceRow | null>(null);
+	const currentInvoice = ref<InvoiceRowVM | null>(null);
 	const currentLines = ref<InvoiceLineRow[]>([]);
 	const pdf = usePdfPreview({
 		command: "export_invoice_pdf",
@@ -528,14 +539,14 @@
 				lines: currentLines.value,
 				settings: settingsStore.settings,
 				currency: currency.value,
-				paidCents: store.paidCentsFor(currentInvoice.value.id)
+				paidCents: currentInvoice.value._paid
 			});
 		},
 		fileName: () => `${currentInvoice.value?.number ?? "invoice"}.pdf`,
 		title: "Invoice PDF preview"
 	});
 
-	const onPdfClick = async (i: InvoiceRow) => {
+	const onPdfClick = async (i: InvoiceRowVM) => {
 		currentInvoice.value = i;
 		try {
 			currentLines.value = await store.getLines(i.id);
@@ -555,6 +566,8 @@
 		try {
 			await store.setStatus(i.id, "sent");
 			toast.add({ title: `${i.number} marked as sent`, color: "info", icon: "i-lucide-send" });
+			await table.reload();
+			await refreshStats();
 		} catch (err) {
 			toast.add({
 				title: "Action failed",
@@ -589,7 +602,7 @@
 
 	// Function declaration (not arrow) so it hoists — the row
 	// right-click handler defined earlier in the script closes over it.
-	function itemsFor(i: InvoiceRow) {
+	function itemsFor(i: InvoiceRowVM) {
 		const lifecycle: { label: string, icon: string, onSelect: () => void }[] = [
 			{ label: "Open", icon: "i-lucide-pencil", onSelect: () => open(i) }
 		];
@@ -604,7 +617,7 @@
 		}
 		// Receipts are only legal on sent invoices that still have a
 		// balance — mirrors the detail page's `canRecordPayments`.
-		if (i.status === "sent" && balanceOf(i) > 0) {
+		if (i.status === "sent" && i._balance > 0) {
 			lifecycle.push({
 				label: "Record payment",
 				icon: "i-lucide-circle-dollar-sign",
