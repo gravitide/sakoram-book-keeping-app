@@ -24,6 +24,7 @@ import type { ClientSnapshot, PricingMode, QuoteLineRow, QuoteRow } from "~/stor
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
+import { deriveInvoiceStatus, invoiceDerivedFrom } from "~/lib/derived-status";
 import { computeLineTotals, sumCents } from "~/lib/money";
 import { allocateDocumentNumber, allocateSpecificDocumentNumber } from "~/lib/numbering";
 import { useBusinessBanksStore } from "~/stores/business_banks";
@@ -242,15 +243,8 @@ export const useInvoicesStore = defineStore("invoices", () => {
 	///   overdue           — sent + balance > 0 + due_date < today
 	///   partial           — sent + 0 < paid < total
 	///   sent              — sent + nothing paid (still pending)
-	const derivedStatus = (inv: InvoiceRow, now: string = todayISO()): InvoiceStatus => {
-		if (inv.status === "draft") return "draft";
-		if (inv.status === "cancelled") return "cancelled";
-		const paid = paidCentsFor(inv.id);
-		if (paid >= inv.total_cents && inv.total_cents > 0) return "paid";
-		if (inv.due_date < now) return "overdue";
-		if (paid > 0) return "partial";
-		return "sent";
-	};
+	const derivedStatus = (inv: InvoiceRow, now: string = todayISO()): InvoiceStatus =>
+		deriveInvoiceStatus(inv.status, paidCentsFor(inv.id), inv.total_cents, inv.due_date, now);
 
 	const filtered = computed(() => {
 		const today = todayISO();
@@ -291,6 +285,29 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		const today = todayISO();
 		return invoices.value.filter((r) => derivedStatus(r, today) === "overdue").length;
 	});
+
+	// Packaged filter snapshot for the server-paginated list page.
+	const listFilters = computed(() => ({
+		search: search.value,
+		statusFilters: statusFilters.value,
+		clientFilter: clientFilter.value,
+		issuedFrom: issuedFrom.value,
+		issuedTo: issuedTo.value,
+		dueFrom: dueFrom.value,
+		dueTo: dueTo.value
+	}));
+
+	// Grand total count + global outstanding (matches outstandingTotal) in one
+	// wrapped query over the derived-status subquery, so the paginated page
+	// needn't load every row to show the header.
+	const fetchHeaderStats = async (): Promise<{ total: number, outstandingCents: number }> => {
+		const rows = await select<{ total: number, outstanding: number }>(
+			`SELECT COUNT(*) AS total,
+			        COALESCE(SUM(CASE WHEN _status IN ('sent','partial','overdue') THEN _balance ELSE 0 END), 0) AS outstanding
+			 FROM ${invoiceDerivedFrom(todayISO())}`
+		);
+		return { total: rows[0]?.total ?? 0, outstandingCents: rows[0]?.outstanding ?? 0 };
+	};
 
 	// `loaded` flips true after the first successful load and stays true
 	// for the lifetime of the store — i.e. the active tenant session,
@@ -726,6 +743,8 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		dueTo,
 		hasDateFilters,
 		clearDateFilters,
+		listFilters,
+		fetchHeaderStats,
 		filtered,
 		outstandingTotal,
 		overdueCount,

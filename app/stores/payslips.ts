@@ -17,6 +17,7 @@ import type { PayeBracket } from "~/lib/statutory";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
+import { derivePayslipStatus, payslipDerivedFrom } from "~/lib/derived-status";
 import { formatRate, sumCents } from "~/lib/money";
 import { allocateDocumentNumber, allocateSpecificDocumentNumber } from "~/lib/numbering";
 import { computePaye, computeStatutory } from "~/lib/statutory";
@@ -159,14 +160,8 @@ export const usePayslipsStore = defineStore("payslips", () => {
 	const balanceCentsFor = (row: PayslipRow): number =>
 		Math.max(0, row.net_cents - paidCentsFor(row.id));
 
-	const derivedStatus = (row: PayslipRow): PayslipStatus => {
-		if (row.status === "cancelled") return "cancelled";
-		if (row.status === "draft") return "draft";
-		const paid = paidCentsFor(row.id);
-		if (paid >= row.net_cents && row.net_cents > 0) return "paid";
-		if (paid > 0) return "partial";
-		return "unpaid";
-	};
+	const derivedStatus = (row: PayslipRow): PayslipStatus =>
+		derivePayslipStatus(row.status, paidCentsFor(row.id), row.net_cents);
 
 	const filtered = computed(() => {
 		const q = search.value.trim().toLowerCase();
@@ -192,6 +187,26 @@ export const usePayslipsStore = defineStore("payslips", () => {
 		}
 		return sum;
 	});
+
+	// Packaged filter snapshot for the server-paginated list page.
+	const listFilters = computed(() => ({
+		search: search.value,
+		statusFilters: statusFilters.value,
+		employeeFilter: employeeFilter.value,
+		periodFrom: periodFrom.value,
+		periodTo: periodTo.value
+	}));
+
+	// Grand total count + global outstanding in one wrapped query over the
+	// derived-status subquery.
+	const fetchHeaderStats = async (): Promise<{ total: number, outstandingCents: number }> => {
+		const rows = await select<{ total: number, outstanding: number }>(
+			`SELECT COUNT(*) AS total,
+			        COALESCE(SUM(CASE WHEN _status IN ('unpaid','partial') THEN _balance ELSE 0 END), 0) AS outstanding
+			 FROM ${payslipDerivedFrom("")}`
+		);
+		return { total: rows[0]?.total ?? 0, outstandingCents: rows[0]?.outstanding ?? 0 };
+	};
 
 	// See app/stores/invoices.ts for the `loaded` / `ensureLoaded`
 	// rationale + shared pendingLoad — same pattern: skip refetching
@@ -490,6 +505,8 @@ export const usePayslipsStore = defineStore("payslips", () => {
 		periodTo,
 		hasDateFilters,
 		clearDateFilters,
+		listFilters,
+		fetchHeaderStats,
 		filtered,
 		outstandingTotal,
 		loaded,
