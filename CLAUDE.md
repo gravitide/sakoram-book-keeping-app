@@ -1344,12 +1344,28 @@ a 5px threshold and risk an accidental nav; and the leading column
 (number, name) reads as "the link" the way GitHub / GitLab tables
 do. Right-click still opens the context menu on the whole row.
 
-**Frontend-only by design.** Sort, filter, and pagination happen on
-the in-memory `filtered` array — the DB only sees the initial
-`SELECT * FROM …`. Acceptable for a single-user desktop app at
-realistic per-business volumes (low thousands of rows). If a real
-tenant ever crosses ~10k in a single table, the migration is to
-swap `store.load()` for paged fetches; don't pre-optimise.
+**Server-side pagination (opt-in, the norm for high-volume lists).**
+`useServerTable` (composable) + `ResizableDataTable`'s opt-in lazy mode
+(pass a `total` prop → PrimeVue lazy + `@request`) page / sort / filter /
+sum in SQLite. Converted: quotes, vendors, employees, categories,
+credit-notes, invoices, bills, payslips, clients. recurring-invoices /
+recurring-bills stay client-mode (tiny + bulk-generate coupling).
+**Converting a list:** build the WHERE from `app/lib/list-query.ts`
+helpers (`likeClause` / `andClauses` / `inClause` / `eqClause` /
+`rangeClause` + a `makeSortResolver` ORDER-BY allowlist), keep the store's
+filter refs (cross-doc nav sets them) + add a `listFilters` computed
+(the refetch dep) and a `fetchHeaderStats` / counts query, bind
+`:rows :total @request`, and call `table.reload()` after in-page
+mutations / New-modal close. Any list still small enough to stay
+client-mode keeps `store.load()` + `:rows="store.filtered"`.
+
+**Derived-status lists** (invoices / bills / payslips / clients) filter /
+sort / sum on voucher-derived state via a subquery: `app/lib/derived-status.ts`
+holds the pure `deriveX` fns (the stores' `derivedStatus` calls these —
+single source of truth) + `xDerivedFrom(today)` SQL builders exposing
+`_paid` / `_balance` / `_status` (`today` inlined as a literal to dodge
+FROM-subquery param ordering). These pages also dropped the vouchers-store
+load — the row carries `_paid` / `_balance` for the record-payment gate + PDFs.
 
 **Legacy components** `ListPagination.vue`, `SortableTh.vue`, and
 `useListView.ts` were removed in the post-PrimeVue cleanup — every
@@ -1940,10 +1956,6 @@ persisted to localStorage).
   connections to the app. It works on machines where the user has
   already allowed the app; the production installer should add a
   program-scoped inbound rule so end users don't hit a silent block.
-- **DB-side pagination** — see "List view conventions". Today every
-  list loads all rows; sort/filter/page is in-memory. Acceptable up
-  to a few thousand rows per table; revisit if a real tenant feels
-  slow.
 - **Drag-drop reorder for `PayslipLineEditor`** —
   `DocumentLineEditor` already has it (grip handle + HTML5
   drag/drop in both bundle + itemized modes); `PayslipLineEditor`
@@ -2210,6 +2222,17 @@ The user's `~/.claude/CLAUDE.md` says:
 
 The project itself doesn't enforce a commit-message format — match the
 existing `git log` style if making commits.
+
+**Pure, unit-testable logic goes in `app/lib/`, never in a store** —
+vitest runs in node; importing a Pinia store drags in `~/lib/db` (Tauri)
+and the test fails to resolve the module. Pattern: a pure `*.ts` +
+`*.test.ts` in `app/lib/` (e.g. `calendar-events`, `quote-query`,
+`list-query`, `derived-status`), imported by the store / composable / page.
+
+**`ResizableDataTable`'s generic is `T extends Record<string, unknown>`** —
+concrete row interfaces (QuoteRow, etc.) trip a `:rows` / `:row-actions`
+typecheck error on *every* list page. Pre-existing + codebase-wide; the
+gate is `bun run lint` / `bun run generate`, not `nuxi typecheck`.
 
 **Branch workflow — every new piece of work follows this.** No
 exceptions, even for one-line fixes:
