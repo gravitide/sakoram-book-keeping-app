@@ -205,19 +205,24 @@
 										:key="`inv-${t.key}`"
 										type="button"
 										:disabled="!canPick(t.key)"
-										class="w-full text-left p-3 rounded-md border transition"
+										class="w-full text-left p-3 rounded-md border transition flex items-center gap-3"
 										:class="[
 											form.pdf_template_invoice === t.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)',
 											canPick(t.key) ? 'cursor-pointer hover:border-(--ui-primary)/50' : 'opacity-50 cursor-not-allowed'
 										]"
 										@click="form.pdf_template_invoice = t.key"
 									>
-										<div class="text-sm font-medium flex items-center gap-1.5">
-											{{ t.label }}
-											<UIcon v-if="!canPick(t.key)" name="i-lucide-lock" class="size-3 text-(--ui-text-muted)" />
+										<div class="w-11 shrink-0 rounded-sm overflow-hidden ring-1 ring-(--ui-border)">
+											<PdfTemplateThumb :template-key="t.key" :color="themeColor" />
 										</div>
-										<div class="text-xs text-(--ui-text-muted) mt-0.5">
-											{{ t.description }}
+										<div class="min-w-0">
+											<div class="text-sm font-medium flex items-center gap-1.5">
+												{{ t.label }}
+												<UIcon v-if="!canPick(t.key)" name="i-lucide-lock" class="size-3 text-(--ui-text-muted)" />
+											</div>
+											<div class="text-xs text-(--ui-text-muted) mt-0.5">
+												{{ t.description }}
+											</div>
 										</div>
 									</button>
 								</div>
@@ -245,19 +250,24 @@
 										:key="`quo-${t.key}`"
 										type="button"
 										:disabled="!canPick(t.key)"
-										class="w-full text-left p-3 rounded-md border transition"
+										class="w-full text-left p-3 rounded-md border transition flex items-center gap-3"
 										:class="[
 											form.pdf_template_quote === t.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)',
 											canPick(t.key) ? 'cursor-pointer hover:border-(--ui-primary)/50' : 'opacity-50 cursor-not-allowed'
 										]"
 										@click="form.pdf_template_quote = t.key"
 									>
-										<div class="text-sm font-medium flex items-center gap-1.5">
-											{{ t.label }}
-											<UIcon v-if="!canPick(t.key)" name="i-lucide-lock" class="size-3 text-(--ui-text-muted)" />
+										<div class="w-11 shrink-0 rounded-sm overflow-hidden ring-1 ring-(--ui-border)">
+											<PdfTemplateThumb :template-key="t.key" :color="themeColor" />
 										</div>
-										<div class="text-xs text-(--ui-text-muted) mt-0.5">
-											{{ t.description }}
+										<div class="min-w-0">
+											<div class="text-sm font-medium flex items-center gap-1.5">
+												{{ t.label }}
+												<UIcon v-if="!canPick(t.key)" name="i-lucide-lock" class="size-3 text-(--ui-text-muted)" />
+											</div>
+											<div class="text-xs text-(--ui-text-muted) mt-0.5">
+												{{ t.description }}
+											</div>
 										</div>
 									</button>
 								</div>
@@ -370,6 +380,7 @@
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { PDF_TEMPLATES } from "~/lib/pdf-templates";
 	import { sampleInvoicePayload, sampleQuotePayload } from "~/lib/sample-pdf";
+	import { themeHex } from "~/lib/theme";
 	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -401,6 +412,8 @@
 	const currency = useActiveCurrency();
 	const TEMPLATES = PDF_TEMPLATES;
 	const canPick = (key: string) => entitledToTemplates.value || key === "classic";
+	// Accent colour for the schematic thumbnails — mirrors what the PDF uses.
+	const themeColor = computed(() => themeHex(store.settings?.theme_color));
 
 	// Live preview: render a sample invoice / quote with the currently-selected
 	// template through the real Typst pipeline (PdfPreviewModal).
