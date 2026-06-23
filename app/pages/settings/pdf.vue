@@ -169,6 +169,113 @@
 					</div>
 				</div>
 
+				<div id="templates" class="scroll-mt-6">
+					<SectionCard
+						icon="i-lucide-layout-template"
+						title="Templates"
+						subtitle="Pick a layout for your client-facing PDFs. Your theme colour, font, and header logo apply to every template — only the layout changes."
+					>
+						<FeatureLock
+							v-if="!entitledToTemplates"
+							title="PDF templates"
+							tier-label="Plus"
+							feature="pdf_templates"
+						/>
+
+						<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+							<!-- Invoice template picker -->
+							<div>
+								<div class="flex items-center justify-between mb-2 gap-2">
+									<div class="text-sm font-medium">
+										Invoice template
+									</div>
+									<UButton
+										size="xs"
+										variant="soft"
+										icon="i-lucide-eye"
+										:loading="invoicePreview.state.rendering"
+										@click="invoicePreview.open()"
+									>
+										Preview
+									</UButton>
+								</div>
+								<div class="space-y-2">
+									<button
+										v-for="t in TEMPLATES"
+										:key="`inv-${t.key}`"
+										type="button"
+										:disabled="!canPick(t.key)"
+										class="w-full text-left p-3 rounded-md border transition flex items-center gap-3"
+										:class="[
+											form.pdf_template_invoice === t.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)',
+											canPick(t.key) ? 'cursor-pointer hover:border-(--ui-primary)/50' : 'opacity-50 cursor-not-allowed'
+										]"
+										@click="form.pdf_template_invoice = t.key"
+									>
+										<div class="w-11 shrink-0 rounded-sm overflow-hidden ring-1 ring-(--ui-border)">
+											<PdfTemplateThumb :template-key="t.key" :color="themeColor" />
+										</div>
+										<div class="min-w-0">
+											<div class="text-sm font-medium flex items-center gap-1.5">
+												{{ t.label }}
+												<UIcon v-if="!canPick(t.key)" name="i-lucide-lock" class="size-3 text-(--ui-text-muted)" />
+											</div>
+											<div class="text-xs text-(--ui-text-muted) mt-0.5">
+												{{ t.description }}
+											</div>
+										</div>
+									</button>
+								</div>
+							</div>
+
+							<!-- Quote template picker -->
+							<div>
+								<div class="flex items-center justify-between mb-2 gap-2">
+									<div class="text-sm font-medium">
+										Quote template
+									</div>
+									<UButton
+										size="xs"
+										variant="soft"
+										icon="i-lucide-eye"
+										:loading="quotePreview.state.rendering"
+										@click="quotePreview.open()"
+									>
+										Preview
+									</UButton>
+								</div>
+								<div class="space-y-2">
+									<button
+										v-for="t in TEMPLATES"
+										:key="`quo-${t.key}`"
+										type="button"
+										:disabled="!canPick(t.key)"
+										class="w-full text-left p-3 rounded-md border transition flex items-center gap-3"
+										:class="[
+											form.pdf_template_quote === t.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)',
+											canPick(t.key) ? 'cursor-pointer hover:border-(--ui-primary)/50' : 'opacity-50 cursor-not-allowed'
+										]"
+										@click="form.pdf_template_quote = t.key"
+									>
+										<div class="w-11 shrink-0 rounded-sm overflow-hidden ring-1 ring-(--ui-border)">
+											<PdfTemplateThumb :template-key="t.key" :color="themeColor" />
+										</div>
+										<div class="min-w-0">
+											<div class="text-sm font-medium flex items-center gap-1.5">
+												{{ t.label }}
+												<UIcon v-if="!canPick(t.key)" name="i-lucide-lock" class="size-3 text-(--ui-text-muted)" />
+											</div>
+											<div class="text-xs text-(--ui-text-muted) mt-0.5">
+												{{ t.description }}
+											</div>
+										</div>
+									</button>
+								</div>
+							</div>
+						</div>
+					</SectionCard>
+				</div>
+
 				<div id="footer-notes" class="scroll-mt-6">
 					<SectionCard
 						icon="i-lucide-file-text"
@@ -241,6 +348,27 @@
 				</div>
 			</div>
 		</UForm>
+
+		<PdfPreviewModal
+			v-model:open="invoicePreview.state.open"
+			:asset-url="invoicePreview.state.assetUrl"
+			:temp-path="invoicePreview.state.tempPath"
+			:suggested-file-name="invoicePreview.state.suggestedFileName"
+			:saving="invoicePreview.state.saving"
+			title="Invoice template preview"
+			@save="invoicePreview.onSave"
+			@cancel="invoicePreview.onCancel"
+		/>
+		<PdfPreviewModal
+			v-model:open="quotePreview.state.open"
+			:asset-url="quotePreview.state.assetUrl"
+			:temp-path="quotePreview.state.tempPath"
+			:suggested-file-name="quotePreview.state.suggestedFileName"
+			:saving="quotePreview.state.saving"
+			title="Quote template preview"
+			@save="quotePreview.onSave"
+			@cancel="quotePreview.onCancel"
+		/>
 	</div>
 </template>
 
@@ -248,6 +376,12 @@
 	import type { SettingsUpdate } from "~/stores/settings";
 	import { appDataDir, join } from "@tauri-apps/api/path";
 	import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
+	import { useActiveCurrency } from "~/composables/useActiveCurrency";
+	import { usePdfPreview } from "~/composables/usePdfPreview";
+	import { PDF_TEMPLATES } from "~/lib/pdf-templates";
+	import { sampleInvoicePayload, sampleQuotePayload } from "~/lib/sample-pdf";
+	import { themeHex } from "~/lib/theme";
+	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
 
@@ -260,13 +394,40 @@
 	// Only the PDF-flavoured fields live on this page. Logo paths are kept on
 	// the form so dirty-tracking can spot a removal/upload that would otherwise
 	// only mutate the store. (Document protection moved to /settings/security.)
-	type PdfForm = Pick<SettingsUpdate, "invoice_footer_notes" | "quote_footer_notes" | "pdf_header_logo_path" | "pdf_font">;
+	type PdfForm = Pick<SettingsUpdate, "invoice_footer_notes" | "quote_footer_notes" | "pdf_header_logo_path" | "pdf_font" | "pdf_template_invoice" | "pdf_template_quote">;
 
 	const form = reactive<PdfForm>({
 		invoice_footer_notes: "",
 		quote_footer_notes: "",
 		pdf_header_logo_path: null,
-		pdf_font: "Akt"
+		pdf_font: "Akt",
+		pdf_template_invoice: "classic",
+		pdf_template_quote: "classic"
+	});
+
+	// PDF templates are a Plus feature. Basic users see the pickers but can
+	// only select Classic; rendering also forces Classic when not entitled.
+	const license = useLicenseStore();
+	const entitledToTemplates = computed(() => license.hasFeature("pdf_templates"));
+	const currency = useActiveCurrency();
+	const TEMPLATES = PDF_TEMPLATES;
+	const canPick = (key: string) => entitledToTemplates.value || key === "classic";
+	// Accent colour for the schematic thumbnails — mirrors what the PDF uses.
+	const themeColor = computed(() => themeHex(store.settings?.theme_color));
+
+	// Live preview: render a sample invoice / quote with the currently-selected
+	// template through the real Typst pipeline (PdfPreviewModal).
+	const invoicePreview = usePdfPreview({
+		command: "export_invoice_pdf",
+		buildPayload: () => sampleInvoicePayload(store.settings, currency.value, form.pdf_template_invoice),
+		fileName: () => "sample-invoice.pdf",
+		title: "Invoice template preview"
+	});
+	const quotePreview = usePdfPreview({
+		command: "export_quote_pdf",
+		buildPayload: () => sampleQuotePayload(store.settings, currency.value, form.pdf_template_quote),
+		fileName: () => "sample-quote.pdf",
+		title: "Quote template preview"
 	});
 
 	// Same curated list the Appearance page used. The Typst template falls
@@ -290,6 +451,8 @@
 		form.quote_footer_notes = s.quote_footer_notes ?? "";
 		form.pdf_header_logo_path = s.pdf_header_logo_path;
 		form.pdf_font = s.pdf_font || "Akt";
+		form.pdf_template_invoice = s.pdf_template_invoice || "classic";
+		form.pdf_template_quote = s.pdf_template_quote || "classic";
 	};
 
 	await store.ensureLoaded();
@@ -308,7 +471,9 @@
 			await store.save({
 				invoice_footer_notes: form.invoice_footer_notes,
 				quote_footer_notes: form.quote_footer_notes,
-				pdf_font: form.pdf_font.trim() || "Akt"
+				pdf_font: form.pdf_font.trim() || "Akt",
+				pdf_template_invoice: form.pdf_template_invoice,
+				pdf_template_quote: form.pdf_template_quote
 			});
 			refreshBaseline();
 			toast.add({ title: "PDF settings saved", color: "success", icon: "i-lucide-check" });

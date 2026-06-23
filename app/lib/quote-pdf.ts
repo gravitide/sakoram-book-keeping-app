@@ -8,6 +8,7 @@
 import type { BankSnapshot, ClientSnapshot, QuoteLineRow, QuoteRow } from "~/stores/quotes";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR, formatQty, formatRate } from "~/lib/money";
+import { resolveTemplateKey } from "~/lib/pdf-templates";
 import { themeHex } from "~/lib/theme";
 
 export interface QuotePdfArgs {
@@ -15,9 +16,14 @@ export interface QuotePdfArgs {
 	lines: QuoteLineRow[]
 	settings: CompanySettingsRow | null
 	currency: { code: string, symbol: string }
+	/**
+	 * Whether the business may use non-Classic templates (Plus feature). When
+	 *  false, the payload's `template` is forced to "classic".
+	 */
+	entitledToTemplates?: boolean
 }
 
-export const buildQuotePdfPayload = ({ row: q, lines, settings, currency }: QuotePdfArgs) => {
+export const buildQuotePdfPayload = ({ row: q, lines, settings, currency, entitledToTemplates = false }: QuotePdfArgs) => {
 	let client: ClientSnapshot | null = null;
 	try {
 		if (q.client_snapshot) client = JSON.parse(q.client_snapshot) as ClientSnapshot;
@@ -48,6 +54,7 @@ export const buildQuotePdfPayload = ({ row: q, lines, settings, currency }: Quot
 	return {
 		kind: "quote",
 		number: q.number,
+		template: resolveTemplateKey(settings?.pdf_template_quote, entitledToTemplates),
 		title,
 		theme_color: themeHex(settings?.theme_color),
 		font_family: settings?.pdf_font ?? "Akt",
