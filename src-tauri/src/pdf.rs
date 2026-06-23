@@ -31,6 +31,7 @@ use tauri_plugin_shell::ShellExt;
 const COMMON_TEMPLATE: &str = include_str!("../templates/common.typ");
 const DOC_CLASSIC: &str = include_str!("../templates/doc-classic.typ");
 const DOC_MODERN: &str = include_str!("../templates/doc-modern.typ");
+const DOC_MINIMAL: &str = include_str!("../templates/doc-minimal.typ");
 const VOUCHER_TEMPLATE: &str = include_str!("../templates/voucher.typ");
 const PAYSLIP_TEMPLATE: &str = include_str!("../templates/payslip.typ");
 const REPORT_TEMPLATE: &str = include_str!("../templates/report.typ");
@@ -272,6 +273,7 @@ fn extract_typst_errors(stderr: &str) -> Option<String> {
 fn document_template(key: Option<&str>) -> (&'static str, &'static str) {
 	match key {
 		Some("modern") => ("doc-modern.typ", DOC_MODERN),
+		Some("minimal") => ("doc-minimal.typ", DOC_MINIMAL),
 		_ => ("doc-classic.typ", DOC_CLASSIC),
 	}
 }
