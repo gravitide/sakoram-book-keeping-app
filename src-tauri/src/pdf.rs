@@ -30,6 +30,7 @@ use tauri_plugin_shell::ShellExt;
 // `#import "common.typ"`. `render_pdf` writes common.typ as an extra file.
 const COMMON_TEMPLATE: &str = include_str!("../templates/common.typ");
 const DOC_CLASSIC: &str = include_str!("../templates/doc-classic.typ");
+const DOC_MODERN: &str = include_str!("../templates/doc-modern.typ");
 const VOUCHER_TEMPLATE: &str = include_str!("../templates/voucher.typ");
 const PAYSLIP_TEMPLATE: &str = include_str!("../templates/payslip.typ");
 const REPORT_TEMPLATE: &str = include_str!("../templates/report.typ");
@@ -268,8 +269,11 @@ fn extract_typst_errors(stderr: &str) -> Option<String> {
 
 // Map the payload's `template` key to the on-disk filename + embedded source.
 // Unknown / missing keys fall back to Classic. New layouts add an arm here.
-fn document_template(_key: Option<&str>) -> (&'static str, &'static str) {
-	("doc-classic.typ", DOC_CLASSIC)
+fn document_template(key: Option<&str>) -> (&'static str, &'static str) {
+	match key {
+		Some("modern") => ("doc-modern.typ", DOC_MODERN),
+		_ => ("doc-classic.typ", DOC_CLASSIC),
+	}
 }
 
 #[tauri::command]
