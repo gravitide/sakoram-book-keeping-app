@@ -1,8 +1,9 @@
 // PDF generation via the embedded `typst` CLI sidecar.
 //
-// We support three templates:
-//   - document.typ — quotes, invoices, bills (unified; the JSON drives labels)
-//   - voucher.typ  — money-in/out vouchers (simpler one-page layout)
+// Client-facing documents (quotes / invoices / bills) render through one of
+// several selectable layouts (doc-classic / doc-modern / …), each importing the
+// shared `common.typ`; the JSON drives labels + which template. Vouchers,
+// payslips, reports, and statements have their own single templates.
 //
 // The frontend hands us:
 //   - `data`: a JSON object with everything the template needs
@@ -24,7 +25,11 @@ use serde_json::Value;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_shell::ShellExt;
 
-const DOCUMENT_TEMPLATE: &str = include_str!("../templates/document.typ");
+// Client-facing document templates. `common.typ` holds the shared rendering
+// (items table, party/meta blocks, etc.); each `doc-*.typ` owns its layout and
+// `#import "common.typ"`. `render_pdf` writes common.typ as an extra file.
+const COMMON_TEMPLATE: &str = include_str!("../templates/common.typ");
+const DOC_CLASSIC: &str = include_str!("../templates/doc-classic.typ");
 const VOUCHER_TEMPLATE: &str = include_str!("../templates/voucher.typ");
 const PAYSLIP_TEMPLATE: &str = include_str!("../templates/payslip.typ");
 const REPORT_TEMPLATE: &str = include_str!("../templates/report.typ");
@@ -106,6 +111,10 @@ async fn render_pdf(
 	mut data: Value,
 	output_path: PathBuf,
 	protect_password: Option<String>,
+	// Additional files written into the work dir before compiling — e.g. a
+	// shared `common.typ` the chosen template imports. Empty for templates
+	// that need no companions (voucher / payslip / report / statement).
+	extra_files: &[(&str, &str)],
 ) -> Result<(), PdfError> {
 	debug_assert!(template_name.ends_with(".typ"));
 
@@ -147,7 +156,11 @@ async fn render_pdf(
 	let data_path = work_dir.join("data.json");
 	std::fs::write(&data_path, serde_json::to_vec_pretty(&data)?)?;
 
-	// 4. Write the template (overwrite each render so updates pick up)
+	// 4. Write any companion files (e.g. common.typ) the template imports,
+	//    then the template itself (overwrite each render so edits pick up).
+	for (name, src) in extra_files {
+		std::fs::write(work_dir.join(name), src)?;
+	}
 	let template_path = work_dir.join(template_name);
 	std::fs::write(&template_path, template_src)?;
 
@@ -260,7 +273,7 @@ pub async fn export_quote_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "document.typ", DOCUMENT_TEMPLATE, data, PathBuf::from(output_path), protect_password).await
+	render_pdf(&app, "doc-classic.typ", DOC_CLASSIC, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
 }
 
 #[tauri::command]
@@ -270,7 +283,7 @@ pub async fn export_invoice_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "document.typ", DOCUMENT_TEMPLATE, data, PathBuf::from(output_path), protect_password).await
+	render_pdf(&app, "doc-classic.typ", DOC_CLASSIC, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
 }
 
 #[tauri::command]
@@ -280,7 +293,7 @@ pub async fn export_bill_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "document.typ", DOCUMENT_TEMPLATE, data, PathBuf::from(output_path), protect_password).await
+	render_pdf(&app, "doc-classic.typ", DOC_CLASSIC, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
 }
 
 #[tauri::command]
@@ -290,7 +303,7 @@ pub async fn export_payslip_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "payslip.typ", PAYSLIP_TEMPLATE, data, PathBuf::from(output_path), protect_password).await
+	render_pdf(&app, "payslip.typ", PAYSLIP_TEMPLATE, data, PathBuf::from(output_path), protect_password, &[]).await
 }
 
 #[tauri::command]
@@ -300,7 +313,7 @@ pub async fn export_voucher_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "voucher.typ", VOUCHER_TEMPLATE, data, PathBuf::from(output_path), protect_password).await
+	render_pdf(&app, "voucher.typ", VOUCHER_TEMPLATE, data, PathBuf::from(output_path), protect_password, &[]).await
 }
 
 // Reports (P&L, VAT, future Tier 1 reports) all render through one
@@ -314,7 +327,7 @@ pub async fn export_report_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "report.typ", REPORT_TEMPLATE, data, PathBuf::from(output_path), protect_password).await
+	render_pdf(&app, "report.typ", REPORT_TEMPLATE, data, PathBuf::from(output_path), protect_password, &[]).await
 }
 
 // Customer statements — per-client snapshot of outstanding invoices.
@@ -329,7 +342,7 @@ pub async fn export_statement_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "statement.typ", STATEMENT_TEMPLATE, data, PathBuf::from(output_path), protect_password).await
+	render_pdf(&app, "statement.typ", STATEMENT_TEMPLATE, data, PathBuf::from(output_path), protect_password, &[]).await
 }
 
 /// Copy a file from `src` to `dst`. Used by the PDF preview flow: we
