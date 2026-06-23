@@ -266,6 +266,12 @@ fn extract_typst_errors(stderr: &str) -> Option<String> {
 // is what tells the template whether it's rendering a quote, invoice, or
 // bill (party labels, secondary date label, paid/balance rows, etc.).
 
+// Map the payload's `template` key to the on-disk filename + embedded source.
+// Unknown / missing keys fall back to Classic. New layouts add an arm here.
+fn document_template(_key: Option<&str>) -> (&'static str, &'static str) {
+	("doc-classic.typ", DOC_CLASSIC)
+}
+
 #[tauri::command]
 pub async fn export_quote_pdf(
 	app: AppHandle,
@@ -273,7 +279,8 @@ pub async fn export_quote_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "doc-classic.typ", DOC_CLASSIC, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
+	let (name, src) = document_template(data.get("template").and_then(|v| v.as_str()));
+	render_pdf(&app, name, src, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
 }
 
 #[tauri::command]
@@ -283,7 +290,8 @@ pub async fn export_invoice_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "doc-classic.typ", DOC_CLASSIC, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
+	let (name, src) = document_template(data.get("template").and_then(|v| v.as_str()));
+	render_pdf(&app, name, src, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
 }
 
 #[tauri::command]

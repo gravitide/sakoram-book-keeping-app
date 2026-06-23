@@ -289,6 +289,7 @@
 	import { buildQuotePdfPayload } from "~/lib/quote-pdf";
 	import { buildQuoteWhere, resolveQuoteSortColumn } from "~/lib/quote-query";
 	import { useClientsStore } from "~/stores/clients";
+	import { useLicenseStore } from "~/stores/license";
 	import { canTransition, useQuotesStore } from "~/stores/quotes";
 	import { useSettingsStore } from "~/stores/settings";
 
@@ -297,6 +298,7 @@
 	const router = useRouter();
 	const toast = useToast();
 	const store = useQuotesStore();
+	const license = useLicenseStore();
 	const clientsStore = useClientsStore();
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
@@ -504,7 +506,8 @@
 				row: currentQuote.value,
 				lines: currentLines.value,
 				settings: settingsStore.settings,
-				currency: currency.value
+				currency: currency.value,
+				entitledToTemplates: license.hasFeature("pdf_templates")
 			});
 		},
 		fileName: () => `${currentQuote.value?.number ?? "quote"}.pdf`,

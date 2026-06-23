@@ -19,6 +19,7 @@ export const FEATURES: Record<string, Tier> = {
 	"reports.sales_by_client": Tier.Plus,
 	"reports.expenses_by_vendor": Tier.Plus,
 	pdf_protection: Tier.Plus,
+	pdf_templates: Tier.Plus,
 	encryption: Tier.Plus,
 	// Premium
 	payroll: Tier.Premium,

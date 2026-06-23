@@ -34,6 +34,11 @@ export interface CompanySettingsRow {
 	currency_symbol_override: string | null
 	ui_font: string
 	pdf_font: string
+	// Per-document-type client-facing PDF template keys (classic | modern |
+	// minimal | compact | letterhead). See app/lib/pdf-templates.ts. A Plus
+	// feature — rendering forces 'classic' when not entitled.
+	pdf_template_invoice: string
+	pdf_template_quote: string
 	theme_color: string
 	// Payroll cycle template — day-of-month integers (1..31). Clamped at
 	// runtime to the actual length of the target month, so 31 means
@@ -94,6 +99,8 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"currency_symbol_override",
 	"ui_font",
 	"pdf_font",
+	"pdf_template_invoice",
+	"pdf_template_quote",
 	"theme_color",
 	"payroll_period_start_day",
 	"payroll_period_end_day",

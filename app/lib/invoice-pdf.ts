@@ -9,6 +9,7 @@ import type { InvoiceLineRow, InvoiceRow } from "~/stores/invoices";
 import type { BankSnapshot, ClientSnapshot } from "~/stores/quotes";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR, formatQty, formatRate } from "~/lib/money";
+import { resolveTemplateKey } from "~/lib/pdf-templates";
 import { themeHex } from "~/lib/theme";
 
 export interface InvoicePdfArgs {
@@ -17,9 +18,14 @@ export interface InvoicePdfArgs {
 	settings: CompanySettingsRow | null
 	currency: { code: string, symbol: string }
 	paidCents: number
+	/**
+	 * Whether the business may use non-Classic templates (Plus feature). When
+	 *  false, the payload's `template` is forced to "classic".
+	 */
+	entitledToTemplates?: boolean
 }
 
-export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, paidCents }: InvoicePdfArgs) => {
+export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, paidCents, entitledToTemplates = false }: InvoicePdfArgs) => {
 	let client: ClientSnapshot | null = null;
 	try {
 		if (inv.client_snapshot) client = JSON.parse(inv.client_snapshot) as ClientSnapshot;
@@ -52,6 +58,7 @@ export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, pa
 		kind: "invoice",
 		number: inv.number,
 		title,
+		template: resolveTemplateKey(settings?.pdf_template_invoice, entitledToTemplates),
 		theme_color: themeHex(settings?.theme_color),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,
