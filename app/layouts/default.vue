@@ -580,6 +580,7 @@
 					icon: "i-lucide-file-text",
 					sections: [
 						{ hash: "#font", label: "Font", icon: "i-lucide-type" },
+						{ hash: "#templates", label: "Templates", icon: "i-lucide-layout-template" },
 						{ hash: "#header-logo", label: "Header logo", icon: "i-lucide-image" },
 						{ hash: "#footer-notes", label: "Footer notes", icon: "i-lucide-file-text" }
 					]
