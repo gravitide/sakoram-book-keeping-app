@@ -32,6 +32,7 @@ const COMMON_TEMPLATE: &str = include_str!("../templates/common.typ");
 const DOC_CLASSIC: &str = include_str!("../templates/doc-classic.typ");
 const DOC_MODERN: &str = include_str!("../templates/doc-modern.typ");
 const DOC_MINIMAL: &str = include_str!("../templates/doc-minimal.typ");
+const DOC_COMPACT: &str = include_str!("../templates/doc-compact.typ");
 const VOUCHER_TEMPLATE: &str = include_str!("../templates/voucher.typ");
 const PAYSLIP_TEMPLATE: &str = include_str!("../templates/payslip.typ");
 const REPORT_TEMPLATE: &str = include_str!("../templates/report.typ");
@@ -274,6 +275,7 @@ fn document_template(key: Option<&str>) -> (&'static str, &'static str) {
 	match key {
 		Some("modern") => ("doc-modern.typ", DOC_MODERN),
 		Some("minimal") => ("doc-minimal.typ", DOC_MINIMAL),
+		Some("compact") => ("doc-compact.typ", DOC_COMPACT),
 		_ => ("doc-classic.typ", DOC_CLASSIC),
 	}
 }
