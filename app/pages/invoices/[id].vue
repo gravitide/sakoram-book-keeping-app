@@ -280,23 +280,23 @@
 						>
 							<div class="flex items-center justify-between gap-2">
 								<span class="text-xs text-(--ui-text-muted) select-none">Amount entered is</span>
-								<div class="flex gap-1">
-									<UButton
-										size="xs"
-										:variant="vatMode === 'exclusive' ? 'solid' : 'ghost'"
-										:color="vatMode === 'exclusive' ? 'primary' : 'neutral'"
+								<div class="flex border border-(--ui-border) rounded-md overflow-hidden text-xs shrink-0">
+									<button
+										type="button"
+										class="px-3 py-1.5"
+										:class="vatMode === 'exclusive' ? 'bg-(--ui-primary) text-(--ui-bg)' : 'hover:bg-(--ui-bg-muted)'"
 										@click="vatMode = 'exclusive'"
 									>
 										Before VAT
-									</UButton>
-									<UButton
-										size="xs"
-										:variant="vatMode === 'inclusive' ? 'solid' : 'ghost'"
-										:color="vatMode === 'inclusive' ? 'primary' : 'neutral'"
+									</button>
+									<button
+										type="button"
+										class="px-3 py-1.5 border-l border-(--ui-border)"
+										:class="vatMode === 'inclusive' ? 'bg-(--ui-primary) text-(--ui-bg)' : 'hover:bg-(--ui-bg-muted)'"
 										@click="vatMode = 'inclusive'"
 									>
 										VAT-inclusive
-									</UButton>
+									</button>
 								</div>
 							</div>
 							<UFormField v-if="vatMode === 'exclusive'" label="Invoice subtotal" help="Total exclusive of VAT.">
