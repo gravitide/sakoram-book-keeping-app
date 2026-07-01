@@ -90,17 +90,21 @@
 			<p v-if="formProjectTitle" class="text-sm text-(--ui-text-muted) mt-1">
 				{{ formProjectTitle }}
 			</p>
-			<NuxtLink
-				v-if="quote.converted_invoice_id"
-				:to="`/invoices/${quote.converted_invoice_id}`"
-				class="text-xs text-(--ui-primary) hover:underline mt-1 inline-flex items-center gap-1"
-			>
-				<UIcon name="i-lucide-link" class="size-3" />
-				View linked invoice
-			</NuxtLink>
 		</header>
 
 		<div class="space-y-6">
+			<!-- Conversion relationship: this quote was turned into an invoice.
+				Full-width banner above the Reference / Quote-to grid; the linked
+				invoice's summary is resolved into `convertedInvoice` on load. -->
+			<ConversionBanner
+				v-if="convertedInvoice"
+				lead="Converted to invoice"
+				:number="convertedInvoice.number"
+				:issue-date="convertedInvoice.issue_date"
+				:total-cents="convertedInvoice.total_cents"
+				:status="convertedInvoiceStatus"
+				:to="`/invoices/${convertedInvoice.id}`"
+			/>
 			<!-- Two cards side-by-side at lg+: Reference (form fields) on
 				the left wider, Quote-to snapshot on the right narrower.
 				At md they stack with Quote to on TOP — the snapshot
@@ -517,6 +521,7 @@
 
 	import type { LineDraft } from "~/components/DocumentLineEditor.vue";
 	import type { ClientRow } from "~/stores/clients";
+	import type { InvoiceRow } from "~/stores/invoices";
 	import type { ClientSnapshot, PricingMode, QuoteLineRow, QuoteRow, QuoteStatus } from "~/stores/quotes";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
@@ -527,6 +532,7 @@
 	import { useLicenseStore } from "~/stores/license";
 	import { canTransition, useQuotesStore } from "~/stores/quotes";
 	import { useSettingsStore } from "~/stores/settings";
+	import { useVouchersStore } from "~/stores/vouchers";
 
 	definePageMeta({ title: "Quote" });
 
@@ -540,6 +546,7 @@
 	const clientsStore = useClientsStore();
 	const quotesStore = useQuotesStore();
 	const invoicesStore = useInvoicesStore();
+	const vouchersStore = useVouchersStore();
 	const currency = useActiveCurrency();
 
 	const quoteId = Number(route.params.id);
@@ -548,6 +555,14 @@
 	}
 
 	const quote = ref<QuoteRow | null>(null);
+	// Summary of the invoice this quote was converted into, for the
+	// "Converted to invoice" banner. Resolved in hydrate() only when the quote
+	// carries a converted_invoice_id. Its badge shows the invoice's *derived*
+	// status (draft/sent/partial/paid/overdue), hence the vouchers store load.
+	const convertedInvoice = ref<InvoiceRow | null>(null);
+	const convertedInvoiceStatus = computed(() =>
+		convertedInvoice.value ? invoicesStore.derivedStatus(convertedInvoice.value) : "draft"
+	);
 	const lines = ref<LineDraft[]>([]);
 	const saving = ref(false);
 	const dirty = ref(false);
@@ -625,7 +640,12 @@
 		}
 	});
 
-	await Promise.all([settingsStore.ensureLoaded(), clientsStore.ensureLoaded(), banksStore.ensureLoaded()]);
+	await Promise.all([
+		settingsStore.ensureLoaded(),
+		clientsStore.ensureLoaded(),
+		banksStore.ensureLoaded(),
+		vouchersStore.ensureLoaded()
+	]);
 
 	const hydrate = async () => {
 		hydrating.value = true;
@@ -635,6 +655,10 @@
 			throw createError({ statusCode: 404, statusMessage: "Quote not found" });
 		}
 		quote.value = row;
+		// Resolve the linked invoice for the conversion banner (non-fatal).
+		convertedInvoice.value = row.converted_invoice_id
+			? await invoicesStore.get(row.converted_invoice_id).catch(() => null)
+			: null;
 		formIssueDate.value = row.issue_date;
 		formValidUntil.value = row.valid_until;
 		formProjectTitle.value = row.project_title;
@@ -929,6 +953,15 @@
 			const lineRows = await quotesStore.getLines(quoteId);
 			const newInvoiceId = await invoicesStore.createFromQuote(quote.value, lineRows);
 			await quotesStore.markConverted(quoteId, newInvoiceId);
+			// markConverted persisted status='converted' + the link to the DB.
+			// This page is kept alive (<NuxtPage keepalive>), so update the local
+			// refs too — otherwise returning to it shows a stale ACCEPTED with the
+			// Convert button still offered (it would let you convert twice).
+			const current = quote.value;
+			if (current) {
+				quote.value = { ...current, status: "converted", converted_invoice_id: newInvoiceId };
+			}
+			convertedInvoice.value = await invoicesStore.get(newInvoiceId).catch(() => null);
 			showConvertDialog.value = false;
 			toast.add({
 				title: "Invoice created from quote",
