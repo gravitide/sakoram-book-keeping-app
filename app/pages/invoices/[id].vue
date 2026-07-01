@@ -276,7 +276,7 @@
 					<div class="w-full sm:w-auto border border-(--ui-border) rounded-xl overflow-hidden flex flex-col sm:flex-row">
 						<div
 							v-if="pricingMode === 'bundle' && editable"
-							class="p-4 space-y-3 sm:w-72 border-b sm:border-b-0 sm:border-r border-(--ui-border)"
+							class="p-4 space-y-3 sm:w-[26rem] border-b sm:border-b-0 sm:border-r border-(--ui-border)"
 						>
 							<div class="flex items-center justify-between gap-2">
 								<span class="text-xs text-(--ui-text-muted) select-none">Amount entered is</span>
@@ -328,7 +328,7 @@
 								</UFormField>
 							</div>
 						</div>
-						<div class="p-4 sm:w-60 bg-(--ui-bg-muted) tabular-nums text-sm flex flex-col justify-center space-y-1">
+						<div class="p-4 sm:w-64 bg-(--ui-bg-muted) tabular-nums text-sm flex flex-col justify-center space-y-1">
 							<div class="flex justify-between gap-8">
 								<span class="text-(--ui-text-muted)">Subtotal</span>
 								<span>{{ formatLKR(computedTotals.subtotal) }}</span>
