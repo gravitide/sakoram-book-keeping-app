@@ -131,11 +131,24 @@ export const useSettingsStore = defineStore("settings", () => {
 
 	// Webview-safe URL for the (square) identity logo used in the sidebar
 	// + tenant switcher + company-settings hero. Null if no logo is set.
+	// Cache-bust asset URLs for logos. Both logos are written to a stable
+	// per-tenant path (logos/{id}.{ext} / pdf-headers/{id}.{ext}), so replacing
+	// an image with one of the SAME extension yields an identical asset:// URL
+	// and the webview keeps serving the cached old bytes — the preview looks
+	// like the upload "didn't take". `updated_at` is bumped by save() on every
+	// write (including a logo upload), so appending it as a query changes the
+	// URL and forces a re-fetch. The asset protocol resolves the file from the
+	// path and ignores the query string.
+	const bustCache = (url: string): string => {
+		const v = settings.value?.updated_at;
+		return v ? `${url}?v=${encodeURIComponent(v)}` : url;
+	};
+
 	const logoSrc = computed(() => {
 		const p = settings.value?.logo_path;
 		if (!p) return null;
 		try {
-			return convertFileSrc(p);
+			return bustCache(convertFileSrc(p));
 		} catch {
 			return null;
 		}
@@ -148,7 +161,7 @@ export const useSettingsStore = defineStore("settings", () => {
 		const p = settings.value?.pdf_header_logo_path;
 		if (!p) return null;
 		try {
-			return convertFileSrc(p);
+			return bustCache(convertFileSrc(p));
 		} catch {
 			return null;
 		}
