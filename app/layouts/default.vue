@@ -22,8 +22,11 @@
 							<div class="font-semibold text-sm truncate">
 								{{ tenants.activeTenant?.name ?? settings.businessName }}
 							</div>
-							<div class="text-xs text-(--ui-text-muted)">
-								{{ tenants.tenants.length > 1 ? "Switch business" : "Sakoram - The desktop bookkeeper!" }}
+							<!-- Only a functional "Switch business" hint when there's
+								more than one tenant; a single business shows just its
+								name (no app-tagline filler). -->
+							<div v-if="tenants.tenants.length > 1" class="text-xs text-(--ui-text-muted)">
+								Switch business
 							</div>
 						</div>
 						<UIcon name="i-lucide-chevrons-up-down" class="size-4 text-(--ui-text-muted) shrink-0" />

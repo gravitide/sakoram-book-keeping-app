@@ -11,7 +11,7 @@
 					class="group relative size-32 shrink-0 rounded-2xl border-2 border-dashed flex items-center justify-center overflow-hidden transition cursor-pointer" :class="[
 						dragOver
 							? 'border-(--ui-primary) bg-(--ui-primary)/5 scale-[1.02]'
-							: 'border-(--ui-border) bg-(--ui-bg-muted) hover:border-(--ui-primary)/60'
+							: 'border-(--ui-border-accented) bg-(--ui-bg-muted) hover:border-(--ui-primary)/60'
 					]"
 					role="button"
 					tabindex="0"
