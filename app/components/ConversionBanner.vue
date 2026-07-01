@@ -5,11 +5,15 @@
 		so this component stays reusable for both directions (invoice showing
 		its source quote, quote showing the invoice it became). Sits full-width
 		above the Reference / party grid on the detail pages. -->
-	<div class="rounded-lg border border-(--ui-border) bg-(--ui-bg) px-4 py-3">
+	<!-- Violet is the fixed "linked / converted relationship" colour — kept
+		distinct from the semantic status colours (green paid / red error /
+		amber warning / blue info) so type and status never read as the same
+		signal. Not tied to the theme accent on purpose. -->
+	<div class="rounded-lg border border-violet-500/20 bg-violet-500/10 px-4 py-3">
 		<!-- Top row: the relationship as an accent tag on the left, the jump
 			link on the right. -->
 		<div class="flex items-center justify-between gap-3">
-			<span class="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-wider px-2 py-1 rounded-md bg-(--ui-primary)/10 text-(--ui-primary) select-none">
+			<span class="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-wider px-2 py-1 rounded-md bg-violet-500/15 text-violet-600 dark:text-violet-300 select-none">
 				<UIcon name="i-lucide-link-2" class="size-3.5" />
 				{{ lead }}
 			</span>
@@ -24,12 +28,26 @@
 				View
 			</UButton>
 		</div>
-		<!-- Details row: the linked document at a glance. -->
-		<div class="flex items-center gap-x-3 gap-y-1 flex-wrap mt-2.5">
-			<span class="font-semibold tabular-nums">{{ number }}</span>
-			<StatusBadge :status="status" />
-			<span class="text-sm text-(--ui-text-muted) tabular-nums">{{ issueDate }}</span>
-			<span class="text-sm font-medium tabular-nums">{{ formatLKR(totalCents) }}</span>
+		<!-- Main row: the two things that matter — which document (identity,
+			left) and how much (figure, right). Date + status recede. -->
+		<div class="flex items-end justify-between gap-4 flex-wrap mt-3">
+			<div>
+				<div class="flex items-center gap-2.5">
+					<span class="text-lg font-semibold tabular-nums">{{ number }}</span>
+					<StatusBadge :status="status" />
+				</div>
+				<div class="text-xs text-(--ui-text-muted) mt-1">
+					Issued {{ issueDate }}
+				</div>
+			</div>
+			<div class="text-right">
+				<div class="text-[11px] uppercase tracking-wider text-(--ui-text-muted) select-none">
+					Amount
+				</div>
+				<div class="text-lg font-semibold tabular-nums mt-0.5">
+					{{ formatLKR(totalCents) }}
+				</div>
+			</div>
 		</div>
 	</div>
 </template>
