@@ -367,6 +367,20 @@
 		newQuoteIssueDate.value = null;
 		newQuoteOpen.value = true;
 	};
+
+	// The create modal writes a draft then navigates to it. Because
+	// <NuxtPage keepalive> keeps this list mounted, returning to it does
+	// NOT re-run the on-mount fetch — so without this the freshly created
+	// quote never appears until some other `deps` change (e.g. a filter
+	// click) forces a refetch. Reload the page + header counts when the
+	// modal closes, matching the invoices / bills / payslips lists.
+	watch(newQuoteOpen, (open) => {
+		if (!open) {
+			void table.reload();
+			void refreshCounts();
+		}
+	});
+
 	const route = useRoute();
 	onMounted(() => {
 		if (route.query.new === "1") {
