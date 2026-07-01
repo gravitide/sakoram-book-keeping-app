@@ -337,7 +337,7 @@
 								<span class="text-(--ui-text-muted)">VAT</span>
 								<span>{{ formatLKR(computedTotals.tax) }}</span>
 							</div>
-							<div class="flex justify-between gap-8 pt-2 mt-1 border-t border-(--ui-border) font-semibold text-base">
+							<div class="flex justify-between gap-8 items-baseline pt-2.5 mt-1.5 border-t border-(--ui-border-accented) font-semibold text-lg">
 								<span>Total</span>
 								<span>{{ formatLKR(computedTotals.total) }}</span>
 							</div>
