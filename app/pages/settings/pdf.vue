@@ -98,7 +98,7 @@
 									:class="[
 										pdfLogoDragOver
 											? 'border-(--ui-primary) bg-(--ui-primary)/5 scale-[1.01]'
-											: 'border-(--ui-border) bg-(--ui-bg-muted) hover:border-(--ui-primary)/60'
+											: 'border-(--ui-border-accented) bg-(--ui-bg-muted) hover:border-(--ui-primary)/60'
 									]"
 									role="button"
 									tabindex="0"

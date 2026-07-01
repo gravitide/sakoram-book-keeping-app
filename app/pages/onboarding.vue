@@ -96,7 +96,7 @@
 						</div>
 						<button
 							type="button"
-							class="w-full aspect-square max-w-[140px] rounded-md border-2 border-dashed border-(--ui-border) hover:border-(--ui-primary) flex items-center justify-center overflow-hidden bg-(--ui-bg-muted)"
+							class="w-full aspect-square max-w-[140px] rounded-md border-2 border-dashed border-(--ui-border-accented) hover:border-(--ui-primary) flex items-center justify-center overflow-hidden bg-(--ui-bg-muted)"
 							@click="identityLogoInput?.click()"
 						>
 							<img
@@ -127,7 +127,7 @@
 						</div>
 						<button
 							type="button"
-							class="w-full h-[140px] rounded-md border-2 border-dashed border-(--ui-border) hover:border-(--ui-primary) flex items-center justify-center overflow-hidden bg-(--ui-bg-muted)"
+							class="w-full h-[140px] rounded-md border-2 border-dashed border-(--ui-border-accented) hover:border-(--ui-primary) flex items-center justify-center overflow-hidden bg-(--ui-bg-muted)"
 							@click="pdfLogoInput?.click()"
 						>
 							<img
