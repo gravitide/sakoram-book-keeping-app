@@ -266,71 +266,81 @@
 					@update:model-value="onLinesChange"
 				/>
 
-				<!-- Amount entry (bundle drafts) + the document's subtotal / VAT
-					/ total breakdown. The headline Total / Paid / Balance live in
-					the summary hero at the top; this is the "what's billed" math,
-					kept next to the items it comes from. -->
-				<div class="mt-4 pt-4 border-t border-(--ui-border) flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-					<div v-if="pricingMode === 'bundle' && editable" class="w-full lg:max-w-sm space-y-3">
-						<div class="flex items-center justify-between gap-2">
-							<span class="text-xs text-(--ui-text-muted) select-none">Amount entered is</span>
-							<div class="flex gap-1">
-								<UButton
-									size="xs"
-									:variant="vatMode === 'exclusive' ? 'solid' : 'ghost'"
-									:color="vatMode === 'exclusive' ? 'primary' : 'neutral'"
-									@click="vatMode = 'exclusive'"
-								>
-									Before VAT
-								</UButton>
-								<UButton
-									size="xs"
-									:variant="vatMode === 'inclusive' ? 'solid' : 'ghost'"
-									:color="vatMode === 'inclusive' ? 'primary' : 'neutral'"
-									@click="vatMode = 'inclusive'"
-								>
-									VAT-inclusive
-								</UButton>
+				<!-- Amount entry + the document's subtotal / VAT / total breakdown,
+					bound into one right-aligned panel so entry and result read as
+					a single unit (no dead gap between them). The entry half only
+					shows for editable bundle drafts; issued / itemized invoices
+					collapse to just the totals box. The headline Total / Paid /
+					Balance live in the summary hero at the top. -->
+				<div class="mt-4 pt-4 border-t border-(--ui-border) flex justify-end">
+					<div class="w-full sm:w-auto border border-(--ui-border) rounded-xl overflow-hidden flex flex-col sm:flex-row">
+						<div
+							v-if="pricingMode === 'bundle' && editable"
+							class="p-4 space-y-3 sm:w-72 border-b sm:border-b-0 sm:border-r border-(--ui-border)"
+						>
+							<div class="flex items-center justify-between gap-2">
+								<span class="text-xs text-(--ui-text-muted) select-none">Amount entered is</span>
+								<div class="flex gap-1">
+									<UButton
+										size="xs"
+										:variant="vatMode === 'exclusive' ? 'solid' : 'ghost'"
+										:color="vatMode === 'exclusive' ? 'primary' : 'neutral'"
+										@click="vatMode = 'exclusive'"
+									>
+										Before VAT
+									</UButton>
+									<UButton
+										size="xs"
+										:variant="vatMode === 'inclusive' ? 'solid' : 'ghost'"
+										:color="vatMode === 'inclusive' ? 'primary' : 'neutral'"
+										@click="vatMode = 'inclusive'"
+									>
+										VAT-inclusive
+									</UButton>
+								</div>
 							</div>
-						</div>
-						<UFormField v-if="vatMode === 'exclusive'" label="Invoice subtotal" help="Total exclusive of VAT.">
-							<MoneyInput v-model="bundleSubtotalCents" />
-						</UFormField>
-						<UFormField v-else label="Grand total (incl. VAT)" help="We split out the subtotal and VAT below.">
-							<MoneyInput v-model="grandTotalCents" />
-						</UFormField>
-						<div class="ml-auto max-w-[12rem] space-y-2">
-							<div class="flex justify-end">
-								<UCheckbox
-									:model-value="vatEnabled"
-									label="Charge VAT"
-									@update:model-value="(v) => setVatEnabled(v === true)"
-								/>
-							</div>
-							<UFormField
-								v-if="vatEnabled"
-								label="VAT rate (%)"
-								:ui="{ labelWrapper: 'justify-end', label: 'text-right' }"
-							>
-								<UInputNumber
-									v-model="vatRatePct"
-									:step="0.01"
-									:min="0"
-									:max="100"
-									class="w-full"
-								/>
+							<UFormField v-if="vatMode === 'exclusive'" label="Invoice subtotal" help="Total exclusive of VAT.">
+								<MoneyInput v-model="bundleSubtotalCents" />
 							</UFormField>
+							<UFormField v-else label="Grand total (incl. VAT)" help="We split out the subtotal and VAT below.">
+								<MoneyInput v-model="grandTotalCents" />
+							</UFormField>
+							<div class="ml-auto max-w-[12rem] space-y-2">
+								<div class="flex justify-end">
+									<UCheckbox
+										:model-value="vatEnabled"
+										label="Charge VAT"
+										@update:model-value="(v) => setVatEnabled(v === true)"
+									/>
+								</div>
+								<UFormField
+									v-if="vatEnabled"
+									label="VAT rate (%)"
+									:ui="{ labelWrapper: 'justify-end', label: 'text-right' }"
+								>
+									<UInputNumber
+										v-model="vatRatePct"
+										:step="0.01"
+										:min="0"
+										:max="100"
+										class="w-full"
+									/>
+								</UFormField>
+							</div>
 						</div>
-					</div>
-					<div class="tabular-nums text-sm space-y-0.5 lg:text-right lg:ml-auto">
-						<div class="text-(--ui-text-muted)">
-							Subtotal: <span class="text-(--ui-text)">{{ formatLKR(computedTotals.subtotal) }}</span>
-						</div>
-						<div v-if="computedTotals.tax !== 0" class="text-(--ui-text-muted)">
-							VAT: <span class="text-(--ui-text)">{{ formatLKR(computedTotals.tax) }}</span>
-						</div>
-						<div class="font-semibold text-base">
-							Total: {{ formatLKR(computedTotals.total) }}
+						<div class="p-4 sm:w-60 bg-(--ui-bg-muted) tabular-nums text-sm flex flex-col justify-center space-y-1">
+							<div class="flex justify-between gap-8">
+								<span class="text-(--ui-text-muted)">Subtotal</span>
+								<span>{{ formatLKR(computedTotals.subtotal) }}</span>
+							</div>
+							<div v-if="computedTotals.tax !== 0" class="flex justify-between gap-8">
+								<span class="text-(--ui-text-muted)">VAT</span>
+								<span>{{ formatLKR(computedTotals.tax) }}</span>
+							</div>
+							<div class="flex justify-between gap-8 pt-2 mt-1 border-t border-(--ui-border) font-semibold text-base">
+								<span>Total</span>
+								<span>{{ formatLKR(computedTotals.total) }}</span>
+							</div>
 						</div>
 					</div>
 				</div>
