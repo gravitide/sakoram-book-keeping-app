@@ -88,6 +88,20 @@
 			<UIcon name="i-lucide-lock" class="size-[16px]" />
 		</button>
 
+		<!-- Quick light/dark theme toggle. Flips the persisted colour-mode
+			preference (Settings → Appearance keeps the full light/dark/system
+			control). Always visible, sits just left of the help button. -->
+		<button
+			type="button"
+			class="flex items-center justify-center hover:bg-(--ui-bg-accented) transition shrink-0"
+			:class="isMac ? 'w-[36px]' : 'w-[44px]'"
+			:title="isDark ? 'Switch to light theme' : 'Switch to dark theme'"
+			:aria-label="isDark ? 'Switch to light theme' : 'Switch to dark theme'"
+			@click="toggleTheme"
+		>
+			<UIcon :name="isDark ? 'i-lucide-sun' : 'i-lucide-moon'" class="size-[16px]" />
+		</button>
+
 		<!-- Global help button — always-visible escape hatch to the
 			docs WebviewWindow. Sits left of the OS-control cluster on
 			Windows; on macOS it becomes the rightmost titlebar button
@@ -170,6 +184,16 @@
 	const helpWindow = useHelpWindow();
 	const openHelp = () => {
 		void helpWindow.openHelpWindow();
+	};
+
+	// Titlebar quick theme toggle. `colorMode.value` is the resolved mode, so
+	// toggling flips to the opposite of whatever is currently showing (even if
+	// the preference was "system"). Settings → Appearance keeps the full
+	// light/dark/system control; this is just the fast switch.
+	const colorMode = useColorMode();
+	const isDark = computed(() => colorMode.value === "dark");
+	const toggleTheme = () => {
+		colorMode.preference = isDark.value ? "light" : "dark";
 	};
 
 	const { isMaximized } = useWindowState();

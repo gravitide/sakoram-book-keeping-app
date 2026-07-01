@@ -83,17 +83,22 @@
 			</div>
 		</div>
 
-		<header class="mb-6">
-			<h1 class="text-2xl font-semibold flex items-center gap-3 flex-wrap">
-				<span class="tabular-nums">{{ invoice.number }}</span>
-				<StatusBadge :status="status" size="md" />
-				<span v-if="!editable" class="app-chrome text-xs text-(--ui-text-muted) font-normal">
-					read-only after issue
-				</span>
-			</h1>
-		</header>
-
 		<div class="space-y-6">
+			<!-- "Read this first" summary: identity on the left, the money that
+				matters (Total / Paid / Balance) as big tiles on the right. All
+				values come from existing computeds — see InvoiceSummaryHero. -->
+			<InvoiceSummaryHero
+				:number="invoice.number"
+				:status="status"
+				:client-name="clientSnapshot?.name"
+				:issue-date="formIssueDate"
+				:due-date="formDueDate"
+				:total-cents="computedTotals.total"
+				:paid-cents="paidCents"
+				:balance-cents="balanceCents"
+				:overpaid-cents="overpaymentCents"
+				:editable="editable"
+			/>
 			<!-- Conversion relationship: this invoice was created from a quote.
 				Full-width banner above the Reference / Bill-to grid; the source
 				quote's summary is resolved into `sourceQuote` on load. -->
@@ -260,118 +265,108 @@
 					:disabled="!editable"
 					@update:model-value="onLinesChange"
 				/>
+
+				<!-- Amount entry + the document's subtotal / VAT / total breakdown,
+					bound into one right-aligned panel so entry and result read as
+					a single unit (no dead gap between them). The entry half only
+					shows for editable bundle drafts; issued / itemized invoices
+					collapse to just the totals box. The headline Total / Paid /
+					Balance live in the summary hero at the top. -->
+				<div class="mt-4 pt-4 border-t border-(--ui-border) flex justify-end">
+					<div class="w-full sm:w-auto border border-(--ui-border) rounded-xl overflow-hidden flex flex-col sm:flex-row">
+						<div
+							v-if="pricingMode === 'bundle' && editable"
+							class="p-4 space-y-3 sm:w-[26rem] border-b sm:border-b-0 sm:border-r border-(--ui-border)"
+						>
+							<div class="flex items-center justify-between gap-2">
+								<span class="text-xs text-(--ui-text-muted) select-none">Amount entered is</span>
+								<div class="flex border border-(--ui-border) rounded-md overflow-hidden text-xs shrink-0">
+									<button
+										type="button"
+										class="px-3 py-1.5"
+										:class="vatMode === 'exclusive' ? 'bg-(--ui-primary) text-(--ui-bg)' : 'hover:bg-(--ui-bg-muted)'"
+										@click="vatMode = 'exclusive'"
+									>
+										Before VAT
+									</button>
+									<button
+										type="button"
+										class="px-3 py-1.5 border-l border-(--ui-border)"
+										:class="vatMode === 'inclusive' ? 'bg-(--ui-primary) text-(--ui-bg)' : 'hover:bg-(--ui-bg-muted)'"
+										@click="vatMode = 'inclusive'"
+									>
+										VAT-inclusive
+									</button>
+								</div>
+							</div>
+							<UFormField v-if="vatMode === 'exclusive'" label="Invoice subtotal" help="Total exclusive of VAT.">
+								<MoneyInput v-model="bundleSubtotalCents" />
+							</UFormField>
+							<UFormField v-else label="Grand total (incl. VAT)" help="We split out the subtotal and VAT below.">
+								<MoneyInput v-model="grandTotalCents" />
+							</UFormField>
+							<div class="ml-auto max-w-[12rem] space-y-2">
+								<div class="flex justify-end">
+									<UCheckbox
+										:model-value="vatEnabled"
+										label="Charge VAT"
+										@update:model-value="(v) => setVatEnabled(v === true)"
+									/>
+								</div>
+								<UFormField
+									v-if="vatEnabled"
+									label="VAT rate (%)"
+									:ui="{ labelWrapper: 'justify-end', label: 'text-right' }"
+								>
+									<UInputNumber
+										v-model="vatRatePct"
+										:step="0.01"
+										:min="0"
+										:max="100"
+										class="w-full"
+									/>
+								</UFormField>
+							</div>
+						</div>
+						<div class="p-4 sm:w-64 bg-(--ui-bg-muted) tabular-nums text-sm flex flex-col justify-center space-y-1">
+							<div class="flex justify-between gap-8">
+								<span class="text-(--ui-text-muted)">Subtotal</span>
+								<span>{{ formatLKR(computedTotals.subtotal) }}</span>
+							</div>
+							<div v-if="computedTotals.tax !== 0" class="flex justify-between gap-8">
+								<span class="text-(--ui-text-muted)">VAT</span>
+								<span>{{ formatLKR(computedTotals.tax) }}</span>
+							</div>
+							<div class="flex justify-between gap-8 items-baseline pt-2.5 mt-1.5 border-t border-(--ui-border-accented) font-semibold text-lg">
+								<span>Total</span>
+								<span>{{ formatLKR(computedTotals.total) }}</span>
+							</div>
+						</div>
+					</div>
+				</div>
 			</UCard>
 
-			<!-- Totals + Notes share a row on large screens: Totals is a
-				compact money summary (~2/5), Notes & sign-off takes the
-				wider ~3/5. items-start so the shorter Totals card doesn't
-				stretch. The Payments table sits full-width below. -->
-			<div class="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
-				<UCard class="lg:col-span-2">
-					<template #header>
-						<div class="app-chrome font-medium">
-							Totals &amp; payments
-						</div>
-					</template>
-
-					<div v-if="pricingMode === 'bundle' && editable" class="space-y-3">
-						<div class="flex items-center justify-between gap-2">
-							<span class="text-xs text-(--ui-text-muted) select-none">Amount entered is</span>
-							<div class="flex gap-1">
-								<UButton
-									size="xs"
-									:variant="vatMode === 'exclusive' ? 'solid' : 'ghost'"
-									:color="vatMode === 'exclusive' ? 'primary' : 'neutral'"
-									@click="vatMode = 'exclusive'"
-								>
-									Before VAT
-								</UButton>
-								<UButton
-									size="xs"
-									:variant="vatMode === 'inclusive' ? 'solid' : 'ghost'"
-									:color="vatMode === 'inclusive' ? 'primary' : 'neutral'"
-									@click="vatMode = 'inclusive'"
-								>
-									VAT-inclusive
-								</UButton>
-							</div>
-						</div>
-						<UFormField v-if="vatMode === 'exclusive'" label="Invoice subtotal" help="Total exclusive of VAT.">
-							<MoneyInput v-model="bundleSubtotalCents" />
-						</UFormField>
-						<UFormField v-else label="Grand total (incl. VAT)" help="We split out the subtotal and VAT below.">
-							<MoneyInput v-model="grandTotalCents" />
-						</UFormField>
-						<div class="ml-auto max-w-[12rem] space-y-2">
-							<div class="flex justify-end">
-								<UCheckbox
-									:model-value="vatEnabled"
-									label="Charge VAT"
-									@update:model-value="(v) => setVatEnabled(v === true)"
-								/>
-							</div>
-							<UFormField
-								v-if="vatEnabled"
-								label="VAT rate (%)"
-								:ui="{ labelWrapper: 'justify-end', label: 'text-right' }"
-							>
-								<UInputNumber
-									v-model="vatRatePct"
-									:step="0.01"
-									:min="0"
-									:max="100"
-									class="w-full"
-								/>
-							</UFormField>
-						</div>
+			<!-- Notes & sign-off — the printed prose. Full width now that the
+				totals result moved into the summary hero and the amount entry into
+				the Items card footer. -->
+			<UCard>
+				<template #header>
+					<div class="app-chrome font-medium">
+						Notes &amp; sign-off
 					</div>
-
-					<div class="flex justify-end" :class="{ 'border-t border-(--ui-border) pt-4 mt-4': pricingMode === 'bundle' && editable }">
-						<div class="text-sm tabular-nums text-right space-y-0.5">
-							<div class="text-(--ui-text-muted)">
-								Subtotal: <span class="text-(--ui-text)">{{ formatLKR(computedTotals.subtotal) }}</span>
-							</div>
-							<div v-if="computedTotals.tax !== 0" class="text-(--ui-text-muted)">
-								VAT: <span class="text-(--ui-text)">{{ formatLKR(computedTotals.tax) }}</span>
-							</div>
-							<div class="font-semibold text-base">
-								Total: {{ formatLKR(computedTotals.total) }}
-							</div>
-							<div v-if="paidCents > 0" class="text-(--ui-text-muted) pt-1 border-t border-(--ui-border) mt-1">
-								Paid: <span class="text-(--ui-success)">{{ formatLKR(paidCents) }}</span>
-							</div>
-							<div v-if="paidCents > 0 && !overpaid" class="font-semibold" :class="balanceCents === 0 ? 'text-(--ui-success)' : 'text-(--ui-text)'">
-								Balance: {{ formatLKR(balanceCents) }}
-							</div>
-							<!-- Overpaid pill: linked receipts sum to more than the
-							invoice total. Soft warning — the user might have
-							a legitimate reason (refund correction, advance)
-							but the discrepancy should be visible. -->
-							<div v-if="overpaid" class="font-semibold text-(--ui-warning) pt-0.5">
-								Overpaid by {{ formatLKR(overpaymentCents) }}
-							</div>
-						</div>
-					</div>
-				</UCard>
-				<UCard class="lg:col-span-3">
-					<template #header>
-						<div class="app-chrome font-medium">
-							Notes &amp; sign-off
-						</div>
-					</template>
-					<div class="grid grid-cols-1 gap-4">
-						<UFormField label="Notes">
-							<UTextarea v-model="formNotes" :rows="6" :disabled="!editable" />
-						</UFormField>
-						<UFormField label="Terms">
-							<UTextarea v-model="formTerms" :rows="3" :disabled="!editable" />
-						</UFormField>
-						<UFormField label="Prepared by">
-							<UInput v-model="formPreparedBy" :disabled="!editable" />
-						</UFormField>
-					</div>
-				</UCard>
-			</div>
+				</template>
+				<div class="grid grid-cols-1 gap-4">
+					<UFormField label="Notes">
+						<UTextarea v-model="formNotes" :rows="6" :disabled="!editable" />
+					</UFormField>
+					<UFormField label="Terms">
+						<UTextarea v-model="formTerms" :rows="3" :disabled="!editable" />
+					</UFormField>
+					<UFormField label="Prepared by">
+						<UInput v-model="formPreparedBy" :disabled="!editable" />
+					</UFormField>
+				</div>
+			</UCard>
 
 			<!-- Receipt vouchers linked to this invoice. Vouchers are the
 				single source of truth for cash flow — the "paid" /
@@ -695,7 +690,6 @@
 	// Overpaid surface — sum of receipts > invoice total. derivedStatus
 	// still reads "paid" (capped); this is purely informational.
 	const overpaymentCents = computed(() => Math.max(0, paidCents.value - totalCents.value));
-	const overpaid = computed(() => overpaymentCents.value > 0);
 
 	const canRecordPayments = computed(() =>
 		persistedStatus.value === "sent" && balanceCents.value > 0
