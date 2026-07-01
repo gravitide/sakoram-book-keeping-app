@@ -5,29 +5,32 @@
 		so this component stays reusable for both directions (invoice showing
 		its source quote, quote showing the invoice it became). Sits full-width
 		above the Reference / party grid on the detail pages. -->
-	<div class="rounded-lg border border-(--ui-border) border-l-4 border-l-(--ui-primary) bg-(--ui-primary)/5 px-4 py-3 flex items-center gap-4 flex-wrap">
-		<UIcon name="i-lucide-link-2" class="size-5 text-(--ui-primary) shrink-0" />
-		<div class="min-w-0 flex-1">
-			<div class="text-[11px] uppercase tracking-wider text-(--ui-text-muted) select-none">
+	<div class="rounded-lg border border-(--ui-border) bg-(--ui-bg) px-4 py-3">
+		<!-- Top row: the relationship as an accent tag on the left, the jump
+			link on the right. -->
+		<div class="flex items-center justify-between gap-3">
+			<span class="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-wider px-2 py-1 rounded-md bg-(--ui-primary)/10 text-(--ui-primary) select-none">
+				<UIcon name="i-lucide-link-2" class="size-3.5" />
 				{{ lead }}
-			</div>
-			<div class="flex items-center gap-x-3 gap-y-1 flex-wrap mt-1">
-				<span class="font-semibold tabular-nums">{{ number }}</span>
-				<StatusBadge :status="status" />
-				<span class="text-sm text-(--ui-text-muted) tabular-nums">{{ issueDate }}</span>
-				<span class="text-sm font-medium tabular-nums">{{ formatLKR(totalCents) }}</span>
-			</div>
+			</span>
+			<UButton
+				:to="to"
+				size="sm"
+				color="neutral"
+				variant="soft"
+				icon="i-lucide-arrow-up-right"
+				class="shrink-0"
+			>
+				View
+			</UButton>
 		</div>
-		<UButton
-			:to="to"
-			size="sm"
-			color="neutral"
-			variant="soft"
-			icon="i-lucide-arrow-up-right"
-			class="shrink-0"
-		>
-			View
-		</UButton>
+		<!-- Details row: the linked document at a glance. -->
+		<div class="flex items-center gap-x-3 gap-y-1 flex-wrap mt-2.5">
+			<span class="font-semibold tabular-nums">{{ number }}</span>
+			<StatusBadge :status="status" />
+			<span class="text-sm text-(--ui-text-muted) tabular-nums">{{ issueDate }}</span>
+			<span class="text-sm font-medium tabular-nums">{{ formatLKR(totalCents) }}</span>
+		</div>
 	</div>
 </template>
 
