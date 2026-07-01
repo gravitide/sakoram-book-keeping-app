@@ -39,6 +39,15 @@ export interface UseServerTableOptions {
 	 */
 	defaultOrderBy: string | (() => string)
 	deps: () => unknown
+	/**
+	 * Optional callback fired alongside the automatic refetch when the host
+	 * list page is re-activated from the `<NuxtPage keepalive>` cache. Use it
+	 * to refresh page-owned derived data that isn't part of the table query —
+	 * e.g. header status counts / summary stats — so they don't go stale after
+	 * a row is created / deleted / edited on a detail page and the user
+	 * navigates back.
+	 */
+	onReactivate?: () => void
 	debounceMs?: number
 	initialPageSize?: number
 	initialSortField?: string | null
@@ -130,6 +139,28 @@ export function useServerTable<Row>(opts: UseServerTableOptions) {
 	// resolve to its empty state. Subsequent filter changes go through the
 	// debounced watch above; page/sort/page-size changes go through onRequest.
 	fetchPage();
+
+	// List pages render under `<NuxtPage keepalive>` (see app.vue), so they
+	// mount ONCE and are reused — navigating to a detail page and back does
+	// NOT re-run the host page's setup/onMounted. Without this, a row deleted
+	// / created / edited on a detail page (or the New modal) would linger in
+	// the cached table until an unrelated `deps` change forced a refetch.
+	// Refetch (and let the page refresh its own header stats via
+	// `onReactivate`) each time the page is re-activated from the cache.
+	//
+	// onActivated also fires on the initial mount, which the eager fetch above
+	// already covered — skip that first one to avoid a double fetch. The hook
+	// is a no-op when the component isn't kept alive, so this is inert for any
+	// non-keepalive consumer.
+	let activatedOnce = false;
+	onActivated(() => {
+		if (!activatedOnce) {
+			activatedOnce = true;
+			return;
+		}
+		fetchPage();
+		opts.onReactivate?.();
+	});
 
 	return {
 		rows,

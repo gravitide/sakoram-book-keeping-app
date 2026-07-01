@@ -303,25 +303,10 @@
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
 
-	// Server-paginated table: page / sort / filter all hit the DB rather
-	// than loading every quote into memory. The store's filter refs stay
-	// the source of truth (cross-doc "View quotes" still sets
-	// store.clientFilter etc.); `buildQuoteWhere` turns them into SQL.
-	const table = useServerTable<QuoteRow>({
-		query: () => ({
-			from: "quotes",
-			where: buildQuoteWhere(store.listFilters),
-			sumExpr: "SUM(total_cents)"
-		}),
-		resolveSortColumn: resolveQuoteSortColumn,
-		defaultOrderBy: "datetime(created_at) DESC",
-		deps: () => store.listFilters,
-		initialSortField: "issue_date",
-		initialSortOrder: -1
-	});
-
 	// Per-status header counts via a grouped query (not the full row set),
 	// refreshed on mount + after any mutation that changes a quote's status.
+	// Declared before the table so it can be wired into the table's
+	// `onReactivate` hook below.
 	const statusCounts = ref<Record<QuoteStatus, number>>({
 		draft: 0,
 		sent: 0,
@@ -336,6 +321,29 @@
 	const refreshCounts = async () => {
 		statusCounts.value = await store.fetchStatusCounts();
 	};
+
+	// Server-paginated table: page / sort / filter all hit the DB rather
+	// than loading every quote into memory. The store's filter refs stay
+	// the source of truth (cross-doc "View quotes" still sets
+	// store.clientFilter etc.); `buildQuoteWhere` turns them into SQL.
+	const table = useServerTable<QuoteRow>({
+		query: () => ({
+			from: "quotes",
+			where: buildQuoteWhere(store.listFilters),
+			sumExpr: "SUM(total_cents)"
+		}),
+		resolveSortColumn: resolveQuoteSortColumn,
+		defaultOrderBy: "datetime(created_at) DESC",
+		deps: () => store.listFilters,
+		initialSortField: "issue_date",
+		initialSortOrder: -1,
+		// Keep the header status counts in step with the table when the page
+		// is re-activated from the keep-alive cache (e.g. after deleting a
+		// quote on its detail page and navigating back).
+		onReactivate: () => {
+			void refreshCounts();
+		}
+	});
 
 	// Initial hydrate: clients (filter dropdown) + settings (PDF), expire
 	// overdue quotes, load header counts. The table fetches its own first
