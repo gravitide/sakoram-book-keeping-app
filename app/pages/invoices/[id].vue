@@ -91,17 +91,21 @@
 					read-only after issue
 				</span>
 			</h1>
-			<NuxtLink
-				v-if="invoice.source_quote_id"
-				:to="`/quotes/${invoice.source_quote_id}`"
-				class="text-xs text-(--ui-primary) hover:underline mt-1 inline-flex items-center gap-1"
-			>
-				<UIcon name="i-lucide-link" class="size-3" />
-				Converted from quote
-			</NuxtLink>
 		</header>
 
 		<div class="space-y-6">
+			<!-- Conversion relationship: this invoice was created from a quote.
+				Full-width banner above the Reference / Bill-to grid; the source
+				quote's summary is resolved into `sourceQuote` on load. -->
+			<ConversionBanner
+				v-if="sourceQuote"
+				lead="Converted from quote"
+				:number="sourceQuote.number"
+				:issue-date="sourceQuote.issue_date"
+				:total-cents="sourceQuote.total_cents"
+				:status="sourceQuote.status"
+				:to="`/quotes/${sourceQuote.id}`"
+			/>
 			<!-- Two cards side-by-side at lg+: Reference (form fields) on
 				the left wider, Bill-to snapshot on the right narrower.
 				At md they stack with Bill to on TOP — the snapshot
@@ -564,7 +568,7 @@
 	import type { LineDraft } from "~/components/DocumentLineEditor.vue";
 	import type { ClientRow } from "~/stores/clients";
 	import type { InvoiceLineRow, InvoicePersistedStatus, InvoiceRow, InvoiceStatus } from "~/stores/invoices";
-	import type { ClientSnapshot, PricingMode } from "~/stores/quotes";
+	import type { ClientSnapshot, PricingMode, QuoteRow } from "~/stores/quotes";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { buildInvoicePdfPayload } from "~/lib/invoice-pdf";
 	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
@@ -572,6 +576,7 @@
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { useLicenseStore } from "~/stores/license";
+	import { useQuotesStore } from "~/stores/quotes";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
 
@@ -586,6 +591,7 @@
 	const banksStore = useBusinessBanksStore();
 	const clientsStore = useClientsStore();
 	const invoicesStore = useInvoicesStore();
+	const quotesStore = useQuotesStore();
 	const vouchersStore = useVouchersStore();
 	const currency = useActiveCurrency();
 
@@ -595,6 +601,9 @@
 	}
 
 	const invoice = ref<InvoiceRow | null>(null);
+	// Source-quote summary for the "Converted from quote" banner. Resolved in
+	// hydrate() only when this invoice carries a source_quote_id.
+	const sourceQuote = ref<QuoteRow | null>(null);
 	const lines = ref<LineDraft[]>([]);
 	const saving = ref(false);
 	const dirty = ref(false);
@@ -741,6 +750,10 @@
 			throw createError({ statusCode: 404, statusMessage: "Invoice not found" });
 		}
 		invoice.value = row;
+		// Resolve the source quote for the conversion banner (non-fatal).
+		sourceQuote.value = row.source_quote_id
+			? await quotesStore.get(row.source_quote_id).catch(() => null)
+			: null;
 		formIssueDate.value = row.issue_date;
 		formDueDate.value = row.due_date;
 		formProjectTitle.value = row.project_title;
