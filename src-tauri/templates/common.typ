@@ -219,6 +219,25 @@
   ]
 ]
 
+// --- company footer notes (fine print appended to every quote/invoice) --
+// The per-business note from Settings -> Quotes & invoices. Read with a
+// default so templates shared with bills (no footer setting) don't error on
+// a missing key — they just render nothing.
+#let footer-notes-block(data) = {
+  let notes = data.at("footer_notes", default: "")
+  if notes != none and notes != "" [
+    #v(12pt)
+    #block(breakable: false)[
+      #text(fill: rgb("#6b7280"), size: 9pt)[
+        #for (j, ln) in notes.split("\n").enumerate() [
+          #if j > 0 [#linebreak()]
+          #ln
+        ]
+      ]
+    ]
+  ]
+}
+
 // --- bank details (from the snapshot frozen at issue time) -------------
 #let bank-block(data) = if data.bank != none [
   #v(10pt)

@@ -83,6 +83,9 @@ export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, pa
 		has_vat: hasVat,
 		notes: inv.notes ?? "",
 		notes_paragraphs: (inv.notes ?? "").split(/\n\s*\n/).filter((p) => p.trim().length > 0),
+		// Per-business footer note (Settings -> Quotes & invoices), rendered as
+		// fine print at the foot of the document by the Typst template.
+		footer_notes: settings?.invoice_footer_notes ?? "",
 		prepared_by: inv.prepared_by ?? "",
 		// Show paid/balance only when something has been paid; null
 		// suppresses the row entirely on a freshly-issued invoice.
