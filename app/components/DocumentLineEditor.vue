@@ -36,14 +36,14 @@
 				<div v-if="mode === 'bundle'" class="flex-1 min-w-0 flex flex-col gap-3 p-3">
 					<UInput
 						:model-value="line.item_label"
-						placeholder="e.g. App development"
+						placeholder="Item or service"
 						:disabled="disabled"
 						class="w-full"
 						@update:model-value="updateField(idx, 'item_label', String($event))"
 					/>
 					<UTextarea
 						:model-value="line.description"
-						placeholder="Scope details. Use line breaks for sub-points."
+						placeholder="Details (optional). Use line breaks for sub-points."
 						:rows="2"
 						:disabled="disabled"
 						class="w-full"
