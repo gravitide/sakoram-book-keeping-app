@@ -80,7 +80,7 @@
 						total's subtotal+rate sub-line hangs below without
 						nudging the inputs. -->
 					<div class="flex flex-wrap items-start gap-x-4 gap-y-3 pt-1">
-						<div class="w-20">
+						<div class="flex-1 min-w-[6rem]">
 							<span class="block text-xs font-medium uppercase tracking-wide text-(--ui-text-muted) mb-1">Qty</span>
 							<UInputNumber
 								:model-value="qtyNum(idx)"
@@ -92,7 +92,7 @@
 								@update:model-value="onQty(idx, $event)"
 							/>
 						</div>
-						<div class="w-24">
+						<div class="flex-1 min-w-[5rem]">
 							<span class="block text-xs font-medium uppercase tracking-wide text-(--ui-text-muted) mb-1">Unit</span>
 							<UInput
 								:model-value="line.unit ?? ''"
@@ -102,7 +102,7 @@
 								@update:model-value="updateField(idx, 'unit', String($event) || null)"
 							/>
 						</div>
-						<div class="w-40">
+						<div class="flex-[1.5] min-w-[9rem]">
 							<span class="block text-xs font-medium uppercase tracking-wide text-(--ui-text-muted) mb-1">Unit price</span>
 							<MoneyInput
 								:model-value="line.unit_price_cents"
@@ -110,7 +110,7 @@
 								@update:model-value="updateField(idx, 'unit_price_cents', $event)"
 							/>
 						</div>
-						<div class="w-24">
+						<div class="flex-1 min-w-[6rem]">
 							<span class="block text-xs font-medium uppercase tracking-wide text-(--ui-text-muted) mb-1">VAT %</span>
 							<UInputNumber
 								:model-value="ratePct(idx)"
@@ -123,14 +123,14 @@
 							/>
 						</div>
 
-						<div class="ml-auto text-right tabular-nums whitespace-nowrap">
-							<span class="block text-xs font-medium uppercase tracking-wide text-(--ui-text-muted) mb-1">Total</span>
-							<div class="font-semibold">
-								{{ formatLKR(lineTotals(line).line_total_cents) }}
-							</div>
-							<div v-if="line.tax_rate_basis_points !== 0" class="text-xs text-(--ui-text-muted)">
-								{{ formatLKR(lineTotals(line).line_subtotal_cents, { withSymbol: false }) }}
-								+ {{ formatRate(line.tax_rate_basis_points) }}
+						<!-- Total is a full-width flex item, so it always wraps to
+							its own row below the four inputs (which then span the
+							width) — consistent regardless of window width. -->
+						<div class="w-full text-right tabular-nums mt-1">
+							<span class="text-xs font-medium uppercase tracking-wide text-(--ui-text-muted) mr-2">Total</span>
+							<span class="font-semibold text-base">{{ formatLKR(lineTotals(line).line_total_cents) }}</span>
+							<div v-if="line.tax_rate_basis_points !== 0" class="text-xs text-(--ui-text-muted) mt-0.5">
+								{{ formatLKR(lineTotals(line).line_subtotal_cents, { withSymbol: false }) }} + {{ formatRate(line.tax_rate_basis_points) }}
 							</div>
 						</div>
 					</div>
