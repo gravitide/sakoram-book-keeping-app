@@ -81,18 +81,20 @@
 			</div>
 		</div>
 
-		<header class="mb-6">
-			<h1 class="text-2xl font-semibold flex items-center gap-3 flex-wrap">
-				<span class="tabular-nums">{{ quote.number }}</span>
-				<StatusBadge :status="status" size="md" />
-				<span v-if="!editable" class="text-xs text-(--ui-text-muted) font-normal">read-only after issue</span>
-			</h1>
-			<p v-if="formProjectTitle" class="text-sm text-(--ui-text-muted) mt-1">
-				{{ formProjectTitle }}
-			</p>
-		</header>
-
 		<div class="space-y-6">
+			<!-- "Read this first" summary: identity + the quote total, surfaced
+				at the top. Values come from existing computeds — see
+				QuoteSummaryHero. -->
+			<QuoteSummaryHero
+				:number="quote.number"
+				:status="status"
+				:client-name="clientSnapshot?.name"
+				:project-title="formProjectTitle || null"
+				:issue-date="formIssueDate"
+				:valid-until="formValidUntil"
+				:total-cents="computedTotals.total"
+				:editable="editable"
+			/>
 			<!-- Conversion relationship: this quote was turned into an invoice.
 				Full-width banner above the Reference / Quote-to grid; the linked
 				invoice's summary is resolved into `convertedInvoice` on load. -->
@@ -264,118 +266,106 @@
 					:disabled="!editable"
 					@update:model-value="onLinesChange"
 				/>
+
+				<!-- Amount entry + subtotal / VAT / total, bound into one
+					right-aligned panel (mirrors the invoice page). Entry half
+					shows only for editable bundle drafts; issued / itemized
+					quotes collapse to just the totals box. The headline Total
+					also appears in the summary hero at the top. -->
+				<div class="mt-4 pt-4 border-t border-(--ui-border) flex justify-end">
+					<div class="w-full sm:w-auto border border-(--ui-border) rounded-xl overflow-hidden flex flex-col sm:flex-row">
+						<div
+							v-if="pricingMode === 'bundle' && editable"
+							class="p-4 space-y-3 sm:w-[26rem] border-b sm:border-b-0 sm:border-r border-(--ui-border)"
+						>
+							<div class="flex items-center justify-between gap-2">
+								<span class="text-xs text-(--ui-text-muted) select-none">Amount entered is</span>
+								<div class="flex border border-(--ui-border) rounded-md overflow-hidden text-xs shrink-0">
+									<button
+										type="button"
+										class="px-3 py-1.5"
+										:class="vatMode === 'exclusive' ? 'bg-(--ui-primary) text-(--ui-bg)' : 'hover:bg-(--ui-bg-muted)'"
+										@click="vatMode = 'exclusive'"
+									>
+										Before VAT
+									</button>
+									<button
+										type="button"
+										class="px-3 py-1.5 border-l border-(--ui-border)"
+										:class="vatMode === 'inclusive' ? 'bg-(--ui-primary) text-(--ui-bg)' : 'hover:bg-(--ui-bg-muted)'"
+										@click="vatMode = 'inclusive'"
+									>
+										VAT-inclusive
+									</button>
+								</div>
+							</div>
+							<UFormField v-if="vatMode === 'exclusive'" label="Quote subtotal" help="Total price for this quote, exclusive of VAT.">
+								<MoneyInput v-model="bundleSubtotalCents" />
+							</UFormField>
+							<UFormField v-else label="Grand total (incl. VAT)" help="We split out the subtotal and VAT below.">
+								<MoneyInput v-model="grandTotalCents" />
+							</UFormField>
+							<div class="ml-auto max-w-[12rem] space-y-2">
+								<div class="flex justify-end">
+									<UCheckbox
+										:model-value="vatEnabled"
+										label="Charge VAT"
+										@update:model-value="(v) => setVatEnabled(v === true)"
+									/>
+								</div>
+								<UFormField
+									v-if="vatEnabled"
+									label="VAT rate (%)"
+									:ui="{ labelWrapper: 'justify-end', label: 'text-right' }"
+								>
+									<UInputNumber
+										v-model="vatRatePct"
+										:step="0.01"
+										:min="0"
+										:max="100"
+										class="w-full"
+									/>
+								</UFormField>
+							</div>
+						</div>
+						<div class="p-4 sm:w-64 bg-(--ui-bg-muted) tabular-nums text-sm flex flex-col justify-center space-y-1">
+							<div class="flex justify-between gap-8">
+								<span class="text-(--ui-text-muted)">Subtotal</span>
+								<span>{{ formatLKR(computedTotals.subtotal) }}</span>
+							</div>
+							<div v-if="computedTotals.tax !== 0" class="flex justify-between gap-8">
+								<span class="text-(--ui-text-muted)">VAT</span>
+								<span>{{ formatLKR(computedTotals.tax) }}</span>
+							</div>
+							<div class="flex justify-between gap-8 items-baseline pt-2.5 mt-1.5 border-t border-(--ui-border-accented) font-semibold text-lg">
+								<span>Total</span>
+								<span>{{ formatLKR(computedTotals.total) }}</span>
+							</div>
+						</div>
+					</div>
+				</div>
 			</UCard>
 
-			<!-- Totals + Notes share a row on large screens — same layout
-				as the invoice page. Totals is a compact money summary
-				(~2/5); Notes & sign-off takes the wider ~3/5. items-start
-				so the shorter Totals card doesn't stretch. -->
-			<div class="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
-				<UCard class="lg:col-span-2">
-					<template #header>
-						<div class="font-medium">
-							Totals
-						</div>
-					</template>
-
-					<div v-if="pricingMode === 'bundle'" class="space-y-3">
-						<div class="flex items-center justify-between gap-2">
-							<span class="text-xs text-(--ui-text-muted) select-none">Amount entered is</span>
-							<div class="flex gap-1">
-								<UButton
-									size="xs"
-									:variant="vatMode === 'exclusive' ? 'solid' : 'ghost'"
-									:color="vatMode === 'exclusive' ? 'primary' : 'neutral'"
-									:disabled="!editable"
-									@click="vatMode = 'exclusive'"
-								>
-									Before VAT
-								</UButton>
-								<UButton
-									size="xs"
-									:variant="vatMode === 'inclusive' ? 'solid' : 'ghost'"
-									:color="vatMode === 'inclusive' ? 'primary' : 'neutral'"
-									:disabled="!editable"
-									@click="vatMode = 'inclusive'"
-								>
-									VAT-inclusive
-								</UButton>
-							</div>
-						</div>
-
-						<UFormField v-if="vatMode === 'exclusive'" label="Quote subtotal" help="Total price for this quote, exclusive of VAT.">
-							<MoneyInput
-								v-model="bundleSubtotalCents"
-								:disabled="!editable"
-							/>
-						</UFormField>
-						<UFormField v-else label="Grand total (incl. VAT)" help="We split out the subtotal and VAT below.">
-							<MoneyInput
-								v-model="grandTotalCents"
-								:disabled="!editable"
-							/>
-						</UFormField>
-
-						<div class="ml-auto max-w-[12rem] space-y-2">
-							<div class="flex justify-end">
-								<UCheckbox
-									:model-value="vatEnabled"
-									label="Charge VAT"
-									:disabled="!editable"
-									@update:model-value="(v) => setVatEnabled(v === true)"
-								/>
-							</div>
-							<UFormField
-								v-if="vatEnabled"
-								label="VAT rate (%)"
-								:ui="{ labelWrapper: 'justify-end', label: 'text-right' }"
-							>
-								<UInputNumber
-									v-model="vatRatePct"
-									:step="0.01"
-									:min="0"
-									:max="100"
-									:disabled="!editable"
-									class="w-full"
-								/>
-							</UFormField>
-						</div>
+			<!-- Notes & sign-off — full width, mirroring the invoice page
+				(the totals moved into the summary hero + the Items footer). -->
+			<UCard>
+				<template #header>
+					<div class="font-medium">
+						Notes &amp; sign-off
 					</div>
-
-					<div class="flex justify-end" :class="{ 'border-t border-(--ui-border) pt-4 mt-4': pricingMode === 'bundle' }">
-						<div class="text-sm tabular-nums text-right">
-							<div class="text-(--ui-text-muted)">
-								Subtotal: <span class="text-(--ui-text)">{{ formatLKR(computedTotals.subtotal) }}</span>
-							</div>
-							<div v-if="computedTotals.tax !== 0" class="text-(--ui-text-muted)">
-								VAT: <span class="text-(--ui-text)">{{ formatLKR(computedTotals.tax) }}</span>
-							</div>
-							<div class="font-semibold text-base mt-1">
-								Total: {{ formatLKR(computedTotals.total) }}
-							</div>
-						</div>
-					</div>
-				</UCard>
-
-				<UCard class="lg:col-span-3">
-					<template #header>
-						<div class="font-medium">
-							Notes &amp; sign-off
-						</div>
-					</template>
-					<div class="grid grid-cols-1 gap-4">
-						<UFormField label="Notes" hint="Free text shown below the items table on the PDF.">
-							<UTextarea v-model="formNotes" :rows="6" :disabled="!editable" />
-						</UFormField>
-						<UFormField label="Terms" hint="Optional — if you keep terms separate from notes.">
-							<UTextarea v-model="formTerms" :rows="3" :disabled="!editable" />
-						</UFormField>
-						<UFormField label="Prepared by" hint="Signature line at the bottom of the PDF.">
-							<UInput v-model="formPreparedBy" placeholder="e.g. Your name" :disabled="!editable" />
-						</UFormField>
-					</div>
-				</UCard>
-			</div>
+				</template>
+				<div class="grid grid-cols-1 gap-4">
+					<UFormField label="Notes" hint="Free text shown below the items table on the PDF.">
+						<UTextarea v-model="formNotes" :rows="6" :disabled="!editable" />
+					</UFormField>
+					<UFormField label="Terms" hint="Optional — if you keep terms separate from notes.">
+						<UTextarea v-model="formTerms" :rows="3" :disabled="!editable" />
+					</UFormField>
+					<UFormField label="Prepared by" hint="Signature line at the bottom of the PDF.">
+						<UInput v-model="formPreparedBy" placeholder="e.g. Your name" :disabled="!editable" />
+					</UFormField>
+				</div>
+			</UCard>
 
 			<!-- Attachments — scans / photos of the quote. Shared card,
 				same as the invoice / bill / voucher detail pages. -->
