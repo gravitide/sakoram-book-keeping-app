@@ -96,14 +96,16 @@
   )
 
   if data.pricing_mode == "bundle" [
+    // Bundle mode has no per-line amount — the whole quote/invoice is one
+    // lump sum. So the items table is just Item + Description; the single
+    // total (and subtotal / VAT when charged) sits in the summary rows below.
     #table(
-      columns: (24%, 1fr, 22%),
+      columns: (28%, 1fr),
       stroke: 0.5pt + rgb("#e5e7eb"),
-      align: (left + top, left + top, right + top),
+      align: (left + top, left + top),
 
       header-cell("Item"),
       header-cell("Description"),
-      header-cell("Amount"),
 
       ..for line in data.lines {
         (
@@ -114,23 +116,22 @@
               #part
             ]
           ]),
-          body-cell([], align-h: right),
         )
       },
 
       ..if data.has_vat {(
-        table.cell(colspan: 2, fill: rgb("#fafafa"), inset: 7pt, align: right)[Subtotal],
-        table.cell(fill: rgb("#fafafa"), inset: 7pt, align: right, text(weight: "regular")[#data.formatted.subtotal]),
-        table.cell(colspan: 2, fill: rgb("#fafafa"), inset: 7pt, align: right)[VAT],
-        table.cell(fill: rgb("#fafafa"), inset: 7pt, align: right, text(weight: "regular")[#data.formatted.tax]),
+        table.cell(colspan: 2, fill: rgb("#fafafa"), inset: 7pt, align: right)[Subtotal #h(1.2em) #data.formatted.subtotal_no_symbol],
+        table.cell(colspan: 2, fill: rgb("#fafafa"), inset: 7pt, align: right)[VAT #h(1.2em) #data.formatted.tax_no_symbol],
       )} else {()},
 
       table.cell(
-        colspan: 3,
+        colspan: 2,
         fill: rgb("#f3f4f6"),
         inset: 9pt,
         align: right,
-        text(weight: "bold", size: 11pt)[#data.currency_symbol #data.formatted.total]
+        // currency symbol + the no-symbol total (formatted.total already
+        // carries a symbol — using it here double-prints "Rs Rs …").
+        text(weight: "bold", size: 11pt)[#data.currency_symbol #data.formatted.total_no_symbol]
       ),
     )
   ] else [
