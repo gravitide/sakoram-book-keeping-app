@@ -20,13 +20,13 @@
 				<div id="footer-notes" class="scroll-mt-6">
 					<SectionCard
 						icon="i-lucide-file-text"
-						title="Footer notes"
-						subtitle="Appended at the bottom of the generated quote / invoice PDF — payment instructions, thanks, fine print."
+						title="Default notes"
+						subtitle="Pre-filled as the note on new quotes and invoices — you can edit it on each document. Printed near the foot of the PDF."
 					>
-						<UFormField label="Invoice footer" name="invoice_footer_notes">
+						<UFormField label="Invoice note" name="invoice_footer_notes" help="Seeded onto new invoices; editable per invoice.">
 							<UTextarea v-model="form.invoice_footer_notes" :rows="5" autoresize class="w-full" />
 						</UFormField>
-						<UFormField label="Quote footer" name="quote_footer_notes">
+						<UFormField label="Quote note" name="quote_footer_notes" help="Seeded onto new quotes; editable per quote.">
 							<UTextarea v-model="form.quote_footer_notes" :rows="5" autoresize class="w-full" />
 						</UFormField>
 					</SectionCard>

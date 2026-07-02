@@ -56,5 +56,4 @@
 #paid-block(data)
 #notes-block(data)
 #bank-block(data)
-#footer-notes-block(data)
 #signoff-block(data)

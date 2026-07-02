@@ -351,8 +351,8 @@ export const useQuotesStore = defineStore("quotes", () => {
 				number, client_id, client_snapshot, client_name, issue_date, valid_until,
 				status, pricing_mode, project_title,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents,
-				prepared_by, bank_details_snapshot, business_bank_id
-			) VALUES (?, ?, ?, ?, ?, ?, 'draft', 'bundle', ?, ?, 0, 0, 0, ?, ?, ?)`,
+				notes, prepared_by, bank_details_snapshot, business_bank_id
+			) VALUES (?, ?, ?, ?, ?, ?, 'draft', 'bundle', ?, ?, 0, 0, 0, ?, ?, ?, ?)`,
 			[
 				allocation.number,
 				input.client.id,
@@ -362,6 +362,9 @@ export const useQuotesStore = defineStore("quotes", () => {
 				validUntil,
 				input.project_title ?? "",
 				defaultVatBp,
+				// Seed the editable note from the business default (Settings ->
+				// Quotes & invoices). Editable per-quote afterwards.
+				settings.quote_footer_notes ?? null,
 				settings.default_prepared_by ?? null,
 				bankSnap,
 				bankId

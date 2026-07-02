@@ -80,9 +80,6 @@ export const buildQuotePdfPayload = ({ row: q, lines, settings, currency, entitl
 		has_vat: hasVat,
 		notes: q.notes ?? "",
 		notes_paragraphs: (q.notes ?? "").split(/\n\s*\n/).filter((p) => p.trim().length > 0),
-		// Per-business footer note (Settings -> Quotes & invoices), rendered as
-		// fine print at the foot of the document by the Typst template.
-		footer_notes: settings?.quote_footer_notes ?? "",
 		prepared_by: q.prepared_by ?? "",
 		// Quotes don't have payments — null suppresses the paid/balance row.
 		paid_cents: null,

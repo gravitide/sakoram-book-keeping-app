@@ -582,7 +582,7 @@
 					label: "Quotes & invoices",
 					icon: "i-lucide-files",
 					sections: [
-						{ hash: "#footer-notes", label: "Footer notes", icon: "i-lucide-file-text" },
+						{ hash: "#footer-notes", label: "Notes", icon: "i-lucide-file-text" },
 						{ hash: "#defaults", label: "Defaults", icon: "i-lucide-sliders-horizontal" }
 					]
 				},
