@@ -41,7 +41,7 @@
     #linebreak()
     #ln#if ln == data.party.address_lines.last() [.] else [,]
   ]
-  #if data.party.tax_id != none [
+  #if data.party.tax_id != none and data.party.tax_id != "" [
     #v(4pt)
     #faint("Tax ID: " + data.party.tax_id)
   ]
