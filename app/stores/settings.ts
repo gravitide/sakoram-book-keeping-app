@@ -26,6 +26,9 @@ export interface CompanySettingsRow {
 	default_quote_validity_days: number
 	invoice_footer_notes: string | null
 	quote_footer_notes: string | null
+	// Per-business default "Prepared by" seeded onto new quotes / invoices
+	// (migration 0038). Editable per-document afterwards.
+	default_prepared_by: string | null
 	fiscal_year_start_month: number
 	currency_code: string
 	// Set only when currency_code isn't a built-in (CURRENCIES map). The
@@ -94,6 +97,7 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"default_quote_validity_days",
 	"invoice_footer_notes",
 	"quote_footer_notes",
+	"default_prepared_by",
 	"fiscal_year_start_month",
 	"currency_code",
 	"currency_symbol_override",

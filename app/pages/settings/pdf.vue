@@ -8,7 +8,7 @@
 				PDF
 			</h1>
 			<p class="text-sm text-(--ui-text-muted)">
-				Font, header logo, and footer notes for every generated quote, invoice, bill, voucher, and payslip.
+				Font, header logo, and templates for your generated PDFs. Footer notes moved to Quotes &amp; invoices.
 			</p>
 		</header>
 
@@ -276,21 +276,6 @@
 					</SectionCard>
 				</div>
 
-				<div id="footer-notes" class="scroll-mt-6">
-					<SectionCard
-						icon="i-lucide-file-text"
-						title="Footer notes"
-						subtitle="Appended at the bottom of generated documents — payment instructions, thanks, fine print."
-					>
-						<UFormField label="Invoice footer" name="invoice_footer_notes">
-							<UTextarea v-model="form.invoice_footer_notes" :rows="5" autoresize class="w-full" />
-						</UFormField>
-						<UFormField label="Quote footer" name="quote_footer_notes">
-							<UTextarea v-model="form.quote_footer_notes" :rows="5" autoresize class="w-full" />
-						</UFormField>
-					</SectionCard>
-				</div>
-
 				<div class="scroll-mt-6">
 					<SectionCard
 						icon="i-lucide-shield-check"
@@ -394,11 +379,9 @@
 	// Only the PDF-flavoured fields live on this page. Logo paths are kept on
 	// the form so dirty-tracking can spot a removal/upload that would otherwise
 	// only mutate the store. (Document protection moved to /settings/security.)
-	type PdfForm = Pick<SettingsUpdate, "invoice_footer_notes" | "quote_footer_notes" | "pdf_header_logo_path" | "pdf_font" | "pdf_template_invoice" | "pdf_template_quote">;
+	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_template_invoice" | "pdf_template_quote">;
 
 	const form = reactive<PdfForm>({
-		invoice_footer_notes: "",
-		quote_footer_notes: "",
 		pdf_header_logo_path: null,
 		pdf_font: "Akt",
 		pdf_template_invoice: "classic",
@@ -447,8 +430,6 @@
 	const hydrate = () => {
 		const s = store.settings;
 		if (!s) return;
-		form.invoice_footer_notes = s.invoice_footer_notes ?? "";
-		form.quote_footer_notes = s.quote_footer_notes ?? "";
 		form.pdf_header_logo_path = s.pdf_header_logo_path;
 		form.pdf_font = s.pdf_font || "Akt";
 		form.pdf_template_invoice = s.pdf_template_invoice || "classic";
@@ -469,8 +450,6 @@
 	const onSubmit = async () => {
 		try {
 			await store.save({
-				invoice_footer_notes: form.invoice_footer_notes,
-				quote_footer_notes: form.quote_footer_notes,
 				pdf_font: form.pdf_font.trim() || "Akt",
 				pdf_template_invoice: form.pdf_template_invoice,
 				pdf_template_quote: form.pdf_template_quote
