@@ -919,9 +919,17 @@
 				bank_details_snapshot: bankSnapshot,
 				title_override: formTitleOverride.value.trim() || null
 			});
+			// Back-date support: if the saved issue date now falls in a
+			// different fiscal year, re-derive this draft's number to match
+			// (collision-safe; no-op when the year is unchanged).
+			const renumberedTo = await invoicesStore.renumberDraft(invoiceId, formIssueDate.value);
 			await invoicesStore.load();
 			await hydrate();
-			toast.add({ title: "Invoice saved", color: "success", icon: "i-lucide-check" });
+			toast.add({
+				title: renumberedTo ? `Saved — renumbered to ${renumberedTo}` : "Invoice saved",
+				color: "success",
+				icon: "i-lucide-check"
+			});
 		} catch (err) {
 			toast.add({
 				title: "Save failed",

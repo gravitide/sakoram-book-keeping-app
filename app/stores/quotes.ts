@@ -15,7 +15,7 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { computeLineTotals, sumCents } from "~/lib/money";
-import { allocateDocumentNumber, allocateSpecificDocumentNumber } from "~/lib/numbering";
+import { allocateDocumentNumber, allocateSpecificDocumentNumber, renumberForIssueDate } from "~/lib/numbering";
 import { useBusinessBanksStore } from "~/stores/business_banks";
 import { purgeDocumentAttachments } from "~/stores/document_attachments";
 import { useSettingsStore } from "~/stores/settings";
@@ -638,6 +638,22 @@ export const useQuotesStore = defineStore("quotes", () => {
 		return out;
 	};
 
+	// Re-derive a DRAFT quote's number when its issue date moves to a
+	// different fiscal year (back-dating a historical quote). Collision-safe —
+	// see renumberForIssueDate. No-op on issued quotes or when the year is
+	// unchanged. Returns the new number, or null when nothing changed.
+	const renumberDraft = async (id: number, newIssueDate: string): Promise<string | null> => {
+		const row = await get(id);
+		if (!row || row.status !== "draft") return null;
+		const newNumber = await renumberForIssueDate("quote", row.number, newIssueDate);
+		if (!newNumber) return null;
+		await execute(
+			"UPDATE quotes SET number = ?, updated_at = datetime('now') WHERE id = ?",
+			[newNumber, id]
+		);
+		return newNumber;
+	};
+
 	return {
 		quotes,
 		loading,
@@ -663,6 +679,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 		createDraft,
 		duplicate,
 		update,
+		renumberDraft,
 		replaceLines,
 		setStatus,
 		markConverted,

@@ -14,6 +14,13 @@
 						<ClientPicker v-model="clientId" @create-new="openModel = false" />
 					</UFormField>
 
+					<!-- Issue date drives the document number's YEAR
+						(PREFIX-YEAR-SEQUENCE). Defaults to today; back-date it to
+						file an old invoice and the number's year + preview follow. -->
+					<UFormField label="Issue date" hint="Sets the invoice's year. Leave as today, or back-date to file an old invoice.">
+						<DateField v-model="issueDate" />
+					</UFormField>
+
 					<!-- Number is editable so the user can fill a gap left by
 						an earlier deletion. See NewQuoteModal for the
 						rationale. -->
@@ -97,8 +104,19 @@
 	const projectTitle = ref("");
 	const creating = ref(false);
 
+	// Local YYYY-MM-DD "today" (not UTC — toISOString would drift a day near
+	// midnight for +ve timezones).
+	const todayISO = (): string => {
+		const d = new Date();
+		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+	};
+
+	// Editable issue date. Defaults to today (or the calendar-picked date via
+	// props), and drives the document number's fiscal year.
+	const issueDate = ref<string>(todayISO());
+
 	// Editable number with live uniqueness check — see NewQuoteModal.
-	const issueDateRef = computed(() => props.issueDate ?? null);
+	const issueDateRef = computed(() => issueDate.value || null);
 	const docNum = useDocumentNumber({
 		type: "invoice",
 		issueDate: issueDateRef,
@@ -110,10 +128,12 @@
 	// we don't pay for them when the modal never appears.
 	watch(openModel, async (open) => {
 		if (open) {
+			issueDate.value = props.issueDate ?? todayISO();
 			await Promise.all([settings.ensureLoaded(), clients.load()]);
 		} else {
 			clientId.value = null;
 			projectTitle.value = "";
+			issueDate.value = todayISO();
 			creating.value = false;
 			docNum.reset();
 		}
@@ -142,7 +162,7 @@
 			const id = await invoices.createDraft({
 				client: { ...client, id: client.id },
 				project_title: projectTitle.value.trim(),
-				issue_date: props.issueDate ?? undefined,
+				issue_date: issueDate.value || undefined,
 				sequence: docNum.sequence.value ?? undefined
 			});
 			toast.add({ title: "Draft invoice created", color: "success", icon: "i-lucide-check" });

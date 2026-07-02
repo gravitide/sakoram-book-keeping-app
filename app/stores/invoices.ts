@@ -26,7 +26,7 @@ import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { deriveInvoiceStatus, invoiceDerivedFrom } from "~/lib/derived-status";
 import { computeLineTotals, sumCents } from "~/lib/money";
-import { allocateDocumentNumber, allocateSpecificDocumentNumber } from "~/lib/numbering";
+import { allocateDocumentNumber, allocateSpecificDocumentNumber, renumberForIssueDate } from "~/lib/numbering";
 import { useBusinessBanksStore } from "~/stores/business_banks";
 import { purgeDocumentAttachments } from "~/stores/document_attachments";
 import { useSettingsStore } from "~/stores/settings";
@@ -733,6 +733,22 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		await useVouchersStore().load().catch(() => { /* non-fatal */ });
 	};
 
+	// Re-derive a DRAFT invoice's number when its issue date moves to a
+	// different fiscal year (back-dating a historical invoice). Collision-safe
+	// — see renumberForIssueDate. No-op on issued invoices or when the year is
+	// unchanged. Returns the new number, or null when nothing changed.
+	const renumberDraft = async (id: number, newIssueDate: string): Promise<string | null> => {
+		const row = await get(id);
+		if (!row || row.status !== "draft") return null;
+		const newNumber = await renumberForIssueDate("invoice", row.number, newIssueDate);
+		if (!newNumber) return null;
+		await execute(
+			"UPDATE invoices SET number = ?, updated_at = datetime('now') WHERE id = ?",
+			[newNumber, id]
+		);
+		return newNumber;
+	};
+
 	return {
 		invoices,
 		loading,
@@ -762,6 +778,7 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		createFromQuote,
 		duplicate,
 		update,
+		renumberDraft,
 		replaceLines,
 		setStatus,
 		deleteDraft,
