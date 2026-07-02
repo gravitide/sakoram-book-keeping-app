@@ -362,7 +362,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 				validUntil,
 				input.project_title ?? "",
 				defaultVatBp,
-				null,
+				settings.default_prepared_by ?? null,
 				bankSnap,
 				bankId
 			]

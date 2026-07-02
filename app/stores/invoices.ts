@@ -414,7 +414,7 @@ export const useInvoicesStore = defineStore("invoices", () => {
 				due,
 				input.project_title ?? "",
 				defaultVatBp,
-				null,
+				settings.default_prepared_by ?? null,
 				bankSnap,
 				bankId
 			]
