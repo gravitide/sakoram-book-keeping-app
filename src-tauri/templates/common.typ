@@ -220,22 +220,39 @@
 ]
 
 // --- bank details (from the snapshot frozen at issue time) -------------
-#let bank-block(data) = if data.bank != none [
-  #v(10pt)
-  #block(breakable: false)[
-    #if data.bank.bank_account_number != none [
-      Account Number: #text(weight: "semibold")[#data.bank.bank_account_number] \
-    ]
-    #if data.bank.bank_account_name != none [
-      Account Name: #text(weight: "semibold")[#data.bank.bank_account_name] \
-    ]
-    #if data.bank.bank_name != none [
-      BANK: #text(weight: "semibold")[
-        #data.bank.bank_name#if data.bank.bank_branch != none [, #data.bank.bank_branch]
-      ]
+#let bank-block(data) = if data.bank != none {
+  // Collect only the present fields into (label, value) rows, then render a
+  // bordered label|value table matching the items table's stroke / fills.
+  let rows = ()
+  if data.bank.bank_name != none {
+    rows.push(("Bank", data.bank.bank_name + if data.bank.bank_branch != none { ", " + data.bank.bank_branch } else { "" }))
+  }
+  if data.bank.bank_account_name != none {
+    rows.push(("Account name", data.bank.bank_account_name))
+  }
+  if data.bank.bank_account_number != none {
+    rows.push(("Account no.", data.bank.bank_account_number))
+  }
+  if rows.len() > 0 [
+    #v(12pt)
+    #block(breakable: false)[
+      #lbl("Payment details")
+      #v(5pt)
+      #table(
+        columns: (auto, auto),
+        stroke: 0.5pt + rgb("#e5e7eb"),
+        inset: (x: 10pt, y: 6pt),
+        // `field` not `label` — label shadows a Typst built-in.
+        ..for (field, value) in rows {
+          (
+            table.cell(fill: rgb("#fafafa"), text(fill: rgb("#4b5563"), size: 9pt)[#field]),
+            table.cell(text(weight: "semibold", size: 9.5pt)[#value]),
+          )
+        }
+      )
     ]
   ]
-]
+}
 
 // --- sign-off (right-aligned) ------------------------------------------
 #let signoff-block(data) = if data.prepared_by != none and data.prepared_by != "" [
