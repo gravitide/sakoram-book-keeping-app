@@ -67,6 +67,16 @@ export const formatDocumentNumber = (
 	return `${PREFIX[type]}-${fiscalYear}-${seq.toString().padStart(4, "0")}`;
 };
 
+// Parse a formatted number ("QUO-2026-0003") back into its fiscal year +
+// sequence. Returns null for anything that doesn't match the shape.
+export const parseDocumentNumber = (
+	number: string
+): { fiscalYear: number, sequence: number } | null => {
+	const m = /^[A-Z]+-(\d{4})-(\d+)$/.exec(number);
+	if (!m) return null;
+	return { fiscalYear: Number(m[1]), sequence: Number(m[2]) };
+};
+
 export interface AllocationResult {
 	number: string
 	fiscalYear: number
@@ -206,4 +216,40 @@ export const allocateSpecificDocumentNumber = async (
 		fiscalYear: fy,
 		sequence
 	};
+};
+
+// Re-derive a DRAFT's number when its issue date moves to a different fiscal
+// year (back-dating a historical document). Returns the new number — and
+// bumps the counter — or null when the year is unchanged (nothing to do).
+//
+// Collision-safe by construction: it first tries to KEEP the current sequence
+// in the target year via allocateSpecificDocumentNumber (which throws if that
+// exact number already exists); on that throw it falls back to the next free
+// number for the year. The `UNIQUE(number)` constraint on the document table
+// is the final backstop, so a duplicate can never be written.
+//
+// Callers must only use this on drafts — issued documents keep their number.
+export const renumberForIssueDate = async (
+	type: DocumentType,
+	currentNumber: string,
+	newIssueDate: string
+): Promise<string | null> => {
+	const settings = await selectOne<{ fiscal_year_start_month: number }>(
+		"SELECT fiscal_year_start_month FROM company_settings WHERE id = 1"
+	);
+	const startMonth = settings?.fiscal_year_start_month ?? 1;
+	const targetFy = computeFiscalYear(newIssueDate, startMonth);
+
+	const parsed = parseDocumentNumber(currentNumber);
+	if (parsed && parsed.fiscalYear === targetFy) return null;
+
+	// Try to keep the same sequence in the new year; fall back to next free.
+	if (parsed) {
+		try {
+			return (await allocateSpecificDocumentNumber(type, newIssueDate, parsed.sequence)).number;
+		} catch {
+			/* sequence already taken in the target year — take the next free */
+		}
+	}
+	return (await allocateDocumentNumber(type, newIssueDate)).number;
 };

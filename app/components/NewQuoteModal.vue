@@ -17,6 +17,14 @@
 						<ClientPicker v-model="clientId" @create-new="openModel = false" />
 					</UFormField>
 
+					<!-- Issue date drives the document number's YEAR (the number
+						is PREFIX-YEAR-SEQUENCE). Defaults to today, so a normal
+						quote needs no thought; back-date it to file an old quote
+						and the number's year + the preview below follow. -->
+					<UFormField label="Issue date" hint="Sets the quote's year. Leave as today, or back-date to file an old quote.">
+						<DateField v-model="issueDate" />
+					</UFormField>
+
 					<!-- Number is editable so the user can fill a gap left by
 						an earlier deletion. The default is whatever the
 						auto-allocator would mint next. Live preview below
@@ -95,11 +103,23 @@
 	const projectTitle = ref("");
 	const creating = ref(false);
 
+	// Local YYYY-MM-DD "today" (not UTC — toISOString would drift a day near
+	// midnight for +ve timezones).
+	const todayISO = (): string => {
+		const d = new Date();
+		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+	};
+
+	// Editable issue date. Defaults to today (or the calendar-picked date via
+	// props), and drives the document number's fiscal year — back-dating it
+	// re-years the number preview below.
+	const issueDate = ref<string>(todayISO());
+
 	// Editable number with live uniqueness check. Defaults to the
 	// auto-allocator's next sequence on open; the user can override to
 	// fill a gap left by a deletion. See `useDocumentNumber` for the
 	// reactive contract.
-	const issueDateRef = computed(() => props.issueDate ?? null);
+	const issueDateRef = computed(() => issueDate.value || null);
 	const docNum = useDocumentNumber({
 		type: "quote",
 		issueDate: issueDateRef,
@@ -108,10 +128,12 @@
 
 	watch(openModel, async (open) => {
 		if (open) {
+			issueDate.value = props.issueDate ?? todayISO();
 			await Promise.all([settings.ensureLoaded(), clients.load()]);
 		} else {
 			clientId.value = null;
 			projectTitle.value = "";
+			issueDate.value = todayISO();
 			creating.value = false;
 			docNum.reset();
 		}
@@ -140,7 +162,7 @@
 			const id = await quotes.createDraft({
 				client: { ...client, id: client.id },
 				project_title: projectTitle.value.trim(),
-				issue_date: props.issueDate ?? undefined,
+				issue_date: issueDate.value || undefined,
 				sequence: docNum.sequence.value ?? undefined
 			});
 			toast.add({ title: "Draft created", color: "success", icon: "i-lucide-check" });
