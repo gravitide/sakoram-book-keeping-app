@@ -513,7 +513,20 @@
 							Only do this if it's a real mistake to scrub from your
 							books.
 						</p>
-						<UFormField :label="`Type ${invoice.number} to confirm`">
+						<UFormField>
+							<template #label>
+								<span class="text-(--ui-text-muted)">Type</span>
+								<button
+									type="button"
+									class="mx-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-(--ui-text) bg-(--ui-bg) border border-(--ui-border-accented) hover:border-(--ui-primary) transition align-middle"
+									title="Copy number"
+									@click="copyNumber"
+								>
+									{{ invoice.number }}
+									<UIcon name="i-lucide-copy" class="size-3" />
+								</button>
+								<span class="text-(--ui-text-muted)">to confirm</span>
+							</template>
 							<UInput v-model="deleteConfirmInput" :placeholder="invoice.number" autofocus />
 						</UFormField>
 					</div>
@@ -992,6 +1005,19 @@
 	const askDelete = () => {
 		deleteConfirmInput.value = "";
 		showDeleteDialog.value = true;
+	};
+
+	// Click-to-copy the invoice number in the confirm dialog — saves the user
+	// hand-typing a long document number just to confirm a delete.
+	const copyNumber = async () => {
+		const n = invoice.value?.number;
+		if (!n) return;
+		try {
+			await navigator.clipboard.writeText(n);
+			toast.add({ title: "Number copied", color: "success", icon: "i-lucide-copy" });
+		} catch {
+			toast.add({ title: "Couldn't copy", color: "error", icon: "i-lucide-circle-alert" });
+		}
 	};
 	// Drafts: plain confirmation. Issued: typed-name confirmation, since this
 	// also wipes the payment ledger and detaches reverse FKs.
