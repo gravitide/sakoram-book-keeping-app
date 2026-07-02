@@ -41,7 +41,7 @@
     #linebreak()
     #ln#if ln == data.party.address_lines.last() [.] else [,]
   ]
-  #if data.party.tax_id != none [
+  #if data.party.tax_id != none and data.party.tax_id != "" [
     #v(4pt)
     #faint("Tax ID: " + data.party.tax_id)
   ]
@@ -96,14 +96,16 @@
   )
 
   if data.pricing_mode == "bundle" [
+    // Bundle mode has no per-line amount — the whole quote/invoice is one
+    // lump sum. So the items table is just Item + Description; the single
+    // total (and subtotal / VAT when charged) sits in the summary rows below.
     #table(
-      columns: (24%, 1fr, 22%),
+      columns: (28%, 1fr),
       stroke: 0.5pt + rgb("#e5e7eb"),
-      align: (left + top, left + top, right + top),
+      align: (left + top, left + top),
 
       header-cell("Item"),
       header-cell("Description"),
-      header-cell("Amount"),
 
       ..for line in data.lines {
         (
@@ -114,23 +116,22 @@
               #part
             ]
           ]),
-          body-cell([], align-h: right),
         )
       },
 
       ..if data.has_vat {(
-        table.cell(colspan: 2, fill: rgb("#fafafa"), inset: 7pt, align: right)[Subtotal],
-        table.cell(fill: rgb("#fafafa"), inset: 7pt, align: right, text(weight: "regular")[#data.formatted.subtotal]),
-        table.cell(colspan: 2, fill: rgb("#fafafa"), inset: 7pt, align: right)[VAT],
-        table.cell(fill: rgb("#fafafa"), inset: 7pt, align: right, text(weight: "regular")[#data.formatted.tax]),
+        table.cell(colspan: 2, fill: rgb("#fafafa"), inset: 7pt, align: right)[Subtotal #h(1.2em) #data.formatted.subtotal_no_symbol],
+        table.cell(colspan: 2, fill: rgb("#fafafa"), inset: 7pt, align: right)[VAT #h(1.2em) #data.formatted.tax_no_symbol],
       )} else {()},
 
       table.cell(
-        colspan: 3,
+        colspan: 2,
         fill: rgb("#f3f4f6"),
         inset: 9pt,
         align: right,
-        text(weight: "bold", size: 11pt)[#data.currency_symbol #data.formatted.total]
+        // currency symbol + the no-symbol total (formatted.total already
+        // carries a symbol — using it here double-prints "Rs Rs …").
+        text(weight: "bold", size: 11pt)[#data.currency_symbol #data.formatted.total_no_symbol]
       ),
     )
   ] else [
@@ -220,22 +221,39 @@
 ]
 
 // --- bank details (from the snapshot frozen at issue time) -------------
-#let bank-block(data) = if data.bank != none [
-  #v(10pt)
-  #block(breakable: false)[
-    #if data.bank.bank_account_number != none [
-      Account Number: #text(weight: "semibold")[#data.bank.bank_account_number] \
-    ]
-    #if data.bank.bank_account_name != none [
-      Account Name: #text(weight: "semibold")[#data.bank.bank_account_name] \
-    ]
-    #if data.bank.bank_name != none [
-      BANK: #text(weight: "semibold")[
-        #data.bank.bank_name#if data.bank.bank_branch != none [, #data.bank.bank_branch]
-      ]
+#let bank-block(data) = if data.bank != none {
+  // Collect only the present fields into (label, value) rows, then render a
+  // bordered label|value table matching the items table's stroke / fills.
+  let rows = ()
+  if data.bank.bank_name != none {
+    rows.push(("Bank", data.bank.bank_name + if data.bank.bank_branch != none { ", " + data.bank.bank_branch } else { "" }))
+  }
+  if data.bank.bank_account_name != none {
+    rows.push(("Account name", data.bank.bank_account_name))
+  }
+  if data.bank.bank_account_number != none {
+    rows.push(("Account no.", data.bank.bank_account_number))
+  }
+  if rows.len() > 0 [
+    #v(12pt)
+    #block(breakable: false)[
+      #lbl("Payment details")
+      #v(5pt)
+      #table(
+        columns: (auto, auto),
+        stroke: 0.5pt + rgb("#e5e7eb"),
+        inset: (x: 10pt, y: 6pt),
+        // `field` not `label` — label shadows a Typst built-in.
+        ..for (field, value) in rows {
+          (
+            table.cell(fill: rgb("#fafafa"), text(fill: rgb("#4b5563"), size: 9pt)[#field]),
+            table.cell(text(weight: "semibold", size: 9.5pt)[#value]),
+          )
+        }
+      )
     ]
   ]
-]
+}
 
 // --- sign-off (right-aligned) ------------------------------------------
 #let signoff-block(data) = if data.prepared_by != none and data.prepared_by != "" [

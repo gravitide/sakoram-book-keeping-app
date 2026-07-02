@@ -33,7 +33,7 @@
     box(height: 12mm)
   }
 ]
-#v(-2mm)
+#v(2mm)
 #line(length: 100%, stroke: 2pt + rgb(data.theme_color))
 
 // Title
