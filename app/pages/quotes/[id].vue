@@ -461,7 +461,20 @@
 								The linked invoice will be unlinked but kept.
 							</span>
 						</p>
-						<UFormField :label="`Type ${quote.number} to confirm`">
+						<UFormField>
+							<template #label>
+								<span class="text-(--ui-text-muted)">Type</span>
+								<button
+									type="button"
+									class="mx-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-(--ui-text) bg-(--ui-bg) border border-(--ui-border-accented) hover:border-(--ui-primary) transition align-middle"
+									title="Copy number"
+									@click="copyNumber"
+								>
+									{{ quote.number }}
+									<UIcon name="i-lucide-copy" class="size-3" />
+								</button>
+								<span class="text-(--ui-text-muted)">to confirm</span>
+							</template>
 							<UInput v-model="deleteConfirmInput" :placeholder="quote.number" autofocus />
 						</UFormField>
 					</div>
@@ -894,6 +907,19 @@
 	const askDelete = () => {
 		deleteConfirmInput.value = "";
 		showDeleteDialog.value = true;
+	};
+
+	// Click-to-copy the quote number in the confirm dialog — saves the user
+	// hand-typing a long document number just to confirm a delete.
+	const copyNumber = async () => {
+		const n = quote.value?.number;
+		if (!n) return;
+		try {
+			await navigator.clipboard.writeText(n);
+			toast.add({ title: "Number copied", color: "success", icon: "i-lucide-copy" });
+		} catch {
+			toast.add({ title: "Couldn't copy", color: "error", icon: "i-lucide-circle-alert" });
+		}
 	};
 
 	// For drafts, no typed confirmation needed. For issued quotes, require
