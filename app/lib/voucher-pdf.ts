@@ -12,7 +12,7 @@
 import type { CompanySettingsRow } from "~/stores/settings";
 import type { VoucherMethod, VoucherRow } from "~/stores/vouchers";
 import { formatLKR } from "~/lib/money";
-import { themeHex } from "~/lib/theme";
+import { pdfThemeHex } from "~/lib/theme";
 
 export interface VoucherPdfArgs {
 	row: VoucherRow
@@ -55,7 +55,7 @@ export const buildVoucherPdfPayload = ({ row: v, settings, currency, relatedLabe
 	return {
 		number: v.number,
 		title: isReceiptDoc ? "Receipt voucher" : "Payment voucher",
-		theme_color: themeHex(settings?.theme_color),
+		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,
 		currency_symbol: currency.symbol,

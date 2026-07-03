@@ -8,7 +8,7 @@
 				PDF
 			</h1>
 			<p class="text-sm text-(--ui-text-muted)">
-				Font, header logo, and templates for your generated PDFs. Footer notes moved to Quotes &amp; invoices.
+				Font, colour, header logo, and templates for your generated PDFs. Footer notes moved to Quotes &amp; invoices.
 			</p>
 		</header>
 
@@ -167,6 +167,34 @@
 							</div>
 						</SectionCard>
 					</div>
+				</div>
+
+				<div id="color" class="scroll-mt-6">
+					<SectionCard
+						icon="i-lucide-palette"
+						title="Colour"
+						subtitle="The accent used for the header rule and highlights on your generated PDFs. Independent of the app's theme colour — set it here to print, say, red invoices from a green app."
+					>
+						<div class="grid grid-cols-4 sm:grid-cols-8 gap-3">
+							<button
+								v-for="c in colors"
+								:key="c.value"
+								type="button"
+								class="group flex flex-col items-center gap-1.5"
+								:title="c.label"
+								@click="form.pdf_theme_color = c.value"
+							>
+								<span
+									class="size-10 rounded-full border-2 transition"
+									:class="form.pdf_theme_color === c.value ? 'border-(--ui-text) scale-110' : 'border-(--ui-border) group-hover:border-(--ui-text-muted)'"
+									:style="{ backgroundColor: c.hex }"
+								/>
+								<span class="text-xs" :class="form.pdf_theme_color === c.value ? 'text-(--ui-text) font-medium' : 'text-(--ui-text-muted)'">
+									{{ c.label }}
+								</span>
+							</button>
+						</div>
+					</SectionCard>
 				</div>
 
 				<div id="templates" class="scroll-mt-6">
@@ -365,7 +393,7 @@
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { PDF_TEMPLATES } from "~/lib/pdf-templates";
 	import { sampleInvoicePayload, sampleQuotePayload } from "~/lib/sample-pdf";
-	import { themeHex } from "~/lib/theme";
+	import { THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -379,11 +407,12 @@
 	// Only the PDF-flavoured fields live on this page. Logo paths are kept on
 	// the form so dirty-tracking can spot a removal/upload that would otherwise
 	// only mutate the store. (Document protection moved to /settings/security.)
-	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_template_invoice" | "pdf_template_quote">;
+	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_theme_color" | "pdf_template_invoice" | "pdf_template_quote">;
 
 	const form = reactive<PdfForm>({
 		pdf_header_logo_path: null,
 		pdf_font: "Akt",
+		pdf_theme_color: "green",
 		pdf_template_invoice: "classic",
 		pdf_template_quote: "classic"
 	});
@@ -395,8 +424,10 @@
 	const currency = useActiveCurrency();
 	const TEMPLATES = PDF_TEMPLATES;
 	const canPick = (key: string) => entitledToTemplates.value || key === "classic";
-	// Accent colour for the schematic thumbnails — mirrors what the PDF uses.
-	const themeColor = computed(() => themeHex(store.settings?.theme_color));
+	const colors = THEME_COLORS;
+	// Accent colour for the schematic thumbnails — tracks the live (unsaved)
+	// PDF colour selection so picking a swatch updates the previews instantly.
+	const themeColor = computed(() => themeHex(form.pdf_theme_color));
 
 	// Live preview: render a sample invoice / quote with the currently-selected
 	// template through the real Typst pipeline (PdfPreviewModal).
@@ -432,6 +463,9 @@
 		if (!s) return;
 		form.pdf_header_logo_path = s.pdf_header_logo_path;
 		form.pdf_font = s.pdf_font || "Akt";
+		// Fall back to the UI theme colour for businesses that predate the
+		// split (0039 seeds it, but a defensive fallback keeps a null safe).
+		form.pdf_theme_color = s.pdf_theme_color ?? s.theme_color ?? "green";
 		form.pdf_template_invoice = s.pdf_template_invoice || "classic";
 		form.pdf_template_quote = s.pdf_template_quote || "classic";
 	};
@@ -451,6 +485,7 @@
 		try {
 			await store.save({
 				pdf_font: form.pdf_font.trim() || "Akt",
+				pdf_theme_color: form.pdf_theme_color,
 				pdf_template_invoice: form.pdf_template_invoice,
 				pdf_template_quote: form.pdf_template_quote
 			});

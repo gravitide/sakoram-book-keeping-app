@@ -10,7 +10,7 @@
 import type { BillLineRow, BillRow, VendorSnapshot } from "~/stores/bills";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR, formatQty, formatRate } from "~/lib/money";
-import { themeHex } from "~/lib/theme";
+import { pdfThemeHex } from "~/lib/theme";
 
 export interface BillPdfArgs {
 	row: BillRow
@@ -61,7 +61,7 @@ export const buildBillPdfPayload = ({ row: b, lines, settings, currency, paidCen
 		kind: "bill",
 		number: b.number,
 		title,
-		theme_color: themeHex(settings?.theme_color),
+		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,
 		currency_symbol: currency.symbol,

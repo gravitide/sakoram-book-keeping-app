@@ -9,7 +9,7 @@ import type { BankSnapshot, ClientSnapshot, QuoteLineRow, QuoteRow } from "~/sto
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR, formatQty, formatRate } from "~/lib/money";
 import { resolveTemplateKey } from "~/lib/pdf-templates";
-import { themeHex } from "~/lib/theme";
+import { pdfThemeHex } from "~/lib/theme";
 
 export interface QuotePdfArgs {
 	row: QuoteRow
@@ -56,7 +56,7 @@ export const buildQuotePdfPayload = ({ row: q, lines, settings, currency, entitl
 		number: q.number,
 		template: resolveTemplateKey(settings?.pdf_template_quote, entitledToTemplates),
 		title,
-		theme_color: themeHex(settings?.theme_color),
+		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,
 		currency_symbol: currency.symbol,

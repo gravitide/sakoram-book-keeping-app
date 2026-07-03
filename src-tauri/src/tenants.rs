@@ -81,6 +81,7 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(36, "payslip paye", include_str!("../migrations/0036_payslip_paye.sql")),
 	(37, "pdf templates", include_str!("../migrations/0037_pdf_templates.sql")),
 	(38, "default prepared by", include_str!("../migrations/0038_default_prepared_by.sql")),
+	(39, "pdf theme color", include_str!("../migrations/0039_pdf_theme_color.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -12,7 +12,7 @@ import type { InvoiceRow } from "~/stores/invoices";
 import type { PayslipRow } from "~/stores/payslips";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatMoney } from "~/lib/money";
-import { themeHex } from "~/lib/theme";
+import { pdfThemeHex } from "~/lib/theme";
 
 /// Generic report payload shape consumed by `report.typ`. Optional
 /// fields mirror the template's `if "field" in data` checks.
@@ -79,7 +79,7 @@ const businessHeader = (
 	website: settings?.website ?? null,
 	tax_id: settings?.tax_id ?? null,
 	logo_path: settings?.pdf_header_logo_path ?? null,
-	theme_color: themeHex(settings?.theme_color ?? "green") ?? "#16a34a",
+	theme_color: pdfThemeHex(settings),
 	font_family: settings?.pdf_font ?? null
 });
 

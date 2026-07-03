@@ -115,7 +115,7 @@
 									Theme color
 								</div>
 								<div class="text-xs text-(--ui-text-muted) mt-1">
-									Drives buttons, links, badges, and the header rule on PDFs.
+									Drives buttons, links, and badges across the app. PDF colour is set separately in PDF settings.
 								</div>
 							</template>
 

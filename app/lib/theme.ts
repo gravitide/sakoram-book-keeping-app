@@ -36,5 +36,15 @@ export const themeHex = (name: string | null | undefined): string => {
 	return found?.hex ?? "#ef4444";
 };
 
+// The PDF accent is split from the UI theme colour (company_settings has a
+// dedicated `pdf_theme_color`), so a business can run, say, a green app UI
+// with red invoices. Businesses that predate the split — or haven't picked a
+// separate PDF colour yet — fall back to their UI theme_color, so nothing
+// changes visually until they choose. Every PDF payload builder resolves its
+// accent through here.
+export const pdfThemeHex = (
+	settings: { pdf_theme_color?: string | null, theme_color?: string | null } | null | undefined
+): string => themeHex(settings?.pdf_theme_color ?? settings?.theme_color);
+
 export const isValidThemeColor = (name: string | null | undefined): name is ThemeColor =>
 	THEME_COLORS.some((c) => c.value === name);

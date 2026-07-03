@@ -13,7 +13,7 @@ import type { CurrencyMeta } from "~/lib/money";
 import type { EmployeeSnapshot, PayslipLineRow, PayslipRow } from "~/stores/payslips";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR } from "~/lib/money";
-import { themeHex } from "~/lib/theme";
+import { pdfThemeHex } from "~/lib/theme";
 
 export interface PayslipPdfPayloadArgs {
 	row: PayslipRow
@@ -57,7 +57,7 @@ export function buildPayslipPdfPayload(args: PayslipPdfPayloadArgs): Record<stri
 
 	return {
 		number: row.number,
-		theme_color: themeHex(settings?.theme_color),
+		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,
 		currency_symbol: currency.symbol,
