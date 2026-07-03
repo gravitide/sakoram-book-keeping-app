@@ -4,7 +4,7 @@
 		side is just the Total; the date line shows "Valid until" (red once the
 		quote has expired). Purely presentational — the page feeds every value
 		from its existing computeds. See app/pages/quotes/[id].vue. -->
-	<div class="rounded-lg border border-(--ui-border) bg-(--ui-bg) shadow-md shadow-black/10 px-5 py-4 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+	<div class="rounded-lg border border-(--ui-border) bg-(--ui-bg) shadow-md shadow-black/10 px-5 py-4 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
 		<!-- Identity -->
 		<div class="min-w-0">
 			<div class="flex items-center gap-3 flex-wrap">
