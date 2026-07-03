@@ -362,7 +362,7 @@
 		// Date: today (or ?date= from the calendar shortcut), never earlier
 		// than the payslip pay-date floor.
 		const queryDate = typeof route.query.date === "string" ? route.query.date : null;
-		const candidate = queryDate && /^d{4}-d{2}-d{2}$/.test(queryDate) ? queryDate : todayISO();
+		const candidate = queryDate && /^\d{4}-\d{2}-\d{2}$/.test(queryDate) ? queryDate : todayISO();
 		voucherDate.value = dateMin.value && candidate < dateMin.value ? dateMin.value : candidate;
 
 		// Reset the non-prefill fields so a re-seed starts clean.
@@ -373,21 +373,28 @@
 
 	applyPrefill();
 
-	// Kept-alive re-activation: re-seed from the now-current route. Skip the
-	// first activation (setup already seeded). Reload the document stores so
-	// a doc created since this page last loaded is present for linking, then
-	// re-seed once more.
-	let firstActivation = true;
-	onActivated(() => {
-		if (firstActivation) {
-			firstActivation = false;
-			return;
+	// This page is kept alive, so setup runs once. Re-seed whenever the
+	// prefill source in the URL changes — driven by a WATCH, not
+	// onActivated: on the first no-query -> ?invoice transition the route
+	// query isn't reliably settled when the kept-alive page activates, so
+	// onActivated would read a stale (empty) query and leave the form
+	// blank until the next visit. A watch fires after the route ref
+	// updates, so applyPrefill always sees the current query. A stable
+	// string key means it fires only when one of these params changes.
+	watch(
+		() => `${route.query.invoice ?? ""}|${route.query.bill ?? ""}|${route.query.payslip ?? ""}|${route.query.date ?? ""}`,
+		() => {
+			applyPrefill();
+			// A document created since this (cached) page last loaded won't
+			// be in the stores; when we arrived with a prefill, reload the
+			// relevant stores and re-seed so it can be found + linked.
+			if (prefilledInvoiceId.value || prefilledBillId.value || prefilledPayslipId.value) {
+				void Promise.all([invoicesStore.load(), billsStore.load(), payslipsStore.load()])
+					.then(applyPrefill)
+					.catch(() => { /* non-fatal — keep the sync seed */ });
+			}
 		}
-		applyPrefill();
-		void Promise.all([invoicesStore.load(), billsStore.load(), payslipsStore.load()])
-			.then(applyPrefill)
-			.catch(() => { /* non-fatal — keep the sync seed */ });
-	});
+	);
 
 	// Editable voucher number with live uniqueness check. The page is
 	// always mounted-and-enabled while the user is on it (no modal open
