@@ -26,6 +26,10 @@
 
 		<UCard>
 			<div class="space-y-4">
+				<!-- TEMP DEBUG PANEL — remove before merge. Shows what the
+					prefill logic actually saw at setup. -->
+				<pre class="rounded bg-red-100 text-red-900 text-[11px] leading-tight p-2 overflow-x-auto whitespace-pre-wrap border border-red-300">DEBUG: {{ JSON.stringify(__debug, null, 2) }}</pre>
+
 				<!-- Linked-document context block: when a bill or invoice is
 					linked (either via ?bill / ?invoice prefill or the
 					dropdown below), show what the payment is going
@@ -302,6 +306,20 @@
 	const seedPayslip = prefilledPayslipId.value
 		? payslipsStore.payslips.find((p) => p.id === prefilledPayslipId.value) ?? null
 		: null;
+
+	// TEMP DEBUG — remove before merge. Snapshot of what the prefill saw.
+	const __debug = {
+		routeQuery: JSON.stringify(route.query),
+		prefilledInvoiceId: prefilledInvoiceId.value,
+		invoicesLoaded: invoicesStore.invoices.length,
+		invoicesLoadError: invoicesStore.error,
+		firstInvoiceIds: invoicesStore.invoices.slice(0, 10).map((i) => i.id).join(","),
+		idPresentInStore: invoicesStore.invoices.some((i) => i.id === prefilledInvoiceId.value),
+		seedInvoiceFound: seedInvoice !== null,
+		seedInvoiceId: seedInvoice?.id ?? null,
+		seedInvoiceTotalCents: seedInvoice?.total_cents ?? null,
+		seedInvoiceSnapshot: (seedInvoice?.client_snapshot ?? "").slice(0, 80)
+	};
 
 	// When recording a payment for a payslip, the voucher date must
 	// be on or after the payslip's pay_date — paying before the pay
