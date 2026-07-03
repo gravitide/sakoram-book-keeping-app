@@ -116,25 +116,45 @@
 							<div class="app-chrome font-medium">
 								Bill from
 							</div>
-							<!-- Re-snapshot the vendor's current row data
-								(address moved, tax ID updated, etc.).
-								Editable-state only; sent / paid bills
-								keep their frozen snapshot. -->
-							<!-- Icon-only because the Bill-from card sits at
-								col-span-1 (~340px wide) at lg+ and the
-								full "Refresh vendor snapshot" label wraps
-								and squeezes the card title. Hover gives
-								the full description via title. -->
-							<UButton
-								v-if="editable"
-								size="xs"
-								variant="ghost"
-								color="neutral"
-								icon="i-lucide-refresh-ccw"
-								title="Refresh vendor snapshot — pull the latest details from the vendor record"
-								aria-label="Refresh vendor snapshot"
-								@click="refreshVendorSnapshot"
-							/>
+							<!-- Cross-doc shortcuts + re-snapshot, all as
+								icon-only buttons so they sit inline in the
+								header of a ~340px col-span-1 card without
+								wrapping. Open vendor routes to the vendor
+								detail page; View all bills pre-filters the
+								bills list to this vendor; Refresh re-snapshots
+								the vendor's current row data (editable-state
+								only — sent / paid bills keep their frozen
+								snapshot). -->
+							<div class="flex items-center gap-1">
+								<UButton
+									size="xs"
+									variant="ghost"
+									color="neutral"
+									icon="i-lucide-external-link"
+									title="Open vendor"
+									aria-label="Open vendor"
+									@click="openVendor"
+								/>
+								<UButton
+									size="xs"
+									variant="ghost"
+									color="neutral"
+									icon="i-lucide-file-text"
+									title="View all bills for this vendor"
+									aria-label="View all bills for this vendor"
+									@click="viewVendorBills"
+								/>
+								<UButton
+									v-if="editable"
+									size="xs"
+									variant="ghost"
+									color="neutral"
+									icon="i-lucide-refresh-ccw"
+									title="Refresh vendor snapshot — pull the latest details from the vendor record"
+									aria-label="Refresh vendor snapshot"
+									@click="refreshVendorSnapshot"
+								/>
+							</div>
 						</div>
 					</template>
 					<div class="text-sm">
@@ -153,31 +173,6 @@
 						<div v-if="vendorSnapshot?.tax_id" class="text-(--ui-text-muted) mt-1 text-xs">
 							Tax ID: {{ vendorSnapshot.tax_id }}
 						</div>
-					</div>
-					<!-- Cross-doc shortcuts. Open vendor routes to the
-						vendor detail page; View all bills pre-filters
-						the bills list to this vendor. Same pattern the
-						address-book hero uses (clients / vendors /
-						employees detail pages). -->
-					<div class="mt-4 pt-3 border-t border-(--ui-border) flex flex-wrap gap-2">
-						<UButton
-							size="xs"
-							variant="soft"
-							color="neutral"
-							icon="i-lucide-external-link"
-							@click="openVendor"
-						>
-							Open vendor
-						</UButton>
-						<UButton
-							size="xs"
-							variant="soft"
-							color="neutral"
-							icon="i-lucide-file-text"
-							@click="viewVendorBills"
-						>
-							View all bills
-						</UButton>
 					</div>
 				</UCard>
 

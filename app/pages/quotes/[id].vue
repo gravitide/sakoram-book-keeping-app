@@ -123,23 +123,45 @@
 							<div class="font-medium">
 								Quote to
 							</div>
-							<!-- Re-snapshot the client's current row data
-								(address moved, tax ID updated, etc.).
-								Draft-only; sent quotes keep their frozen
-								snapshot. Icon-only because the Quote-to
-								card sits at col-span-1 (~340px wide) at
-								lg+ and the full label would wrap and
-								squeeze the card title. -->
-							<UButton
-								v-if="editable"
-								size="xs"
-								variant="ghost"
-								color="neutral"
-								icon="i-lucide-refresh-ccw"
-								title="Refresh client snapshot — pull the latest details from the client record"
-								aria-label="Refresh client snapshot"
-								@click="refreshClientSnapshot"
-							/>
+							<!-- Cross-doc shortcuts + re-snapshot, all as
+								icon-only buttons so they sit inline in the
+								header of a ~340px col-span-1 card without
+								wrapping. Open client routes to the client
+								detail page; View all quotes pre-filters
+								the quotes list to this client; Refresh
+								re-snapshots the client's current row data
+								(draft-only — sent quotes keep their frozen
+								snapshot). -->
+							<div class="flex items-center gap-1">
+								<UButton
+									size="xs"
+									variant="ghost"
+									color="neutral"
+									icon="i-lucide-external-link"
+									title="Open client"
+									aria-label="Open client"
+									@click="openClient"
+								/>
+								<UButton
+									size="xs"
+									variant="ghost"
+									color="neutral"
+									icon="i-lucide-file-text"
+									title="View all quotes for this client"
+									aria-label="View all quotes for this client"
+									@click="viewClientQuotes"
+								/>
+								<UButton
+									v-if="editable"
+									size="xs"
+									variant="ghost"
+									color="neutral"
+									icon="i-lucide-refresh-ccw"
+									title="Refresh client snapshot — pull the latest details from the client record"
+									aria-label="Refresh client snapshot"
+									@click="refreshClientSnapshot"
+								/>
+							</div>
 						</div>
 					</template>
 					<div class="text-sm">
@@ -158,31 +180,6 @@
 						<div v-if="clientSnapshot?.tax_id" class="text-(--ui-text-muted) mt-1 text-xs">
 							Tax ID: {{ clientSnapshot.tax_id }}
 						</div>
-					</div>
-					<!-- Cross-doc shortcuts. Open client routes to the
-						client detail page; View all quotes pre-filters
-						the quotes list to this client. Same pattern the
-						address-book hero uses (clients / vendors /
-						employees detail pages). -->
-					<div class="mt-4 pt-3 border-t border-(--ui-border) flex flex-wrap gap-2">
-						<UButton
-							size="xs"
-							variant="soft"
-							color="neutral"
-							icon="i-lucide-external-link"
-							@click="openClient"
-						>
-							Open client
-						</UButton>
-						<UButton
-							size="xs"
-							variant="soft"
-							color="neutral"
-							icon="i-lucide-file-text"
-							@click="viewClientQuotes"
-						>
-							View all quotes
-						</UButton>
 					</div>
 				</UCard>
 
