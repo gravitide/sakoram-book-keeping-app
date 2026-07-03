@@ -10,7 +10,7 @@ import type { BankSnapshot, ClientSnapshot } from "~/stores/quotes";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR, formatQty, formatRate } from "~/lib/money";
 import { resolveTemplateKey } from "~/lib/pdf-templates";
-import { themeHex } from "~/lib/theme";
+import { pdfThemeHex } from "~/lib/theme";
 
 export interface InvoicePdfArgs {
 	row: InvoiceRow
@@ -59,7 +59,7 @@ export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, pa
 		number: inv.number,
 		title,
 		template: resolveTemplateKey(settings?.pdf_template_invoice, entitledToTemplates),
-		theme_color: themeHex(settings?.theme_color),
+		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,
 		currency_symbol: currency.symbol,

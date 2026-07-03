@@ -5,7 +5,7 @@ name = "sakoram_billing"
 # can't pick a binary. Pin the app binary so the tool stays out of the way
 # (mint it explicitly via `cargo run --bin mint_license`).
 default-run = "sakoram_billing"
-version = "0.125.3"
+version = "0.126.0"
 description = "Sakoram — desktop bookkeeper for quotes, invoices, bills and vouchers"
 authors = [ "Sakoram" ]
 license = "MIT"

@@ -43,6 +43,11 @@ export interface CompanySettingsRow {
 	pdf_template_invoice: string
 	pdf_template_quote: string
 	theme_color: string
+	// PDF accent colour — split from the UI theme_color (migration 0039) so a
+	// business can run a different colour on its generated PDFs than in the
+	// app. A name from the THEME_COLORS palette; NULL falls back to
+	// theme_color in the PDF builders (see app/lib/theme.ts pdfThemeHex).
+	pdf_theme_color: string | null
 	// Payroll cycle template — day-of-month integers (1..31). Clamped at
 	// runtime to the actual length of the target month, so 31 means
 	// "last day of whatever month this is" (Feb → 28/29, Apr → 30…).
@@ -106,6 +111,7 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"pdf_template_invoice",
 	"pdf_template_quote",
 	"theme_color",
+	"pdf_theme_color",
 	"payroll_period_start_day",
 	"payroll_period_end_day",
 	"payroll_pay_day",
