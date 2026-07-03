@@ -225,7 +225,15 @@
 	import { usePayslipsStore } from "~/stores/payslips";
 	import { useVouchersStore } from "~/stores/vouchers";
 
-	definePageMeta({ title: "New voucher" });
+	// Opt out of the app-wide <NuxtPage keepalive>. This form reads its
+	// prefill (type / party / amount / linked-doc) from route.query at
+	// setup time and computes it ONCE — there's no onActivated/watch to
+	// re-seed. Kept alive, the second "Record payment" from a different
+	// invoice reuses the cached instance and shows the first document's
+	// stale prefill (or none). Disabling keep-alive forces a fresh setup
+	// every visit, so the prefill always reflects the current ?invoice /
+	// ?bill / ?payslip. A form page has nothing worth caching anyway.
+	definePageMeta({ title: "New voucher", keepalive: false });
 
 	const route = useRoute();
 	const router = useRouter();
