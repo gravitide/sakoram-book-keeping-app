@@ -26,10 +26,6 @@
 
 		<UCard>
 			<div class="space-y-4">
-				<!-- TEMP DEBUG PANEL — remove before merge. Shows what the
-					prefill logic actually saw at setup. -->
-				<pre class="rounded bg-red-100 text-red-900 text-[11px] leading-tight p-2 overflow-x-auto whitespace-pre-wrap border border-red-300">DEBUG: {{ JSON.stringify(__debug, null, 2) }}</pre>
-
 				<!-- Linked-document context block: when a bill or invoice is
 					linked (either via ?bill / ?invoice prefill or the
 					dropdown below), show what the payment is going
@@ -229,15 +225,13 @@
 	import { usePayslipsStore } from "~/stores/payslips";
 	import { useVouchersStore } from "~/stores/vouchers";
 
-	// Opt out of the app-wide <NuxtPage keepalive>. This form reads its
-	// prefill (type / party / amount / linked-doc) from route.query at
-	// setup time and computes it ONCE — there's no onActivated/watch to
-	// re-seed. Kept alive, the second "Record payment" from a different
-	// invoice reuses the cached instance and shows the first document's
-	// stale prefill (or none). Disabling keep-alive forces a fresh setup
-	// every visit, so the prefill always reflects the current ?invoice /
-	// ?bill / ?payslip. A form page has nothing worth caching anyway.
-	definePageMeta({ title: "New voucher", keepalive: false });
+	// NOTE: this page is kept alive by the app-wide <NuxtPage keepalive>.
+	// A per-page `keepalive: false` here does NOT work — Nuxt resolves
+	// `props.keepalive ?? route.meta.keepalive`, so the boolean prop wins
+	// and the meta is ignored. Setup therefore runs only once; the prefill
+	// is re-applied on every activation via applyPrefill() + onActivated
+	// below so a second "Record payment" doesn't show a stale form.
+	definePageMeta({ title: "New voucher" });
 
 	const route = useRoute();
 	const router = useRouter();
@@ -297,111 +291,103 @@
 	// once — the invoice prefill wins if it is, since that's the more
 	// recent route. Otherwise these defaults are the empty-form path
 	// (today, payment-type, blank).
-	const seedBill = prefilledBillId.value
-		? billsStore.bills.find((b) => b.id === prefilledBillId.value) ?? null
-		: null;
-	const seedInvoice = prefilledInvoiceId.value
-		? invoicesStore.invoices.find((i) => i.id === prefilledInvoiceId.value) ?? null
-		: null;
-	const seedPayslip = prefilledPayslipId.value
-		? payslipsStore.payslips.find((p) => p.id === prefilledPayslipId.value) ?? null
-		: null;
+	// --- Prefill -------------------------------------------------------------
+	// "Record payment" on a bill / invoice / payslip navigates here with
+	// ?bill / ?invoice / ?payslip and we seed the form from that document.
+	// Because this page is kept alive (see the definePageMeta note above),
+	// setup runs once — so applyPrefill() is called at setup AND on every
+	// activation, reading the CURRENT route each time. Invoice wins over
+	// payslip over bill when multiple params are present (a malformed link).
 
-	// TEMP DEBUG — remove before merge. Snapshot of what the prefill saw.
-	const __debug = {
-		routeQuery: JSON.stringify(route.query),
-		prefilledInvoiceId: prefilledInvoiceId.value,
-		invoicesLoaded: invoicesStore.invoices.length,
-		invoicesLoadError: invoicesStore.error,
-		firstInvoiceIds: invoicesStore.invoices.slice(0, 10).map((i) => i.id).join(","),
-		idPresentInStore: invoicesStore.invoices.some((i) => i.id === prefilledInvoiceId.value),
-		seedInvoiceFound: seedInvoice !== null,
-		seedInvoiceId: seedInvoice?.id ?? null,
-		seedInvoiceTotalCents: seedInvoice?.total_cents ?? null,
-		seedInvoiceSnapshot: (seedInvoice?.client_snapshot ?? "").slice(0, 80)
-	};
-
-	// When recording a payment for a payslip, the voucher date must
-	// be on or after the payslip's pay_date — paying before the pay
-	// date doesn't make accounting sense. Bills and invoices don't
-	// share the same constraint (you can pay a bill the day it
-	// arrives, even before its issue/due date in edge cases) so we
-	// only clamp the payslip case.
-	const dateMin: string | null = seedPayslip?.pay_date ?? null;
-
-	const seedVendorName = (() => {
-		if (!seedBill) return "";
-		try {
-			return (JSON.parse(seedBill.vendor_snapshot) as VendorSnapshot).name ?? "";
-		} catch {
-			return "";
-		}
-	})();
-
-	const seedClientName = (() => {
-		if (!seedInvoice) return "";
-		try {
-			return (JSON.parse(seedInvoice.client_snapshot) as ClientSnapshot).name ?? "";
-		} catch {
-			return "";
-		}
-	})();
-
-	const seedEmployeeName = (() => {
-		if (!seedPayslip) return "";
-		try {
-			return (JSON.parse(seedPayslip.employee_snapshot) as EmployeeSnapshot).full_name ?? "";
-		} catch {
-			return "";
-		}
-	})();
-
-	// Pick whichever side prefilled. Invoice wins, then payslip, then bill.
-	// Multiple query params at once is a malformed link — first match wins.
-	const seedAmountCents = seedInvoice
-		? invoicesStore.balanceCentsFor(seedInvoice)
-		: seedPayslip
-			? payslipsStore.balanceCentsFor(seedPayslip)
-			: seedBill ? billsStore.balanceCentsFor(seedBill) : 0;
-
-	const initialType: VoucherType = seedInvoice ? "receipt" : "payment";
-	const initialPartyName = seedInvoice
-		? seedClientName
-		: seedPayslip
-			? seedEmployeeName
-			: seedVendorName;
-	const initialDescription = seedInvoice
-		? `Receipt for ${seedInvoice.number}`
-		: seedPayslip
-			? `Salary payment — ${seedPayslip.number}`
-			: seedBill ? `Payment for ${seedBill.number}` : "";
-
-	const voucherType = ref<VoucherType>(initialType);
-	// Default to today, but never earlier than the payslip's pay_date
-	// when one's prefilled — saves the user a manual fix when they
-	// open the form before the salary is officially due.
-	//
-	// `?date=YYYY-MM-DD` from the calendar's "New voucher" shortcut
-	// overrides today. The min-date guard above still applies so the
-	// voucher can't predate a linked payslip.
-	const initialDate = (() => {
-		const queryDate = typeof route.query.date === "string" ? route.query.date : null;
-		const candidate = queryDate && /^\d{4}-\d{2}-\d{2}$/.test(queryDate)
-			? queryDate
-			: todayISO();
-		return dateMin && candidate < dateMin ? dateMin : candidate;
-	})();
-	const voucherDate = ref<string>(initialDate);
-	const partyName = ref<string>(initialPartyName);
-	const amountCents = ref<number>(seedAmountCents);
+	const voucherType = ref<VoucherType>("payment");
+	const voucherDate = ref<string>(todayISO());
+	// Min voucher date — the payslip's pay_date when recording salary (paying
+	// before pay day makes no accounting sense). Null for bills / invoices.
+	const dateMin = ref<string | null>(null);
+	const partyName = ref<string>("");
+	const amountCents = ref<number>(0);
 	const method = ref<VoucherMethod | null>("bank_transfer");
 	const bankId = ref<number | null>(banksStore.defaultBank?.id ?? null);
 	const reference = ref<string>("");
-	const description = ref<string>(initialDescription);
-	const relatedInvoiceId = ref<number | null>(seedInvoice?.id ?? null);
-	const relatedBillId = ref<number | null>(seedBill?.id ?? null);
-	const relatedPayslipId = ref<number | null>(seedPayslip?.id ?? null);
+	const description = ref<string>("");
+	const relatedInvoiceId = ref<number | null>(null);
+	const relatedBillId = ref<number | null>(null);
+	const relatedPayslipId = ref<number | null>(null);
 	const creating = ref(false);
+
+	const nameFromSnapshot = (json: string | undefined, key: "name" | "full_name"): string => {
+		if (!json) return "";
+		try {
+			return (JSON.parse(json) as Record<string, string | undefined>)[key] ?? "";
+		} catch {
+			return "";
+		}
+	};
+
+	// Seed every form field from the current route + loaded stores.
+	// Idempotent and safe to call repeatedly (setup + each activation).
+	const applyPrefill = () => {
+		const seedInvoice = prefilledInvoiceId.value
+			? invoicesStore.invoices.find((i) => i.id === prefilledInvoiceId.value) ?? null
+			: null;
+		const seedBill = prefilledBillId.value
+			? billsStore.bills.find((b) => b.id === prefilledBillId.value) ?? null
+			: null;
+		const seedPayslip = prefilledPayslipId.value
+			? payslipsStore.payslips.find((p) => p.id === prefilledPayslipId.value) ?? null
+			: null;
+
+		dateMin.value = seedPayslip?.pay_date ?? null;
+
+		voucherType.value = seedInvoice ? "receipt" : "payment";
+		partyName.value = seedInvoice
+			? nameFromSnapshot(seedInvoice.client_snapshot, "name")
+			: seedPayslip
+				? nameFromSnapshot(seedPayslip.employee_snapshot, "full_name")
+				: seedBill ? nameFromSnapshot(seedBill.vendor_snapshot, "name") : "";
+		amountCents.value = seedInvoice
+			? invoicesStore.balanceCentsFor(seedInvoice)
+			: seedPayslip
+				? payslipsStore.balanceCentsFor(seedPayslip)
+				: seedBill ? billsStore.balanceCentsFor(seedBill) : 0;
+		description.value = seedInvoice
+			? `Receipt for ${seedInvoice.number}`
+			: seedPayslip
+				? `Salary payment — ${seedPayslip.number}`
+				: seedBill ? `Payment for ${seedBill.number}` : "";
+		relatedInvoiceId.value = seedInvoice?.id ?? null;
+		relatedBillId.value = seedBill?.id ?? null;
+		relatedPayslipId.value = seedPayslip?.id ?? null;
+
+		// Date: today (or ?date= from the calendar shortcut), never earlier
+		// than the payslip pay-date floor.
+		const queryDate = typeof route.query.date === "string" ? route.query.date : null;
+		const candidate = queryDate && /^d{4}-d{2}-d{2}$/.test(queryDate) ? queryDate : todayISO();
+		voucherDate.value = dateMin.value && candidate < dateMin.value ? dateMin.value : candidate;
+
+		// Reset the non-prefill fields so a re-seed starts clean.
+		method.value = "bank_transfer";
+		bankId.value = banksStore.defaultBank?.id ?? null;
+		reference.value = "";
+	};
+
+	applyPrefill();
+
+	// Kept-alive re-activation: re-seed from the now-current route. Skip the
+	// first activation (setup already seeded). Reload the document stores so
+	// a doc created since this page last loaded is present for linking, then
+	// re-seed once more.
+	let firstActivation = true;
+	onActivated(() => {
+		if (firstActivation) {
+			firstActivation = false;
+			return;
+		}
+		applyPrefill();
+		void Promise.all([invoicesStore.load(), billsStore.load(), payslipsStore.load()])
+			.then(applyPrefill)
+			.catch(() => { /* non-fatal — keep the sync seed */ });
+	});
 
 	// Editable voucher number with live uniqueness check. The page is
 	// always mounted-and-enabled while the user is on it (no modal open
