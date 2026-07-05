@@ -254,7 +254,10 @@
 					@update:model-value="onLinesChange"
 				/>
 
-				<div v-if="pricingMode === 'bundle'" class="space-y-3">
+				<!-- Bundle entry sits in a compact right-aligned column so the
+					single amount field doesn't stretch the full card width and
+					lines up above the computed totals below. -->
+				<div v-if="pricingMode === 'bundle'" class="ml-auto w-full max-w-sm space-y-3">
 					<div class="flex items-center justify-between gap-2">
 						<span class="text-xs text-(--ui-text-muted) select-none">Amount entered is</span>
 						<div class="flex gap-1">
@@ -292,30 +295,30 @@
 							class="w-full"
 						/>
 					</UFormField>
-					<div class="ml-auto max-w-[12rem] space-y-2">
+					<div class="flex justify-end">
+						<UCheckbox
+							:model-value="vatEnabled"
+							label="Charge VAT"
+							:disabled="!editable"
+							@update:model-value="(v) => setVatEnabled(v === true)"
+						/>
+					</div>
+					<UFormField
+						v-if="vatEnabled"
+						label="VAT rate (%)"
+						:ui="{ labelWrapper: 'justify-end', label: 'text-right' }"
+					>
 						<div class="flex justify-end">
-							<UCheckbox
-								:model-value="vatEnabled"
-								label="Charge VAT"
-								:disabled="!editable"
-								@update:model-value="(v) => setVatEnabled(v === true)"
-							/>
-						</div>
-						<UFormField
-							v-if="vatEnabled"
-							label="VAT rate (%)"
-							:ui="{ labelWrapper: 'justify-end', label: 'text-right' }"
-						>
 							<UInputNumber
 								v-model="vatRatePct"
 								:step="0.01"
 								:min="0"
 								:max="100"
 								:disabled="!editable"
-								class="w-full"
+								class="w-1/2"
 							/>
-						</UFormField>
-					</div>
+						</div>
+					</UFormField>
 				</div>
 
 				<div class="border-t border-(--ui-border) pt-4 mt-4 flex justify-end">

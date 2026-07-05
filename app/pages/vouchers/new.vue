@@ -187,12 +187,16 @@
 				<UFormField v-if="voucherType === 'receipt'" label="Linked invoice (optional)">
 					<LinkedInvoiceField v-model="relatedInvoiceId" :disabled="prefilled" />
 				</UFormField>
-				<UFormField v-if="voucherType === 'payment'" label="Linked bill (optional)">
-					<LinkedBillField v-model="relatedBillId" :disabled="prefilled" />
-				</UFormField>
-				<UFormField v-if="voucherType === 'payment'" label="Linked payslip (optional)">
-					<LinkedPayslipField v-model="relatedPayslipId" :disabled="prefilled" />
-				</UFormField>
+				<!-- Payment vouchers can link a bill OR a payslip — show the two
+					pickers side by side rather than stacked. -->
+				<div v-if="voucherType === 'payment'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<UFormField label="Linked bill (optional)">
+						<LinkedBillField v-model="relatedBillId" :disabled="prefilled" />
+					</UFormField>
+					<UFormField label="Linked payslip (optional)">
+						<LinkedPayslipField v-model="relatedPayslipId" :disabled="prefilled" />
+					</UFormField>
+				</div>
 			</div>
 
 			<template #footer>
