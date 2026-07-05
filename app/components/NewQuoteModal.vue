@@ -21,7 +21,7 @@
 						is PREFIX-YEAR-SEQUENCE). Defaults to today, so a normal
 						quote needs no thought; back-date it to file an old quote
 						and the number's year + the preview below follow. -->
-					<UFormField label="Issue date" hint="Sets the quote's year. Leave as today, or back-date to file an old quote.">
+					<UFormField label="Issue date" help="Sets the quote's year. Leave as today, or back-date to file an old quote.">
 						<DateField v-model="issueDate" />
 					</UFormField>
 

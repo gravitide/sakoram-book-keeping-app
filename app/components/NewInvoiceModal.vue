@@ -17,7 +17,7 @@
 					<!-- Issue date drives the document number's YEAR
 						(PREFIX-YEAR-SEQUENCE). Defaults to today; back-date it to
 						file an old invoice and the number's year + preview follow. -->
-					<UFormField label="Issue date" hint="Sets the invoice's year. Leave as today, or back-date to file an old invoice.">
+					<UFormField label="Issue date" help="Sets the invoice's year. Leave as today, or back-date to file an old invoice.">
 						<DateField v-model="issueDate" />
 					</UFormField>
 
