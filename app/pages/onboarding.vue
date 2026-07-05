@@ -17,11 +17,11 @@
 		<!-- Step indicator. Click any past step to go back; future steps
 			stay un-clickable so the user can't skip ahead without
 			triggering the save callbacks. -->
-		<div class="flex items-center justify-center gap-2 mb-6">
+		<div class="flex items-center justify-center gap-1 mb-6">
 			<template v-for="(s, idx) in steps" :key="s.label">
 				<button
 					type="button"
-					class="flex items-center gap-2 text-xs px-2 py-1 rounded transition"
+					class="flex items-center gap-1.5 text-xs px-1.5 py-1 rounded transition whitespace-nowrap shrink-0"
 					:class="idx + 1 === currentStep
 						? 'text-(--ui-primary) font-medium'
 						: idx + 1 < currentStep
@@ -31,7 +31,7 @@
 					@click="goToStep(idx + 1)"
 				>
 					<span
-						class="inline-flex size-5 items-center justify-center rounded-full text-[10px] font-medium"
+						class="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium"
 						:class="idx + 1 === currentStep
 							? 'bg-(--ui-primary) text-(--ui-bg)'
 							: idx + 1 < currentStep
@@ -46,7 +46,7 @@
 				<UIcon
 					v-if="idx < steps.length - 1"
 					name="i-lucide-chevron-right"
-					class="size-3 text-(--ui-text-muted)/50"
+					class="size-3 shrink-0 text-(--ui-text-muted)/50"
 				/>
 			</template>
 		</div>
@@ -96,8 +96,15 @@
 						</div>
 						<button
 							type="button"
-							class="w-full aspect-square max-w-[140px] rounded-md border-2 border-dashed border-(--ui-border-accented) hover:border-(--ui-primary) flex items-center justify-center overflow-hidden bg-(--ui-bg-muted)"
+							class="w-full aspect-square max-w-[140px] rounded-md border-2 border-dashed flex items-center justify-center overflow-hidden transition"
+							:class="identityDragOver
+								? 'border-(--ui-primary) bg-(--ui-primary)/5'
+								: 'border-(--ui-border-accented) hover:border-(--ui-primary) bg-(--ui-bg-muted)'"
 							@click="identityLogoInput?.click()"
+							@dragover.prevent="identityDragOver = true"
+							@dragenter.prevent="identityDragOver = true"
+							@dragleave.prevent="identityDragOver = false"
+							@drop.prevent="onLogoDrop($event, 'identity')"
 						>
 							<img
 								v-if="identityLogoPreview"
@@ -107,7 +114,7 @@
 							>
 							<div v-else class="text-xs text-(--ui-text-muted) text-center px-2">
 								<UIcon name="i-lucide-upload" class="size-5 mx-auto mb-1" />
-								Click to upload
+								Click or drop
 							</div>
 						</button>
 						<input
@@ -127,8 +134,15 @@
 						</div>
 						<button
 							type="button"
-							class="w-full h-[140px] rounded-md border-2 border-dashed border-(--ui-border-accented) hover:border-(--ui-primary) flex items-center justify-center overflow-hidden bg-(--ui-bg-muted)"
+							class="w-full h-[140px] rounded-md border-2 border-dashed flex items-center justify-center overflow-hidden transition"
+							:class="pdfDragOver
+								? 'border-(--ui-primary) bg-(--ui-primary)/5'
+								: 'border-(--ui-border-accented) hover:border-(--ui-primary) bg-(--ui-bg-muted)'"
 							@click="pdfLogoInput?.click()"
+							@dragover.prevent="pdfDragOver = true"
+							@dragenter.prevent="pdfDragOver = true"
+							@dragleave.prevent="pdfDragOver = false"
+							@drop.prevent="onLogoDrop($event, 'pdf-header')"
 						>
 							<img
 								v-if="pdfLogoPreview"
@@ -138,7 +152,7 @@
 							>
 							<div v-else class="text-xs text-(--ui-text-muted) text-center px-2">
 								<UIcon name="i-lucide-upload" class="size-5 mx-auto mb-1" />
-								Click to upload
+								Click or drop
 							</div>
 						</button>
 						<input
@@ -263,8 +277,72 @@
 			</div>
 		</UCard>
 
-		<!-- Step 5 — Security (optional) -->
+		<!-- Step 5 — Documents (PDF template + accent colour) -->
 		<UCard v-if="currentStep === 5">
+			<template #header>
+				<div class="font-medium">
+					Documents
+				</div>
+				<p class="text-xs text-(--ui-text-muted) mt-1">
+					How your quotes, invoices, and bills look when printed. Fine-tune this any time in Settings → PDF.
+				</p>
+			</template>
+
+			<div class="space-y-6">
+				<div>
+					<div class="text-xs font-medium text-(--ui-text) mb-2">
+						Template
+					</div>
+					<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+						<button
+							v-for="t in PDF_TEMPLATES"
+							:key="t.key"
+							type="button"
+							:disabled="!canPickTemplate(t.key)"
+							class="p-2 rounded-md border text-left transition"
+							:class="[
+								form.pdf_template === t.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)',
+								canPickTemplate(t.key) ? 'cursor-pointer hover:border-(--ui-primary)/50' : 'opacity-50 cursor-not-allowed'
+							]"
+							@click="form.pdf_template = t.key"
+						>
+							<div class="rounded-sm overflow-hidden ring-1 ring-(--ui-border) mb-1.5">
+								<PdfTemplateThumb :template-key="t.key" :color="themeHex(form.pdf_theme_color)" />
+							</div>
+							<div class="text-xs font-medium flex items-center gap-1">
+								{{ t.label }}
+								<UIcon v-if="!canPickTemplate(t.key)" name="i-lucide-lock" class="size-3 text-(--ui-text-muted)" />
+							</div>
+						</button>
+					</div>
+				</div>
+
+				<div>
+					<div class="text-xs font-medium text-(--ui-text) mb-2">
+						Accent colour
+					</div>
+					<div class="grid grid-cols-8 gap-3 max-w-md">
+						<button
+							v-for="c in THEME_COLORS"
+							:key="c.value"
+							type="button"
+							class="group flex items-center justify-center"
+							:title="c.label"
+							@click="form.pdf_theme_color = c.value"
+						>
+							<span
+								class="size-8 rounded-full border-2 transition"
+								:class="form.pdf_theme_color === c.value ? 'border-(--ui-text) scale-110' : 'border-(--ui-border) group-hover:border-(--ui-text-muted)'"
+								:style="{ backgroundColor: c.hex }"
+							/>
+						</button>
+					</div>
+				</div>
+			</div>
+		</UCard>
+
+		<!-- Step 6 — Security (optional) -->
+		<UCard v-if="currentStep === 6">
 			<template #header>
 				<div class="font-medium">
 					Security
@@ -316,7 +394,7 @@
 
 			<div class="flex items-center gap-2">
 				<UButton
-					v-if="currentStep < 5"
+					v-if="currentStep < 6"
 					variant="ghost"
 					color="neutral"
 					:disabled="saving"
@@ -326,12 +404,12 @@
 				</UButton>
 				<UButton
 					:loading="saving"
-					:disabled="(currentStep === 1 && !form.business_name.trim()) || (currentStep === 5 && encMismatch)"
-					:icon="currentStep === 5 ? 'i-lucide-check' : 'i-lucide-arrow-right'"
-					:trailing="currentStep < 5"
+					:disabled="(currentStep === 1 && !form.business_name.trim()) || (currentStep === 6 && encMismatch)"
+					:icon="currentStep === 6 ? 'i-lucide-check' : 'i-lucide-arrow-right'"
+					:trailing="currentStep < 6"
 					@click="onNext"
 				>
-					{{ currentStep === 5 ? "Finish & open dashboard" : "Next" }}
+					{{ currentStep === 6 ? "Finish & open dashboard" : "Next" }}
 				</UButton>
 			</div>
 		</div>
@@ -384,7 +462,10 @@
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import CurrencyPicker from "~/components/CurrencyPicker.vue";
 	import { resetDbCache } from "~/lib/db";
+	import { PDF_TEMPLATES } from "~/lib/pdf-templates";
+	import { THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
+	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
 
@@ -397,18 +478,26 @@
 	const settingsStore = useSettingsStore();
 	const banksStore = useBusinessBanksStore();
 	const tenants = useTenantsStore();
+	const license = useLicenseStore();
 
 	await settingsStore.ensureLoaded();
 
+	// PDF templates are a Plus feature. A fresh install is on the Premium
+	// trial so all are pickable; after the trial only Classic is. Mirrors
+	// the gate on /settings/pdf.
+	const entitledToTemplates = computed(() => license.hasFeature("pdf_templates"));
+	const canPickTemplate = (key: string): boolean => entitledToTemplates.value || key === "classic";
+
 	// Step state machine. `steps` is a typed array purely for the indicator
-	// UI labels. Steps 1-4 save settings; step 5 (Security) is the optional
+	// UI labels. Steps 1-5 save settings; step 6 (Security) is the optional
 	// at-rest encryption opt-in handled separately on Finish.
-	type Step = 1 | 2 | 3 | 4 | 5;
+	type Step = 1 | 2 | 3 | 4 | 5 | 6;
 	const steps = [
 		{ label: "Identity" },
 		{ label: "Contact" },
 		{ label: "Money defaults" },
 		{ label: "Banking" },
+		{ label: "Documents" },
 		{ label: "Security" }
 	] as const;
 	const currentStep = ref<Step>(1);
@@ -433,6 +522,11 @@
 		default_vat_rate_pct: (settingsStore.settings?.default_vat_rate ?? 1800) / 100,
 		default_payment_terms_days: settingsStore.settings?.default_payment_terms_days ?? 30,
 		default_quote_validity_days: settingsStore.settings?.default_quote_validity_days ?? 30,
+		// Step 5 (Documents) — one template choice applies to both invoice
+		// and quote PDFs; accent colour is the dedicated pdf_theme_color
+		// (falls back to the UI theme colour for a sensible default).
+		pdf_template: settingsStore.settings?.pdf_template_invoice || "classic",
+		pdf_theme_color: settingsStore.settings?.pdf_theme_color ?? settingsStore.settings?.theme_color ?? "green",
 		// Bank fields on this form aren't part of company_settings any
 		// more (migration 0023 split them into a managed business_banks
 		// list). The step 4 save creates a new business_banks row + sets
@@ -473,7 +567,7 @@
 	// Persist the step's fields. Each step saves only the columns it
 	// owns — keeps the SQL UPDATE list tight and avoids accidentally
 	// clobbering a field the user touched on a later step.
-	const saveStep = async (step: 1 | 2 | 3 | 4) => {
+	const saveStep = async (step: 1 | 2 | 3 | 4 | 5) => {
 		if (step === 1) {
 			await settingsStore.save({
 				business_name: form.business_name.trim() || "Untitled business",
@@ -499,6 +593,14 @@
 				default_payment_terms_days: form.default_payment_terms_days,
 				default_quote_validity_days: form.default_quote_validity_days
 			});
+		} else if (step === 5) {
+			// Documents — one template applies to both invoice + quote PDFs;
+			// accent colour drives the header rule + highlights.
+			await settingsStore.save({
+				pdf_template_invoice: form.pdf_template,
+				pdf_template_quote: form.pdf_template,
+				pdf_theme_color: form.pdf_theme_color
+			});
 		} else {
 			// Banking lives in business_banks now. Only create a row if
 			// the user filled anything in — empty step 4 means "skip,
@@ -523,7 +625,7 @@
 		}
 	};
 
-	// ---- Step 5: optional at-rest encryption -------------------------------
+	// ---- Step 6 (Security): optional at-rest encryption --------------------
 	const encPw = ref("");
 	const encPw2 = ref("");
 	const encMismatch = computed(() => !!encPw2.value && encPw.value !== encPw2.value);
@@ -578,14 +680,14 @@
 		if (saving.value) return;
 		saving.value = true;
 		try {
-			if (currentStep.value === 5) {
+			if (currentStep.value === 6) {
 				// Final step: optionally enable encryption, then open the
 				// dashboard (the recovery-key modal handles the reload when a
 				// password was set).
 				await finishWithOptionalEncryption();
 				return;
 			}
-			await saveStep(currentStep.value as 1 | 2 | 3 | 4);
+			await saveStep(currentStep.value as 1 | 2 | 3 | 4 | 5);
 			currentStep.value = (currentStep.value + 1) as Step;
 		} catch (err) {
 			toast.add({
@@ -602,13 +704,13 @@
 	// Skip = advance without writing anything for this step. Whatever
 	// the user typed stays in `form` if they hit Back later.
 	const onSkip = () => {
-		if (currentStep.value < 5) {
+		if (currentStep.value < 6) {
 			currentStep.value = (currentStep.value + 1) as Step;
 		}
 	};
 
 	const goToStep = (step: number) => {
-		if (step < 1 || step > 5) return;
+		if (step < 1 || step > 6) return;
 		if (step > currentStep.value) return; // only allow going back via the indicator
 		currentStep.value = step as Step;
 	};
@@ -683,5 +785,24 @@
 		const file = input.files?.[0];
 		input.value = "";
 		if (file) await uploadLogo(file, "pdf-header");
+	};
+
+	// Drag-and-drop onto the logo zones. The window sets dragDropEnabled:false
+	// and disable-file-drop-nav.client.ts prevents the document from navigating
+	// on a stray drop, so a zone's own drop handler runs first and reads the
+	// file — same pattern as /settings/pdf.vue's header-logo drop zone.
+	const identityDragOver = ref(false);
+	const pdfDragOver = ref(false);
+
+	const onLogoDrop = async (event: DragEvent, kind: "identity" | "pdf-header") => {
+		if (kind === "identity") identityDragOver.value = false;
+		else pdfDragOver.value = false;
+		const file = event.dataTransfer?.files?.[0];
+		if (!file) return;
+		if (!file.type.startsWith("image/")) {
+			toast.add({ title: "Only image files are accepted", color: "error", icon: "i-lucide-circle-alert" });
+			return;
+		}
+		await uploadLogo(file, kind);
 	};
 </script>
