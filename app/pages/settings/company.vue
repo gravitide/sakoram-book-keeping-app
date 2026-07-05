@@ -186,10 +186,10 @@
 						title="Bank accounts"
 						subtitle="Shown on invoice PDFs so clients know where to pay. One is the default for new quotes / invoices."
 					>
-						<div v-if="banksStore.activeBanks.length === 0" class="text-sm text-(--ui-text-muted) py-4 text-center">
+						<div v-if="banksStore.activeBanks.length === 0" class="text-sm text-muted py-4 text-center">
 							No bank accounts yet. Add one to show payment instructions on your quotes and invoices.
 						</div>
-						<ul v-else class="divide-y divide-(--ui-border) -mt-2">
+						<ul v-else class="divide-y divide-default -mt-2">
 							<li
 								v-for="bank in banksStore.activeBanks"
 								:key="bank.id"
@@ -207,7 +207,7 @@
 											Default
 										</UBadge>
 									</div>
-									<div class="text-xs text-(--ui-text-muted) truncate mt-0.5">
+									<div class="text-xs text-muted truncate mt-0.5">
 										<span>{{ bank.bank_name || "—" }}</span>
 										<span v-if="bank.bank_account_number" class="tabular-nums"> · {{ bank.bank_account_number }}</span>
 										<span v-if="bank.bank_branch"> · {{ bank.bank_branch }}</span>
@@ -243,7 +243,11 @@
 						title="Operational defaults"
 						subtitle="Pre-fill values when creating new documents."
 					>
-						<UFormField label="Currency" name="currency_code" hint="Used everywhere money is displayed and on every PDF.">
+						<UFormField
+							label="Currency"
+							name="currency_code"
+							help="Used everywhere money is displayed and on every PDF."
+						>
 							<CurrencyPicker
 								v-model:code="form.currency_code"
 								v-model:symbol-override="form.currency_symbol_override"
@@ -259,11 +263,11 @@
 									class="w-full"
 								/>
 							</UFormField>
-							<UFormField label="Payment terms (days)" name="default_payment_terms_days">
-								<UInputNumber
-									v-model="form.default_payment_terms_days"
-									:min="0"
-									:max="365"
+							<UFormField label="Fiscal year starts" name="fiscal_year_start_month">
+								<USelect
+									v-model="form.fiscal_year_start_month"
+									:items="months"
+									value-key="value"
 									class="w-full"
 								/>
 							</UFormField>
@@ -275,11 +279,11 @@
 									class="w-full"
 								/>
 							</UFormField>
-							<UFormField label="Fiscal year starts" name="fiscal_year_start_month">
-								<USelect
-									v-model="form.fiscal_year_start_month"
-									:items="months"
-									value-key="value"
+							<UFormField label="Payment terms (days)" name="default_payment_terms_days">
+								<UInputNumber
+									v-model="form.default_payment_terms_days"
+									:min="0"
+									:max="365"
 									class="w-full"
 								/>
 							</UFormField>
@@ -359,7 +363,7 @@
 			</template>
 			<template #footer>
 				<div class="flex justify-end gap-2 w-full">
-					<UButton color="neutral" variant="ghost" @click="bankToDelete = null">
+					<UButton color="neutral" variant="ghost" @click="() => { bankToDelete = null }">
 						Cancel
 					</UButton>
 					<UButton
@@ -394,12 +398,18 @@
 	const tenants = useTenantsStore();
 	const toast = useToast();
 
-	// Appearance settings (ui_font, theme_color) live on a sibling page, so
-	// Excludes fields owned by sibling settings pages so we don't stamp them
-	// back when this form saves. Appearance owns ui_font/pdf_font/theme_color;
-	// the PDF page owns pdf_header_logo_path/invoice_footer_notes/quote_footer_notes.
-	type SiblingOwnedKey = "ui_font" | "pdf_font" | "theme_color" | "pdf_header_logo_path" | "invoice_footer_notes" | "quote_footer_notes";
-	type CompanyForm = Omit<SettingsUpdate, SiblingOwnedKey>;
+	// This page owns only the identity / address / operational-default columns.
+	// Everything else on company_settings belongs to a sibling settings page
+	// (Appearance: ui_font/pdf_font/theme_color; PDF: templates + header logo +
+	// footer notes + pdf_theme_color; Payroll: cycle + statutory + PAYE; etc.).
+	// Pick exactly what we manage rather than Omit — so new columns added to
+	// SettingsUpdate don't silently become required fields on this form.
+	type CompanyFormKey
+		= | "business_name" | "address_line1" | "address_line2" | "city" | "postal_code"
+			| "country" | "tax_id" | "email" | "phone" | "website" | "logo_path"
+			| "default_vat_rate" | "default_payment_terms_days" | "default_quote_validity_days"
+			| "fiscal_year_start_month" | "currency_code" | "currency_symbol_override";
+	type CompanyForm = Pick<SettingsUpdate, CompanyFormKey>;
 
 	const form = reactive<CompanyForm>({
 		business_name: "",
@@ -579,7 +589,10 @@
 
 	const schema = z.object({
 		business_name: z.string().trim().min(1, "Business name is required"),
-		email: z.union([z.literal(""), z.string().email("Invalid email")]),
+		// Nullable to match the form model (CompanyForm.email is `string | null`
+		// via SettingsUpdate) so <UForm :state="form"> typechecks. Runtime value
+		// is always a string ("" when blank) — null never actually reaches here.
+		email: z.union([z.literal(""), z.string().email("Invalid email")]).nullable(),
 		default_payment_terms_days: z.number().int().min(0).max(365),
 		default_quote_validity_days: z.number().int().min(0).max(365),
 		fiscal_year_start_month: z.number().int().min(1).max(12)

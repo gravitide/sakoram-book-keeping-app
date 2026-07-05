@@ -1,5 +1,5 @@
 <template>
-	<div class="space-y-3">
+	<div>
 		<USelect
 			v-model="dropdownValue"
 			:items="dropdownOptions"
@@ -10,8 +10,11 @@
 		<!-- Custom-currency inputs. Inline (not a modal) so the user sees
 			what they're configuring without leaving the form. Visible
 			whenever the user picked "Custom currency…" or arrived on the
-			page with a code that isn't in the built-in list. -->
-		<div v-if="isCustom" class="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-md border border-(--ui-border) bg-(--ui-bg-muted) p-3">
+			page with a code that isn't in the built-in list. The mt-3 lives
+			here (not as space-y on the root) so the picker adds NO trailing
+			space when it's just the dropdown — otherwise a following field's
+			help text floats a row too far below. -->
+		<div v-if="isCustom" class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-md border border-(--ui-border) bg-(--ui-bg-muted) p-3">
 			<UFormField label="Code">
 				<UInput
 					v-model="customCode"
