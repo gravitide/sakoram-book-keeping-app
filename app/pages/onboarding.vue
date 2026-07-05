@@ -63,8 +63,18 @@
 			</template>
 
 			<div class="space-y-4">
+				<!-- One-time intro hint (step 1 only) — explains the wizard
+					navigation so a first-timer knows Next saves, Skip moves on,
+					and nothing is committed until the end. -->
+				<HelpCallout variant="tip" title="Nothing's locked in">
+					<strong>Next</strong> saves each step and moves on, <strong>Skip this step</strong> jumps past it, and <strong>Skip onboarding</strong> takes you straight to the app. You can change any of this later in Settings.
+				</HelpCallout>
+
 				<UFormField label="Business name" required>
 					<UInput v-model="form.business_name" placeholder="e.g. Acme Trading Co" autofocus />
+					<template #help>
+						<span class="text-xs text-(--ui-text-muted)">Shown on every quote, invoice, and PDF. You can rename it later.</span>
+					</template>
 				</UFormField>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
