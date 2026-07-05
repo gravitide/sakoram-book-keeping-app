@@ -34,6 +34,10 @@
 			</div>
 		</header>
 
+		<!-- First-run checklist. Self-contained: derives completion from row
+			counts, hides once done or dismissed. -->
+		<GettingStartedCard />
+
 		<div v-if="loadError" class="mb-4">
 			<UAlert
 				color="error"
