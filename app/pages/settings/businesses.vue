@@ -25,6 +25,12 @@
 					>
 						Add demo business
 					</UButton>
+					<UButton color="neutral" variant="outline" icon="i-lucide-folder-open" :loading="opening" :disabled="opening" title="Open an existing business folder" @click="onOpenBusiness">
+						Open
+					</UButton>
+					<UButton v-if="tenants.activeTenantId" color="neutral" variant="outline" icon="i-lucide-log-out" title="Close the active business and return to the welcome screen" @click="onClose">
+						Close
+					</UButton>
 					<UButton color="neutral" variant="outline" icon="i-lucide-upload" @click="onImportClick">
 						Import
 					</UButton>
@@ -62,14 +68,17 @@
 							<UBadge v-if="t.id === tenants.activeTenantId" color="primary" variant="subtle" size="sm">
 								Active
 							</UBadge>
+							<UBadge v-if="missingFolders[t.id]" color="error" variant="subtle" size="sm">
+								Not found
+							</UBadge>
 						</div>
-						<div class="text-xs text-(--ui-text-muted) truncate">
-							{{ t.id }}.db
+						<div class="text-xs text-(--ui-text-muted) truncate" :title="t.path">
+							{{ t.path || t.id }}
 						</div>
 					</div>
 					<div class="flex gap-1">
 						<UButton
-							v-if="t.id !== tenants.activeTenantId"
+							v-if="t.id !== tenants.activeTenantId && !missingFolders[t.id]"
 							size="xs"
 							variant="ghost"
 							icon="i-lucide-log-in"
@@ -79,6 +88,7 @@
 							Switch
 						</UButton>
 						<UButton
+							v-if="!missingFolders[t.id]"
 							size="xs"
 							variant="ghost"
 							icon="i-lucide-download"
@@ -90,6 +100,7 @@
 							Export
 						</UButton>
 						<UButton
+							v-if="!missingFolders[t.id]"
 							size="xs"
 							variant="ghost"
 							icon="i-lucide-pencil"
@@ -99,9 +110,19 @@
 						<UButton
 							size="xs"
 							variant="ghost"
+							icon="i-lucide-eye-off"
+							:title="`Remove ${t.name} from the list (keeps files on disk)`"
+							@click="onForget(t)"
+						>
+							Forget
+						</UButton>
+						<UButton
+							v-if="!missingFolders[t.id]"
+							size="xs"
+							variant="ghost"
 							color="error"
 							icon="i-lucide-trash-2"
-							:title="`Delete ${t.name}`"
+							:title="`Delete ${t.name} (removes the folder)`"
 							@click="askDelete(t)"
 						/>
 					</div>
@@ -116,7 +137,7 @@
 					<UInput v-model="renameValue" autofocus @keydown.enter="confirmRename" />
 				</UFormField>
 				<p class="text-xs text-(--ui-text-muted) mt-2">
-					This updates the display name only — the database file ({{ renameTarget?.id }}.db) keeps its current filename.
+					This updates the display name only — the business folder on disk keeps its current name and location.
 				</p>
 			</template>
 			<template #footer>
@@ -263,8 +284,8 @@
 		<UModal v-model:open="showDelete" :title="`Delete ${deleteTarget?.name ?? ''}?`">
 			<template #body>
 				<p class="text-sm text-(--ui-text-muted)">
-					This <span class="font-semibold text-(--ui-error)">permanently deletes</span> the database for
-					<span class="font-medium text-(--ui-text)">{{ deleteTarget?.name }}</span> — all its clients, quotes, invoices, bills, vouchers, and settings. This cannot be undone.
+					This <span class="font-semibold text-(--ui-error)">permanently deletes the folder</span> for
+					<span class="font-medium text-(--ui-text)">{{ deleteTarget?.name }}</span> — all its clients, quotes, invoices, bills, vouchers, settings, logos, and attachments. This cannot be undone. To keep the files but remove it from the list, use <span class="font-medium">Forget</span> instead.
 				</p>
 				<div
 					v-if="deleteTarget?.id === tenants.activeTenantId"
@@ -351,7 +372,9 @@
 
 	import type { Tenant } from "~/stores/tenants";
 	import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+	import { appDataDir } from "@tauri-apps/api/path";
 	import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+	import { exists } from "@tauri-apps/plugin-fs";
 	import { createDemoBusiness } from "~/lib/demo-seed";
 	import { useLicenseStore } from "~/stores/license";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -391,6 +414,69 @@
 	};
 	onMounted(refreshLogos);
 
+	// ---- Missing-folder detection ----
+	// Flag registry entries whose folder no longer exists so the row shows a
+	// "Not found" badge + a Forget action instead of failing on Switch.
+	const missingFolders = ref<Record<string, boolean>>({});
+	const refreshMissing = async () => {
+		for (const t of tenants.tenants) {
+			try {
+				missingFolders.value[t.id] = t.path ? !(await exists(t.path)) : true;
+			} catch {
+				missingFolders.value[t.id] = false;
+			}
+		}
+	};
+	onMounted(refreshMissing);
+
+	// ---- Open an existing business folder ----
+	const opening = ref(false);
+	const onOpenBusiness = async () => {
+		if (opening.value) return;
+		let dir: string | null = null;
+		try {
+			const picked = await openDialog({ directory: true, title: "Open a business folder" });
+			if (typeof picked === "string") dir = picked;
+			else if (Array.isArray(picked) && picked.length > 0) dir = picked[0] ?? null;
+		} catch (err) {
+			toast.add({ title: "Could not open folder picker", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });
+			return;
+		}
+		if (!dir) return;
+		opening.value = true;
+		try {
+			const t = await tenants.open(dir);
+			await tenants.activate(t.id);
+			window.location.assign("/");
+		} catch (err) {
+			opening.value = false;
+			toast.add({ title: "Not a business folder", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });
+		}
+	};
+
+	// ---- Close the active business ----
+	const onClose = async () => {
+		try {
+			await tenants.close();
+			router.push("/welcome");
+		} catch (err) {
+			toast.add({ title: "Could not close business", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });
+		}
+	};
+
+	// ---- Forget (drop from list, keep files) ----
+	const onForget = async (t: Tenant) => {
+		const wasActive = t.id === tenants.activeTenantId;
+		try {
+			await tenants.forget(t.id);
+			delete missingFolders.value[t.id];
+			toast.add({ title: `${t.name} removed from list`, description: "The folder was left untouched on disk.", color: "info", icon: "i-lucide-eye-off" });
+			if (wasActive) window.location.assign("/");
+		} catch (err) {
+			toast.add({ title: "Could not forget business", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });
+		}
+	};
+
 	const goWelcome = async () => {
 		if (!license.canCreateBusiness(tenants.tenants.length)) {
 			await navigateTo("/upgrade?feature=businesses");
@@ -418,11 +504,14 @@
 		seedingDone.value = 0;
 		seedingTotal.value = 0;
 		try {
+			// One-click demo — no folder dialog. Default its parent to
+			// appDataDir() so the throwaway lands inside %APPDATA%.
+			const demoParent = await appDataDir();
 			const t = await createDemoBusiness(undefined, (p) => {
 				seedingStage.value = p.stage;
 				seedingDone.value = p.done;
 				seedingTotal.value = p.total;
-			});
+			}, demoParent);
 			toast.add({
 				title: `${t.name} created`,
 				description: "Sample data ready to explore.",
@@ -680,6 +769,20 @@
 
 	const confirmImport = async () => {
 		if (!importManifest.value || importing.value) return;
+		// Importing "new" creates a portable folder — ask where to put it before
+		// we flip the importing flag (so a cancelled dialog leaves the modal open).
+		let targetParent: string | null = null;
+		if (importMode.value === "new") {
+			try {
+				const picked = await openDialog({ directory: true, title: "Choose where to store the imported business" });
+				if (typeof picked === "string") targetParent = picked;
+				else if (Array.isArray(picked) && picked.length > 0) targetParent = picked[0] ?? null;
+			} catch (err) {
+				toast.add({ title: "Could not open folder picker", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });
+				return;
+			}
+			if (!targetParent) return; // user cancelled
+		}
 		importing.value = true;
 		try {
 			const args: Record<string, unknown> = {
@@ -690,6 +793,7 @@
 			if (importMode.value === "new") {
 				const name = importNewName.value.trim() || importManifest.value.business_name;
 				args.targetName = name;
+				args.targetParent = targetParent;
 			} else {
 				args.targetTenantId = importReplaceTargetId.value;
 			}
