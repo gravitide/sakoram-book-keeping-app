@@ -33,7 +33,7 @@ use axum::routing::{get, post};
 use axum::Router;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 use tokio::sync::{oneshot, Mutex};
 
 use crate::tenants;
@@ -193,8 +193,8 @@ fn validate_doc(document_type: &str, document_id: &str) -> Result<(), String> {
 	Ok(())
 }
 
-/// The attachment directory for a document in the active tenant:
-/// attachments/<tenant>/<type>/<id>. Does not create it.
+/// The attachment directory for a document in the active business folder:
+/// <business folder>/attachments/<type>/<id>. Does not create it.
 fn attachment_dir_path(
 	app: &AppHandle,
 	document_type: &str,
@@ -202,12 +202,7 @@ fn attachment_dir_path(
 ) -> Result<PathBuf, String> {
 	validate_doc(document_type, document_id)?;
 	let tenant = tenants::active_tenant_id(app)?;
-	Ok(app
-		.path()
-		.app_data_dir()
-		.map_err(|e| e.to_string())?
-		.join("attachments")
-		.join(tenant)
+	Ok(tenants::attachments_dir_for(app, &tenant)?
 		.join(document_type)
 		.join(document_id))
 }
