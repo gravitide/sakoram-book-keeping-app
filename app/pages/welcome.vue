@@ -18,16 +18,22 @@
 			</p>
 		</header>
 
-		<!-- Existing businesses -->
-		<div v-if="tenants.tenants.length > 0" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+		<!-- Existing businesses. Each is a portable folder you open and close.
+			The one that's currently open is highlighted with an "Open now" tag
+			and gets Go-to-it / Close actions; the rest are one click to open. -->
+		<div v-if="tenants.tenants.length > 0" class="space-y-3 mb-4">
 			<div
 				v-for="t in tenants.tenants"
 				:key="t.id"
-				class="text-left p-4 bg-(--ui-bg) border border-(--ui-border) rounded-lg transition flex items-center gap-3 group"
-				:class="missingFolders[t.id]
-					? 'opacity-90'
-					: 'hover:border-(--ui-primary) cursor-pointer'"
-				@click="!missingFolders[t.id] && switchingId === null && switchTo(t.id)"
+				class="p-4 rounded-lg border transition flex items-center gap-3 group"
+				:class="[
+					t.id === tenants.activeTenantId
+						? 'border-(--ui-primary) bg-(--ui-primary)/5'
+						: missingFolders[t.id]
+							? 'border-(--ui-border) bg-(--ui-bg) opacity-90'
+							: 'border-(--ui-border) bg-(--ui-bg) hover:border-(--ui-primary) cursor-pointer'
+				]"
+				@click="onCardClick(t)"
 			>
 				<div class="size-12 shrink-0 rounded-md bg-(--ui-bg-muted) border border-(--ui-border) flex items-center justify-center overflow-hidden">
 					<img
@@ -39,11 +45,24 @@
 					<UIcon v-else name="i-lucide-building-2" class="size-5 text-(--ui-text-muted)" />
 				</div>
 				<div class="min-w-0 flex-1">
-					<div class="font-medium truncate">
-						{{ t.name }}
+					<div class="flex items-center gap-2 min-w-0">
+						<span class="font-medium truncate">{{ t.name }}</span>
+						<UIcon
+							v-if="t.encrypted"
+							name="i-lucide-lock"
+							class="size-3.5 shrink-0 text-(--ui-text-muted)"
+							title="Password-protected"
+						/>
 					</div>
 					<div class="text-xs text-(--ui-text-muted) truncate" :title="t.path">
 						{{ t.path || t.id }}
+					</div>
+					<div
+						v-if="t.id === tenants.activeTenantId"
+						class="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-(--ui-primary)"
+					>
+						<span class="size-1.5 rounded-full bg-(--ui-primary)" />
+						Currently open
 					</div>
 					<div v-if="missingFolders[t.id]" class="mt-1 flex items-center gap-2">
 						<span class="inline-flex items-center gap-1 text-xs text-(--ui-error)">
@@ -55,22 +74,37 @@
 							class="text-xs text-(--ui-primary) hover:underline"
 							@click.stop="onForget(t.id)"
 						>
-							Forget
+							Remove from list
 						</button>
 					</div>
 				</div>
+
+				<!-- Active business: open it (go to its dashboard) or close it. -->
+				<div v-if="t.id === tenants.activeTenantId" class="shrink-0 flex items-center gap-1">
+					<UButton size="xs" variant="ghost" @click.stop="goToActive">
+						Open
+					</UButton>
+					<UButton
+						size="xs"
+						variant="ghost"
+						color="neutral"
+						:loading="closing"
+						@click.stop="closeActive"
+					>
+						Close
+					</UButton>
+				</div>
+				<!-- Other business: switch to it. -->
 				<UIcon
-					v-if="t.encrypted"
-					name="i-lucide-lock"
-					class="size-4 text-(--ui-text-muted)"
-					title="Password-protected"
-				/>
-				<UIcon
-					v-if="switchingId === t.id"
+					v-else-if="switchingId === t.id"
 					name="i-lucide-loader-circle"
-					class="size-5 text-(--ui-text-muted) animate-spin"
+					class="size-5 shrink-0 text-(--ui-text-muted) animate-spin"
 				/>
-				<UIcon v-else-if="!missingFolders[t.id]" name="i-lucide-chevron-right" class="size-5 text-(--ui-text-muted) group-hover:text-(--ui-primary)" />
+				<UIcon
+					v-else-if="!missingFolders[t.id]"
+					name="i-lucide-chevron-right"
+					class="size-5 shrink-0 text-(--ui-text-muted) group-hover:text-(--ui-primary)"
+				/>
 			</div>
 		</div>
 
@@ -413,6 +447,43 @@
 		}
 	});
 
+	// ---- Active business: go to it / close it ----
+	// Go straight to its dashboard.
+	const goToActive = () => {
+		window.location.assign("/");
+	};
+
+	// Close it: deactivate (folder + data untouched) so it drops back to a
+	// switchable card and nothing is open. Stays on /welcome.
+	const closing = ref(false);
+	const closeActive = async () => {
+		if (closing.value) return;
+		closing.value = true;
+		try {
+			await tenants.close();
+		} catch (err) {
+			toast.add({
+				title: "Couldn't close the business",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		} finally {
+			closing.value = false;
+		}
+	};
+
+	// Card click: the active business goes to its dashboard; any other switches.
+	const onCardClick = (t: { id: string }) => {
+		if (t.id === tenants.activeTenantId) {
+			goToActive();
+			return;
+		}
+		if (!missingFolders.value[t.id] && switchingId.value === null) {
+			void switchTo(t.id);
+		}
+	};
+
 	// ---- Open an existing business folder ----
 	const opening = ref(false);
 	const onOpenBusiness = async () => {
@@ -450,7 +521,7 @@
 			delete missingFolders.value[id];
 			toast.add({ title: "Removed from list", description: "The business folder was left untouched on disk.", color: "info", icon: "i-lucide-eye-off" });
 		} catch (err) {
-			toast.add({ title: "Could not forget business", description: err instanceof Error ? err.message : String(err), color: "error", icon: "i-lucide-circle-alert" });
+			toast.add({ title: "Couldn't remove it from the list", description: err instanceof Error ? err.message : String(err), color: "error", icon: "i-lucide-circle-alert" });
 		}
 	};
 
