@@ -282,7 +282,12 @@ fn read_registry(app: &AppHandle) -> Result<TenantRegistry, String> {
 		return Ok(TenantRegistry::default());
 	}
 	let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
-	serde_json::from_slice(&bytes).map_err(|e| e.to_string())
+	// Fall back to an empty registry if the file can't be parsed — e.g. a
+	// pre-portable-folders tenants.json whose entries lack the now-required
+	// `path` field. Clean cutover (pre-1.0, disposable): the user starts fresh
+	// and re-Opens their business folders, which still hold all their data.
+	// Avoids bricking the welcome screen on an incompatible old registry.
+	Ok(serde_json::from_slice(&bytes).unwrap_or_default())
 }
 
 fn write_registry(app: &AppHandle, reg: &TenantRegistry) -> Result<(), String> {
