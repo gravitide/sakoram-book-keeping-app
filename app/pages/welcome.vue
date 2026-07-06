@@ -331,7 +331,6 @@
 	import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 	import { appDataDir } from "@tauri-apps/api/path";
 	import { open as openDialog } from "@tauri-apps/plugin-dialog";
-	import { exists } from "@tauri-apps/plugin-fs";
 	import pkg from "~~/package.json";
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import { createDemoBusiness } from "~/lib/demo-seed";
@@ -407,7 +406,7 @@
 	onMounted(async () => {
 		for (const t of tenants.tenants) {
 			try {
-				missingFolders.value[t.id] = t.path ? !(await exists(t.path)) : true;
+				missingFolders.value[t.id] = t.path ? !(await invoke<boolean>("path_exists", { path: t.path })) : true;
 			} catch {
 				missingFolders.value[t.id] = false;
 			}

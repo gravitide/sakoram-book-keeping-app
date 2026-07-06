@@ -692,6 +692,65 @@ pub async fn tenant_logo_path(
 	})
 }
 
+/// Write a logo / PDF-header image into the business folder from the frontend.
+///
+/// Done in Rust (std::fs, which is NOT gated by Tauri's capability scope)
+/// rather than the JS fs plugin, because a business folder can live on ANY
+/// drive (e.g. D:\Sakoram\…) — outside the fs plugin's allow-list, which can't
+/// cleanly glob arbitrary drive roots. The path is derived from the registry
+/// (never caller-controlled), so this stays safe. Returns the absolute path of
+/// the written file (stored on company_settings.{logo_path,pdf_header_logo_path}).
+///
+/// `kind` is "logo" (→ <folder>/logos/logo.<ext>) or "pdf-header"
+/// (→ <folder>/pdf-header.<ext>). Any stale same-stem file of a different
+/// extension is removed so there's never two.
+#[tauri::command]
+pub fn save_business_asset(
+	app: AppHandle,
+	id: String,
+	kind: String,
+	ext: String,
+	bytes: Vec<u8>,
+) -> Result<String, String> {
+	let ext = {
+		let e = ext.trim().trim_start_matches('.').to_lowercase();
+		if e.is_empty() { "png".to_string() } else { e }
+	};
+	let (dir, stem) = match kind.as_str() {
+		"logo" => (logos_dir_for(&app, &id)?, "logo"),
+		"pdf-header" => (folder_for(&app, &id)?, "pdf-header"),
+		_ => return Err(format!("unknown asset kind: {kind}")),
+	};
+	std::fs::create_dir_all(&dir).map_err(|e| format!("create asset dir: {e}"))?;
+	// Drop any stale <stem>.<other-ext> so a format change doesn't orphan a file.
+	if let Ok(entries) = std::fs::read_dir(&dir) {
+		for entry in entries.flatten() {
+			let p = entry.path();
+			let same_stem = p.file_stem().and_then(|s| s.to_str()) == Some(stem);
+			let same_ext = p
+				.extension()
+				.and_then(|s| s.to_str())
+				.map(|e| e.to_lowercase())
+				== Some(ext.clone());
+			if same_stem && !same_ext {
+				let _ = std::fs::remove_file(&p);
+			}
+		}
+	}
+	let dest = dir.join(format!("{stem}.{ext}"));
+	std::fs::write(&dest, &bytes).map_err(|e| format!("write asset: {e}"))?;
+	Ok(dest.to_string_lossy().to_string())
+}
+
+/// Whether a path exists on disk. Used by the welcome / Businesses pages to
+/// flag registry entries whose folder was moved/deleted ("Not found" badge) —
+/// done in Rust (std::fs, unscoped) so it works for business folders on ANY
+/// drive, which the fs plugin's capability scope can't reach.
+#[tauri::command]
+pub fn path_exists(path: String) -> bool {
+	std::path::Path::new(&path).exists()
+}
+
 // ---------- Cross-module helpers (consumed by data_io) ----------------------
 //
 // data_io needs to create tenants and update logos as part of the import

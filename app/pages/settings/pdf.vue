@@ -387,8 +387,7 @@
 
 <script setup lang="ts">
 	import type { SettingsUpdate } from "~/stores/settings";
-	import { join } from "@tauri-apps/api/path";
-	import { readDir, remove, writeFile } from "@tauri-apps/plugin-fs";
+	import { invoke } from "@tauri-apps/api/core";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { PDF_TEMPLATES } from "~/lib/pdf-templates";
@@ -527,39 +526,25 @@
 		return p.split(/[\\/]/).pop() ?? p;
 	});
 
-	// Drop any existing pdf-header.<other-ext> at the folder root so switching
-	// the image format (png → jpg) doesn't orphan the previous letterhead.
-	const removeStalePdfHeaders = async (folder: string, keepExt: string) => {
-		try {
-			const entries = await readDir(folder);
-			for (const entry of entries) {
-				if (!entry.isFile) continue;
-				const name = entry.name.toLowerCase();
-				if (name.startsWith("pdf-header.") && name !== `pdf-header.${keepExt}`) {
-					await remove(await join(folder, entry.name)).catch(() => { /* best-effort */ });
-				}
-			}
-		} catch { /* folder missing — nothing to clean */ }
-	};
-
 	const uploadPdfLogo = async (file: File) => {
 		const tenantId = tenants.activeTenantId;
-		const folder = tenants.activeFolder;
-		if (!tenantId || !folder) {
+		if (!tenantId) {
 			toast.add({ title: "No active business", color: "error", icon: "i-lucide-circle-alert" });
 			return;
 		}
 
 		try {
-			const bytes = new Uint8Array(await file.arrayBuffer());
-			// The wide letterhead lives at the business-folder root as
-			// pdf-header.<ext> (fixed stem) so it never collides with the square
-			// identity logo under logos/.
+			const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
 			const ext = (file.name.split(".").pop() ?? "png").toLowerCase();
-			await removeStalePdfHeaders(folder, ext);
-			const fileName = `pdf-header.${ext}`;
-			const target = await join(folder, fileName);
-			await writeFile(target, bytes);
+			// The wide letterhead lives at the business-folder root as
+			// pdf-header.<ext>. Written by the Rust `save_business_asset` command
+			// (std::fs, unscoped) so it works on any drive the folder lives on.
+			const target = await invoke<string>("save_business_asset", {
+				id: tenantId,
+				kind: "pdf-header",
+				ext,
+				bytes
+			});
 			await store.save({ pdf_header_logo_path: target });
 			form.pdf_header_logo_path = target;
 			refreshBaseline();

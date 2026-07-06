@@ -374,7 +374,6 @@
 	import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 	import { appDataDir } from "@tauri-apps/api/path";
 	import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-	import { exists } from "@tauri-apps/plugin-fs";
 	import { createDemoBusiness } from "~/lib/demo-seed";
 	import { useLicenseStore } from "~/stores/license";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -421,7 +420,7 @@
 	const refreshMissing = async () => {
 		for (const t of tenants.tenants) {
 			try {
-				missingFolders.value[t.id] = t.path ? !(await exists(t.path)) : true;
+				missingFolders.value[t.id] = t.path ? !(await invoke<boolean>("path_exists", { path: t.path })) : true;
 			} catch {
 				missingFolders.value[t.id] = false;
 			}

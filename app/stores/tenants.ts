@@ -60,18 +60,30 @@ export const useTenantsStore = defineStore("tenants", () => {
 		tenants.value = reg.tenants;
 		activeTenantId.value = reg.active_tenant_id;
 		if (activeTenantId.value && !dbUrl.value) {
-			const active = tenants.value.find((t) => t.id === activeTenantId.value);
-			if (active?.encrypted) {
-				// Encrypted: only open the DB if the Rust session already holds
-				// the key (e.g. after an unlock + reload). If it's locked, leave
-				// dbUrl null — the middleware routes the user to /unlock. Calling
-				// ensure_tenant_db here would create an empty plaintext DB.
-				const state = await invoke<string>("tenant_lock_state", { id: activeTenantId.value });
-				if (state === "unlocked") {
-					dbUrl.value = await invoke<string>("ensure_tenant_db", { id: activeTenantId.value });
+			const activeId = activeTenantId.value;
+			const active = tenants.value.find((t) => t.id === activeId);
+			try {
+				if (active?.encrypted) {
+					// Encrypted: only open the DB if the Rust session already holds
+					// the key (e.g. after an unlock + reload). If it's locked, leave
+					// dbUrl null — the middleware routes the user to /unlock. Calling
+					// ensure_tenant_db here would create an empty plaintext DB.
+					const state = await invoke<string>("tenant_lock_state", { id: activeId });
+					if (state === "unlocked") {
+						dbUrl.value = await invoke<string>("ensure_tenant_db", { id: activeId });
+					}
+				} else {
+					dbUrl.value = await invoke<string>("ensure_tenant_db", { id: activeId });
 				}
-			} else {
-				dbUrl.value = await invoke<string>("ensure_tenant_db", { id: activeTenantId.value });
+			} catch {
+				// The active business folder is gone / unreadable (moved or deleted
+				// on disk). Don't crash startup — drop it as active so the tenant
+				// middleware routes to /welcome, where the row shows "Not found"
+				// with a Forget action. The registry entry is kept so the user can
+				// Forget it, or Open it again from its new location.
+				dbUrl.value = null;
+				activeTenantId.value = null;
+				await invoke("clear_active_tenant").catch(() => { /* best-effort */ });
 			}
 		}
 		loaded.value = true;
