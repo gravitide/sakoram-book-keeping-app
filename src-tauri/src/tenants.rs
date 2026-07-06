@@ -1,14 +1,24 @@
-// Multi-tenancy: each business has its own SQLite file.
+// Multi-tenancy: each business is a portable, user-chosen FOLDER.
 //
-// Layout under app_data_dir:
+// App-level state stays under app_data_dir:
 //
-//   tenants.json                 ← registry + active_tenant_id
-//   businesses/{id}.db           ← per-tenant SQLite database
-//   logos/{id}.{ext}             ← per-tenant logo file
+//   tenants.json                 ← registry + active_tenant_id (only this)
+//   license.json                 ← per-install license/trial (untouched here)
 //
-// `id` is a slug ("acme", "acme-co"). It's stable: renaming a tenant
-// changes display name only — the slug, DB filename, and logo filename
-// stay put so we don't have to move files around.
+// A business folder (chosen by the user, anywhere on disk) contains
+// everything for that business:
+//
+//   business.json                ← marker (self-describing: id, name, schema)
+//   business.db                  ← the SQLite file (FIXED name)
+//   attachments/<type>/<id>/…    ← document scans / photos
+//   logos/logo.<ext>             ← square identity logo
+//   pdf-header.<ext>             ← optional wide letterhead image
+//   business.db.enc + business.vault.json   ← only when encrypted
+//
+// `id` is the stable business identity — used by the registry, marker,
+// and vault session keys. Filenames inside the folder are fixed (the
+// folder is the container), so the id is not encoded in filenames. The
+// registry's `path` field records where each business folder lives.
 //
 // We deliberately do NOT use tauri-plugin-sql's add_migrations() because
 // it requires URLs to be registered at app build time. Adding a tenant
@@ -23,6 +33,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Manager};
+
+use crate::data_io::SCHEMA_VERSION;
 
 // Default bill categories seeded into every freshly-created tenant. Same
 // list the demo seed used to inject manually — moved here so brand-new
@@ -86,11 +98,15 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Tenant {
-	/// Stable slug — also the DB filename stem and the logo filename stem.
+	/// Stable business identity. Lives in the marker + registry; no longer
+	/// encoded into filenames (the folder is the container).
 	pub id: String,
-	/// Display name. Mutable; doesn't affect file paths.
+	/// Display name. Mutable; doesn't affect the folder path.
 	pub name: String,
-	/// `{id}.{ext}` if the user has uploaded a logo; None otherwise.
+	/// Absolute path to this business's folder — the source of truth for all
+	/// of its files (business.db, attachments/, logos/, pdf-header.<ext>).
+	pub path: String,
+	/// Relative logo filename under `<path>/logos/` (e.g. "logo.png"), or None.
 	pub logo_file: Option<String>,
 	/// True once the user has enabled at-rest encryption for this business.
 	/// `#[serde(default)]` so tenants.json written before this field parses
@@ -106,67 +122,152 @@ pub struct TenantRegistry {
 }
 
 // ---------- Path helpers ----------------------------------------------------
+//
+// Everything for a business lives inside its folder. Given an `id`, we look up
+// the folder path in the registry, then join fixed filenames. This is the
+// single point where `id` → on-disk location is resolved.
 
 fn registry_path(app: &AppHandle) -> Result<PathBuf, String> {
 	Ok(app.path().app_data_dir().map_err(|e| e.to_string())?.join("tenants.json"))
 }
 
-fn businesses_dir(app: &AppHandle) -> Result<PathBuf, String> {
-	let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("businesses");
-	std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-	Ok(dir)
+/// Absolute path of a business's folder, resolved from the registry.
+pub fn folder_for(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
+	let t = get_tenant(app, id)?;
+	Ok(PathBuf::from(t.path))
 }
 
-fn logos_dir(app: &AppHandle) -> Result<PathBuf, String> {
-	let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("logos");
-	std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-	Ok(dir)
+pub fn tenant_db_path_public(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
+	Ok(folder_for(app, id)?.join("business.db"))
 }
 
-fn tenant_db_path(app: &AppHandle, tenant_id: &str) -> Result<PathBuf, String> {
-	Ok(businesses_dir(app)?.join(format!("{tenant_id}.db")))
+pub fn tenant_enc_path(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
+	Ok(folder_for(app, id)?.join("business.db.enc"))
 }
 
-pub fn tenant_enc_path(app: &AppHandle, tenant_id: &str) -> Result<PathBuf, String> {
-	Ok(businesses_dir(app)?.join(format!("{tenant_id}.db.enc")))
+pub fn tenant_vault_path(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
+	Ok(folder_for(app, id)?.join("business.vault.json"))
 }
 
-pub fn tenant_vault_path(app: &AppHandle, tenant_id: &str) -> Result<PathBuf, String> {
-	Ok(businesses_dir(app)?.join(format!("{tenant_id}.vault.json")))
+/// `<folder>/logos/`, created if missing.
+pub fn logos_dir_for(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
+	let d = folder_for(app, id)?.join("logos");
+	std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;
+	Ok(d)
 }
 
-pub fn tenant_db_path_public(app: &AppHandle, tenant_id: &str) -> Result<PathBuf, String> {
-	tenant_db_path(app, tenant_id)
+/// `<folder>/attachments/` (not created here — callers append <type>/<id>).
+pub fn attachments_dir_for(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
+	Ok(folder_for(app, id)?.join("attachments"))
 }
 
-/// Remove any leftover DB + sidecar files at a freshly-chosen (not-yet-
-/// registered) tenant slug. Such files are orphans from a crashed or failed
-/// prior create/import: because the slug isn't in the registry, the next
-/// create reuses it and `run_migrations` would re-run on a half-migrated DB —
-/// surfacing errors like "duplicate column name". Called from the create paths
-/// right before migrating so we always start on a clean DB. MUST only be called
-/// for a slug that is NOT a registered tenant.
-fn remove_stale_db_files(app: &AppHandle, tenant_id: &str) {
-	if let Ok(db) = tenant_db_path(app, tenant_id) {
-		let base = db.as_os_str().to_owned();
-		// {id}.db, {id}.db-wal, {id}.db-shm (SQLite WAL sidecars), {id}.db.enc.
-		for suffix in ["", "-wal", "-shm", ".enc"] {
-			let mut p = base.clone();
-			p.push(suffix);
-			let _ = std::fs::remove_file(PathBuf::from(p));
+// ---------- Marker file (business.json) -------------------------------------
+//
+// A self-describing marker at the root of a business folder. Lets "Open" (and
+// a fresh machine) validate a folder and rebuild a registry entry from it.
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Marker {
+	pub id: String,
+	pub name: String,
+	pub schema_version: i32,
+	pub created_at: String,
+	#[serde(default)]
+	pub encrypted: bool,
+}
+
+fn marker_path(folder: &Path) -> PathBuf {
+	folder.join("business.json")
+}
+
+fn write_marker(folder: &Path, m: &Marker) -> Result<(), String> {
+	std::fs::write(marker_path(folder), serde_json::to_vec_pretty(m).map_err(|e| e.to_string())?)
+		.map_err(|e| e.to_string())
+}
+
+fn read_marker(folder: &Path) -> Result<Marker, String> {
+	let raw = std::fs::read(marker_path(folder))
+		.map_err(|_| "Not a Sakoram business folder (missing business.json).".to_string())?;
+	serde_json::from_slice(&raw).map_err(|e| format!("Corrupt business.json: {e}"))
+}
+
+/// Detect the identity-logo filename (relative to `<folder>/logos/`) for a
+/// business folder, so `open_tenant` can rebuild the registry's `logo_file`.
+fn detect_logo_file(folder: &Path) -> Option<String> {
+	let logos = folder.join("logos");
+	for ext in &["png", "jpg", "jpeg", "webp", "svg"] {
+		let name = format!("logo.{ext}");
+		if logos.join(&name).exists() {
+			return Some(name);
 		}
 	}
-	if let Ok(vault) = tenant_vault_path(app, tenant_id) {
-		let _ = std::fs::remove_file(vault);
+	None
+}
+
+/// Permit the webview's `asset://` protocol to read files from a business
+/// folder, so a logo on ANY drive (e.g. D:\) loads in an <img>. The asset
+/// scope is otherwise compile-locked to $APPDATA (tauri.conf.json). This is a
+/// runtime, process-level allow that survives webview reloads. Best-effort —
+/// a failure just means that folder's logo won't render, never a hard error.
+fn allow_asset_dir(app: &AppHandle, folder: &str) {
+	let _ = app.asset_protocol_scope().allow_directory(folder, true);
+}
+
+/// Coarse ISO-8601 UTC timestamp for the marker's `created_at`.
+fn now_iso() -> String {
+	use std::time::{SystemTime, UNIX_EPOCH};
+	let secs = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.map(|d| d.as_secs())
+		.unwrap_or(0);
+	let days = secs / 86_400;
+	let secs_today = secs % 86_400;
+	let h = secs_today / 3600;
+	let m = (secs_today % 3600) / 60;
+	let s = secs_today % 60;
+	let z = days as i64 + 719_468;
+	let era = z.div_euclid(146_097);
+	let doe = (z - era * 146_097) as u64;
+	let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+	let y = yoe as i64 + era * 400;
+	let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+	let mp = (5 * doy + 2) / 153;
+	let d = doy - (153 * mp + 2) / 5 + 1;
+	let m_cal = if mp < 10 { mp + 3 } else { mp - 9 };
+	let y = if m_cal <= 2 { y + 1 } else { y };
+	format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, m_cal, d, h, m, s)
+}
+
+/// Create a fresh business folder under `parent_dir` named `folder_name`,
+/// de-duplicated with " (2)", " (3)"… if that name is already taken. Returns
+/// the created folder path. Race-safe within a single process (create then
+/// bump on collision).
+fn create_business_folder(parent_dir: &str, folder_name: &str) -> Result<PathBuf, String> {
+	if parent_dir.trim().is_empty() {
+		return Err("A location for the business folder is required.".into());
 	}
+	let base = {
+		let f = folder_name.trim();
+		if f.is_empty() { "business".to_string() } else { f.to_string() }
+	};
+	let parent = PathBuf::from(parent_dir);
+	let mut folder = parent.join(&base);
+	let mut n = 2;
+	while folder.exists() {
+		folder = parent.join(format!("{base} ({n})"));
+		n += 1;
+	}
+	std::fs::create_dir_all(&folder).map_err(|e| format!("create business folder: {e}"))?;
+	Ok(folder)
 }
 
 /// Best-effort teardown of a tenant that was created mid-import but whose import
-/// then failed — removes the registry entry plus every file the create/import
-/// may have written (DB + sidecars, logos, PDF header, attachments) so a failed
-/// import never leaves a broken business in the picker. Safe to call with a
-/// tenant id that may or may not be registered.
+/// then failed — removes the entire business folder plus its registry entry so a
+/// failed import never leaves a broken business in the picker. Safe to call with
+/// a tenant id that may or may not be registered.
 pub fn discard_tenant(app: &AppHandle, id: &str) {
+	// Grab the folder path (if the entry still exists) before we drop it.
+	let folder = get_tenant(app, id).ok().map(|t| t.path);
 	if let Ok(mut reg) = read_registry(app) {
 		let before = reg.tenants.len();
 		reg.tenants.retain(|t| t.id != id);
@@ -177,14 +278,8 @@ pub fn discard_tenant(app: &AppHandle, id: &str) {
 			let _ = write_registry(app, &reg);
 		}
 	}
-	// DB file + WAL/SHM sidecars + encrypted blob + vault metadata.
-	remove_stale_db_files(app, id);
-	if let Ok(app_data) = app.path().app_data_dir() {
-		for ext in &["png", "jpg", "jpeg", "webp", "svg"] {
-			let _ = std::fs::remove_file(app_data.join("logos").join(format!("{id}.{ext}")));
-			let _ = std::fs::remove_file(app_data.join("pdf-headers").join(format!("{id}.{ext}")));
-		}
-		let _ = std::fs::remove_dir_all(app_data.join("attachments").join(id));
+	if let Some(path) = folder {
+		let _ = std::fs::remove_dir_all(&path);
 	}
 }
 
@@ -196,7 +291,12 @@ fn read_registry(app: &AppHandle) -> Result<TenantRegistry, String> {
 		return Ok(TenantRegistry::default());
 	}
 	let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
-	serde_json::from_slice(&bytes).map_err(|e| e.to_string())
+	// Fall back to an empty registry if the file can't be parsed — e.g. a
+	// pre-portable-folders tenants.json whose entries lack the now-required
+	// `path` field. Clean cutover (pre-1.0, disposable): the user starts fresh
+	// and re-Opens their business folders, which still hold all their data.
+	// Avoids bricking the welcome screen on an incompatible old registry.
+	Ok(serde_json::from_slice(&bytes).unwrap_or_default())
 }
 
 fn write_registry(app: &AppHandle, reg: &TenantRegistry) -> Result<(), String> {
@@ -356,75 +456,10 @@ async fn seed_fresh_tenant(db_path: &Path, business_name: &str) -> Result<(), St
 	Ok(())
 }
 
-// ---------- Legacy single-DB migration --------------------------------------
-
-/// On first launch after the multi-tenancy upgrade, look for the old
-/// single `sakoram.db` and absorb it as the first tenant. Idempotent: if
-/// `tenants.json` already has tenants, this no-ops.
-async fn migrate_legacy_db(app: &AppHandle) -> Result<(), String> {
-	let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
-	let legacy = app_data.join("sakoram.db");
-	if !legacy.exists() {
-		return Ok(());
-	}
-	let existing = read_registry(app)?;
-	if !existing.tenants.is_empty() {
-		return Ok(());
-	}
-
-	// Pull the business name out of the legacy DB so we can derive a slug.
-	let business_name = {
-		let url = format!("sqlite:{}", legacy.to_string_lossy());
-		let opts = SqliteConnectOptions::from_str(&url).map_err(|e| e.to_string())?;
-		let pool = SqlitePool::connect_with(opts).await.map_err(|e| e.to_string())?;
-		let row: Result<(String,), _> =
-			sqlx::query_as("SELECT business_name FROM company_settings WHERE id = 1")
-				.fetch_one(&pool)
-				.await;
-		pool.close().await;
-		row.map(|r| r.0).unwrap_or_else(|_| "My Business".to_string())
-	};
-
-	let slug = slugify(&business_name);
-	let new_db_path = businesses_dir(app)?.join(format!("{slug}.db"));
-	std::fs::rename(&legacy, &new_db_path).map_err(|e| format!("move legacy db: {e}"))?;
-
-	// Walk the obvious image extensions for the legacy `app_data/logo.*`.
-	let mut logo_file: Option<String> = None;
-	for ext in &["png", "jpg", "jpeg", "webp", "svg"] {
-		let src = app_data.join(format!("logo.{ext}"));
-		if !src.exists() {
-			continue;
-		}
-		let dst_name = format!("{slug}.{ext}");
-		let dst = logos_dir(app)?.join(&dst_name);
-		std::fs::rename(&src, &dst).map_err(|e| format!("move logo: {e}"))?;
-
-		// company_settings.logo_path stores an absolute path — update it.
-		let url = format!("sqlite:{}", new_db_path.to_string_lossy());
-		let opts = SqliteConnectOptions::from_str(&url).map_err(|e| e.to_string())?;
-		let pool = SqlitePool::connect_with(opts).await.map_err(|e| e.to_string())?;
-		sqlx::query("UPDATE company_settings SET logo_path = ? WHERE id = 1")
-			.bind(dst.to_string_lossy().to_string())
-			.execute(&pool)
-			.await
-			.map_err(|e| format!("update logo_path: {e}"))?;
-		pool.close().await;
-		logo_file = Some(dst_name);
-		break;
-	}
-
-	let tenant = Tenant { id: slug.clone(), name: business_name, logo_file, encrypted: false };
-	let reg = TenantRegistry { active_tenant_id: Some(slug), tenants: vec![tenant] };
-	write_registry(app, &reg)?;
-	Ok(())
-}
-
 // ---------- Tauri commands --------------------------------------------------
 
 #[tauri::command]
 pub async fn list_tenants(app: AppHandle) -> Result<TenantRegistry, String> {
-	migrate_legacy_db(&app).await?;
 	let mut reg = read_registry(&app)?;
 	// Self-heal a stale active_tenant_id (e.g. registry hand-edited).
 	if let Some(active) = reg.active_tenant_id.clone() {
@@ -433,31 +468,105 @@ pub async fn list_tenants(app: AppHandle) -> Result<TenantRegistry, String> {
 			write_registry(&app, &reg)?;
 		}
 	}
+	// Allow every known business folder for asset:// reads so their logos
+	// render on the welcome screen + sidebar regardless of drive.
+	for t in &reg.tenants {
+		allow_asset_dir(&app, &t.path);
+	}
 	Ok(reg)
 }
 
+/// Create a brand-new business in `<parent_dir>/<folder_name>` (de-duped with
+/// " (2)"…). `name` fills the registry entry, marker, and DB `business_name`;
+/// `folder_name` (already sanitized by the JS `safeFolderName` util) only names
+/// the folder. A fresh `business.db` is migrated + seeded, and a `business.json`
+/// marker is written so the folder is self-describing.
 #[tauri::command]
-pub async fn create_tenant(app: AppHandle, name: String) -> Result<Tenant, String> {
+pub async fn create_tenant(
+	app: AppHandle,
+	name: String,
+	parent_dir: String,
+	folder_name: String,
+) -> Result<Tenant, String> {
 	let trimmed = name.trim();
 	if trimmed.is_empty() {
 		return Err("Business name is required".into());
 	}
+
 	let mut reg = read_registry(&app)?;
 	let id = unique_slug(&slugify(trimmed), &reg.tenants);
-	let db_path = tenant_db_path(&app, &id)?;
 
-	// Wipe any orphaned leftover at this (unregistered) slug so migrations run
-	// on a clean DB — see remove_stale_db_files.
-	remove_stale_db_files(&app, &id);
+	let folder = create_business_folder(&parent_dir, &folder_name)?;
+	let db_path = folder.join("business.db");
 	run_migrations(&db_path).await?;
 	seed_fresh_tenant(&db_path, trimmed).await?;
 
-	let tenant = Tenant { id: id.clone(), name: trimmed.to_string(), logo_file: None, encrypted: false };
+	write_marker(
+		&folder,
+		&Marker {
+			id: id.clone(),
+			name: trimmed.to_string(),
+			schema_version: SCHEMA_VERSION,
+			created_at: now_iso(),
+			encrypted: false,
+		},
+	)?;
+
+	let tenant = Tenant {
+		id: id.clone(),
+		name: trimmed.to_string(),
+		path: folder.to_string_lossy().to_string(),
+		logo_file: None,
+		encrypted: false,
+	};
 	reg.tenants.push(tenant.clone());
 	if reg.active_tenant_id.is_none() {
 		reg.active_tenant_id = Some(id);
 	}
 	write_registry(&app, &reg)?;
+	allow_asset_dir(&app, &tenant.path);
+	Ok(tenant)
+}
+
+/// Open an existing business from its folder. Validates the marker + business.db,
+/// runs any pending migrations (schema catch-up), then upserts the registry entry
+/// keyed on the marker's `id`.
+#[tauri::command]
+pub async fn open_tenant(app: AppHandle, path: String) -> Result<Tenant, String> {
+	let folder = PathBuf::from(&path);
+	let marker = read_marker(&folder)?;
+	let db = folder.join("business.db");
+	// An encrypted-but-locked business ships only business.db.enc; we must not
+	// migrate a missing db (the empty-DB hazard). Accept either a plaintext db
+	// or the encrypted blob as proof this is a real business folder.
+	let enc = folder.join("business.db.enc");
+	if !db.exists() && !enc.exists() {
+		return Err("Folder has no business.db.".into());
+	}
+	if db.exists() {
+		run_migrations(&db).await?;
+	}
+
+	let tenant = Tenant {
+		id: marker.id.clone(),
+		name: marker.name.clone(),
+		path: folder.to_string_lossy().to_string(),
+		logo_file: detect_logo_file(&folder),
+		encrypted: marker.encrypted,
+	};
+
+	let mut reg = read_registry(&app)?;
+	match reg.tenants.iter_mut().find(|t| t.id == tenant.id) {
+		Some(existing) => {
+			existing.path = tenant.path.clone();
+			existing.name = tenant.name.clone();
+			existing.logo_file = tenant.logo_file.clone();
+			existing.encrypted = tenant.encrypted;
+		}
+		None => reg.tenants.push(tenant.clone()),
+	}
+	write_registry(&app, &reg)?;
+	allow_asset_dir(&app, &tenant.path);
 	Ok(tenant)
 }
 
@@ -470,10 +579,17 @@ pub async fn rename_tenant(app: AppHandle, id: String, name: String) -> Result<(
 	let mut reg = read_registry(&app)?;
 	let tenant = reg.tenants.iter_mut().find(|t| t.id == id).ok_or("Tenant not found")?;
 	tenant.name = trimmed.to_string();
+	let folder = PathBuf::from(&tenant.path);
 	write_registry(&app, &reg)?;
 
+	// Keep the marker's name in sync so a re-open rebuilds the right label.
+	if let Ok(mut m) = read_marker(&folder) {
+		m.name = trimmed.to_string();
+		let _ = write_marker(&folder, &m);
+	}
+
 	// Keep the DB's business_name in sync so PDFs/header reflect the rename.
-	let path = tenant_db_path(&app, &id)?;
+	let path = folder.join("business.db");
 	if path.exists() {
 		let url = format!("sqlite:{}", path.to_string_lossy());
 		let opts = SqliteConnectOptions::from_str(&url).map_err(|e| e.to_string())?;
@@ -488,6 +604,9 @@ pub async fn rename_tenant(app: AppHandle, id: String, name: String) -> Result<(
 	Ok(())
 }
 
+/// Delete a business entirely: remove its whole folder from disk AND drop the
+/// registry entry. Caller must close the open DB connection first (Windows
+/// locks open files). See `forget_tenant` to drop only the registry entry.
 #[tauri::command]
 pub async fn delete_tenant(app: AppHandle, id: String) -> Result<(), String> {
 	let mut reg = read_registry(&app)?;
@@ -495,31 +614,29 @@ pub async fn delete_tenant(app: AppHandle, id: String) -> Result<(), String> {
 	let tenant = reg.tenants.remove(pos);
 	// If the deleted tenant was active, clear the active pointer so the
 	// next launch (or middleware redirect) sends the user to /welcome.
-	// Caller is responsible for closing the open DB connection before
-	// invoking this — otherwise the file is locked on Windows.
 	if reg.active_tenant_id.as_deref() == Some(&tenant.id) {
 		reg.active_tenant_id = None;
 	}
 	write_registry(&app, &reg)?;
 
-	let _ = std::fs::remove_file(tenant_db_path(&app, &tenant.id)?);
-	// Remove encrypted blob + vault metadata if the tenant had at-rest
-	// encryption enabled. Best-effort: same pattern as the logo removal below.
-	let _ = std::fs::remove_file(tenant_enc_path(&app, &tenant.id)?);
-	let _ = std::fs::remove_file(tenant_vault_path(&app, &tenant.id)?);
-	// Remove both logo variants if present (identity + PDF header).
-	if let Some(logo) = &tenant.logo_file {
-		let _ = std::fs::remove_file(logos_dir(&app)?.join(logo));
+	// Remove the entire business folder (db, attachments, logos, pdf header,
+	// vault blob + metadata all live inside it). Best-effort.
+	let _ = std::fs::remove_dir_all(&tenant.path);
+	Ok(())
+}
+
+/// Remove a business from the registry WITHOUT touching its folder on disk —
+/// the user can re-open it later via Open. Clears the active pointer if it
+/// matched.
+#[tauri::command]
+pub async fn forget_tenant(app: AppHandle, id: String) -> Result<(), String> {
+	let mut reg = read_registry(&app)?;
+	let pos = reg.tenants.iter().position(|t| t.id == id).ok_or("Tenant not found")?;
+	let tenant = reg.tenants.remove(pos);
+	if reg.active_tenant_id.as_deref() == Some(&tenant.id) {
+		reg.active_tenant_id = None;
 	}
-	for ext in &["png", "jpg", "jpeg", "webp", "svg"] {
-		let _ = std::fs::remove_file(
-			app.path()
-				.app_data_dir()
-				.map_err(|e| e.to_string())?
-				.join("pdf-headers")
-				.join(format!("{}.{ext}", tenant.id)),
-		);
-	}
+	write_registry(&app, &reg)?;
 	Ok(())
 }
 
@@ -534,19 +651,25 @@ pub async fn set_active_tenant(app: AppHandle, id: String) -> Result<(), String>
 	Ok(())
 }
 
+/// Clear the active-business pointer (used by "Close business" → welcome).
+/// The registry entry stays; only `active_tenant_id` is nulled.
+#[tauri::command]
+pub async fn clear_active_tenant(app: AppHandle) -> Result<(), String> {
+	let mut reg = read_registry(&app)?;
+	reg.active_tenant_id = None;
+	write_registry(&app, &reg)?;
+	Ok(())
+}
+
 /// Idempotently ensures the tenant's DB exists and is migrated, then
-/// returns the sqlite URL JS should pass to `Database.load()`.
+/// returns the absolute sqlite URL JS should pass to `Database.load()`.
 #[tauri::command]
 pub async fn ensure_tenant_db(app: AppHandle, id: String) -> Result<String, String> {
-	let reg = read_registry(&app)?;
-	if !reg.tenants.iter().any(|t| t.id == id) {
-		return Err("Tenant not found".into());
-	}
-	let path = tenant_db_path(&app, &id)?;
+	let path = tenant_db_path_public(&app, &id)?;
 	run_migrations(&path).await?;
-	// Plugin-sql resolves `sqlite:foo.db` relative to app_data_dir, so a
-	// relative path is what we want.
-	Ok(format!("sqlite:businesses/{id}.db"))
+	// Business DBs live at arbitrary user-chosen paths, so we hand plugin-sql
+	// an absolute sqlite URL rather than an app-data-relative one.
+	Ok(format!("sqlite:{}", path.to_string_lossy()))
 }
 
 /// Update the cached logo filename in tenants.json (called from the
@@ -573,11 +696,75 @@ pub async fn tenant_logo_path(
 ) -> Result<Option<String>, String> {
 	let reg = read_registry(&app)?;
 	let tenant = reg.tenants.iter().find(|t| t.id == id).ok_or("Tenant not found")?;
-	Ok(tenant.logo_file.as_ref().map(|f| {
-		logos_dir(&app)
-			.map(|d| d.join(f).to_string_lossy().to_string())
-			.unwrap_or_default()
-	}))
+	Ok(match &tenant.logo_file {
+		Some(f) => Some(
+			PathBuf::from(&tenant.path)
+				.join("logos")
+				.join(f)
+				.to_string_lossy()
+				.to_string(),
+		),
+		None => None,
+	})
+}
+
+/// Write a logo / PDF-header image into the business folder from the frontend.
+///
+/// Done in Rust (std::fs, which is NOT gated by Tauri's capability scope)
+/// rather than the JS fs plugin, because a business folder can live on ANY
+/// drive (e.g. D:\Sakoram\…) — outside the fs plugin's allow-list, which can't
+/// cleanly glob arbitrary drive roots. The path is derived from the registry
+/// (never caller-controlled), so this stays safe. Returns the absolute path of
+/// the written file (stored on company_settings.{logo_path,pdf_header_logo_path}).
+///
+/// `kind` is "logo" (→ <folder>/logos/logo.<ext>) or "pdf-header"
+/// (→ <folder>/pdf-header.<ext>). Any stale same-stem file of a different
+/// extension is removed so there's never two.
+#[tauri::command]
+pub fn save_business_asset(
+	app: AppHandle,
+	id: String,
+	kind: String,
+	ext: String,
+	bytes: Vec<u8>,
+) -> Result<String, String> {
+	let ext = {
+		let e = ext.trim().trim_start_matches('.').to_lowercase();
+		if e.is_empty() { "png".to_string() } else { e }
+	};
+	let (dir, stem) = match kind.as_str() {
+		"logo" => (logos_dir_for(&app, &id)?, "logo"),
+		"pdf-header" => (folder_for(&app, &id)?, "pdf-header"),
+		_ => return Err(format!("unknown asset kind: {kind}")),
+	};
+	std::fs::create_dir_all(&dir).map_err(|e| format!("create asset dir: {e}"))?;
+	// Drop any stale <stem>.<other-ext> so a format change doesn't orphan a file.
+	if let Ok(entries) = std::fs::read_dir(&dir) {
+		for entry in entries.flatten() {
+			let p = entry.path();
+			let same_stem = p.file_stem().and_then(|s| s.to_str()) == Some(stem);
+			let same_ext = p
+				.extension()
+				.and_then(|s| s.to_str())
+				.map(|e| e.to_lowercase())
+				== Some(ext.clone());
+			if same_stem && !same_ext {
+				let _ = std::fs::remove_file(&p);
+			}
+		}
+	}
+	let dest = dir.join(format!("{stem}.{ext}"));
+	std::fs::write(&dest, &bytes).map_err(|e| format!("write asset: {e}"))?;
+	Ok(dest.to_string_lossy().to_string())
+}
+
+/// Whether a path exists on disk. Used by the welcome / Businesses pages to
+/// flag registry entries whose folder was moved/deleted ("Not found" badge) —
+/// done in Rust (std::fs, unscoped) so it works for business folders on ANY
+/// drive, which the fs plugin's capability scope can't reach.
+#[tauri::command]
+pub fn path_exists(path: String) -> bool {
+	std::path::Path::new(&path).exists()
 }
 
 // ---------- Cross-module helpers (consumed by data_io) ----------------------
@@ -596,21 +783,45 @@ pub fn get_tenant(app: &AppHandle, id: &str) -> Result<Tenant, String> {
 	reg.tenants.iter().find(|t| t.id == id).cloned().ok_or_else(|| "Tenant not found".into())
 }
 
-pub async fn create_tenant_internal(app: &AppHandle, name: &str) -> Result<Tenant, String> {
+/// Create a fresh business folder + registry entry for an IMPORT "new" flow.
+/// Mirrors `create_tenant` but takes `&AppHandle` directly (data_io calls it
+/// without a command round-trip). The folder name is derived from `name` via
+/// `slugify` (import has no separate JS-sanitized folder name), then de-duped.
+pub async fn create_tenant_internal(
+	app: &AppHandle,
+	name: &str,
+	parent_dir: &str,
+) -> Result<Tenant, String> {
 	let trimmed = name.trim();
 	if trimmed.is_empty() {
 		return Err("Business name is required".into());
 	}
 	let mut reg = read_registry(app)?;
 	let id = unique_slug(&slugify(trimmed), &reg.tenants);
-	let db_path = tenant_db_path(app, &id)?;
-	// Wipe any orphaned leftover at this (unregistered) slug so migrations run
-	// on a clean DB — see remove_stale_db_files.
-	remove_stale_db_files(app, &id);
+
+	let folder = create_business_folder(parent_dir, trimmed)?;
+	let db_path = folder.join("business.db");
 	run_migrations(&db_path).await?;
 	seed_fresh_tenant(&db_path, trimmed).await?;
 
-	let tenant = Tenant { id: id.clone(), name: trimmed.to_string(), logo_file: None, encrypted: false };
+	write_marker(
+		&folder,
+		&Marker {
+			id: id.clone(),
+			name: trimmed.to_string(),
+			schema_version: SCHEMA_VERSION,
+			created_at: now_iso(),
+			encrypted: false,
+		},
+	)?;
+
+	let tenant = Tenant {
+		id: id.clone(),
+		name: trimmed.to_string(),
+		path: folder.to_string_lossy().to_string(),
+		logo_file: None,
+		encrypted: false,
+	};
 	reg.tenants.push(tenant.clone());
 	if reg.active_tenant_id.is_none() {
 		reg.active_tenant_id = Some(id);
@@ -658,19 +869,43 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn tenant_encrypted_defaults_false_for_legacy_json() {
-		// A tenants.json written before this field existed must still parse,
+	fn tenant_encrypted_defaults_false_when_field_absent() {
+		// A tenants.json entry without the `encrypted` field must still parse,
 		// with encrypted defaulting to false.
-		let legacy = r#"{"active_tenant_id":"acme","tenants":[{"id":"acme","name":"Acme","logo_file":null}]}"#;
-		let reg: TenantRegistry = serde_json::from_str(legacy).unwrap();
+		let json = r#"{"active_tenant_id":"acme","tenants":[{"id":"acme","name":"Acme","path":"C:/biz/Acme","logo_file":null}]}"#;
+		let reg: TenantRegistry = serde_json::from_str(json).unwrap();
 		assert_eq!(reg.tenants[0].encrypted, false);
+		assert_eq!(reg.tenants[0].path, "C:/biz/Acme");
 	}
 
 	#[test]
-	fn tenant_encrypted_round_trips() {
-		let t = Tenant { id: "acme".into(), name: "Acme".into(), logo_file: None, encrypted: true };
+	fn tenant_round_trips() {
+		let t = Tenant {
+			id: "acme".into(),
+			name: "Acme".into(),
+			path: "/tmp/Acme".into(),
+			logo_file: Some("logo.png".into()),
+			encrypted: true,
+		};
 		let json = serde_json::to_string(&t).unwrap();
 		let back: Tenant = serde_json::from_str(&json).unwrap();
 		assert!(back.encrypted);
+		assert_eq!(back.path, "/tmp/Acme");
+		assert_eq!(back.logo_file.as_deref(), Some("logo.png"));
+	}
+
+	#[test]
+	fn marker_round_trips() {
+		let m = Marker {
+			id: "acme".into(),
+			name: "Acme".into(),
+			schema_version: SCHEMA_VERSION,
+			created_at: now_iso(),
+			encrypted: false,
+		};
+		let json = serde_json::to_string(&m).unwrap();
+		let back: Marker = serde_json::from_str(&json).unwrap();
+		assert_eq!(back.id, "acme");
+		assert_eq!(back.schema_version, SCHEMA_VERSION);
 	}
 }

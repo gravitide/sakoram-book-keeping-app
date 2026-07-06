@@ -44,7 +44,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{Row, SqlitePool};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 use crate::tenants;
 use crate::vault;
@@ -52,7 +52,8 @@ use data_encoding::BASE64;
 
 const FORMAT_VERSION: i32 = 1;
 /// Increment when adding migrations beyond what existing exports can carry.
-const SCHEMA_VERSION: i32 = 39;
+/// Also stamped into each business folder's `business.json` marker.
+pub const SCHEMA_VERSION: i32 = 39;
 
 /// Tables exported in dependency order — parents first. Restore uses
 /// the same order; replace-mode wipe uses the reverse.
@@ -255,13 +256,7 @@ pub async fn export_tenant_data(
 	encrypt: bool,
 	passphrase: Option<String>,
 ) -> Result<(), String> {
-	let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
-	let db_path = app_data.join("businesses").join(format!("{tenant_id}.db"));
-	if !db_path.exists() {
-		return Err(format!("Tenant DB not found: {}", db_path.display()));
-	}
-
-	// Look up the tenant's display name from the registry (for the manifest).
+	// Look up the tenant's display name + folder from the registry.
 	let reg = tenants::read_registry_public(&app)?;
 	let tenant = reg
 		.tenants
@@ -269,6 +264,12 @@ pub async fn export_tenant_data(
 		.find(|t| t.id == tenant_id)
 		.ok_or_else(|| format!("Tenant {tenant_id} not registered"))?
 		.clone();
+
+	let folder = PathBuf::from(&tenant.path);
+	let db_path = folder.join("business.db");
+	if !db_path.exists() {
+		return Err(format!("Business database not found: {}", db_path.display()));
+	}
 
 	let pool = open_pool(&db_path).await?;
 
@@ -284,10 +285,10 @@ pub async fn export_tenant_data(
 	let attachment_files = collect_attachment_files(&data);
 	let pdf_header = collect_pdf_header(&data);
 
-	// Resolve the logo file (if present).
+	// Resolve the logo file (if present) from the business folder's logos/ dir.
 	let mut logo_payload: Option<(String, Vec<u8>)> = None;
 	if let Some(logo_file) = &tenant.logo_file {
-		let logo_path = app_data.join("logos").join(logo_file);
+		let logo_path = folder.join("logos").join(logo_file);
 		if logo_path.exists() {
 			let bytes = std::fs::read(&logo_path).map_err(|e| format!("read logo: {e}"))?;
 			let ext = logo_path
@@ -421,6 +422,10 @@ pub async fn import_tenant_data(
 	mode: String,
 	target_tenant_id: Option<String>,
 	target_name: Option<String>,
+	// For mode="new": the PARENT directory the new business folder is created
+	// under. Optional so existing JS callers (which will be updated in a later
+	// task) still deserialize; required at runtime for "new".
+	target_parent: Option<String>,
 	passphrase: Option<String>,
 ) -> Result<tenants::Tenant, String> {
 	let in_path = PathBuf::from(input_path);
@@ -521,7 +526,10 @@ pub async fn import_tenant_data(
 	match mode.as_str() {
 		"new" => {
 			let name = target_name.unwrap_or_else(|| manifest.business_name.clone());
-			import_as_new_tenant(&app, &name, &mut data, logo_name.as_deref(), logo_bytes, &pdf_header, &attachments).await
+			let parent = target_parent
+				.filter(|p| !p.trim().is_empty())
+				.ok_or_else(|| "Importing as a new business needs a location for its folder.".to_string())?;
+			import_as_new_tenant(&app, &name, &parent, &mut data, logo_name.as_deref(), logo_bytes, &pdf_header, &attachments).await
 		}
 		"replace" => {
 			let id = target_tenant_id
@@ -560,15 +568,16 @@ fn read_zip_bytes<R: Read + Seek>(
 async fn import_as_new_tenant(
 	app: &AppHandle,
 	name: &str,
+	parent_dir: &str,
 	data: &mut Value,
 	logo_name: Option<&str>,
 	logo_bytes: Option<Vec<u8>>,
 	pdf_header: &Option<(String, Vec<u8>)>,
 	attachments: &[(String, Vec<u8>)],
 ) -> Result<tenants::Tenant, String> {
-	// Use the existing create_tenant path — produces a unique slug, a
-	// fresh DB with migrations applied, and a registry entry.
-	let tenant = tenants::create_tenant_internal(app, name).await?;
+	// Use the existing create path — produces a unique id, a fresh business
+	// folder + migrated DB + marker, and a registry entry.
+	let tenant = tenants::create_tenant_internal(app, name, parent_dir).await?;
 
 	// Run the actual restore; if anything fails partway, tear the freshly-
 	// created tenant back down so a failed import never leaves a broken
@@ -597,8 +606,7 @@ async fn populate_new_tenant(
 	// Rewrite attachment paths now that we know the new tenant id.
 	rewrite_attachment_paths(app, tenant_id, data)?;
 
-	let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
-	let db_path = app_data.join("businesses").join(format!("{tenant_id}.db"));
+	let db_path = tenants::tenant_db_path_public(app, tenant_id)?;
 	let pool = open_pool(&db_path).await?;
 
 	// Brand-new DB has the seeded company_settings row — wipe it before
@@ -612,11 +620,11 @@ async fn populate_new_tenant(
 		}
 	}
 
-	// Logo: extract bytes to logos/{tenant_id}.{ext}, point the DB at it.
+	// Logo: extract bytes to <folder>/logos/logo.<ext>, point the DB at it.
 	let updated_logo_file = write_logo(app, tenant_id, logo_name, logo_bytes.as_deref()).await?;
 	let new_logo_path = updated_logo_file
 		.as_ref()
-		.map(|f| logos_path(app, f))
+		.map(|f| logos_path(app, tenant_id, f))
 		.transpose()?;
 
 	// Rewrite logo_path in the imported row (it referenced the
@@ -660,23 +668,21 @@ async fn import_replace(
 	pdf_header: &Option<(String, Vec<u8>)>,
 	attachments: &[(String, Vec<u8>)],
 ) -> Result<tenants::Tenant, String> {
-	let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
-	let db_path = app_data.join("businesses").join(format!("{target_id}.db"));
+	let folder = tenants::folder_for(app, target_id)?;
+	let db_path = folder.join("business.db");
 	if !db_path.exists() {
-		return Err(format!("Target tenant DB not found: {}", db_path.display()));
+		return Err(format!("Target business database not found: {}", db_path.display()));
 	}
 
 	// Delete the old logo before writing the new one (or before clearing,
 	// if the bundle has none).
 	if let Some(old_logo) = tenants::get_tenant(app, target_id)?.logo_file {
-		let old = app_data.join("logos").join(&old_logo);
+		let old = folder.join("logos").join(&old_logo);
 		let _ = std::fs::remove_file(&old);
 	}
 
 	// Delete the old attachments dir before writing restored ones.
-	let _ = std::fs::remove_dir_all(
-		app.path().app_data_dir().map_err(|e| e.to_string())?.join("attachments").join(target_id)
-	);
+	let _ = std::fs::remove_dir_all(folder.join("attachments"));
 
 	let pool = open_pool(&db_path).await?;
 	wipe_tenant_data(&pool).await?;
@@ -690,7 +696,7 @@ async fn import_replace(
 	let updated_logo_file = write_logo(app, target_id, logo_name, logo_bytes.as_deref()).await?;
 	let new_logo_path = updated_logo_file
 		.as_ref()
-		.map(|f| logos_path(app, f))
+		.map(|f| logos_path(app, target_id, f))
 		.transpose()?;
 	sqlx::query("UPDATE company_settings SET logo_path = ? WHERE id = 1")
 		.bind(new_logo_path.as_ref().map(|p| p.to_string_lossy().to_string()))
@@ -724,10 +730,9 @@ async fn import_replace(
 /// Rewrite each document_attachments row's file_path to point under the given
 /// tenant's attachments dir, and return the absolute path each row maps to so
 /// the caller can drop the bundled bytes there. New path =
-/// <app_data>/attachments/<tenant_id>/<document_type>/<document_id>/<basename>.
+/// <business folder>/attachments/<document_type>/<document_id>/<basename>.
 fn rewrite_attachment_paths(app: &AppHandle, tenant_id: &str, data: &mut Value) -> Result<(), String> {
-	let base = app.path().app_data_dir().map_err(|e| e.to_string())?
-		.join("attachments").join(tenant_id);
+	let base = tenants::attachments_dir_for(app, tenant_id)?;
 	let Some(rows) = data.get_mut("document_attachments").and_then(|v| v.as_array_mut()) else {
 		return Ok(());
 	};
@@ -753,8 +758,7 @@ fn write_attachment_files(app: &AppHandle, tenant_id: &str, attachments: &[(Stri
 	if attachments.is_empty() {
 		return Ok(());
 	}
-	let base = app.path().app_data_dir().map_err(|e| e.to_string())?
-		.join("attachments").join(tenant_id);
+	let base = tenants::attachments_dir_for(app, tenant_id)?;
 	for (rel, bytes) in attachments {
 		// Only allow plain relative components — rejects absolute paths, Windows
 		// drive/UNC prefixes, leading separators, "..", and "." from a crafted bundle
@@ -776,14 +780,13 @@ fn write_attachment_files(app: &AppHandle, tenant_id: &str, attachments: &[(Stri
 	Ok(())
 }
 
-/// Write the PDF header logo under pdf-headers/<tenant>.<ext>, returning its
-/// absolute path so company_settings.pdf_header_logo_path can be rewritten.
+/// Write the PDF header logo to `<business folder>/pdf-header.<ext>`, returning
+/// its absolute path so company_settings.pdf_header_logo_path can be rewritten.
 fn write_pdf_header(app: &AppHandle, tenant_id: &str, header: &Option<(String, Vec<u8>)>) -> Result<Option<String>, String> {
 	let Some((name, bytes)) = header else { return Ok(None) };
 	let ext = Path::new(name).extension().and_then(|e| e.to_str()).unwrap_or("png");
-	let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("pdf-headers");
-	std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-	let path = dir.join(format!("{tenant_id}.{ext}"));
+	let folder = tenants::folder_for(app, tenant_id)?;
+	let path = folder.join(format!("pdf-header.{ext}"));
 	std::fs::write(&path, bytes).map_err(|e| format!("write pdf header: {e}"))?;
 	Ok(Some(path.to_string_lossy().to_string()))
 }
@@ -834,10 +837,10 @@ fn collect_pdf_header(data: &serde_json::Map<String, Value>) -> Option<(String, 
 	Some((format!("pdf-header.{ext}"), bytes))
 }
 
-fn logos_path(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
-	let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("logos");
-	std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-	Ok(dir.join(name))
+/// Absolute path of a logo file (by relative name) inside the business folder's
+/// `logos/` dir, creating the dir if needed.
+fn logos_path(app: &AppHandle, tenant_id: &str, name: &str) -> Result<PathBuf, String> {
+	Ok(tenants::logos_dir_for(app, tenant_id)?.join(name))
 }
 
 async fn write_logo(
@@ -853,8 +856,10 @@ async fn write_logo(
 		.extension()
 		.and_then(|e| e.to_str())
 		.unwrap_or("png");
-	let file_name = format!("{tenant_id}.{ext}");
-	let path = logos_path(app, &file_name)?;
+	// Fixed stem inside the folder — the folder is the container, so the id is
+	// not encoded in the filename.
+	let file_name = format!("logo.{ext}");
+	let path = logos_path(app, tenant_id, &file_name)?;
 	std::fs::write(&path, bytes).map_err(|e| format!("write logo: {e}"))?;
 	Ok(Some(file_name))
 }

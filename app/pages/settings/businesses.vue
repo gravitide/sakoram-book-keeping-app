@@ -3,7 +3,7 @@
 		<!-- select-none on the page root: static labels and copy aren't
 			selectable; form fields stay selectable via the input rule
 			in main.css. -->
-		<header class="mb-6 flex items-start justify-between gap-4 flex-wrap">
+		<header class="mb-3 flex items-start justify-between gap-4 flex-wrap">
 			<div>
 				<h1 class="text-2xl font-semibold">
 					Businesses
@@ -14,18 +14,13 @@
 			</div>
 			<div class="flex flex-col items-end gap-2">
 				<div class="flex gap-2">
-					<UButton
-						color="neutral"
-						variant="outline"
-						icon="i-lucide-sparkles"
-						:loading="seedingDemo"
-						:disabled="seedingDemo"
-						title="Create a new business pre-filled with realistic sample data"
-						@click="onAddDemo"
-					>
-						Add demo business
+					<UButton color="neutral" variant="outline" icon="i-lucide-folder-open" :loading="opening" :disabled="opening" title="Open a business folder you already have — e.g. one you moved here or that lives on another drive" @click="onOpenBusiness">
+						Open
 					</UButton>
-					<UButton color="neutral" variant="outline" icon="i-lucide-upload" @click="onImportClick">
+					<UButton v-if="tenants.activeTenantId" color="neutral" variant="outline" icon="i-lucide-log-out" title="Close the active business and return to the welcome screen" @click="onClose">
+						Close
+					</UButton>
+					<UButton color="neutral" variant="outline" icon="i-lucide-upload" title="Restore a .zip backup as a new business" @click="onImportClick">
 						Import
 					</UButton>
 					<UButton icon="i-lucide-plus" :disabled="!license.canCreateBusiness(tenants.tenants.length)" @click="goWelcome">
@@ -40,74 +35,118 @@
 			</div>
 		</header>
 
-		<UCard>
-			<ul class="divide-y divide-(--ui-border)">
-				<li
-					v-for="t in tenants.tenants"
-					:key="t.id"
-					class="py-3 flex items-center gap-3"
-				>
-					<div class="size-10 shrink-0 rounded-md bg-(--ui-bg-muted) border border-(--ui-border) flex items-center justify-center overflow-hidden">
-						<img
-							v-if="logoSrcs[t.id]"
-							:src="logoSrcs[t.id]!"
-							:alt="t.name"
-							class="max-w-full max-h-full object-contain"
-						>
-						<UIcon v-else name="i-lucide-building-2" class="size-5 text-(--ui-text-muted)" />
-					</div>
-					<div class="min-w-0 flex-1">
-						<div class="font-medium flex items-center gap-2 flex-wrap">
-							<span class="truncate">{{ t.name }}</span>
-							<UBadge v-if="t.id === tenants.activeTenantId" color="primary" variant="subtle" size="sm">
-								Active
-							</UBadge>
-						</div>
-						<div class="text-xs text-(--ui-text-muted) truncate">
-							{{ t.id }}.db
-						</div>
-					</div>
-					<div class="flex gap-1">
-						<UButton
-							v-if="t.id !== tenants.activeTenantId"
-							size="xs"
-							variant="ghost"
-							icon="i-lucide-log-in"
-							:title="`Switch to ${t.name}`"
-							@click="onSwitch(t.id)"
-						>
-							Switch
-						</UButton>
-						<UButton
-							size="xs"
-							variant="ghost"
-							icon="i-lucide-download"
-							:title="`Export ${t.name} as a backup .zip`"
-							:loading="exportingId === t.id"
-							:disabled="exportingId !== null"
-							@click="askExport(t)"
-						>
-							Export
-						</UButton>
-						<UButton
-							size="xs"
-							variant="ghost"
-							icon="i-lucide-pencil"
-							:title="`Rename ${t.name}`"
-							@click="askRename(t)"
-						/>
-						<UButton
-							size="xs"
-							variant="ghost"
-							color="error"
-							icon="i-lucide-trash-2"
-							:title="`Delete ${t.name}`"
-							@click="askDelete(t)"
-						/>
-					</div>
+		<!-- Distinguishes the two "bring in a business" toolbar actions, which
+			are easy to confuse: Open uses a folder that already exists; Import
+			rebuilds one from a .zip snapshot. -->
+		<div class="mb-6 rounded-lg border border-(--ui-border-accented) bg-(--ui-bg-muted)/60 p-4">
+			<ul class="space-y-3">
+				<li class="flex items-start gap-3">
+					<span class="size-8 shrink-0 rounded-md bg-(--ui-primary)/10 flex items-center justify-center">
+						<UIcon name="i-lucide-folder-open" class="size-4 text-(--ui-primary)" />
+					</span>
+					<p class="text-sm leading-relaxed">
+						<span class="font-medium text-(--ui-text)">Open</span>
+						<span class="text-(--ui-text-muted)"> — point at a business folder you already have on disk, e.g. one you moved here or that lives on another drive.</span>
+					</p>
+				</li>
+				<li class="flex items-start gap-3">
+					<span class="size-8 shrink-0 rounded-md bg-(--ui-primary)/10 flex items-center justify-center">
+						<UIcon name="i-lucide-upload" class="size-4 text-(--ui-primary)" />
+					</span>
+					<p class="text-sm leading-relaxed">
+						<span class="font-medium text-(--ui-text)">Import</span>
+						<span class="text-(--ui-text-muted)"> — restore a .zip backup as a brand-new business.</span>
+					</p>
 				</li>
 			</ul>
-		</UCard>
+		</div>
+
+		<!-- One card per business. The whole card is a right-click context
+			menu; the ⋯ button opens the same menu. Both consume itemsFor(t)
+			so the actions never drift. Clicking a non-active, present card
+			body switches to it. -->
+		<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+			<UContextMenu
+				v-for="t in tenants.tenants"
+				:key="t.id"
+				:items="itemsFor(t)"
+			>
+				<div
+					class="relative h-full rounded-lg border bg-(--ui-bg) p-4 transition"
+					:class="[
+						t.id === tenants.activeTenantId
+							? 'border-(--ui-primary)'
+							: 'border-(--ui-border)',
+						canSwitch(t)
+							? 'cursor-pointer hover:border-(--ui-primary)'
+							: ''
+					]"
+					@click="onCardClick(t)"
+				>
+					<!-- ⋯ overflow — stop propagation so the card's switch
+						click doesn't also fire when opening the menu. -->
+					<UDropdownMenu :items="itemsFor(t)">
+						<UButton
+							size="xs"
+							color="neutral"
+							variant="ghost"
+							icon="i-lucide-ellipsis-vertical"
+							class="absolute top-2 right-2"
+							title="Actions"
+							aria-label="Actions"
+							@click.stop
+						/>
+					</UDropdownMenu>
+
+					<div class="flex items-start gap-3 pr-8">
+						<div class="size-11 shrink-0 rounded-md bg-(--ui-bg-muted) border border-(--ui-border) flex items-center justify-center overflow-hidden">
+							<img
+								v-if="logoSrcs[t.id]"
+								:src="logoSrcs[t.id]!"
+								:alt="t.name"
+								class="max-w-full max-h-full object-contain"
+							>
+							<UIcon v-else name="i-lucide-building-2" class="size-5 text-(--ui-text-muted)" />
+						</div>
+						<div class="min-w-0 flex-1">
+							<div class="font-medium flex items-center gap-2 flex-wrap">
+								<span class="truncate">{{ t.name }}</span>
+								<UBadge v-if="t.id === tenants.activeTenantId" color="primary" variant="subtle" size="sm">
+									Active
+								</UBadge>
+								<UBadge v-if="missingFolders[t.id]" color="error" variant="subtle" size="sm">
+									Not found
+								</UBadge>
+							</div>
+							<div class="text-xs text-(--ui-text-muted) truncate mt-0.5" :title="t.path">
+								{{ t.path || t.id }}
+							</div>
+							<p v-if="missingFolders[t.id]" class="text-xs text-(--ui-error)/90 mt-1">
+								This folder was moved or deleted. Remove it from the list, or Open it again from its new location.
+							</p>
+						</div>
+					</div>
+				</div>
+			</UContextMenu>
+		</div>
+
+		<!-- Demo business — a quieter, exploratory option below the real list. -->
+		<div class="mt-6">
+			<UButton
+				color="neutral"
+				variant="outline"
+				size="sm"
+				icon="i-lucide-sparkles"
+				:loading="seedingDemo"
+				:disabled="seedingDemo"
+				@click="onAddDemo"
+			>
+				Add a demo business
+			</UButton>
+			<p class="text-xs text-(--ui-text-muted) mt-1.5">
+				New here? A demo business comes pre-filled with realistic sample data so you can explore before setting up your own.
+			</p>
+		</div>
 
 		<!-- Rename modal -->
 		<UModal v-model:open="showRename" title="Rename business">
@@ -116,7 +155,7 @@
 					<UInput v-model="renameValue" autofocus @keydown.enter="confirmRename" />
 				</UFormField>
 				<p class="text-xs text-(--ui-text-muted) mt-2">
-					This updates the display name only — the database file ({{ renameTarget?.id }}.db) keeps its current filename.
+					This updates the display name only — the business folder on disk keeps its current name and location.
 				</p>
 			</template>
 			<template #footer>
@@ -263,8 +302,8 @@
 		<UModal v-model:open="showDelete" :title="`Delete ${deleteTarget?.name ?? ''}?`">
 			<template #body>
 				<p class="text-sm text-(--ui-text-muted)">
-					This <span class="font-semibold text-(--ui-error)">permanently deletes</span> the database for
-					<span class="font-medium text-(--ui-text)">{{ deleteTarget?.name }}</span> — all its clients, quotes, invoices, bills, vouchers, and settings. This cannot be undone.
+					This <span class="font-semibold text-(--ui-error)">permanently deletes the folder</span> for
+					<span class="font-medium text-(--ui-text)">{{ deleteTarget?.name }}</span> — all its clients, quotes, invoices, bills, vouchers, settings, logos, and attachments. This cannot be undone. To keep the files but take it off the list, use <span class="font-medium">Remove from list</span> instead.
 				</p>
 				<div
 					v-if="deleteTarget?.id === tenants.activeTenantId"
@@ -351,6 +390,7 @@
 
 	import type { Tenant } from "~/stores/tenants";
 	import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+	import { appDataDir } from "@tauri-apps/api/path";
 	import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 	import { createDemoBusiness } from "~/lib/demo-seed";
 	import { useLicenseStore } from "~/stores/license";
@@ -391,6 +431,69 @@
 	};
 	onMounted(refreshLogos);
 
+	// ---- Missing-folder detection ----
+	// Flag registry entries whose folder no longer exists so the row shows a
+	// "Not found" badge + a Forget action instead of failing on Switch.
+	const missingFolders = ref<Record<string, boolean>>({});
+	const refreshMissing = async () => {
+		for (const t of tenants.tenants) {
+			try {
+				missingFolders.value[t.id] = t.path ? !(await invoke<boolean>("path_exists", { path: t.path })) : true;
+			} catch {
+				missingFolders.value[t.id] = false;
+			}
+		}
+	};
+	onMounted(refreshMissing);
+
+	// ---- Open an existing business folder ----
+	const opening = ref(false);
+	const onOpenBusiness = async () => {
+		if (opening.value) return;
+		let dir: string | null = null;
+		try {
+			const picked = await openDialog({ directory: true, title: "Open a business folder" });
+			if (typeof picked === "string") dir = picked;
+			else if (Array.isArray(picked) && picked.length > 0) dir = picked[0] ?? null;
+		} catch (err) {
+			toast.add({ title: "Could not open folder picker", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });
+			return;
+		}
+		if (!dir) return;
+		opening.value = true;
+		try {
+			const t = await tenants.open(dir);
+			await tenants.activate(t.id);
+			window.location.assign("/");
+		} catch (err) {
+			opening.value = false;
+			toast.add({ title: "Not a business folder", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });
+		}
+	};
+
+	// ---- Close the active business ----
+	const onClose = async () => {
+		try {
+			await tenants.close();
+			router.push("/welcome");
+		} catch (err) {
+			toast.add({ title: "Could not close business", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });
+		}
+	};
+
+	// ---- Forget (drop from list, keep files) ----
+	const onForget = async (t: Tenant) => {
+		const wasActive = t.id === tenants.activeTenantId;
+		try {
+			await tenants.forget(t.id);
+			delete missingFolders.value[t.id];
+			toast.add({ title: `${t.name} removed from list`, description: "The folder was left untouched on disk.", color: "info", icon: "i-lucide-eye-off" });
+			if (wasActive) window.location.assign("/");
+		} catch (err) {
+			toast.add({ title: "Couldn't remove it from the list", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });
+		}
+	};
+
 	const goWelcome = async () => {
 		if (!license.canCreateBusiness(tenants.tenants.length)) {
 			await navigateTo("/upgrade?feature=businesses");
@@ -418,11 +521,14 @@
 		seedingDone.value = 0;
 		seedingTotal.value = 0;
 		try {
+			// One-click demo — no folder dialog. Default its parent to
+			// appDataDir() so the throwaway lands inside %APPDATA%.
+			const demoParent = await appDataDir();
 			const t = await createDemoBusiness(undefined, (p) => {
 				seedingStage.value = p.stage;
 				seedingDone.value = p.done;
 				seedingTotal.value = p.total;
-			});
+			}, demoParent);
 			toast.add({
 				title: `${t.name} created`,
 				description: "Sample data ready to explore.",
@@ -455,6 +561,18 @@
 				icon: "i-lucide-circle-alert"
 			});
 		}
+	};
+
+	// A card is a switch target only when it's not the active one and its
+	// folder is present. The active card can't be switched to (already
+	// there) and a missing folder can't be opened.
+	const canSwitch = (t: Tenant) => t.id !== tenants.activeTenantId && !missingFolders.value[t.id];
+
+	// Clicking the card body switches to a switchable business; on the
+	// active card or a missing one it's a no-op (the ⋯ / right-click menu
+	// still exposes everything).
+	const onCardClick = (t: Tenant) => {
+		if (canSwitch(t)) void onSwitch(t.id);
 	};
 
 	// ---- Rename ----
@@ -680,6 +798,20 @@
 
 	const confirmImport = async () => {
 		if (!importManifest.value || importing.value) return;
+		// Importing "new" creates a portable folder — ask where to put it before
+		// we flip the importing flag (so a cancelled dialog leaves the modal open).
+		let targetParent: string | null = null;
+		if (importMode.value === "new") {
+			try {
+				const picked = await openDialog({ directory: true, title: "Choose where to store the imported business" });
+				if (typeof picked === "string") targetParent = picked;
+				else if (Array.isArray(picked) && picked.length > 0) targetParent = picked[0] ?? null;
+			} catch (err) {
+				toast.add({ title: "Could not open folder picker", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });
+				return;
+			}
+			if (!targetParent) return; // user cancelled
+		}
 		importing.value = true;
 		try {
 			const args: Record<string, unknown> = {
@@ -690,6 +822,7 @@
 			if (importMode.value === "new") {
 				const name = importNewName.value.trim() || importManifest.value.business_name;
 				args.targetName = name;
+				args.targetParent = targetParent;
 			} else {
 				args.targetTenantId = importReplaceTargetId.value;
 			}
@@ -723,5 +856,65 @@
 		} finally {
 			importing.value = false;
 		}
+	};
+
+	// Single source of truth for both the ⋯ overflow UDropdownMenu and the
+	// whole-card right-click UContextMenu, so the two never drift. Grouped
+	// arrays become separators; the Delete row is tinted error. Rows that
+	// don't apply to a missing folder (Export / Rename / Delete) are dropped.
+	// Declared last so the ask* handlers it references are already in scope.
+	const itemsFor = (t: Tenant) => {
+		const isActive = t.id === tenants.activeTenantId;
+		const missing = !!missingFolders.value[t.id];
+
+		const primary = isActive
+			? [{
+				label: "Go to dashboard",
+				icon: "i-lucide-layout-dashboard",
+				onSelect: () => window.location.assign("/")
+			}]
+			: missing
+				? []
+				: [{
+					label: "Switch to this business",
+					icon: "i-lucide-log-in",
+					onSelect: () => {
+						void onSwitch(t.id);
+					}
+				}];
+
+		const manage = missing
+			? []
+			: [
+				{
+					label: "Export…",
+					icon: "i-lucide-download",
+					onSelect: () => askExport(t)
+				},
+				{
+					label: "Rename…",
+					icon: "i-lucide-pencil",
+					onSelect: () => askRename(t)
+				}
+			];
+
+		const forget = [{
+			label: "Remove from list",
+			icon: "i-lucide-eye-off",
+			onSelect: () => {
+				void onForget(t);
+			}
+		}];
+
+		const destructive = missing
+			? []
+			: [{
+				label: "Delete…",
+				icon: "i-lucide-trash-2",
+				class: "text-(--ui-error) hover:bg-(--ui-error)/10 [&>span>span:first-child]:text-(--ui-error)",
+				onSelect: () => askDelete(t)
+			}];
+
+		return [primary, manage, forget, destructive].filter((g) => g.length > 0);
 	};
 </script>

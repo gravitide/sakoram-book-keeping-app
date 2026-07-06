@@ -387,8 +387,7 @@
 
 <script setup lang="ts">
 	import type { SettingsUpdate } from "~/stores/settings";
-	import { appDataDir, join } from "@tauri-apps/api/path";
-	import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
+	import { invoke } from "@tauri-apps/api/core";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { PDF_TEMPLATES } from "~/lib/pdf-templates";
@@ -535,14 +534,17 @@
 		}
 
 		try {
-			const bytes = new Uint8Array(await file.arrayBuffer());
-			const appData = await appDataDir();
-			const dir = await join(appData, "pdf-headers");
-			await mkdir(dir, { recursive: true }).catch(() => { /* already exists */ });
+			const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
 			const ext = (file.name.split(".").pop() ?? "png").toLowerCase();
-			const fileName = `${tenantId}.${ext}`;
-			const target = await join(dir, fileName);
-			await writeFile(target, bytes);
+			// The wide letterhead lives at the business-folder root as
+			// pdf-header.<ext>. Written by the Rust `save_business_asset` command
+			// (std::fs, unscoped) so it works on any drive the folder lives on.
+			const target = await invoke<string>("save_business_asset", {
+				id: tenantId,
+				kind: "pdf-header",
+				ext,
+				bytes
+			});
 			await store.save({ pdf_header_logo_path: target });
 			form.pdf_header_logo_path = target;
 			refreshBaseline();

@@ -143,45 +143,84 @@ migrations per DB via sqlx directly (we deliberately do NOT use
 `tauri-plugin-sql`'s `add_migrations` because it can't register URLs
 added at runtime).
 
-### File layout under `app_data_dir`
+### Portable business folders (since migration 0037 / v0.129)
+
+Each business is a **portable folder the user chooses the location of** —
+a "document" they own, can move to an external drive, and Open / Close /
+Forget like a file. Only two app-level files stay in `%APPDATA%`:
 
 ```
 %APPDATA%\com.sakoram.billing\
-  ├─ tenants.json              ← registry: { active_tenant_id, tenants: [{ id, name, logo_file }] }
-  ├─ businesses\
-  │   └─ {tenant_id}.db        ← one SQLite file per business
-  ├─ logos\
-  │   └─ {tenant_id}.{ext}     ← square identity logo (sidebar, tenant switcher, hero)
-  └─ pdf-headers\
-      └─ {tenant_id}.{ext}     ← optional wide letterhead logo printed on PDFs
+  ├─ tenants.json     ← registry: { active_tenant_id, tenants: [{ id, name, path, logo_file, encrypted }] }
+  └─ license.json     ← per-install trial/license (per-machine; NEVER travels with a folder)
 ```
 
-`tenant.id` doubles as the **slug** and the **filename stem** for both
-the DB and both logo variants. It's stable: renaming a tenant changes
-`tenant.name` only — the slug, DB filename, and logo filenames stay
-put so we don't have to move files around on rename.
+A **business folder** (anywhere the user picks) holds everything for that
+business, with **fixed filenames** (the folder is the container — the id
+is no longer encoded in filenames):
 
-Two logos by design: the sidebar / tenant switcher want a square mark,
-while invoice headers look better with a wide letterhead-style image.
-Only the identity logo (`logos/`) is mirrored into `tenants.json` as
-`logo_file` because the welcome/sidebar UI reads that file directly
-without going through the DB. The PDF header logo lives only on
-`company_settings.pdf_header_logo_path`.
+```
+<Safe Business Name>/
+  ├─ business.json                       ← self-describing marker { id, name, schema_version, created_at, encrypted }
+  ├─ business.db                         ← the SQLite file (fixed name)
+  ├─ attachments/<document_type>/<document_id>/…
+  ├─ logos/logo.<ext>                    ← square identity logo (sidebar, tenant switcher, hero)
+  ├─ pdf-header.<ext>                    ← optional wide letterhead logo printed on PDFs
+  └─ business.db.enc + business.vault.json   ← only when encrypted (decrypt-on-unlock working file is business.db)
+```
+
+- **`tenants.json` gained an absolute `path` per tenant** — the registry
+  is a recent-list index; the folder (via its `business.json` marker) is
+  the source of truth. `tenant.id` is still the stable identity (registry,
+  vault session keys, business_name in the DB) but is **no longer** a
+  filename stem — filenames inside a folder are fixed.
+- **Folder name is cosmetic**, derived from the business name via
+  `app/lib/safe-folder-name.ts` (illegal-char strip, Windows reserved-name
+  guard, length cap; Rust de-dupes with ` (2)`…). Renaming a business
+  updates `name` in the marker + registry only — the folder is **not**
+  moved/renamed (matches the old "rename changes name only" invariant).
+- **Logo (`logos/logo.<ext>`) is mirrored into `tenants.json` as
+  `logo_file`** because the welcome/sidebar UI reads it directly without
+  going through the DB. The wide PDF-header logo lives at the folder root
+  and only on `company_settings.pdf_header_logo_path`. Both frontend
+  writers (`settings/company.vue`, `settings/pdf.vue`, `onboarding.vue`)
+  resolve their target from `tenants.activeFolder` (the active tenant's
+  `path`), not from `appDataDir()`.
+- **Clean cutover, no migration.** The old
+  `%APPDATA%/{businesses,logos,pdf-headers,attachments}` layout is
+  **retired** (pre-1.0, disposable data). Businesses created on an old
+  build won't appear — their registry entries lack a `path`. `migrate_legacy_db`
+  was dropped.
 
 ### Tenant lifecycle
 
 - **App startup** — `app/middleware/tenant.global.ts` redirects every
   navigation to `/welcome` unless an active tenant is set.
-- **Legacy migration** — first launch after the multi-tenancy upgrade,
-  Rust auto-migrates the old single `sakoram.db` into the first tenant
-  (`tenants::migrate_legacy_db`).
+- **New** — enter a name → **pick a parent folder** (folder dialog) →
+  `tenants.create(name, parentDir)` invokes `create_tenant({ name, parentDir,
+  folderName: safeFolderName(name) })`; Rust creates `<parentDir>/<folderName>`,
+  migrates + seeds `business.db`, writes the marker, registers it. Then
+  the welcome page activates + hard-reloads into onboarding. The demo
+  business skips the dialog and defaults its parent to `appDataDir()`
+  (one-click; the throwaway lands in `%APPDATA%`).
+- **Open** — folder dialog → `tenants.open(path)` → `open_tenant({ path })`
+  validates the marker + `business.db`, runs pending migrations, upserts
+  the registry entry keyed on the marker `id` → activate + hard-reload.
+- **Close** — `tenants.close()` → `resetDbCache()`, seals an encrypted
+  active tenant, `clear_active_tenant()`, nulls active state → `/welcome`.
+- **Delete vs Forget** — `tenants.remove(id)` (`delete_tenant`) removes the
+  whole folder from disk; `tenants.forget(id)` (`forget_tenant`) drops the
+  registry entry only, leaving the files untouched (re-Openable later).
+- **Missing folder** — welcome + Businesses check each registry `path` with
+  `exists()` on load; a missing folder shows a "Not found" badge + a Forget
+  action (full Locate/relocate is a P2 follow-up).
 - **Switching** — `tenants.activate(id)` then **`window.location.assign("/")`** to hard-reload. This wipes every Pinia store's in-memory state cleanly. Don't try to manually `$reset()` everything — it's bug-prone.
 
 ### Bundle identifier
 
 `com.sakoram.billing` is the Tauri bundle identifier. **Do not change
-it** — it determines `app_data_dir`. Renaming would orphan all of the
-user's existing tenants.
+it** — it still determines `app_data_dir` (home of `tenants.json` +
+`license.json`). Renaming would orphan the registry + license state.
 
 ---
 

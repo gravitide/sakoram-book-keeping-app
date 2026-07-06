@@ -26,7 +26,7 @@ import type { AttachmentFile, DocumentType } from "~/stores/document_attachments
 import type { Tenant } from "~/stores/tenants";
 import type { VendorRow } from "~/stores/vendors";
 import { invoke } from "@tauri-apps/api/core";
-import { appLocalDataDir, join } from "@tauri-apps/api/path";
+import { appDataDir, appLocalDataDir, join } from "@tauri-apps/api/path";
 import { BaseDirectory, writeFile } from "@tauri-apps/plugin-fs";
 import { buildCategorySnapshot, useBillCategoriesStore } from "~/stores/bill_categories";
 import { useBillsStore } from "~/stores/bills";
@@ -1468,14 +1468,22 @@ const seedSampleAttachments = async (
  */
 export const createDemoBusiness = async (
 	displayName = "Acme Trading Co (demo)",
-	onProgress: SeedProgressFn = noopProgress
+	onProgress: SeedProgressFn = noopProgress,
+	parentDir?: string
 ): Promise<Tenant> => {
 	const tenants = useTenantsStore();
 
 	// 1. Create the tenant + 2. activate it. After activate(), getDb() in
 	// every other store will use this new DB.
+	//
+	// Portable folders: a business now lives in a user-chosen folder, but the
+	// demo is a one-click affordance — we don't want to interrupt it with a
+	// folder dialog. Default its parent to appDataDir() so the throwaway demo
+	// lands inside %APPDATA% (out of the user's document folders) unless the
+	// caller passes an explicit parent.
 	onProgress({ stage: "Creating tenant", done: 0, total: 0 });
-	const t = await tenants.create(displayName);
+	const parent = parentDir ?? (await appDataDir());
+	const t = await tenants.create(displayName, parent);
 	await tenants.activate(t.id);
 
 	// 3. Seed — curated handcrafted set first, so the dashboard / detail

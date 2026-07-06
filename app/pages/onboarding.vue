@@ -467,8 +467,6 @@
 // to the last Next they pressed is preserved.
 
 	import { invoke } from "@tauri-apps/api/core";
-	import { appDataDir, join } from "@tauri-apps/api/path";
-	import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import CurrencyPicker from "~/components/CurrencyPicker.vue";
 	import { resetDbCache } from "~/lib/db";
@@ -747,8 +745,11 @@
 	};
 
 	// ---- Logo upload helpers ----------------------------------------------
-	// Same shape as /settings/company.vue's uploadLogo: write into APPDATA
-	// (which IS in the allowed fs scope) and save the path to the DB.
+	// Remove any existing <stem>.<other-ext> in `dir` so switching the image
+	// format (png → jpg) doesn't orphan the previous file.
+	// Write into the portable business folder via the Rust `save_business_asset`
+	// command (std::fs, unscoped) so it works on any drive the folder lives on —
+	// identity → <folder>/logos/logo.<ext>; PDF header → <folder>/pdf-header.<ext>.
 	const uploadLogo = async (file: File, kind: "identity" | "pdf-header") => {
 		const tenantId = tenants.activeTenantId;
 		if (!tenantId) {
@@ -756,18 +757,18 @@
 			return;
 		}
 		try {
-			const bytes = new Uint8Array(await file.arrayBuffer());
-			const appData = await appDataDir();
-			const dir = await join(appData, kind === "identity" ? "logos" : "pdf-headers");
-			await mkdir(dir, { recursive: true }).catch(() => { /* exists */ });
+			const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
 			const ext = (file.name.split(".").pop() ?? "png").toLowerCase();
-			const fileName = `${tenantId}.${ext}`;
-			const target = await join(dir, fileName);
-			await writeFile(target, bytes);
+			const target = await invoke<string>("save_business_asset", {
+				id: tenantId,
+				kind: kind === "identity" ? "logo" : "pdf-header",
+				ext,
+				bytes
+			});
 
 			if (kind === "identity") {
 				await settingsStore.save({ logo_path: target });
-				await tenants.setLogoFile(tenantId, fileName);
+				await tenants.setLogoFile(tenantId, `logo.${ext}`);
 				identityLogoPreview.value = URL.createObjectURL(file);
 			} else {
 				await settingsStore.save({ pdf_header_logo_path: target });

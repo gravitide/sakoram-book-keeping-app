@@ -297,6 +297,7 @@
 // Layout mounts before any page; ensure the singleton settings row is loaded
 // once for the whole app. Subsequent calls from pages no-op.
 
+	import { open as openDialog } from "@tauri-apps/plugin-dialog";
 	import { open as openExternal } from "@tauri-apps/plugin-shell";
 	import pkg from "~~/package.json";
 	// Sakoram brand wordmark — bundled into the build by Vite (resolves at
@@ -336,10 +337,48 @@
 	const router = useRouter();
 	const { sidebarCollapsed } = useUiState();
 	const appConfig = useAppConfig() as { ui: { colors: { primary: string } } };
+	const toast = useToast();
 
-	// Tenant switcher menu — lists every business the user has, plus links
-	// to the welcome screen (where they can create a new business or pick
-	// from logos) and to the Businesses settings page (rename/delete).
+	// Open an existing business folder from anywhere in the app: pick the
+	// folder, register + activate it, then hard-reload so every store starts
+	// fresh on the new business (same as a switch).
+	const onOpenBusinessFolder = async () => {
+		try {
+			const picked = await openDialog({ directory: true, title: "Open a business folder" });
+			const path = typeof picked === "string" ? picked : Array.isArray(picked) ? picked[0] ?? null : null;
+			if (!path) return;
+			const t = await tenants.open(path);
+			await tenants.activate(t.id);
+			window.location.assign("/");
+		} catch (err) {
+			toast.add({
+				title: "Couldn't open that folder",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	// Close the current business — deactivate it and return to the welcome
+	// screen with nothing open. The folder + data are untouched.
+	const onCloseBusiness = async () => {
+		try {
+			await tenants.close();
+			void router.push("/welcome");
+		} catch (err) {
+			toast.add({
+				title: "Couldn't close the business",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	// Tenant switcher menu — lists every business the user has, plus actions to
+	// open an existing folder, add a new business, manage them, or close the
+	// current one.
 	const tenantMenuItems = computed(() => {
 		const others = tenants.tenants
 			.filter((t) => t.id !== tenants.activeTenantId)
@@ -367,11 +406,23 @@
 				}
 			},
 			{
+				label: "Open a business folder…",
+				icon: "i-lucide-folder-open",
+				onSelect: onOpenBusinessFolder
+			},
+			{
 				label: "Add another business",
 				icon: "i-lucide-plus",
 				onSelect: () => {
 					void router.push("/welcome");
 				}
+			}
+		]);
+		sections.push([
+			{
+				label: "Close business",
+				icon: "i-lucide-log-out",
+				onSelect: onCloseBusiness
 			}
 		]);
 		return sections;

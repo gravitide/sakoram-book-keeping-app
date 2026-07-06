@@ -383,8 +383,7 @@
 <script setup lang="ts">
 	import type { BusinessBankRow } from "~/stores/business_banks";
 	import type { SettingsUpdate } from "~/stores/settings";
-	import { appDataDir, join } from "@tauri-apps/api/path";
-	import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
+	import { invoke } from "@tauri-apps/api/core";
 	import { z } from "zod";
 	import CurrencyPicker from "~/components/CurrencyPicker.vue";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
@@ -645,9 +644,11 @@
 	});
 
 	// Use an HTML <input type="file"> rather than the Tauri dialog plugin: it
-	// gives us the raw File bytes directly via FileReader, so we never need
-	// fs-read capability on the user's arbitrary source path. We only write
-	// into the app data dir, which IS in the allowed scope.
+	// gives us the raw File bytes directly, so we never need fs-read capability
+	// on the user's arbitrary source path. The write into the portable business
+	// folder (<folder>/logos/logo.<ext>) is done by the Rust `save_business_asset`
+	// command (std::fs, unscoped) — the business folder can live on ANY drive
+	// (e.g. D:\), which the fs plugin's capability scope can't cover.
 	const uploadLogo = async (file: File) => {
 		const tenantId = tenants.activeTenantId;
 		if (!tenantId) {
@@ -656,22 +657,18 @@
 		}
 
 		try {
-			const bytes = new Uint8Array(await file.arrayBuffer());
-			// Build paths with `join` so the separators are platform-correct.
-			// Hand-concatenating backslashes confuses Tauri's fs scope matcher
-			// — it falls back to the "forbidden path" error even though the
-			// glob ($APPDATA/**) should logically cover the destination.
-			const appData = await appDataDir();
-			const logosDir = await join(appData, "logos");
-			await mkdir(logosDir, { recursive: true }).catch(() => { /* already exists */ });
+			const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
 			const ext = (file.name.split(".").pop() ?? "png").toLowerCase();
-			const fileName = `${tenantId}.${ext}`;
-			const target = await join(logosDir, fileName);
-			await writeFile(target, bytes);
+			const target = await invoke<string>("save_business_asset", {
+				id: tenantId,
+				kind: "logo",
+				ext,
+				bytes
+			});
 			await store.save({ logo_path: target });
 			// Sync the filename into tenants.json so the welcome screen +
 			// sidebar can find it without round-tripping through the DB.
-			await tenants.setLogoFile(tenantId, fileName);
+			await tenants.setLogoFile(tenantId, `logo.${ext}`);
 			form.logo_path = target;
 			refreshBaseline();
 			toast.add({ title: "Logo updated", color: "success", icon: "i-lucide-check" });

@@ -18,15 +18,22 @@
 			</p>
 		</header>
 
-		<!-- Existing businesses -->
-		<div v-if="tenants.tenants.length > 0" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-			<button
+		<!-- Existing businesses. Each is a portable folder you open and close.
+			The one that's currently open is highlighted with an "Open now" tag
+			and gets Go-to-it / Close actions; the rest are one click to open. -->
+		<div v-if="tenants.tenants.length > 0" class="space-y-3 mb-4">
+			<div
 				v-for="t in tenants.tenants"
 				:key="t.id"
-				type="button"
-				class="text-left p-4 bg-(--ui-bg) border border-(--ui-border) rounded-lg hover:border-(--ui-primary) transition flex items-center gap-3 group"
-				:disabled="switchingId !== null"
-				@click="switchTo(t.id)"
+				class="p-4 rounded-lg border transition flex items-center gap-3 group"
+				:class="[
+					t.id === tenants.activeTenantId
+						? 'border-(--ui-primary) bg-(--ui-primary)/5'
+						: missingFolders[t.id]
+							? 'border-(--ui-border) bg-(--ui-bg) opacity-90'
+							: 'border-(--ui-border) bg-(--ui-bg) hover:border-(--ui-primary) cursor-pointer'
+				]"
+				@click="onCardClick(t)"
 			>
 				<div class="size-12 shrink-0 rounded-md bg-(--ui-bg-muted) border border-(--ui-border) flex items-center justify-center overflow-hidden">
 					<img
@@ -38,26 +45,67 @@
 					<UIcon v-else name="i-lucide-building-2" class="size-5 text-(--ui-text-muted)" />
 				</div>
 				<div class="min-w-0 flex-1">
-					<div class="font-medium truncate">
-						{{ t.name }}
+					<div class="flex items-center gap-2 min-w-0">
+						<span class="font-medium truncate">{{ t.name }}</span>
+						<UIcon
+							v-if="t.encrypted"
+							name="i-lucide-lock"
+							class="size-3.5 shrink-0 text-(--ui-text-muted)"
+							title="Password-protected"
+						/>
 					</div>
-					<div class="text-xs text-(--ui-text-muted) truncate">
-						{{ t.id }}.db
+					<div class="text-xs text-(--ui-text-muted) truncate" :title="t.path">
+						{{ t.path || t.id }}
+					</div>
+					<div
+						v-if="t.id === tenants.activeTenantId"
+						class="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-(--ui-primary)"
+					>
+						<span class="size-1.5 rounded-full bg-(--ui-primary)" />
+						Currently open
+					</div>
+					<div v-if="missingFolders[t.id]" class="mt-1 flex items-center gap-2">
+						<span class="inline-flex items-center gap-1 text-xs text-(--ui-error)">
+							<UIcon name="i-lucide-folder-x" class="size-3" />
+							Not found
+						</span>
+						<button
+							type="button"
+							class="text-xs text-(--ui-primary) hover:underline"
+							@click.stop="onForget(t.id)"
+						>
+							Remove from list
+						</button>
 					</div>
 				</div>
+
+				<!-- Active business: open it (go to its dashboard) or close it. -->
+				<div v-if="t.id === tenants.activeTenantId" class="shrink-0 flex items-center gap-1">
+					<UButton size="xs" variant="ghost" @click.stop="goToActive">
+						Open
+					</UButton>
+					<UButton
+						size="xs"
+						variant="ghost"
+						color="neutral"
+						:loading="closing"
+						@click.stop="closeActive"
+					>
+						Close
+					</UButton>
+				</div>
+				<!-- Other business: switch to it. -->
 				<UIcon
-					v-if="t.encrypted"
-					name="i-lucide-lock"
-					class="size-4 text-(--ui-text-muted)"
-					title="Password-protected"
-				/>
-				<UIcon
-					v-if="switchingId === t.id"
+					v-else-if="switchingId === t.id"
 					name="i-lucide-loader-circle"
-					class="size-5 text-(--ui-text-muted) animate-spin"
+					class="size-5 shrink-0 text-(--ui-text-muted) animate-spin"
 				/>
-				<UIcon v-else name="i-lucide-chevron-right" class="size-5 text-(--ui-text-muted) group-hover:text-(--ui-primary)" />
-			</button>
+				<UIcon
+					v-else-if="!missingFolders[t.id]"
+					name="i-lucide-chevron-right"
+					class="size-5 shrink-0 text-(--ui-text-muted) group-hover:text-(--ui-primary)"
+				/>
+			</div>
 		</div>
 
 		<!-- First-run choice: empty state offers Create vs Try-demo as
@@ -167,6 +215,22 @@
 					</UButton>
 				</div>
 			</div>
+		</div>
+
+		<!-- Open an existing business folder — for a business created elsewhere
+			(another PC, external drive) or one that was forgotten from this
+			machine's list. Validates the folder's marker + business.db. -->
+		<div class="text-center mt-4">
+			<UButton
+				icon="i-lucide-folder-open"
+				variant="outline"
+				color="neutral"
+				:loading="opening"
+				:disabled="seedingDemo || opening"
+				@click="onOpenBusiness"
+			>
+				Open a business folder…
+			</UButton>
 		</div>
 
 		<!-- Import a backup — always available, including when there are no
@@ -299,6 +363,7 @@
 
 	import type { Tenant } from "~/stores/tenants";
 	import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+	import { appDataDir } from "@tauri-apps/api/path";
 	import { open as openDialog } from "@tauri-apps/plugin-dialog";
 	import pkg from "~~/package.json";
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
@@ -366,6 +431,100 @@
 		}
 	};
 
+	// ---- Missing-folder detection ----
+	// A registry entry whose `path` no longer exists on disk (folder moved,
+	// deleted, or on an unplugged drive). We flag it so the row shows a
+	// "Not found" badge + a Forget action instead of failing on click.
+	// Full Locate/relocate is a P2 follow-up.
+	const missingFolders = ref<Record<string, boolean>>({});
+	onMounted(async () => {
+		for (const t of tenants.tenants) {
+			try {
+				missingFolders.value[t.id] = t.path ? !(await invoke<boolean>("path_exists", { path: t.path })) : true;
+			} catch {
+				missingFolders.value[t.id] = false;
+			}
+		}
+	});
+
+	// ---- Active business: go to it / close it ----
+	// Go straight to its dashboard.
+	const goToActive = () => {
+		window.location.assign("/");
+	};
+
+	// Close it: deactivate (folder + data untouched) so it drops back to a
+	// switchable card and nothing is open. Stays on /welcome.
+	const closing = ref(false);
+	const closeActive = async () => {
+		if (closing.value) return;
+		closing.value = true;
+		try {
+			await tenants.close();
+		} catch (err) {
+			toast.add({
+				title: "Couldn't close the business",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		} finally {
+			closing.value = false;
+		}
+	};
+
+	// Card click: the active business goes to its dashboard; any other switches.
+	const onCardClick = (t: { id: string }) => {
+		if (t.id === tenants.activeTenantId) {
+			goToActive();
+			return;
+		}
+		if (!missingFolders.value[t.id] && switchingId.value === null) {
+			void switchTo(t.id);
+		}
+	};
+
+	// ---- Open an existing business folder ----
+	const opening = ref(false);
+	const onOpenBusiness = async () => {
+		if (opening.value) return;
+		let dir: string | null = null;
+		try {
+			const picked = await openDialog({ directory: true, title: "Open a business folder" });
+			if (typeof picked === "string") dir = picked;
+			else if (Array.isArray(picked) && picked.length > 0) dir = picked[0] ?? null;
+		} catch (err) {
+			toast.add({ title: "Could not open folder picker", description: err instanceof Error ? err.message : String(err), color: "error", icon: "i-lucide-circle-alert" });
+			return;
+		}
+		if (!dir) return;
+		opening.value = true;
+		try {
+			const t = await tenants.open(dir);
+			await tenants.activate(t.id);
+			window.location.assign("/");
+		} catch (err) {
+			opening.value = false;
+			toast.add({
+				title: "Not a business folder",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	// ---- Forget a business (drop from list, keep files) ----
+	const onForget = async (id: string) => {
+		try {
+			await tenants.forget(id);
+			delete missingFolders.value[id];
+			toast.add({ title: "Removed from list", description: "The business folder was left untouched on disk.", color: "info", icon: "i-lucide-eye-off" });
+		} catch (err) {
+			toast.add({ title: "Couldn't remove it from the list", description: err instanceof Error ? err.message : String(err), color: "error", icon: "i-lucide-circle-alert" });
+		}
+	};
+
 	// "Try with sample data" — creates a demo tenant with realistic
 	// clients/vendors/quotes/invoices/bills/vouchers pre-loaded so the
 	// dashboard, lists, and PDFs all have something interesting to show
@@ -385,11 +544,14 @@
 		seedingDone.value = 0;
 		seedingTotal.value = 0;
 		try {
+			// The demo is a one-click affordance — no folder dialog. Default its
+			// parent to appDataDir() so the throwaway lands inside %APPDATA%.
+			const demoParent = await appDataDir();
 			const t = await createDemoBusiness(undefined, (p) => {
 				seedingStage.value = p.stage;
 				seedingDone.value = p.done;
 				seedingTotal.value = p.total;
-			});
+			}, demoParent);
 			toast.add({
 				title: `${t.name} created`,
 				description: "Sample clients, invoices, bills, and vouchers are ready to explore.",
@@ -416,9 +578,24 @@
 			await navigateTo("/upgrade?feature=businesses");
 			return;
 		}
+		// Pick WHERE the portable business folder is created. The app creates a
+		// safe-named subfolder under the chosen parent (see tenants.create).
+		let parentDir: string | null = null;
+		try {
+			const picked = await openDialog({
+				directory: true,
+				title: "Choose where to store this business"
+			});
+			if (typeof picked === "string") parentDir = picked;
+			else if (Array.isArray(picked) && picked.length > 0) parentDir = picked[0] ?? null;
+		} catch (err) {
+			toast.add({ title: "Could not open folder picker", description: err instanceof Error ? err.message : String(err), color: "error", icon: "i-lucide-circle-alert" });
+			return;
+		}
+		if (!parentDir) return; // user cancelled
 		creating.value = true;
 		try {
-			const t = await tenants.create(name);
+			const t = await tenants.create(name, parentDir);
 			toast.add({ title: `${t.name} created`, color: "success", icon: "i-lucide-check" });
 			newName.value = "";
 			showCreate.value = false;
@@ -506,12 +683,24 @@
 
 	const confirmImport = async () => {
 		if (!importManifest.value || importing.value || !canImport.value) return;
+		// Importing "new" now creates a portable folder — ask where to put it.
+		let parentDir: string | null = null;
+		try {
+			const picked = await openDialog({ directory: true, title: "Choose where to store the imported business" });
+			if (typeof picked === "string") parentDir = picked;
+			else if (Array.isArray(picked) && picked.length > 0) parentDir = picked[0] ?? null;
+		} catch (err) {
+			toast.add({ title: "Could not open folder picker", description: err instanceof Error ? err.message : String(err), color: "error", icon: "i-lucide-circle-alert" });
+			return;
+		}
+		if (!parentDir) return; // user cancelled
 		importing.value = true;
 		try {
 			const imported = await invoke<Tenant>("import_tenant_data", {
 				inputPath: importPath.value,
 				mode: "new",
 				targetName: importName.value.trim() || importManifest.value.business_name,
+				targetParent: parentDir,
 				passphrase: importManifest.value.encrypted ? importPassphrase.value : null
 			});
 			await tenants.refresh();
