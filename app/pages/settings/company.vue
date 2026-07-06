@@ -383,8 +383,8 @@
 <script setup lang="ts">
 	import type { BusinessBankRow } from "~/stores/business_banks";
 	import type { SettingsUpdate } from "~/stores/settings";
-	import { appDataDir, join } from "@tauri-apps/api/path";
-	import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
+	import { join } from "@tauri-apps/api/path";
+	import { mkdir, readDir, remove, writeFile } from "@tauri-apps/plugin-fs";
 	import { z } from "zod";
 	import CurrencyPicker from "~/components/CurrencyPicker.vue";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
@@ -644,13 +644,30 @@
 		return p.split(/[\\/]/).pop() ?? p;
 	});
 
+	// Remove any existing logo.<other-ext> in the logos dir so switching the
+	// image format (png → jpg) doesn't orphan the previous file.
+	const removeStaleLogos = async (logosDir: string, keepExt: string) => {
+		try {
+			const entries = await readDir(logosDir);
+			for (const entry of entries) {
+				if (!entry.isFile) continue;
+				const name = entry.name.toLowerCase();
+				if (name.startsWith("logo.") && name !== `logo.${keepExt}`) {
+					await remove(await join(logosDir, entry.name)).catch(() => { /* best-effort */ });
+				}
+			}
+		} catch { /* dir may not exist yet — nothing to clean */ }
+	};
+
 	// Use an HTML <input type="file"> rather than the Tauri dialog plugin: it
 	// gives us the raw File bytes directly via FileReader, so we never need
-	// fs-read capability on the user's arbitrary source path. We only write
-	// into the app data dir, which IS in the allowed scope.
+	// fs-read capability on the user's arbitrary source path. We write into the
+	// portable business folder (<folder>/logos/logo.<ext>), which the broadened
+	// $HOME/** fs scope covers.
 	const uploadLogo = async (file: File) => {
 		const tenantId = tenants.activeTenantId;
-		if (!tenantId) {
+		const folder = tenants.activeFolder;
+		if (!tenantId || !folder) {
 			toast.add({ title: "No active business", color: "error", icon: "i-lucide-circle-alert" });
 			return;
 		}
@@ -660,12 +677,14 @@
 			// Build paths with `join` so the separators are platform-correct.
 			// Hand-concatenating backslashes confuses Tauri's fs scope matcher
 			// — it falls back to the "forbidden path" error even though the
-			// glob ($APPDATA/**) should logically cover the destination.
-			const appData = await appDataDir();
-			const logosDir = await join(appData, "logos");
+			// glob ($HOME/**) should logically cover the destination.
+			const logosDir = await join(folder, "logos");
 			await mkdir(logosDir, { recursive: true }).catch(() => { /* already exists */ });
+			// Fixed stem "logo"; drop any stale logo.* of a different extension so
+			// we never leave two identity logos behind.
 			const ext = (file.name.split(".").pop() ?? "png").toLowerCase();
-			const fileName = `${tenantId}.${ext}`;
+			await removeStaleLogos(logosDir, ext);
+			const fileName = `logo.${ext}`;
 			const target = await join(logosDir, fileName);
 			await writeFile(target, bytes);
 			await store.save({ logo_path: target });
