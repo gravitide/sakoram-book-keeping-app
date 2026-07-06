@@ -12,11 +12,11 @@ mod tenants;
 mod vault;
 mod vault_fs;
 
-// Multi-tenancy: each business has its own SQLite file under
-// app_data_dir/businesses/. We don't register migrations with
-// tauri-plugin-sql because new tenants get added at runtime — instead
-// the `tenants` module runs migrations directly via sqlx whenever a
-// tenant DB is opened.
+// Multi-tenancy: each business is a portable user-chosen FOLDER holding its
+// own SQLite file (business.db). Only tenants.json + license.json stay under
+// app_data_dir. We don't register migrations with tauri-plugin-sql because new
+// tenants get added at runtime — instead the `tenants` module runs migrations
+// directly via sqlx whenever a business DB is opened.
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -70,9 +70,12 @@ pub fn run() {
 			pdf::open_path,
 			tenants::list_tenants,
 			tenants::create_tenant,
+			tenants::open_tenant,
 			tenants::rename_tenant,
 			tenants::delete_tenant,
+			tenants::forget_tenant,
 			tenants::set_active_tenant,
+			tenants::clear_active_tenant,
 			tenants::ensure_tenant_db,
 			tenants::set_tenant_logo,
 			tenants::tenant_logo_path,
