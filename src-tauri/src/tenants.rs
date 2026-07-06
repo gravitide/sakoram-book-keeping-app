@@ -204,6 +204,15 @@ fn detect_logo_file(folder: &Path) -> Option<String> {
 	None
 }
 
+/// Permit the webview's `asset://` protocol to read files from a business
+/// folder, so a logo on ANY drive (e.g. D:\) loads in an <img>. The asset
+/// scope is otherwise compile-locked to $APPDATA (tauri.conf.json). This is a
+/// runtime, process-level allow that survives webview reloads. Best-effort —
+/// a failure just means that folder's logo won't render, never a hard error.
+fn allow_asset_dir(app: &AppHandle, folder: &str) {
+	let _ = app.asset_protocol_scope().allow_directory(folder, true);
+}
+
 /// Coarse ISO-8601 UTC timestamp for the marker's `created_at`.
 fn now_iso() -> String {
 	use std::time::{SystemTime, UNIX_EPOCH};
@@ -459,6 +468,11 @@ pub async fn list_tenants(app: AppHandle) -> Result<TenantRegistry, String> {
 			write_registry(&app, &reg)?;
 		}
 	}
+	// Allow every known business folder for asset:// reads so their logos
+	// render on the welcome screen + sidebar regardless of drive.
+	for t in &reg.tenants {
+		allow_asset_dir(&app, &t.path);
+	}
 	Ok(reg)
 }
 
@@ -510,6 +524,7 @@ pub async fn create_tenant(
 		reg.active_tenant_id = Some(id);
 	}
 	write_registry(&app, &reg)?;
+	allow_asset_dir(&app, &tenant.path);
 	Ok(tenant)
 }
 
@@ -551,6 +566,7 @@ pub async fn open_tenant(app: AppHandle, path: String) -> Result<Tenant, String>
 		None => reg.tenants.push(tenant.clone()),
 	}
 	write_registry(&app, &reg)?;
+	allow_asset_dir(&app, &tenant.path);
 	Ok(tenant)
 }
 
