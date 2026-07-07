@@ -23,15 +23,10 @@
 					<UButton color="neutral" variant="outline" icon="i-lucide-upload" title="Restore a .zip backup as a new business" @click="onImportClick">
 						Import
 					</UButton>
-					<UButton icon="i-lucide-plus" :disabled="!license.canCreateBusiness(tenants.tenants.length)" @click="goWelcome">
+					<UButton icon="i-lucide-plus" @click="goWelcome">
 						Add business
 					</UButton>
 				</div>
-				<p v-if="!license.canCreateBusiness(tenants.tenants.length)" class="text-xs text-(--ui-text-muted)">
-					Basic is limited to 2 businesses — <NuxtLink to="/upgrade?feature=businesses" class="text-(--ui-primary) underline">
-						upgrade
-					</NuxtLink> for more.
-				</p>
 			</div>
 		</header>
 
@@ -393,7 +388,6 @@
 	import { appDataDir } from "@tauri-apps/api/path";
 	import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 	import { createDemoBusiness } from "~/lib/demo-seed";
-	import { useLicenseStore } from "~/stores/license";
 	import { useTenantsStore } from "~/stores/tenants";
 
 	interface ExportManifest {
@@ -411,7 +405,6 @@
 	definePageMeta({ title: "Businesses" });
 
 	const tenants = useTenantsStore();
-	const license = useLicenseStore();
 	const router = useRouter();
 	const toast = useToast();
 	const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -494,11 +487,7 @@
 		}
 	};
 
-	const goWelcome = async () => {
-		if (!license.canCreateBusiness(tenants.tenants.length)) {
-			await navigateTo("/upgrade?feature=businesses");
-			return;
-		}
+	const goWelcome = () => {
 		router.push("/welcome");
 	};
 

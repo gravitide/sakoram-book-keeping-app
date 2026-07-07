@@ -1,89 +1,34 @@
-// Per-install licensing store. Reads license.json via Rust, verifies any
-// entered key via Rust (validate_license), computes the effective entitlement
-// (tier + trial) via app/lib/licensing.ts, and updates last_seen on load.
+// Sakoram is free — no tiers, no trial, no gating. This store keeps its original
+// public shape only so the ~30 existing consumers keep compiling; every
+// entitlement now reports the top tier so all gated UI hides itself.
+// FeatureLock / UpgradeButton / lock badges / app/lib/licensing.ts are left
+// dormant (never render once neutered), pending a follow-up cleanup PR.
 
-import { invoke } from "@tauri-apps/api/core";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
-import { effectiveEntitlement, hasFeature as hasFeatureFor, Tier } from "~/lib/licensing";
-
-interface LicenseState { license_key: string | null, trial_start: string | null, last_seen_date: string | null }
-interface LicenseInfo { tier: number, license_id: number, name: string, email: string }
-
-function todayIso(): string {
-	return new Date().toISOString().slice(0, 10);
-}
+import { Tier } from "~/lib/licensing";
 
 export const useLicenseStore = defineStore("license", () => {
-	const loaded = ref(false);
-	const licenseTier = ref<Tier | null>(null);
+	const loaded = ref(true);
 	const buyerName = ref("");
 	const buyerEmail = ref("");
-	const trialStart = ref<string | null>(null);
-	const lastSeen = ref<string | null>(null);
 
-	const entitlement = computed(() =>
-		effectiveEntitlement(licenseTier.value, { trialStart: trialStart.value, lastSeen: lastSeen.value }, todayIso()));
-	const tier = computed(() => entitlement.value.tier);
-	const isTrial = computed(() => entitlement.value.isTrial);
-	const trialDaysLeft = computed(() => entitlement.value.trialDaysLeft);
-	const businessLimit = computed(() => entitlement.value.businessLimit);
+	const tier = computed(() => Tier.Premium);
+	const isTrial = computed(() => false);
+	const trialDaysLeft = computed(() => 0);
+	const businessLimit = computed(() => Number.POSITIVE_INFINITY);
 
-	const hasFeature = (key: string) => hasFeatureFor(tier.value, key);
-	const canCreateBusiness = (currentCount: number) => currentCount < businessLimit.value;
+	const hasFeature = (_key: string) => true;
+	const canCreateBusiness = (_currentCount: number) => true;
 
-	async function ensureLoaded() {
-		if (loaded.value) return;
-		// Rust reconciles trial_start against the out-of-band keyring marker (so
-		// deleting license.json can't re-arm the trial); we seed today below if
-		// it's a genuinely fresh install.
-		const st = await invoke<LicenseState>("read_license_state");
-		const today = todayIso();
-		const seededStart = st.trial_start ?? today;
-		const seededLastSeen = !st.last_seen_date || st.last_seen_date < today ? today : st.last_seen_date;
-		trialStart.value = seededStart;
-		lastSeen.value = seededLastSeen;
-
-		if (st.license_key) {
-			try {
-				const info = await invoke<LicenseInfo>("validate_license", { key: st.license_key });
-				licenseTier.value = info.tier as Tier;
-				buyerName.value = info.name;
-				buyerEmail.value = info.email;
-			} catch {
-				licenseTier.value = null;
-			}
-		}
-		await invoke("write_license_state", {
-			state: { license_key: st.license_key ?? null, trial_start: seededStart, last_seen_date: seededLastSeen }
-		});
+	// No-ops: nothing to load, and no key to enter/clear now. Kept because
+	// tenant.global.ts calls ensureLoaded (and the soon-to-be-deleted license
+	// page referenced enterKey/clearKey).
+	const ensureLoaded = async () => {
 		loaded.value = true;
-	}
-
-	// Returns null on success, or an error message.
-	async function enterKey(key: string): Promise<string | null> {
-		try {
-			const info = await invoke<LicenseInfo>("validate_license", { key });
-			licenseTier.value = info.tier as Tier;
-			buyerName.value = info.name;
-			buyerEmail.value = info.email;
-			await invoke("write_license_state", {
-				state: { license_key: key, trial_start: trialStart.value, last_seen_date: lastSeen.value }
-			});
-			return null;
-		} catch (e) {
-			return String(e);
-		}
-	}
-
-	async function clearKey() {
-		licenseTier.value = null;
-		buyerName.value = "";
-		buyerEmail.value = "";
-		await invoke("write_license_state", {
-			state: { license_key: null, trial_start: trialStart.value, last_seen_date: lastSeen.value }
-		});
-	}
+	};
+	const enterKey = async (_key: string): Promise<string | null> => null;
+	const clearKey = async () => { /* no-op */ };
 
 	return {
 		loaded,

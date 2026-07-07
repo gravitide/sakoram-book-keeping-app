@@ -7,11 +7,23 @@
 // middleware only wires the store state into it. On first navigation we also
 // populate the tenants store (which auto-migrates a legacy single-DB).
 
+import { useTerms } from "~/composables/useTerms";
 import { resolveTenantGuard } from "~/lib/tenant-route";
 import { useLicenseStore } from "~/stores/license";
 import { useTenantsStore } from "~/stores/tenants";
 
 export default defineNuxtRouteMiddleware(async (to) => {
+	// First-run Terms gate — before any tenant routing. If the current Terms
+	// version hasn't been accepted, force /terms (except for /terms itself).
+	const { accepted } = useTerms();
+	if (!accepted.value && to.path !== "/terms") {
+		return navigateTo("/terms");
+	}
+	// Once accepted, keep the user out of the gate.
+	if (accepted.value && to.path === "/terms") {
+		return navigateTo("/welcome");
+	}
+
 	const tenants = useTenantsStore();
 	if (!tenants.loaded) {
 		try {
