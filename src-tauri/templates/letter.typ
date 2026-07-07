@@ -121,16 +121,30 @@
 #render-blocks(data.blocks)
 
 // --- signature -----------------------------------------------------------
-#let has-sig = (data.signatory_name != none and data.signatory_name != "") or (data.signatory_title != none and data.signatory_title != "")
-#if has-sig {
+// A field's value or none (treats missing / empty-string alike).
+#let sig-field(k) = {
+  let v = data.at(k, default: none)
+  if v == none or v == "" { none } else { v }
+}
+// Ordered sign-off lines: name (emphasised), then title / company / email /
+// phone. Empty fields drop out so the block only shows what's filled.
+#let sig-lines = (
+  sig-field("signatory_name"),
+  sig-field("signatory_title"),
+  sig-field("signatory_company"),
+  sig-field("signatory_email"),
+  sig-field("signatory_phone"),
+).filter(x => x != none)
+#if sig-lines.len() > 0 {
   v(40pt)
   line(length: 40%, stroke: 0.5pt + rgb("#9ca3af"))
   v(3pt)
-  if data.signatory_name != none and data.signatory_name != "" {
-    text(weight: "semibold")[#data.signatory_name]
-    linebreak()
-  }
-  if data.signatory_title != none and data.signatory_title != "" {
-    text(fill: rgb("#6b7280"), size: 9pt)[#data.signatory_title]
+  for (i, ln) in sig-lines.enumerate() {
+    if i > 0 { linebreak() }
+    if i == 0 {
+      text(weight: "semibold")[#ln]
+    } else {
+      text(fill: rgb("#4b5563"), size: 9.5pt)[#ln]
+    }
   }
 }
