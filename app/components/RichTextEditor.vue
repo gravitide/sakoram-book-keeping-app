@@ -21,18 +21,17 @@
 </template>
 
 <script setup lang="ts">
-// Thin TipTap wrapper. v-model is the ProseMirror document serialised to a
-// JSON string (what we persist in letters.body_json). StarterKit provides
-// bold / italic / underline / heading / bullet + ordered lists (Underline is
-// bundled in StarterKit v3 — registering it separately would duplicate). A
-// `tick` ref bumped on every transaction keeps the toolbar's active-state
-// highlighting reactive (TipTap's editor instance isn't a Vue reactive object).
+// Thin TipTap wrapper on the official Vue-3 integration (`useEditor` +
+// EditorContent, per TipTap's Nuxt guide). v-model is the ProseMirror document
+// serialised to a JSON string (what we persist in letters.body_json).
+// StarterKit provides bold / italic / underline / heading / bullet + ordered
+// lists (Underline is bundled in StarterKit v3 — registering it separately
+// would duplicate). `immediatelyRender: false` avoids the SSG prerender pass
+// touching the editor before the client hydrates.
 	import StarterKit from "@tiptap/starter-kit";
-	import { Editor, EditorContent } from "@tiptap/vue-3";
+	import { EditorContent, useEditor } from "@tiptap/vue-3";
 
 	const model = defineModel<string>({ default: "" });
-	const editor = shallowRef<Editor>();
-	const tick = ref(0);
 
 	const parseDoc = (json: string): object | undefined => {
 		if (!json) return undefined;
@@ -43,35 +42,28 @@
 		}
 	};
 
-	onMounted(() => {
-		editor.value = new Editor({
-			extensions: [StarterKit],
-			content: parseDoc(model.value),
-			onUpdate: ({ editor: e }) => {
-				model.value = JSON.stringify(e.getJSON());
-			},
-			onTransaction: () => {
-				tick.value++;
-			}
-		});
+	const editor = useEditor({
+		extensions: [StarterKit],
+		content: parseDoc(model.value),
+		immediatelyRender: false,
+		onUpdate: ({ editor: e }) => {
+			model.value = JSON.stringify(e.getJSON());
+		}
 	});
 
-	onBeforeUnmount(() => {
-		editor.value?.destroy();
-	});
-
-	// External model changes (e.g. loading a letter) → set content without
-	// looping back through onUpdate. Skip when the value already matches.
+	// External model changes (e.g. loading a different letter under keepalive)
+	// → replace content without looping back through onUpdate. Skip when the
+	// value already matches what the editor holds.
 	watch(model, (val) => {
-		if (!editor.value) return;
-		const current = JSON.stringify(editor.value.getJSON());
-		if (val !== current) editor.value.commands.setContent(parseDoc(val) ?? "", { emitUpdate: false });
+		const e = editor.value;
+		if (!e) return;
+		const current = JSON.stringify(e.getJSON());
+		if (val !== current) e.commands.setContent(parseDoc(val) ?? "", { emitUpdate: false });
 	});
 
 	interface ToolbarButton { name: string, icon: string, active: boolean, run: () => void }
 	const toolbar = computed<ToolbarButton[]>(() => {
 		const e = editor.value;
-		void tick.value; // reactive dep so active states refresh on selection
 		if (!e) return [];
 		return [
 			{ name: "Bold", icon: "i-lucide-bold", active: e.isActive("bold"), run: () => e.chain().focus().toggleBold().run() },
@@ -88,6 +80,9 @@
 .letter-body :deep(.ProseMirror) {
 	outline: none;
 	min-height: 220px;
+}
+.letter-body :deep(.ProseMirror:focus) {
+	outline: none;
 }
 .letter-body :deep(ul) {
 	list-style: disc;

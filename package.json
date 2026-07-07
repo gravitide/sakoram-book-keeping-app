@@ -37,6 +37,7 @@
 		"@tauri-apps/plugin-shell": "^2.3.4",
 		"@tauri-apps/plugin-sql": "^2.4.0",
 		"@tauri-apps/plugin-store": "^2.4.2",
+		"@tiptap/pm": "^3.27.3",
 		"@tiptap/starter-kit": "^3.27.2",
 		"@tiptap/vue-3": "^3.27.2",
 		"nuxt": "^4.3.0",
