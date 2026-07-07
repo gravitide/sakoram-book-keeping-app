@@ -172,25 +172,30 @@
 		signatory_phone: "",
 		pre_printed: 0
 	});
-	let snapshot = "";
+	// Baseline for dirty-tracking. MUST be a ref (not a plain `let`): the `dirty`
+	// computed only re-evaluates when a reactive dep changes, so a plain-let
+	// snapshot re-baselined on save (with form unchanged) would leave `dirty`
+	// stuck true and the save bar stuck open. Coerce every field with `?? ""`
+	// so a null/missing column never lands `undefined` in the form.
+	const snapshot = ref("");
 	const saving = ref(false);
 
 	const hydrate = (row: LetterRow) => {
 		letter.value = row;
-		form.number = row.number;
-		form.letter_date = row.letter_date;
-		form.category = row.category;
-		form.recipient_name = row.recipient_name;
-		form.recipient_address = row.recipient_address;
-		form.subject = row.subject;
-		form.body_json = row.body_json;
-		form.signatory_name = row.signatory_name;
-		form.signatory_title = row.signatory_title;
-		form.signatory_company = row.signatory_company;
-		form.signatory_email = row.signatory_email;
-		form.signatory_phone = row.signatory_phone;
-		form.pre_printed = row.pre_printed;
-		snapshot = JSON.stringify(form);
+		form.number = row.number ?? "";
+		form.letter_date = row.letter_date ?? "";
+		form.category = row.category ?? "";
+		form.recipient_name = row.recipient_name ?? "";
+		form.recipient_address = row.recipient_address ?? "";
+		form.subject = row.subject ?? "";
+		form.body_json = row.body_json ?? "";
+		form.signatory_name = row.signatory_name ?? "";
+		form.signatory_title = row.signatory_title ?? "";
+		form.signatory_company = row.signatory_company ?? "";
+		form.signatory_email = row.signatory_email ?? "";
+		form.signatory_phone = row.signatory_phone ?? "";
+		form.pre_printed = row.pre_printed ?? 0;
+		snapshot.value = JSON.stringify(form);
 	};
 
 	const load = async () => {
@@ -213,7 +218,7 @@
 		}
 	});
 
-	const dirty = computed(() => JSON.stringify(form) !== snapshot);
+	const dirty = computed(() => JSON.stringify(form) !== snapshot.value);
 
 	const discard = () => {
 		if (letter.value) hydrate(letter.value);
