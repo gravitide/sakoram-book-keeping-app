@@ -113,8 +113,8 @@
 
 // --- subject -------------------------------------------------------------
 #if data.subject != none and data.subject != "" {
-  text(weight: "bold")[#data.subject]
-  v(12pt)
+  align(center, text(weight: "bold", size: 13pt, tracking: 0.03em)[#upper(data.subject)])
+  v(14pt)
 }
 
 // --- body ----------------------------------------------------------------
