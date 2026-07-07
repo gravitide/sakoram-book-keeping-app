@@ -96,6 +96,7 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(39, "pdf theme color", include_str!("../migrations/0039_pdf_theme_color.sql")),
 	(40, "letters", include_str!("../migrations/0040_letters.sql")),
 	(41, "letter settings", include_str!("../migrations/0041_letter_settings.sql")),
+	(42, "letter signature", include_str!("../migrations/0042_letter_signature.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

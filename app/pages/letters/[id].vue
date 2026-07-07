@@ -58,22 +58,36 @@
 					</SectionCard>
 				</div>
 
-				<SectionCard title="Body" icon="i-lucide-pilcrow">
+				<!-- Body has no header — it's obviously the letter body. Plain card
+					keeps the page rhythm without a redundant title. -->
+				<UCard>
 					<RichTextEditor v-model="form.body_json" />
-				</SectionCard>
+				</UCard>
 
-				<SectionCard title="Signature & letterhead" icon="i-lucide-pen-line">
+				<SectionCard title="Signature" icon="i-lucide-pen-line">
 					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 						<UFormField label="Signatory name">
 							<UInput v-model="form.signatory_name" placeholder="e.g. Jane Doe" />
 						</UFormField>
-						<UFormField label="Signatory title">
-							<UInput v-model="form.signatory_title" placeholder="e.g. HR Manager" />
+						<UFormField label="Title / designation">
+							<UInput v-model="form.signatory_title" placeholder="e.g. Director" />
 						</UFormField>
-						<UFormField label="Pre-printed letterhead paper" class="sm:col-span-2" hint="On: reserve blank space at the top for physical stationery. Off: the app prints your letterhead header + footer.">
-							<USwitch v-model="prePrintedBool" />
+						<UFormField label="Company">
+							<UInput v-model="form.signatory_company" placeholder="e.g. Gravitide (Pvt) Ltd" />
+						</UFormField>
+						<UFormField label="Email">
+							<UInput v-model="form.signatory_email" placeholder="e.g. hello@gravitide.dev" />
+						</UFormField>
+						<UFormField label="Contact / phone" class="sm:col-span-2">
+							<UInput v-model="form.signatory_phone" placeholder="e.g. +94 (0) 7787 20966" />
 						</UFormField>
 					</div>
+				</SectionCard>
+
+				<SectionCard title="Letterhead" icon="i-lucide-file-text">
+					<UFormField label="Pre-printed letterhead paper" hint="On: reserve blank space at the top for physical stationery. Off: the app prints your letterhead header + footer.">
+						<USwitch v-model="prePrintedBool" />
+					</UFormField>
 				</SectionCard>
 			</div>
 
@@ -136,6 +150,9 @@
 		body_json: string
 		signatory_name: string
 		signatory_title: string
+		signatory_company: string
+		signatory_email: string
+		signatory_phone: string
 		pre_printed: number
 	}
 
@@ -150,6 +167,9 @@
 		body_json: "",
 		signatory_name: "",
 		signatory_title: "",
+		signatory_company: "",
+		signatory_email: "",
+		signatory_phone: "",
 		pre_printed: 0
 	});
 	let snapshot = "";
@@ -166,6 +186,9 @@
 		form.body_json = row.body_json;
 		form.signatory_name = row.signatory_name;
 		form.signatory_title = row.signatory_title;
+		form.signatory_company = row.signatory_company;
+		form.signatory_email = row.signatory_email;
+		form.signatory_phone = row.signatory_phone;
 		form.pre_printed = row.pre_printed;
 		snapshot = JSON.stringify(form);
 	};
