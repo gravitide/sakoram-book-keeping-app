@@ -245,8 +245,15 @@
 								</dd>
 							</dl>
 
-							<div class="text-xs text-(--ui-text-muted) border-t border-(--ui-border) pt-4">
-								© {{ copyrightYear }} Gravitide. All rights reserved.
+							<div class="text-xs text-(--ui-text-muted) border-t border-(--ui-border) pt-4 flex items-center justify-between gap-2">
+								<span>© {{ copyrightYear }} Gravitide. All rights reserved.</span>
+								<button
+									type="button"
+									class="text-(--ui-primary) hover:underline cursor-pointer shrink-0"
+									@click="termsOpen = true"
+								>
+									Terms &amp; conditions
+								</button>
 							</div>
 						</div>
 					</template>
@@ -255,6 +262,14 @@
 							<UButton color="neutral" variant="ghost" @click="aboutOpen = false">
 								Close
 							</UButton>
+						</div>
+					</template>
+				</UModal>
+
+				<UModal v-model:open="termsOpen" title="Terms &amp; conditions">
+					<template #body>
+						<div class="max-h-[60vh] overflow-y-auto pr-1">
+							<TermsContent />
 						</div>
 					</template>
 				</UModal>
@@ -320,6 +335,7 @@
 	// gets it for free; the toggle is the small info button next to the
 	// version number.
 	const aboutOpen = ref(false);
+	const termsOpen = ref(false);
 
 	const license = useLicenseStore();
 	const settings = useSettingsStore();
