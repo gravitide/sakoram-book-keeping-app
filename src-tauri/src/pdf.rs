@@ -38,6 +38,7 @@ const VOUCHER_TEMPLATE: &str = include_str!("../templates/voucher.typ");
 const PAYSLIP_TEMPLATE: &str = include_str!("../templates/payslip.typ");
 const REPORT_TEMPLATE: &str = include_str!("../templates/report.typ");
 const STATEMENT_TEMPLATE: &str = include_str!("../templates/statement.typ");
+const LETTER_TEMPLATE: &str = include_str!("../templates/letter.typ");
 
 #[derive(Debug, thiserror::Error)]
 pub enum PdfError {
@@ -361,6 +362,18 @@ pub async fn export_statement_pdf(
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
 	render_pdf(&app, "statement.typ", STATEMENT_TEMPLATE, data, PathBuf::from(output_path), protect_password, &[]).await
+}
+
+// Letters — free-form correspondence on the business letterhead. Standalone
+// template; no companion files. Always unencrypted (no per-type protection).
+#[tauri::command]
+pub async fn export_letter_pdf(
+	app: AppHandle,
+	data: Value,
+	output_path: String,
+	protect_password: Option<String>,
+) -> Result<(), PdfError> {
+	render_pdf(&app, "letter.typ", LETTER_TEMPLATE, data, PathBuf::from(output_path), protect_password, &[]).await
 }
 
 /// Copy a file from `src` to `dst`. Used by the PDF preview flow: we

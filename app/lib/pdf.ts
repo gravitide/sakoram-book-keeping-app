@@ -31,7 +31,8 @@ export type PdfCommand
 		| "export_voucher_pdf"
 		| "export_payslip_pdf"
 		| "export_report_pdf"
-		| "export_statement_pdf";
+		| "export_statement_pdf"
+		| "export_letter_pdf";
 
 export type PdfResult
 	= | { ok: true, path: string }
@@ -71,7 +72,9 @@ const PROTECT_FLAG: Record<PdfCommand, keyof CompanySettingsRow | null> = {
 	export_report_pdf: null,
 	// Customer statements are the same — generated ad-hoc, point-in-time,
 	// no immutable archive. No per-type protection toggle.
-	export_statement_pdf: null
+	export_statement_pdf: null,
+	// Letters are ad-hoc correspondence — no per-type protection toggle.
+	export_letter_pdf: null
 };
 
 // Resolve the owner password to encrypt this document type with, or null
