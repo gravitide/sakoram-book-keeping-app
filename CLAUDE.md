@@ -349,6 +349,7 @@ sakoram_app/
 │  │     ├─ pdf.vue                   ← PDF font + PDF header logo
 │  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), light/dark/system toggle, zoom (6 discrete steps)
 │  │     ├─ payroll.vue               ← cycle template (period_start_day / period_end_day / pay_day)
+│  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + pre-printed top margin (letter_preprinted_top_margin_mm) + letterhead-templates placeholder
 │  │     └─ businesses.vue            ← tenant CRUD + Export/Import
 │  ├─ components/
 │  │  ├─ TitleBar.vue                 ← custom titlebar — Windows: full chrome (sidebar toggle + back + drag region + min/max/close). macOS: 78px reservation for OS traffic lights + sidebar toggle + back; OS owns close/min/max. Pixel-pinned sizing so zoom doesn't scale it.
@@ -1240,6 +1241,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0036_payslip_paye.sql                   ← PAYE/APIT monthly tax-table auto-compute. company_settings gains paye_auto_compute (master toggle, default off) + paye_relief_cents (15000000) + paye_deduct_epf (1) + paye_brackets (JSON: taxable-income bands, seeded with the SL 2025/26 table). payslips gain paye_cents (frozen) + paye_enabled (per-payslip, seeded from settings). payslip_lines reuse auto_source = 'paye' for the managed PAYE deduction line. Progressive math in app/lib/statutory.ts computePaye().
 (0037_pdf_templates / 0038_default_prepared_by / 0039_pdf_theme_color landed between here and 0040 — see the MIGRATIONS array in tenants.rs for the authoritative list.)
 0040_letters.sql                        ← `letters` table (free-form correspondence rendered on the business letterhead). No lines table, no snapshot, no money. `number` is a NON-UNIQUE editable reference (auto-suggested LET-YYYY-NNNN but user can override/clear it — letters aren't gapless-numbered). `body_json` holds the TipTap rich-text document; `pre_printed` (0/1) toggles app-rendered letterhead vs reserved blank top space for physical stationery. SCHEMA_VERSION → 40.
+0041_letter_settings.sql                ← `letter_categories` managed lookup (name-only — no colour/icon) that powers the letter Category picker; the letter still stores `category` as plain text so archiving/deleting a category never rewrites existing letters. Adds `company_settings.letter_preprinted_top_margin_mm` (INTEGER, default 55) — the blank top space `letter.typ` reserves in pre-printed mode. SCHEMA_VERSION → 41.
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,
@@ -1997,8 +1999,16 @@ persisted to localStorage).
   (header logo + footer, like invoices) and reserved blank top space for
   physical stationery. Editable, clearable, non-gapless `LET-YYYY-NNNN`
   reference. `/letters` list (search + category filter + row actions) +
-  `NewLetterModal` + `/letters/[id]` detail; duplicate-to-clone. Sidebar
-  "Correspondence" group.
+  `NewLetterModal` + `/letters/[id]` detail (Letter-details + Recipient cards
+  side by side); duplicate-to-clone. Sidebar "Correspondence" group.
+  **Categories are a managed list** (`letter_categories`, migration 0041) —
+  `LetterCategoryPicker` (search-or-create) on the modal + detail; managed on
+  the new **`/settings/letters`** page (Business group) alongside the
+  **pre-printed top margin** (`company_settings.letter_preprinted_top_margin_mm`,
+  read by `letter.typ`) and a "coming soon" letterhead-templates placeholder.
+  Rich text uses TipTap's official `useEditor` + `immediatelyRender: false`
+  (a hand-rolled `new Editor` in `onMounted` did NOT bind to `EditorContent` —
+  that was the "rich text doesn't work" bug); `@tiptap/pm` is an explicit dep.
 
 ### Deferred / open items
 
