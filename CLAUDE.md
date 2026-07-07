@@ -2271,6 +2271,18 @@ the next "feels native" win.
   here (`oven-sh/setup-bun@v2`, `Swatinem/rust-cache@v2`,
   `softprops/action-gh-release@v2`, `dtolnay/rust-toolchain@stable`)
   are already Node-24 compatible.
+- **TipTap needs a single ProseMirror copy — `nuxt.config.ts` dedupes it.**
+  `@nuxt/ui` bundles its OWN TipTap at a different `prosemirror-model` version
+  than the one our Letters editor uses. With both loaded, node schema identity
+  differs across copies and every *structural* editor command (bullet/numbered
+  lists, Enter/`splitBlock`) throws `RangeError: … multiple versions of
+  prosemirror-model` while inline ops (typing, bold) still work — a confusing
+  partial failure. Fix: `vite.resolve.dedupe` lists every `prosemirror-*`
+  package + `@tiptap/pm`. **Don't remove that dedupe block**, and if you add a
+  TipTap extension that pulls a new `prosemirror-*` package, add it to the list.
+  A related symptom, `RangeError: Duplicate use of selection JSON ID gapcursor`,
+  is HMR state pollution from editing TipTap files with the dev server running —
+  restart the server + clear `node_modules/.cache/vite` to clear it.
 
 ---
 
