@@ -544,6 +544,8 @@
 		{ heading: true, label: "Banking", divider: true },
 		{ to: "/vouchers", label: "Vouchers", icon: "i-lucide-ticket" },
 		{ to: "/reconcile", label: "Reconcile", icon: "i-lucide-scale", feature: "reconcile" },
+		{ heading: true, label: "Correspondence", divider: true },
+		{ to: "/letters", label: "Letters", icon: "i-lucide-mail" },
 		{
 			// `/payroll` is the landing card grid (mirrors `/reports`).
 			// Dashboard lives at `/payroll/dashboard` so the top-level
