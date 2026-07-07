@@ -217,15 +217,6 @@
 								</dd>
 
 								<dt class="text-(--ui-text-muted)">
-									Plan
-								</dt>
-								<dd class="font-medium">
-									{{ ["Basic", "Plus", "Premium"][license.tier] }}
-									<span v-if="license.isTrial" class="text-(--ui-text-muted) font-normal"> · trial, {{ license.trialDaysLeft }} day{{ license.trialDaysLeft === 1 ? "" : "s" }} left</span>
-									<span v-else-if="license.buyerName" class="text-(--ui-text-muted) font-normal"> · licensed to {{ license.buyerName }}</span>
-								</dd>
-
-								<dt class="text-(--ui-text-muted)">
 									Website
 								</dt>
 								<dd>
@@ -270,7 +261,6 @@
 			</aside>
 
 			<div class="flex-1 min-w-0 flex flex-col min-h-0">
-				<TrialBanner />
 				<main ref="mainEl" class="flex-1 min-h-0 overflow-auto">
 					<!-- Content cap: 96rem (1536px) — matches Tailwind's `2xl`
 					breakpoint. Wider than the default `max-w-7xl` (1280px) so
@@ -679,8 +669,7 @@
 						{ hash: "#zoom", label: "Zoom", icon: "i-lucide-zoom-in" }
 					]
 				},
-				{ to: "/settings/businesses", label: "Businesses", icon: "i-lucide-briefcase" },
-				{ to: "/settings/license", label: "License", icon: "i-lucide-key-round" }
+				{ to: "/settings/businesses", label: "Businesses", icon: "i-lucide-briefcase" }
 			]
 		},
 		{

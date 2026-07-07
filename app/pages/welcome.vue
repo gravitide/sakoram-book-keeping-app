@@ -115,8 +115,8 @@
 			<button
 				type="button"
 				class="text-left p-5 bg-(--ui-bg) border border-(--ui-border) rounded-lg hover:border-(--ui-primary) transition disabled:opacity-50 disabled:hover:border-(--ui-border)"
-				:disabled="seedingDemo || !license.canCreateBusiness(tenants.tenants.length)"
-				@click="license.canCreateBusiness(tenants.tenants.length) && (showCreate = true)"
+				:disabled="seedingDemo"
+				@click="showCreate = true"
 			>
 				<div class="size-10 rounded-md bg-(--ui-primary)/10 flex items-center justify-center mb-3">
 					<UIcon name="i-lucide-plus" class="size-5 text-(--ui-primary)" />
@@ -159,16 +159,11 @@
 				<UButton
 					icon="i-lucide-plus"
 					variant="outline"
-					:disabled="seedingDemo || !license.canCreateBusiness(tenants.tenants.length)"
-					@click="license.canCreateBusiness(tenants.tenants.length) && (showCreate = true)"
+					:disabled="seedingDemo"
+					@click="showCreate = true"
 				>
 					Add another business
 				</UButton>
-				<p v-if="!license.canCreateBusiness(tenants.tenants.length)" class="text-xs text-(--ui-text-muted)">
-					Basic is limited to 2 businesses — <NuxtLink to="/upgrade?feature=businesses" class="text-(--ui-primary) underline">
-						upgrade
-					</NuxtLink> for more.
-				</p>
 				<div class="text-xs text-(--ui-text-muted)">
 					or
 					<button
@@ -207,7 +202,7 @@
 					</UButton>
 					<UButton
 						:loading="creating"
-						:disabled="!newName.trim() || creating || !license.canCreateBusiness(tenants.tenants.length)"
+						:disabled="!newName.trim() || creating"
 						icon="i-lucide-plus"
 						@click="onCreate"
 					>
@@ -368,7 +363,6 @@
 	import pkg from "~~/package.json";
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import { createDemoBusiness } from "~/lib/demo-seed";
-	import { useLicenseStore } from "~/stores/license";
 	import { useTenantsStore } from "~/stores/tenants";
 
 	definePageMeta({
@@ -377,7 +371,6 @@
 	});
 
 	const tenants = useTenantsStore();
-	const license = useLicenseStore();
 	const toast = useToast();
 
 	await tenants.ensureLoaded();
@@ -574,10 +567,6 @@
 	const onCreate = async () => {
 		const name = newName.value.trim();
 		if (!name || creating.value) return;
-		if (!license.canCreateBusiness(tenants.tenants.length)) {
-			await navigateTo("/upgrade?feature=businesses");
-			return;
-		}
 		// Pick WHERE the portable business folder is created. The app creates a
 		// safe-named subfolder under the chosen parent (see tenants.create).
 		let parentDir: string | null = null;
