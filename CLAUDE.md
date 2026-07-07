@@ -269,7 +269,27 @@ Off by default; unencrypted businesses are unaffected.
 
 ## Licensing & feature tiers
 
-Commercial 3-tier model, fully offline. Spec/plan:
+> **The app is now FREE (since v0.130.0). No tiers, no trial, no gating.**
+> `app/stores/license.ts` was neutered to report `tier = Premium`,
+> `isTrial = false`, `businessLimit = ∞`, and `hasFeature`/`canCreateBusiness`
+> always `true` — so every gated UI element (lock badges, `<FeatureLock>`,
+> `<UpgradeButton>`, capped business creation) auto-hides with zero callsite
+> edits. The **reachable** licensing UI is deleted: `/upgrade` page,
+> `/settings/license` page, the License nav entry, the trial banner, and the
+> About-modal tier line. Left **dormant** pending a follow-up cleanup PR:
+> `src-tauri/src/license.rs` + `bin/mint_license.rs` + their crate deps,
+> `app/lib/licensing.ts` (+ its unit test), and `FeatureLock` / `UpgradeButton`
+> — none of these render or run once the store is neutered.
+>
+> **First-run Terms gate** replaces licensing as the only pre-use wall.
+> `app/lib/terms.ts` (`TERMS_VERSION` + `hasAcceptedTerms`) + `useTerms()`
+> composable store a versioned acceptance flag in localStorage
+> (`sakoram.terms.acceptedVersion`, per-machine). `tenant.global.ts` redirects
+> to `/terms` until accepted; the Terms are re-readable via the About modal.
+> The disclaimer is a liability/as-is/backup-your-own-data notice — bump
+> `TERMS_VERSION` to force everyone to re-accept after a material copy change.
+
+The historical commercial 3-tier design (now dormant) — spec/plan:
 `docs/superpowers/{specs,plans}/2026-06-04-licensing-tiers.*`.
 
 - **Tiers:** Basic (free) < Plus < Premium. Fresh install = 30-day full
