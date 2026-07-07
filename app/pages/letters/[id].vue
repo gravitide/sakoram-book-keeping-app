@@ -29,7 +29,7 @@
 
 			<div class="space-y-4">
 				<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-					<SectionCard title="Letter details" icon="i-lucide-file-pen">
+					<SectionCard title="Letter details" subtitle="Reference, date, category, and subject." icon="i-lucide-file-pen">
 						<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
 							<UFormField label="Reference" hint="Editable / clearable">
 								<UInput v-model="form.number" />
@@ -46,7 +46,7 @@
 						</div>
 					</SectionCard>
 
-					<SectionCard title="Recipient" icon="i-lucide-user">
+					<SectionCard title="Recipient" subtitle="Who the letter is addressed to." icon="i-lucide-user">
 						<div class="space-y-3">
 							<UFormField label="Name">
 								<UInput v-model="form.recipient_name" />
@@ -64,7 +64,7 @@
 					<RichTextEditor v-model="form.body_json" />
 				</UCard>
 
-				<SectionCard title="Signature" icon="i-lucide-pen-line">
+				<SectionCard title="Signature" subtitle="The sign-off printed at the bottom of the letter." icon="i-lucide-pen-line">
 					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 						<UFormField label="Signatory name">
 							<UInput v-model="form.signatory_name" placeholder="e.g. Jane Doe" />
@@ -84,7 +84,7 @@
 					</div>
 				</SectionCard>
 
-				<SectionCard title="Letterhead" icon="i-lucide-file-text">
+				<SectionCard title="Letterhead" subtitle="How the top of the printed page is handled." icon="i-lucide-file-text">
 					<div class="flex items-start justify-between gap-4">
 						<div class="min-w-0">
 							<div class="text-sm font-medium">
