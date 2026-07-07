@@ -62,9 +62,11 @@
 #let render-blocks(blocks) = {
   for b in blocks {
     if b.kind == "paragraph" {
-      block(below: 8pt, apply-align(b.at("align", default: none), render-runs(b.runs)))
+      // width: 100% so the block spans the page — otherwise it shrinks to the
+      // text width and align(center/right) has no room to move the line.
+      block(width: 100%, below: 8pt, apply-align(b.at("align", default: none), render-runs(b.runs)))
     } else if b.kind == "heading" {
-      block(above: 10pt, below: 6pt, apply-align(b.at("align", default: none), text(weight: "bold", size: 12pt, render-runs(b.runs))))
+      block(width: 100%, above: 10pt, below: 6pt, apply-align(b.at("align", default: none), text(weight: "bold", size: 12pt, render-runs(b.runs))))
     } else if b.kind == "bullet_list" {
       list(..b.items.map(items => render-blocks(items)))
     } else if b.kind == "ordered_list" {
