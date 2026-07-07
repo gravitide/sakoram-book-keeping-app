@@ -36,7 +36,7 @@ finalize-lock, no snapshots, no money math.
 
 ## Data model
 
-New table `letters` (migration `0037_letters.sql`). No lines table, no FK, no
+New table `letters` (migration `0040_letters.sql`). No lines table, no FK, no
 `*_snapshot` column — a letter is fully self-contained free text.
 
 | Column | Type | Notes |
@@ -55,8 +55,8 @@ New table `letters` (migration `0037_letters.sql`). No lines table, no FK, no
 | `created_at` | TEXT | ISO timestamp |
 | `updated_at` | TEXT | ISO timestamp |
 
-`SCHEMA_VERSION` bumps to **37**; `letters` is added to the `TABLES` list in
-`data_io.rs` so export/import covers it. Register `0037_letters.sql` in the
+`SCHEMA_VERSION` bumps to **40**; `letters` is added to the `TABLES` list in
+`data_io.rs` so export/import covers it. Register `0040_letters.sql` in the
 `MIGRATIONS` array in `tenants.rs`.
 
 ### Numbering
@@ -201,7 +201,7 @@ add a Letters entry to the project layout + migrations list + "What's done".
 ## File map
 
 **Create**
-- `src-tauri/migrations/0037_letters.sql`
+- `src-tauri/migrations/0040_letters.sql`
 - `src-tauri/templates/letter.typ`
 - `app/lib/letter-body.ts` + `app/lib/letter-body.test.ts`
 - `app/lib/letter-pdf.ts`
@@ -216,7 +216,7 @@ add a Letters entry to the project layout + migrations list + "What's done".
 - `src-tauri/src/pdf.rs` (add `export_letter_pdf`)
 - `src-tauri/src/lib.rs` (register the command)
 - `src-tauri/src/tenants.rs` (register the migration)
-- `src-tauri/src/data_io.rs` (`SCHEMA_VERSION` 37 + `letters` in `TABLES`)
+- `src-tauri/src/data_io.rs` (`SCHEMA_VERSION` 40 + `letters` in `TABLES`)
 - `app/layouts/default.vue` (sidebar Letters entry)
 - `package.json`, `tauri.conf.json`, `Cargo.toml` (version bump)
 - `CLAUDE.md` (docs)
