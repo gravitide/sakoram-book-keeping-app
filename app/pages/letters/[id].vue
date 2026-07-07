@@ -29,18 +29,18 @@
 
 			<div class="space-y-4">
 				<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-					<SectionCard title="Letter details" subtitle="Reference, date, category, and subject." icon="i-lucide-file-pen">
-						<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+					<SectionCard title="Letter details" subtitle="Reference, category, date, and subject." icon="i-lucide-file-pen">
+						<div class="space-y-3">
 							<UFormField label="Reference" hint="Editable / clearable">
 								<UInput v-model="form.number" />
+							</UFormField>
+							<UFormField label="Category">
+								<LetterCategoryPicker v-model="form.category" />
 							</UFormField>
 							<UFormField label="Date">
 								<DateField v-model="form.letter_date" />
 							</UFormField>
-							<UFormField label="Category" class="sm:col-span-2">
-								<LetterCategoryPicker v-model="form.category" />
-							</UFormField>
-							<UFormField label="Subject" class="sm:col-span-2">
+							<UFormField label="Subject">
 								<UInput v-model="form.subject" />
 							</UFormField>
 						</div>
