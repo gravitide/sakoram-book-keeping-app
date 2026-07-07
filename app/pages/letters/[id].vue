@@ -85,9 +85,18 @@
 				</SectionCard>
 
 				<SectionCard title="Letterhead" icon="i-lucide-file-text">
-					<UFormField label="Pre-printed letterhead paper" hint="On: reserve blank space at the top for physical stationery. Off: the app prints your letterhead header + footer.">
-						<USwitch v-model="prePrintedBool" />
-					</UFormField>
+					<div class="flex items-start justify-between gap-4">
+						<div class="min-w-0">
+							<div class="text-sm font-medium">
+								Pre-printed letterhead paper
+							</div>
+							<p class="text-xs text-(--ui-text-muted) mt-1 leading-relaxed">
+								<span class="font-medium text-(--ui-text)">On</span> — reserve blank space at the top for physical stationery.
+								<span class="font-medium text-(--ui-text)">Off</span> — the app prints your letterhead header + footer.
+							</p>
+						</div>
+						<USwitch v-model="prePrintedBool" class="shrink-0 mt-0.5" />
+					</div>
 				</SectionCard>
 			</div>
 
