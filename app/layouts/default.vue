@@ -651,6 +651,16 @@
 					]
 				},
 				{
+					to: "/settings/letters",
+					label: "Letters",
+					icon: "i-lucide-mail",
+					sections: [
+						{ hash: "#categories", label: "Categories", icon: "i-lucide-tags" },
+						{ hash: "#preprinted", label: "Pre-printed", icon: "i-lucide-file-text" },
+						{ hash: "#templates", label: "Templates", icon: "i-lucide-layout-template" }
+					]
+				},
+				{
 					to: "/settings/security",
 					label: "Security",
 					icon: "i-lucide-shield-check",

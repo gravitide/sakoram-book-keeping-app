@@ -28,36 +28,35 @@
 			</header>
 
 			<div class="space-y-4">
-				<SectionCard title="Letter details" icon="i-lucide-file-pen">
-					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-						<UFormField label="Reference" hint="Editable / clearable">
-							<UInput v-model="form.number" />
-						</UFormField>
-						<UFormField label="Date">
-							<DateField v-model="form.letter_date" />
-						</UFormField>
-						<UFormField label="Category">
-							<UInput v-model="form.category" list="letter-categories" />
-							<datalist id="letter-categories">
-								<option v-for="c in store.categories" :key="c" :value="c" />
-							</datalist>
-						</UFormField>
-						<UFormField label="Subject">
-							<UInput v-model="form.subject" />
-						</UFormField>
-					</div>
-				</SectionCard>
+				<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+					<SectionCard title="Letter details" icon="i-lucide-file-pen">
+						<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+							<UFormField label="Reference" hint="Editable / clearable">
+								<UInput v-model="form.number" />
+							</UFormField>
+							<UFormField label="Date">
+								<DateField v-model="form.letter_date" />
+							</UFormField>
+							<UFormField label="Category" class="sm:col-span-2">
+								<LetterCategoryPicker v-model="form.category" />
+							</UFormField>
+							<UFormField label="Subject" class="sm:col-span-2">
+								<UInput v-model="form.subject" />
+							</UFormField>
+						</div>
+					</SectionCard>
 
-				<SectionCard title="Recipient" icon="i-lucide-user">
-					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-						<UFormField label="Name">
-							<UInput v-model="form.recipient_name" />
-						</UFormField>
-						<UFormField label="Address" class="sm:col-span-2">
-							<UTextarea v-model="form.recipient_address" :rows="3" placeholder="One line per row" />
-						</UFormField>
-					</div>
-				</SectionCard>
+					<SectionCard title="Recipient" icon="i-lucide-user">
+						<div class="space-y-3">
+							<UFormField label="Name">
+								<UInput v-model="form.recipient_name" />
+							</UFormField>
+							<UFormField label="Address">
+								<UTextarea v-model="form.recipient_address" :rows="3" placeholder="One line per row" />
+							</UFormField>
+						</div>
+					</SectionCard>
+				</div>
 
 				<SectionCard title="Body" icon="i-lucide-pilcrow">
 					<RichTextEditor v-model="form.body_json" />

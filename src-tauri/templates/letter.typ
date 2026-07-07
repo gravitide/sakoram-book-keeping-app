@@ -24,10 +24,11 @@
 #set par(leading: 0.65em, spacing: 0.9em)
 
 #let pre-printed = data.at("pre_printed", default: false)
+#let preprinted-top = data.at("preprinted_top_margin_mm", default: 55) * 1mm
 
 #set page(
   paper: "a4",
-  margin: if pre-printed { (x: 22mm, top: 55mm, bottom: 22mm) } else { (x: 22mm, top: 20mm, bottom: 24mm) },
+  margin: if pre-printed { (x: 22mm, top: preprinted-top, bottom: 22mm) } else { (x: 22mm, top: 20mm, bottom: 24mm) },
   footer: if pre-printed { [] } else {
     [
       #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))

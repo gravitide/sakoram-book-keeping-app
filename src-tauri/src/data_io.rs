@@ -53,7 +53,7 @@ use data_encoding::BASE64;
 const FORMAT_VERSION: i32 = 1;
 /// Increment when adding migrations beyond what existing exports can carry.
 /// Also stamped into each business folder's `business.json` marker.
-pub const SCHEMA_VERSION: i32 = 40;
+pub const SCHEMA_VERSION: i32 = 41;
 
 /// Tables exported in dependency order — parents first. Restore uses
 /// the same order; replace-mode wipe uses the reverse.
@@ -81,6 +81,7 @@ const TABLES: &[&str] = &[
 	"payslip_lines",
 	"vouchers",
 	"letters",
+	"letter_categories",
 	"document_attachments",
 	"bank_statement_imports",
 	"bank_statement_rows",

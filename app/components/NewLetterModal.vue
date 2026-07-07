@@ -14,11 +14,8 @@
 					<UFormField label="Date" required>
 						<DateField v-model="letterDate" />
 					</UFormField>
-					<UFormField label="Category" hint="For filtering (optional)">
-						<UInput v-model="category" placeholder="e.g. Service letter" list="letter-categories" />
-						<datalist id="letter-categories">
-							<option v-for="c in letters.categories" :key="c" :value="c" />
-						</datalist>
+					<UFormField label="Category" hint="Optional">
+						<LetterCategoryPicker v-model="category" />
 					</UFormField>
 				</div>
 

@@ -23,6 +23,7 @@ export const buildLetterPdfPayload = ({ row, settings }: LetterPdfArgs) => ({
 	signatory_name: row.signatory_name || null,
 	signatory_title: row.signatory_title || null,
 	pre_printed: row.pre_printed === 1,
+	preprinted_top_margin_mm: settings?.letter_preprinted_top_margin_mm ?? 55,
 	theme_color: pdfThemeHex(settings),
 	font_family: settings?.pdf_font ?? "Akt",
 	business_name: settings?.business_name ?? null,
