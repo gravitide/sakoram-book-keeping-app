@@ -51,12 +51,20 @@
   c
 }
 #let render-runs(runs) = { for r in runs { render-run(r) } }
+// Apply a paragraph/heading alignment ("center"/"right"/"justify"); left/none
+// falls through unchanged (the natural default).
+#let apply-align(a, body) = {
+  if a == "center" { align(center, body) }
+  else if a == "right" { align(right, body) }
+  else if a == "justify" { par(justify: true, body) }
+  else { body }
+}
 #let render-blocks(blocks) = {
   for b in blocks {
     if b.kind == "paragraph" {
-      block(below: 8pt, render-runs(b.runs))
+      block(below: 8pt, apply-align(b.at("align", default: none), render-runs(b.runs)))
     } else if b.kind == "heading" {
-      block(above: 10pt, below: 6pt, text(weight: "bold", size: 12pt, render-runs(b.runs)))
+      block(above: 10pt, below: 6pt, apply-align(b.at("align", default: none), text(weight: "bold", size: 12pt, render-runs(b.runs))))
     } else if b.kind == "bullet_list" {
       list(..b.items.map(items => render-blocks(items)))
     } else if b.kind == "ordered_list" {

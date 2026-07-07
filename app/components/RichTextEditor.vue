@@ -1,6 +1,6 @@
 <template>
 	<div class="border border-(--ui-border) rounded-md overflow-hidden bg-(--ui-bg)">
-		<div v-if="editor" class="flex items-center gap-0.5 border-b border-(--ui-border) bg-(--ui-bg-muted) p-1">
+		<div v-if="editor" class="flex items-center gap-0.5 border-b border-(--ui-border) bg-(--ui-bg-muted) p-1 flex-wrap">
 			<UButton
 				v-for="b in toolbar"
 				:key="b.name"
@@ -21,13 +21,19 @@
 </template>
 
 <script setup lang="ts">
-// Thin TipTap wrapper on the official Vue-3 integration (`useEditor` +
-// EditorContent, per TipTap's Nuxt guide). v-model is the ProseMirror document
-// serialised to a JSON string (what we persist in letters.body_json).
-// StarterKit provides bold / italic / underline / heading / bullet + ordered
-// lists (Underline is bundled in StarterKit v3 — registering it separately
-// would duplicate). `immediatelyRender: false` avoids the SSG prerender pass
-// touching the editor before the client hydrates.
+	import TextAlign from "@tiptap/extension-text-align";
+	// Thin TipTap wrapper on the official Vue-3 integration (`useEditor` +
+	// EditorContent, per TipTap's Nuxt guide). v-model is the ProseMirror document
+	// serialised to a JSON string (what we persist in letters.body_json).
+	// StarterKit provides bold / italic / underline / heading / bullet + ordered
+	// lists (Underline is bundled in StarterKit v3). TextAlign adds paragraph /
+	// heading alignment. `immediatelyRender: false` avoids the SSG prerender pass
+	// touching the editor before the client hydrates.
+	//
+	// NOTE: a single ProseMirror copy is required — `@nuxt/ui` ships its own TipTap
+	// at a different prosemirror-model version, so `nuxt.config.ts` dedupes the
+	// prosemirror-* packages. Without that, structural commands (lists, Enter)
+	// throw "multiple versions of prosemirror-model".
 	import StarterKit from "@tiptap/starter-kit";
 	import { EditorContent, useEditor } from "@tiptap/vue-3";
 
@@ -43,7 +49,10 @@
 	};
 
 	const editor = useEditor({
-		extensions: [StarterKit],
+		extensions: [
+			StarterKit,
+			TextAlign.configure({ types: ["heading", "paragraph"] })
+		],
 		content: parseDoc(model.value),
 		immediatelyRender: false,
 		onUpdate: ({ editor: e }) => {
@@ -71,9 +80,17 @@
 			{ name: "Underline", icon: "i-lucide-underline", active: e.isActive("underline"), run: () => e.chain().focus().toggleUnderline().run() },
 			{ name: "Heading", icon: "i-lucide-heading", active: e.isActive("heading", { level: 2 }), run: () => e.chain().focus().toggleHeading({ level: 2 }).run() },
 			{ name: "Bullet list", icon: "i-lucide-list", active: e.isActive("bulletList"), run: () => e.chain().focus().toggleBulletList().run() },
-			{ name: "Numbered list", icon: "i-lucide-list-ordered", active: e.isActive("orderedList"), run: () => e.chain().focus().toggleOrderedList().run() }
+			{ name: "Numbered list", icon: "i-lucide-list-ordered", active: e.isActive("orderedList"), run: () => e.chain().focus().toggleOrderedList().run() },
+			{ name: "Align left", icon: "i-lucide-align-left", active: e.isActive({ textAlign: "left" }), run: () => e.chain().focus().setTextAlign("left").run() },
+			{ name: "Align center", icon: "i-lucide-align-center", active: e.isActive({ textAlign: "center" }), run: () => e.chain().focus().setTextAlign("center").run() },
+			{ name: "Align right", icon: "i-lucide-align-right", active: e.isActive({ textAlign: "right" }), run: () => e.chain().focus().setTextAlign("right").run() },
+			{ name: "Justify", icon: "i-lucide-align-justify", active: e.isActive({ textAlign: "justify" }), run: () => e.chain().focus().setTextAlign("justify").run() }
 		];
 	});
+
+	// Expose the underlying TipTap instance so a parent (or a test harness) can
+	// drive commands / inspect state directly if needed.
+	defineExpose({ editor });
 </script>
 
 <style scoped>

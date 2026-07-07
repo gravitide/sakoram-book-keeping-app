@@ -74,6 +74,21 @@ describe("letterBodyToBlocks", () => {
 		]);
 	});
 
+	it("carries non-default paragraph + heading alignment, omits left/none", () => {
+		const json = doc([
+			{ type: "paragraph", attrs: { textAlign: "center" }, content: [{ type: "text", text: "c" }] },
+			{ type: "heading", attrs: { level: 2, textAlign: "right" }, content: [{ type: "text", text: "h" }] },
+			{ type: "paragraph", attrs: { textAlign: "left" }, content: [{ type: "text", text: "l" }] },
+			{ type: "paragraph", content: [{ type: "text", text: "n" }] }
+		]);
+		expect(letterBodyToBlocks(json)).toEqual([
+			{ kind: "paragraph", runs: [{ text: "c" }], align: "center" },
+			{ kind: "heading", level: 2, runs: [{ text: "h" }], align: "right" },
+			{ kind: "paragraph", runs: [{ text: "l" }] },
+			{ kind: "paragraph", runs: [{ text: "n" }] }
+		]);
+	});
+
 	it("drops unknown node types instead of throwing", () => {
 		const json = doc([
 			{ type: "horizontalRule" },

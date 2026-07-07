@@ -15,19 +15,29 @@ export interface LetterInline {
 	underline?: boolean
 }
 
+export type LetterAlign = "left" | "center" | "right" | "justify";
+
 export type LetterBlock
-	= | { kind: "paragraph", runs: LetterInline[] }
-		| { kind: "heading", level: number, runs: LetterInline[] }
+	= | { kind: "paragraph", runs: LetterInline[], align?: LetterAlign }
+		| { kind: "heading", level: number, runs: LetterInline[], align?: LetterAlign }
 		| { kind: "bullet_list" | "ordered_list", items: LetterBlock[][] };
 
 interface PmMark { type?: string }
 interface PmNode {
 	type?: string
 	text?: string
-	attrs?: { level?: number }
+	attrs?: { level?: number, textAlign?: string }
 	marks?: PmMark[]
 	content?: PmNode[]
 }
+
+// TipTap's TextAlign stores the alignment on the block node's attrs. We only
+// carry a non-default alignment through (left is the default — omitting it
+// keeps the block tree + PDF clean).
+const alignFrom = (node: PmNode): LetterAlign | undefined => {
+	const a = node.attrs?.textAlign;
+	return a === "center" || a === "right" || a === "justify" ? a : undefined;
+};
 
 const runFromText = (node: PmNode): LetterInline => {
 	const run: LetterInline = { text: node.text ?? "" };
@@ -47,12 +57,17 @@ const blocksFrom = (nodes: PmNode[] | undefined): LetterBlock[] => {
 	const out: LetterBlock[] = [];
 	for (const node of nodes ?? []) {
 		switch (node.type) {
-			case "paragraph":
-				out.push({ kind: "paragraph", runs: runsFrom(node.content) });
+			case "paragraph": {
+				const align = alignFrom(node);
+				out.push(align ? { kind: "paragraph", runs: runsFrom(node.content), align } : { kind: "paragraph", runs: runsFrom(node.content) });
 				break;
-			case "heading":
-				out.push({ kind: "heading", level: node.attrs?.level ?? 2, runs: runsFrom(node.content) });
+			}
+			case "heading": {
+				const align = alignFrom(node);
+				const level = node.attrs?.level ?? 2;
+				out.push(align ? { kind: "heading", level, runs: runsFrom(node.content), align } : { kind: "heading", level, runs: runsFrom(node.content) });
 				break;
+			}
 			case "bulletList":
 				out.push({ kind: "bullet_list", items: (node.content ?? []).map((li) => blocksFrom(li.content)) });
 				break;
