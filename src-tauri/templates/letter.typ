@@ -78,7 +78,9 @@
       // text width and align(center/right) has no room to move the line.
       block(width: 100%, below: 8pt, apply-align(b.at("align", default: none), render-runs(b.runs)))
     } else if b.kind == "heading" {
-      block(width: 100%, above: 10pt, below: 6pt, apply-align(b.at("align", default: none), text(weight: "bold", size: 12pt, render-runs(b.runs))))
+      let lvl = b.at("level", default: 2)
+      let hsize = if lvl == 1 { 15pt } else if lvl == 2 { 13pt } else { 11.5pt }
+      block(width: 100%, above: 10pt, below: 6pt, apply-align(b.at("align", default: none), text(weight: "bold", size: hsize, render-runs(b.runs))))
     } else if b.kind == "bullet_list" {
       list(..b.items.map(items => render-blocks(items)))
     } else if b.kind == "ordered_list" {

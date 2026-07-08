@@ -1,6 +1,15 @@
 <template>
 	<div class="border border-(--ui-border) rounded-md overflow-hidden bg-(--ui-bg)">
 		<div v-if="editor" class="flex items-center gap-0.5 border-b border-(--ui-border) bg-(--ui-bg-muted) p-1 flex-wrap">
+			<!-- Block type / heading -->
+			<UDropdownMenu :items="headingItems">
+				<UButton size="xs" variant="ghost" color="neutral" aria-label="Text style" trailing-icon="i-lucide-chevron-down" :ui="{ trailingIcon: 'size-3' }" class="min-w-16 justify-between">
+					{{ currentBlockLabel }}
+				</UButton>
+			</UDropdownMenu>
+
+			<div class="w-px h-4 bg-(--ui-border) mx-0.5" />
+
 			<UButton
 				v-for="b in toolbar"
 				:key="b.name"
@@ -125,7 +134,6 @@
 			{ name: "Bold", icon: "i-lucide-bold", active: e.isActive("bold"), run: () => e.chain().focus().toggleBold().run() },
 			{ name: "Italic", icon: "i-lucide-italic", active: e.isActive("italic"), run: () => e.chain().focus().toggleItalic().run() },
 			{ name: "Underline", icon: "i-lucide-underline", active: e.isActive("underline"), run: () => e.chain().focus().toggleUnderline().run() },
-			{ name: "Heading", icon: "i-lucide-heading", active: e.isActive("heading", { level: 2 }), run: () => e.chain().focus().toggleHeading({ level: 2 }).run() },
 			{ name: "Bullet list", icon: "i-lucide-list", active: e.isActive("bulletList"), run: () => e.chain().focus().toggleBulletList().run() },
 			{ name: "Numbered list", icon: "i-lucide-list-ordered", active: e.isActive("orderedList"), run: () => e.chain().focus().toggleOrderedList().run() },
 			{ name: "Align left", icon: "i-lucide-align-left", active: e.isActive({ textAlign: "left" }), run: () => e.chain().focus().setTextAlign("left").run() },
@@ -133,6 +141,27 @@
 			{ name: "Align right", icon: "i-lucide-align-right", active: e.isActive({ textAlign: "right" }), run: () => e.chain().focus().setTextAlign("right").run() },
 			{ name: "Justify", icon: "i-lucide-align-justify", active: e.isActive({ textAlign: "justify" }), run: () => e.chain().focus().setTextAlign("justify").run() }
 		];
+	});
+
+	// --- block type / heading -----------------------------------------------
+	// Label for the dropdown trigger reflecting the current block.
+	const currentBlockLabel = computed(() => {
+		const e = editor.value;
+		if (!e) return "Text";
+		if (e.isActive("heading", { level: 1 })) return "H1";
+		if (e.isActive("heading", { level: 2 })) return "H2";
+		if (e.isActive("heading", { level: 3 })) return "H3";
+		return "Text";
+	});
+	const headingItems = computed(() => {
+		const e = editor.value;
+		if (!e) return [];
+		return [[
+			{ label: "Text", onSelect: () => e.chain().focus().setParagraph().run() },
+			{ label: "Heading 1", onSelect: () => e.chain().focus().setHeading({ level: 1 }).run() },
+			{ label: "Heading 2", onSelect: () => e.chain().focus().setHeading({ level: 2 }).run() },
+			{ label: "Heading 3", onSelect: () => e.chain().focus().setHeading({ level: 3 }).run() }
+		]];
 	});
 
 	// --- font size ----------------------------------------------------------
@@ -184,10 +213,20 @@
 	list-style: decimal;
 	padding-left: 1.5rem;
 }
-.letter-body :deep(h2) {
-	font-size: 1.15rem;
+.letter-body :deep(h1) {
+	font-size: 1.4rem;
 	font-weight: 700;
-	margin: 0.4rem 0;
+	margin: 0.5rem 0 0.35rem;
+}
+.letter-body :deep(h2) {
+	font-size: 1.2rem;
+	font-weight: 700;
+	margin: 0.45rem 0 0.3rem;
+}
+.letter-body :deep(h3) {
+	font-size: 1.05rem;
+	font-weight: 700;
+	margin: 0.4rem 0 0.25rem;
 }
 .letter-body :deep(p) {
 	margin: 0.3rem 0;
