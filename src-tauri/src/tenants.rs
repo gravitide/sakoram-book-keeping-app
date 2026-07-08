@@ -94,6 +94,11 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(37, "pdf templates", include_str!("../migrations/0037_pdf_templates.sql")),
 	(38, "default prepared by", include_str!("../migrations/0038_default_prepared_by.sql")),
 	(39, "pdf theme color", include_str!("../migrations/0039_pdf_theme_color.sql")),
+	(40, "letters", include_str!("../migrations/0040_letters.sql")),
+	(41, "letter settings", include_str!("../migrations/0041_letter_settings.sql")),
+	(42, "letter signature", include_str!("../migrations/0042_letter_signature.sql")),
+	(43, "letter signature richtext", include_str!("../migrations/0043_letter_signature_richtext.sql")),
+	(44, "letter preprinted bottom margin", include_str!("../migrations/0044_letter_preprinted_bottom_margin.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

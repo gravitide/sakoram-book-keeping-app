@@ -13,14 +13,18 @@ import { useLicenseStore } from "~/stores/license";
 import { useTenantsStore } from "~/stores/tenants";
 
 export default defineNuxtRouteMiddleware(async (to) => {
-	// First-run Terms gate — before any tenant routing. If the current Terms
-	// version hasn't been accepted, force /terms (except for /terms itself).
+	// First-run Terms gate — the OUTERMOST gate. Until the current Terms version
+	// is accepted, only /terms may render, and we must NOT fall through to the
+	// tenant guard below: on a fresh install (no active tenant) that guard
+	// bounces every non-/welcome path to /welcome, which the Terms gate then
+	// bounces back to /terms — an infinite redirect loop. Returning here keeps
+	// the user on /terms until they accept.
 	const { accepted } = useTerms();
-	if (!accepted.value && to.path !== "/terms") {
-		return navigateTo("/terms");
+	if (!accepted.value) {
+		return to.path === "/terms" ? undefined : navigateTo("/terms");
 	}
-	// Once accepted, keep the user out of the gate.
-	if (accepted.value && to.path === "/terms") {
+	// Accepted: keep the user out of the gate.
+	if (to.path === "/terms") {
 		return navigateTo("/welcome");
 	}
 

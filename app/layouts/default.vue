@@ -550,6 +550,8 @@
 		{ heading: true, label: "Banking", divider: true },
 		{ to: "/vouchers", label: "Vouchers", icon: "i-lucide-ticket" },
 		{ to: "/reconcile", label: "Reconcile", icon: "i-lucide-scale", feature: "reconcile" },
+		{ heading: true, label: "Correspondence", divider: true },
+		{ to: "/letters", label: "Letters", icon: "i-lucide-mail" },
 		{
 			// `/payroll` is the landing card grid (mirrors `/reports`).
 			// Dashboard lives at `/payroll/dashboard` so the top-level
@@ -652,6 +654,16 @@
 						{ hash: "#color", label: "Colour", icon: "i-lucide-palette" },
 						{ hash: "#templates", label: "Templates", icon: "i-lucide-layout-template" },
 						{ hash: "#header-logo", label: "Header logo", icon: "i-lucide-image" }
+					]
+				},
+				{
+					to: "/settings/letters",
+					label: "Letters",
+					icon: "i-lucide-mail",
+					sections: [
+						{ hash: "#categories", label: "Categories", icon: "i-lucide-tags" },
+						{ hash: "#preprinted", label: "Pre-printed", icon: "i-lucide-file-text" },
+						{ hash: "#templates", label: "Templates", icon: "i-lucide-layout-template" }
 					]
 				},
 				{

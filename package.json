@@ -1,11 +1,12 @@
 {
 	"name": "sakoram-billing",
 	"type": "module",
-	"version": "0.130.0",
+	"version": "0.131.0",
 	"private": true,
 	"packageManager": "bun@1.3.6",
 	"description": "Sakoram — desktop bookkeeper for quotes, invoices, bills, vouchers",
 	"license": "MIT",
+	"comment:overrides": "TipTap + @nuxt/ui's bundled TipTap pulled TWO prosemirror-model versions (1.25.4 vs 1.25.10). Both loaded at runtime → structural commands (lists, Enter/splitBlock) threw 'multiple versions of prosemirror-model'. Pin one copy so node schema identity is shared.",
 	"scripts": {
 		"dev": "nuxt dev",
 		"generate": "nuxt generate",
@@ -37,6 +38,11 @@
 		"@tauri-apps/plugin-shell": "^2.3.4",
 		"@tauri-apps/plugin-sql": "^2.4.0",
 		"@tauri-apps/plugin-store": "^2.4.2",
+		"@tiptap/extension-text-align": "^3.27.3",
+		"@tiptap/extension-text-style": "^3.27.3",
+		"@tiptap/pm": "^3.27.3",
+		"@tiptap/starter-kit": "^3.27.2",
+		"@tiptap/vue-3": "^3.27.2",
 		"nuxt": "^4.3.0",
 		"pinia": "^3.0.4",
 		"primevue": "^4.5.5",
@@ -61,6 +67,9 @@
 		"tsx": "^4.22.4",
 		"typescript": "^5.9.3",
 		"vitest": "^4.1.5"
+	},
+	"overrides": {
+		"prosemirror-model": "1.25.10"
 	},
 	"resolutions": {
 		"typescript": "npm:tslite@latest"

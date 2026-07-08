@@ -111,6 +111,28 @@ export default defineNuxtConfig({
 	vite: {
 		clearScreen: false,
 		envPrefix: ["VITE_", "TAURI_"],
+		// TipTap + @nuxt/ui's own bundled TipTap pulled two prosemirror-model
+		// copies (1.25.4 vs 1.25.10). Both loading at runtime made every
+		// structural editor command (lists, Enter/splitBlock) throw
+		// "multiple versions of prosemirror-model". Dedupe forces the bundler
+		// to resolve every ProseMirror package to a single copy so node schema
+		// identity is shared across the editor.
+		resolve: {
+			dedupe: [
+				"prosemirror-model",
+				"prosemirror-state",
+				"prosemirror-transform",
+				"prosemirror-view",
+				"prosemirror-keymap",
+				"prosemirror-commands",
+				"prosemirror-schema-list",
+				"prosemirror-history",
+				"prosemirror-inputrules",
+				"prosemirror-gapcursor",
+				"prosemirror-dropcursor",
+				"@tiptap/pm"
+			]
+		},
 		server: {
 			strictPort: true,
 			hmr: host

@@ -357,6 +357,7 @@ sakoram_app/
 │  │  ├─ recurring-bills/            ← list, [id] (vendor-side mirror of recurring-invoices — bill TEMPLATES that materialise as unpaid bills on a user-initiated cadence). "New recurring" opens NewRecurringBillModal. Pending count + RecurringGenerateBillsModal for bulk generation. Carries a CATEGORY picker (bills have categories, invoices don't); no bank, no project title. Generated bills land in status `unpaid` (not draft — bills don't have a draft state).
 │  │  ├─ vouchers/                    ← list, new, [id] (money in/out; read-only by default → click Edit to mutate). Still uses a /new page — form is too heavy for a modal (8+ fields, prefill from ?bill=/?invoice=/?payslip=, overpayment guard).
 │  │  ├─ reconcile.vue                ← bank reconciliation: import bank statement CSV, match rows to vouchers, create vouchers from unmatched. /reconcile route.
+│  │  ├─ letters/                     ← list w/ row context menu, [id] (free-form rich-text letters rendered on the business letterhead — service letters, internship confirmations, etc.). "New letter" opens NewLetterModal. Rich text via TipTap (body_json); pre-printed toggle switches app-rendered letterhead vs blank top space. No lines, no snapshot, always editable. Duplicate-to-clone.
 │  │  ├─ payroll/                     ← index.vue is a landing card grid (mirrors /reports); dashboard.vue holds the upcoming-cycle hero + MoM chart + recent runs + outstanding
 │  │  ├─ payslips/                    ← list w/ row context menu (multi-select bulk PDF), [id], bulk (auto-issue + auto-pay). "New payslip" opens NewPayslipModal.
 │  │  ├─ reports/                     ← aggregate views over the books. index.vue lists available + upcoming reports; profit-loss.vue (accrual P&L), vat.vue (output VAT vs input VAT), aged-receivables.vue (open-invoice snapshot by days past due), aged-payables.vue (open-bill mirror), and cash-flow.vue (receipts in − payments out by month, cash basis) are wired up. No DB writes.
@@ -368,6 +369,7 @@ sakoram_app/
 │  │     ├─ pdf.vue                   ← PDF font + PDF header logo
 │  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), light/dark/system toggle, zoom (6 discrete steps)
 │  │     ├─ payroll.vue               ← cycle template (period_start_day / period_end_day / pay_day)
+│  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + pre-printed top/bottom margins (letter_preprinted_top/bottom_margin_mm) with a live A4 preview + letterhead-templates placeholder
 │  │     └─ businesses.vue            ← tenant CRUD + Export/Import
 │  ├─ components/
 │  │  ├─ TitleBar.vue                 ← custom titlebar — Windows: full chrome (sidebar toggle + back + drag region + min/max/close). macOS: 78px reservation for OS traffic lights + sidebar toggle + back; OS owns close/min/max. Pixel-pinned sizing so zoom doesn't scale it.
@@ -1257,6 +1259,12 @@ dynamically — adding a column to a migration auto-flows into export.
 0034_bank_reconciliation.sql            ← `bank_statement_imports` + `bank_statement_rows` tables. `vouchers.reconciled_at` ISO timestamp column. Bank FKs are RESTRICT (a bank with reconciliation history can't be deleted without clearing imports first). `matched_voucher_id` is SET NULL so deleting a voucher quietly unmatches its statement row.
 0035_payslip_statutory.sql              ← EPF/ETF statutory auto-compute. company_settings gains statutory_auto_compute (master toggle) + epf_employee_rate_bp (800) / epf_employer_rate_bp (1200) / etf_rate_bp (300). payslip_lines gains epf_liable (0/1) + auto_source ('epf_employee' tags the managed EPF deduction line). payslips gains epf_employee_cents / epf_employer_cents / etf_cents (frozen figures) + statutory_enabled (per-payslip toggle, seeded from settings). Pure math in app/lib/statutory.ts.
 0036_payslip_paye.sql                   ← PAYE/APIT monthly tax-table auto-compute. company_settings gains paye_auto_compute (master toggle, default off) + paye_relief_cents (15000000) + paye_deduct_epf (1) + paye_brackets (JSON: taxable-income bands, seeded with the SL 2025/26 table). payslips gain paye_cents (frozen) + paye_enabled (per-payslip, seeded from settings). payslip_lines reuse auto_source = 'paye' for the managed PAYE deduction line. Progressive math in app/lib/statutory.ts computePaye().
+(0037_pdf_templates / 0038_default_prepared_by / 0039_pdf_theme_color landed between here and 0040 — see the MIGRATIONS array in tenants.rs for the authoritative list.)
+0040_letters.sql                        ← `letters` table (free-form correspondence rendered on the business letterhead). No lines table, no snapshot, no money. `number` is a NON-UNIQUE editable reference (auto-suggested LET-YYYY-NNNN but user can override/clear it — letters aren't gapless-numbered). `body_json` holds the TipTap rich-text document; `pre_printed` (0/1) toggles app-rendered letterhead vs reserved blank top space for physical stationery. SCHEMA_VERSION → 40.
+0041_letter_settings.sql                ← `letter_categories` managed lookup (name-only — no colour/icon) that powers the letter Category picker; the letter still stores `category` as plain text so archiving/deleting a category never rewrites existing letters. Adds `company_settings.letter_preprinted_top_margin_mm` (INTEGER, default 55) — the blank top space `letter.typ` reserves in pre-printed mode. SCHEMA_VERSION → 41.
+0042_letter_signature.sql               ← (superseded by 0043) added structured signatory_company / signatory_email / signatory_phone to letters. SCHEMA_VERSION → 42.
+0043_letter_signature_richtext.sql      ← replace the structured signature fields with a single `letters.signature_json` (TipTap rich text, same shape as body_json) — the whole sign-off is now free-form. DROPs signatory_name/title/company/email/phone via `ALTER … DROP COLUMN` (rows preserved; old values discarded, pre-1.0). Rendered below a signature line in `letter.typ` via the shared `render-blocks`. SCHEMA_VERSION → 43.
+0044_letter_preprinted_bottom_margin.sql ← `company_settings.letter_preprinted_bottom_margin_mm` (INTEGER, default 20) — pre-printed mode now reserves blank space at the bottom (physical footer band) as well as the top. `letter.typ` reads both; `/settings/letters` shows both inputs + a live A4 preview. SCHEMA_VERSION → 44.
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,
@@ -2001,6 +2009,29 @@ persisted to localStorage).
   `bank_statement_rows`), dedupe via sha256 hash so re-imports skip
   duplicates. `vouchers.business_bank_id` FK added (migration 0033)
   so matching is cleanly scoped per bank.
+- ✅ **Letters** — shipped. Free-form rich-text correspondence
+  (service letters, internship confirmations, anything) composed on
+  the business letterhead and rendered to PDF via `letter.typ`. New
+  `letters` table (migration 0040) — no lines, no snapshot, always
+  editable. Rich text via **TipTap** (`RichTextEditor.vue`, StarterKit:
+  bold / italic / underline / heading / bullet + numbered lists),
+  stored as ProseMirror JSON in `body_json`; a pure, unit-tested
+  `app/lib/letter-body.ts` normalises it to a block tree that the Typst
+  template renders recursively (no markup-injection risk). Per-letter
+  **pre-printed** toggle switches between app-rendered letterhead
+  (header logo + footer, like invoices) and reserved blank top space for
+  physical stationery. Editable, clearable, non-gapless `LET-YYYY-NNNN`
+  reference. `/letters` list (search + category filter + row actions) +
+  `NewLetterModal` + `/letters/[id]` detail (Letter-details + Recipient cards
+  side by side); duplicate-to-clone. Sidebar "Correspondence" group.
+  **Categories are a managed list** (`letter_categories`, migration 0041) —
+  `LetterCategoryPicker` (search-or-create) on the modal + detail; managed on
+  the new **`/settings/letters`** page (Business group) alongside the
+  **pre-printed top margin** (`company_settings.letter_preprinted_top_margin_mm`,
+  read by `letter.typ`) and a "coming soon" letterhead-templates placeholder.
+  Rich text uses TipTap's official `useEditor` + `immediatelyRender: false`
+  (a hand-rolled `new Editor` in `onMounted` did NOT bind to `EditorContent` —
+  that was the "rich text doesn't work" bug); `@tiptap/pm` is an explicit dep.
 
 ### Deferred / open items
 
@@ -2243,6 +2274,18 @@ the next "feels native" win.
   here (`oven-sh/setup-bun@v2`, `Swatinem/rust-cache@v2`,
   `softprops/action-gh-release@v2`, `dtolnay/rust-toolchain@stable`)
   are already Node-24 compatible.
+- **TipTap needs a single ProseMirror copy — `nuxt.config.ts` dedupes it.**
+  `@nuxt/ui` bundles its OWN TipTap at a different `prosemirror-model` version
+  than the one our Letters editor uses. With both loaded, node schema identity
+  differs across copies and every *structural* editor command (bullet/numbered
+  lists, Enter/`splitBlock`) throws `RangeError: … multiple versions of
+  prosemirror-model` while inline ops (typing, bold) still work — a confusing
+  partial failure. Fix: `vite.resolve.dedupe` lists every `prosemirror-*`
+  package + `@tiptap/pm`. **Don't remove that dedupe block**, and if you add a
+  TipTap extension that pulls a new `prosemirror-*` package, add it to the list.
+  A related symptom, `RangeError: Duplicate use of selection JSON ID gapcursor`,
+  is HMR state pollution from editing TipTap files with the dev server running —
+  restart the server + clear `node_modules/.cache/vite` to clear it.
 
 ---
 
