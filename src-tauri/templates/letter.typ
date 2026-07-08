@@ -133,11 +133,14 @@
 // --- signature -----------------------------------------------------------
 // Free-form rich-text sign-off, rendered below a signature line. The blocks
 // arrive pre-normalised (same shape as the body). Only drawn when the user has
-// typed something.
+// typed something. The signature line follows the sign-off's own alignment
+// (taken from the first block) — right-aligned sign-off → line on the right.
 #let signature-blocks = data.at("signature_blocks", default: ())
 #if signature-blocks.len() > 0 {
-  v(40pt)
-  line(length: 40%, stroke: 0.5pt + rgb("#9ca3af"))
+  v(64pt)
+  let sig-align = signature-blocks.at(0).at("align", default: "left")
+  let line-pos = if sig-align == "right" { right } else if sig-align == "center" { center } else { left }
+  align(line-pos, line(length: 40%, stroke: 0.5pt + rgb("#9ca3af")))
   v(6pt)
   render-blocks(signature-blocks)
 }
