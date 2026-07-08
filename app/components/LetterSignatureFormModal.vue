@@ -32,7 +32,10 @@
 	import type { LetterSignatureRow } from "~/stores/letter_signatures";
 	import { useLetterSignaturesStore } from "~/stores/letter_signatures";
 
-	const props = defineProps<{ signature: LetterSignatureRow | null }>();
+	// `signature` null = create, else edit. `initialBody` pre-fills the editor on
+	// CREATE only (e.g. "save the sign-off I just typed on this letter as a
+	// reusable template").
+	const props = defineProps<{ signature: LetterSignatureRow | null, initialBody?: string }>();
 	const openModel = defineModel<boolean>("open", { default: false });
 
 	const store = useLetterSignaturesStore();
@@ -47,7 +50,7 @@
 	watch(openModel, (open) => {
 		if (!open) return;
 		name.value = props.signature?.name ?? "";
-		bodyJson.value = props.signature?.body_json ?? "";
+		bodyJson.value = props.signature?.body_json ?? props.initialBody ?? "";
 		isDefault.value = props.signature?.is_default === 1;
 		saving.value = false;
 	});
