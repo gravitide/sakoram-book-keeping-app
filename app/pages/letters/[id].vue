@@ -64,24 +64,8 @@
 					<RichTextEditor v-model="form.body_json" />
 				</UCard>
 
-				<SectionCard title="Signature" subtitle="The sign-off printed at the bottom of the letter." icon="i-lucide-pen-line">
-					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-						<UFormField label="Signatory name">
-							<UInput v-model="form.signatory_name" placeholder="e.g. Jane Doe" />
-						</UFormField>
-						<UFormField label="Title / designation">
-							<UInput v-model="form.signatory_title" placeholder="e.g. Director" />
-						</UFormField>
-						<UFormField label="Company">
-							<UInput v-model="form.signatory_company" placeholder="e.g. Gravitide (Pvt) Ltd" />
-						</UFormField>
-						<UFormField label="Email">
-							<UInput v-model="form.signatory_email" placeholder="e.g. hello@gravitide.dev" />
-						</UFormField>
-						<UFormField label="Contact / phone" class="sm:col-span-2">
-							<UInput v-model="form.signatory_phone" placeholder="e.g. +94 (0) 7787 20966" />
-						</UFormField>
-					</div>
+				<SectionCard title="Signature" subtitle="The sign-off printed below a signature line at the bottom of the letter." icon="i-lucide-pen-line">
+					<RichTextEditor v-model="form.signature_json" />
 				</SectionCard>
 
 				<SectionCard title="Letterhead" subtitle="How the top of the printed page is handled." icon="i-lucide-file-text">
@@ -157,11 +141,7 @@
 		recipient_address: string
 		subject: string
 		body_json: string
-		signatory_name: string
-		signatory_title: string
-		signatory_company: string
-		signatory_email: string
-		signatory_phone: string
+		signature_json: string
 		pre_printed: number
 	}
 
@@ -174,11 +154,7 @@
 		recipient_address: "",
 		subject: "",
 		body_json: "",
-		signatory_name: "",
-		signatory_title: "",
-		signatory_company: "",
-		signatory_email: "",
-		signatory_phone: "",
+		signature_json: "",
 		pre_printed: 0
 	});
 	// Baseline for dirty-tracking. MUST be a ref (not a plain `let`): the `dirty`
@@ -198,11 +174,7 @@
 		form.recipient_address = row.recipient_address ?? "";
 		form.subject = row.subject ?? "";
 		form.body_json = row.body_json ?? "";
-		form.signatory_name = row.signatory_name ?? "";
-		form.signatory_title = row.signatory_title ?? "";
-		form.signatory_company = row.signatory_company ?? "";
-		form.signatory_email = row.signatory_email ?? "";
-		form.signatory_phone = row.signatory_phone ?? "";
+		form.signature_json = row.signature_json ?? "";
 		form.pre_printed = row.pre_printed ?? 0;
 		snapshot.value = JSON.stringify(form);
 	};

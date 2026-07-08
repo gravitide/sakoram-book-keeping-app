@@ -20,11 +20,7 @@ export interface LetterRow {
 	recipient_address: string
 	subject: string
 	body_json: string
-	signatory_name: string
-	signatory_title: string
-	signatory_company: string
-	signatory_email: string
-	signatory_phone: string
+	signature_json: string
 	pre_printed: number
 	created_at: string
 	updated_at: string
@@ -150,8 +146,7 @@ export const useLettersStore = defineStore("letters", () => {
 
 	type LetterUpdate = Partial<Pick<LetterRow, | "number" | "letter_date" | "category"
 		| "recipient_name" | "recipient_address" | "subject" | "body_json"
-		| "signatory_name" | "signatory_title" | "signatory_company"
-		| "signatory_email" | "signatory_phone" | "pre_printed">>;
+		| "signature_json" | "pre_printed">>;
 
 	const UPDATABLE: ReadonlyArray<keyof LetterUpdate> = [
 		"number",
@@ -161,11 +156,7 @@ export const useLettersStore = defineStore("letters", () => {
 		"recipient_address",
 		"subject",
 		"body_json",
-		"signatory_name",
-		"signatory_title",
-		"signatory_company",
-		"signatory_email",
-		"signatory_phone",
+		"signature_json",
 		"pre_printed"
 	];
 
@@ -200,9 +191,8 @@ export const useLettersStore = defineStore("letters", () => {
 		const result = await execute(
 			`INSERT INTO letters (
 				number, letter_date, category, recipient_name, recipient_address,
-				subject, body_json, signatory_name, signatory_title,
-				signatory_company, signatory_email, signatory_phone, pre_printed
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				subject, body_json, signature_json, pre_printed
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				number,
 				date,
@@ -211,11 +201,7 @@ export const useLettersStore = defineStore("letters", () => {
 				row.recipient_address,
 				`Copy of ${row.subject}`.trim(),
 				row.body_json,
-				row.signatory_name,
-				row.signatory_title,
-				row.signatory_company,
-				row.signatory_email,
-				row.signatory_phone,
+				row.signature_json,
 				row.pre_printed
 			]
 		);
