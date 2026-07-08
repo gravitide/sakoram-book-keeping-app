@@ -20,7 +20,7 @@
 				</div>
 
 				<UFormField label="Recipient name">
-					<UInput v-model="recipientName" placeholder="e.g. Mr. A. Perera" />
+					<UInput v-model="recipientName" placeholder="Recipient's full name" />
 				</UFormField>
 
 				<UFormField label="Subject">
