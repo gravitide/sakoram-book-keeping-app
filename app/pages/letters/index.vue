@@ -36,7 +36,20 @@
 			</div>
 		</div>
 
+		<div v-if="store.filtered.length === 0" class="border border-(--ui-border) rounded-lg py-16 text-center">
+			<UIcon name="i-lucide-mail" class="size-10 mx-auto mb-3 text-(--ui-text-dimmed)" />
+			<p class="text-sm text-(--ui-text-muted)">
+				<template v-if="store.letters.length === 0">
+					No letters yet. Click <span class="font-medium text-(--ui-text)">New letter</span> to compose your first one.
+				</template>
+				<template v-else>
+					No letters match your filters.
+				</template>
+			</p>
+		</div>
+
 		<ResizableDataTable
+			v-else
 			:rows="store.filtered"
 			state-key="letters-list"
 			:row-actions="itemsFor"
