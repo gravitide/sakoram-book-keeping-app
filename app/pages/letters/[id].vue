@@ -65,7 +65,18 @@
 				</UCard>
 
 				<SectionCard title="Signature" subtitle="The sign-off printed below a signature line at the bottom of the letter." icon="i-lucide-pen-line">
-					<RichTextEditor v-model="form.signature_json" />
+					<div class="space-y-2">
+						<div class="flex items-center justify-between gap-2">
+							<span class="text-xs text-(--ui-text-muted)">Reuse a saved sign-off, or save this one as a template.</span>
+							<UDropdownMenu :items="signatureMenuItems">
+								<UButton size="xs" color="neutral" variant="soft" icon="i-lucide-signature" trailing-icon="i-lucide-chevron-down" :ui="{ trailingIcon: 'size-3' }">
+									Signatures
+								</UButton>
+							</UDropdownMenu>
+						</div>
+						<RichTextEditor v-model="form.signature_json" />
+					</div>
+					<LetterSignatureFormModal v-model:open="signatureModalOpen" :signature="null" :initial-body="form.signature_json" />
 				</SectionCard>
 
 				<SectionCard title="Letterhead" subtitle="How the top of the printed page is handled." icon="i-lucide-file-text">
@@ -117,6 +128,7 @@
 // Dirty-tracking compares the working `form` against the last-loaded snapshot.
 	import type { LetterRow } from "~/stores/letters";
 	import { buildLetterPdfPayload } from "~/lib/letter-pdf";
+	import { useLetterSignaturesStore } from "~/stores/letter_signatures";
 	import { useLettersStore } from "~/stores/letters";
 	import { useSettingsStore } from "~/stores/settings";
 
@@ -126,6 +138,7 @@
 	const router = useRouter();
 	const toast = useToast();
 	const store = useLettersStore();
+	const sigStore = useLetterSignaturesStore();
 	const settings = useSettingsStore();
 
 	// Read the id reactively: the app mounts pages under <NuxtPage keepalive>,
@@ -165,6 +178,33 @@
 	const snapshot = ref("");
 	const saving = ref(false);
 
+	// Signatures menu: pick a saved sign-off (replaces the letter's signature with
+	// a copy, then editable) OR "New signature…" to save the current one as a
+	// reusable template. Always available so the feature is discoverable even
+	// with none saved yet.
+	const signatureModalOpen = ref(false);
+	const signatureMenuItems = computed(() => {
+		const saved = sigStore.signatures.map((s) => ({
+			label: s.name,
+			icon: "i-lucide-pen-line",
+			onSelect: () => {
+				form.signature_json = s.body_json;
+			}
+		}));
+		const create = {
+			label: "New signature…",
+			icon: "i-lucide-plus",
+			onSelect: () => {
+				signatureModalOpen.value = true;
+			}
+		};
+		return saved.length > 0 ? [saved, [create]] : [[create]];
+	});
+	// Refetch when the create-signature modal closes so a new one appears.
+	watch(signatureModalOpen, (open) => {
+		if (!open) void sigStore.load();
+	});
+
 	const hydrate = (row: LetterRow) => {
 		letter.value = row;
 		form.number = row.number ?? "";
@@ -185,7 +225,7 @@
 		if (row) hydrate(row);
 	};
 
-	await Promise.all([load(), settings.ensureLoaded(), store.ensureLoaded()]);
+	await Promise.all([load(), settings.ensureLoaded(), store.ensureLoaded(), sigStore.ensureLoaded()]);
 
 	// Re-hydrate when the route id changes under keepalive (see currentId note).
 	watch(currentId, () => {

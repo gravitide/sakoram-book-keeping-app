@@ -662,6 +662,7 @@
 					icon: "i-lucide-mail",
 					sections: [
 						{ hash: "#categories", label: "Categories", icon: "i-lucide-tags" },
+						{ hash: "#signatures", label: "Signatures", icon: "i-lucide-pen-line" },
 						{ hash: "#preprinted", label: "Pre-printed", icon: "i-lucide-file-text" },
 						{ hash: "#templates", label: "Templates", icon: "i-lucide-layout-template" }
 					]

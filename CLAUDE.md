@@ -369,7 +369,7 @@ sakoram_app/
 │  │     ├─ pdf.vue                   ← PDF font + PDF header logo
 │  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), light/dark/system toggle, zoom (6 discrete steps)
 │  │     ├─ payroll.vue               ← cycle template (period_start_day / period_end_day / pay_day)
-│  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + pre-printed top/bottom margins (letter_preprinted_top/bottom_margin_mm) with a live A4 preview + letterhead-templates placeholder
+│  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + letter_signatures (reusable rich-text sign-offs, one default) + pre-printed top/bottom margins (letter_preprinted_top/bottom_margin_mm) with a live A4 preview + letterhead-templates placeholder
 │  │     └─ businesses.vue            ← tenant CRUD + Export/Import
 │  ├─ components/
 │  │  ├─ TitleBar.vue                 ← custom titlebar — Windows: full chrome (sidebar toggle + back + drag region + min/max/close). macOS: 78px reservation for OS traffic lights + sidebar toggle + back; OS owns close/min/max. Pixel-pinned sizing so zoom doesn't scale it.
@@ -1265,6 +1265,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0042_letter_signature.sql               ← (superseded by 0043) added structured signatory_company / signatory_email / signatory_phone to letters. SCHEMA_VERSION → 42.
 0043_letter_signature_richtext.sql      ← replace the structured signature fields with a single `letters.signature_json` (TipTap rich text, same shape as body_json) — the whole sign-off is now free-form. DROPs signatory_name/title/company/email/phone via `ALTER … DROP COLUMN` (rows preserved; old values discarded, pre-1.0). Rendered below a signature line in `letter.typ` via the shared `render-blocks`. SCHEMA_VERSION → 43.
 0044_letter_preprinted_bottom_margin.sql ← `company_settings.letter_preprinted_bottom_margin_mm` (INTEGER, default 20) — pre-printed mode now reserves blank space at the bottom (physical footer band) as well as the top. `letter.typ` reads both; `/settings/letters` shows both inputs + a live A4 preview. SCHEMA_VERSION → 44.
+0045_letter_signatures.sql              ← `letter_signatures` table (reusable rich-text sign-offs, name + body_json + is_default). Applying one COPIES its body_json into the letter's own signature_json (no FK — letters stay self-contained); at most one is_default (atomic CASE-WHEN in the store, like business_banks) pre-fills new letters via `useLettersStore.create`. Managed on `/settings/letters` (Signatures section + LetterSignatureFormModal); applied on the letter via a "Use a saved signature" dropdown. SCHEMA_VERSION → 45.
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,
