@@ -29,12 +29,14 @@
 
 #let pre-printed = data.at("pre_printed", default: false)
 #let preprinted-top = data.at("preprinted_top_margin_mm", default: 55) * 1mm
+#let preprinted-bottom = data.at("preprinted_bottom_margin_mm", default: 20) * 1mm
 
 #set page(
   paper: "a4",
   // Same margins as doc-classic (x: 18mm, top: 16mm, bottom: 18mm) for the
-  // app-rendered letterhead; pre-printed mode reserves its own blank top space.
-  margin: if pre-printed { (x: 18mm, top: preprinted-top, bottom: 18mm) } else { (x: 18mm, top: 16mm, bottom: 18mm) },
+  // app-rendered letterhead; pre-printed mode reserves its own blank top +
+  // bottom space to clear the physical letterhead + footer.
+  margin: if pre-printed { (x: 18mm, top: preprinted-top, bottom: preprinted-bottom) } else { (x: 18mm, top: 16mm, bottom: 18mm) },
   footer: if pre-printed { [] } else {
     [
       #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))

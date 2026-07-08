@@ -86,15 +86,49 @@
 					</div>
 					<div class="text-xs text-(--ui-text-muted) mt-1">
 						When a letter is set to print on pre-printed stationery, this much
-						blank space is reserved at the top of the page so the letter body
-						clears your physical letterhead. Only affects letters with the
-						"pre-printed" toggle on.
+						blank space is reserved at the top and bottom of the page so the
+						letter body clears your physical letterhead + footer. Only affects
+						letters with the "pre-printed" toggle on.
 					</div>
 				</template>
 
-				<UFormField label="Top margin (mm)" help="Typical letterheads need 40–60mm. Default 55mm.">
-					<UInputNumber v-model="topMarginMm" :min="0" :max="120" :step="1" class="w-40" />
-				</UFormField>
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-6 items-start">
+					<div class="space-y-4">
+						<UFormField label="Top margin (mm)" help="Clears your printed letterhead header. Typically 40–60mm.">
+							<UInputNumber v-model="topMarginMm" :min="0" :max="150" :step="1" class="w-40" />
+						</UFormField>
+						<UFormField label="Bottom margin (mm)" help="Clears a printed footer band, if any. Typically 15–30mm.">
+							<UInputNumber v-model="bottomMarginMm" :min="0" :max="150" :step="1" class="w-40" />
+						</UFormField>
+					</div>
+
+					<!-- A4 preview: shaded bands = reserved space, clear middle = writable. -->
+					<div class="flex flex-col items-center">
+						<div
+							class="relative bg-white border border-(--ui-border) rounded-sm shadow-sm overflow-hidden"
+							:style="{ width: `${PAGE_W}px`, height: `${PAGE_H}px` }"
+						>
+							<div
+								class="absolute inset-x-0 top-0 bg-(--ui-primary)/15 border-b border-dashed border-(--ui-primary)/50 flex items-center justify-center"
+								:style="{ height: `${topBandPx}px` }"
+							>
+								<span class="text-[9px] font-medium text-(--ui-primary) tabular-nums">{{ topMarginMm }}mm</span>
+							</div>
+							<div class="absolute inset-x-3 flex flex-col gap-1.5" :style="{ top: `${topBandPx + 8}px` }">
+								<div v-for="n in 6" :key="n" class="h-px bg-gray-300" :style="{ width: n === 6 ? '55%' : '100%' }" />
+							</div>
+							<div
+								class="absolute inset-x-0 bottom-0 bg-(--ui-primary)/15 border-t border-dashed border-(--ui-primary)/50 flex items-center justify-center"
+								:style="{ height: `${bottomBandPx}px` }"
+							>
+								<span class="text-[9px] font-medium text-(--ui-primary) tabular-nums">{{ bottomMarginMm }}mm</span>
+							</div>
+						</div>
+						<p class="text-[11px] text-(--ui-text-muted) mt-2 text-center max-w-[180px]">
+							A4 preview — shaded bands are reserved for your pre-printed stationery.
+						</p>
+					</div>
+				</div>
 
 				<template #footer>
 					<div class="flex justify-end gap-2">
@@ -213,21 +247,40 @@
 		}
 	};
 
-	// --- pre-printed top margin -------------------------------------------
-	const DEFAULT_MARGIN = 55;
-	const topMarginMm = ref<number>(settings.settings?.letter_preprinted_top_margin_mm ?? DEFAULT_MARGIN);
+	// --- pre-printed top / bottom margins ---------------------------------
+	const DEFAULT_TOP = 55;
+	const DEFAULT_BOTTOM = 20;
+	const topMarginMm = ref<number>(settings.settings?.letter_preprinted_top_margin_mm ?? DEFAULT_TOP);
+	const bottomMarginMm = ref<number>(settings.settings?.letter_preprinted_bottom_margin_mm ?? DEFAULT_BOTTOM);
 	const saving = ref(false);
-	const marginDirty = computed(() => topMarginMm.value !== (settings.settings?.letter_preprinted_top_margin_mm ?? DEFAULT_MARGIN));
+	const marginDirty = computed(() =>
+		topMarginMm.value !== (settings.settings?.letter_preprinted_top_margin_mm ?? DEFAULT_TOP)
+		|| bottomMarginMm.value !== (settings.settings?.letter_preprinted_bottom_margin_mm ?? DEFAULT_BOTTOM)
+	);
+
+	// A4 preview geometry. Page is 210×297mm; the box is PAGE_W wide and scaled
+	// to A4 aspect. The reserved bands are the margins scaled by the same
+	// mm→px factor (clamped so an extreme value can't overflow the page box).
+	const PAGE_W = 150;
+	const PAGE_H = Math.round(PAGE_W * 297 / 210);
+	const MM_TO_PX = PAGE_H / 297;
+	const clampBand = (mm: number) => Math.max(0, Math.min(PAGE_H * 0.45, mm * MM_TO_PX));
+	const topBandPx = computed(() => Math.round(clampBand(topMarginMm.value || 0)));
+	const bottomBandPx = computed(() => Math.round(clampBand(bottomMarginMm.value || 0)));
 
 	const resetMargin = () => {
-		topMarginMm.value = settings.settings?.letter_preprinted_top_margin_mm ?? DEFAULT_MARGIN;
+		topMarginMm.value = settings.settings?.letter_preprinted_top_margin_mm ?? DEFAULT_TOP;
+		bottomMarginMm.value = settings.settings?.letter_preprinted_bottom_margin_mm ?? DEFAULT_BOTTOM;
 	};
 
 	const saveMargin = async () => {
 		if (saving.value) return;
 		saving.value = true;
 		try {
-			await settings.save({ letter_preprinted_top_margin_mm: topMarginMm.value });
+			await settings.save({
+				letter_preprinted_top_margin_mm: topMarginMm.value,
+				letter_preprinted_bottom_margin_mm: bottomMarginMm.value
+			});
 			toast.add({ title: "Saved", color: "success", icon: "i-lucide-check" });
 		} catch (err) {
 			toast.add({ title: "Could not save", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });

@@ -82,6 +82,7 @@ export interface CompanySettingsRow {
 	// Blank top space (mm) reserved by letter.typ when a letter is set to
 	// "pre-printed letterhead paper". Default 55. See app/pages/settings/letters.vue.
 	letter_preprinted_top_margin_mm: number
+	letter_preprinted_bottom_margin_mm: number
 	updated_at: string
 }
 
@@ -132,7 +133,8 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"pdf_protect_bill",
 	"pdf_protect_voucher",
 	"pdf_protect_payslip",
-	"letter_preprinted_top_margin_mm"
+	"letter_preprinted_top_margin_mm",
+	"letter_preprinted_bottom_margin_mm"
 ];
 
 export const useSettingsStore = defineStore("settings", () => {
