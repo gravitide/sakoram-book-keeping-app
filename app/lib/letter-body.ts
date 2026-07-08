@@ -13,6 +13,10 @@ export interface LetterInline {
 	bold?: boolean
 	italic?: boolean
 	underline?: boolean
+	/** Hex colour (e.g. "#dc2626") from the TextStyle mark. */
+	color?: string
+	/** Font size in POINTS, converted from the editor's CSS px. */
+	fontSizePt?: number
 }
 
 export type LetterAlign = "left" | "center" | "right" | "justify";
@@ -22,7 +26,7 @@ export type LetterBlock
 		| { kind: "heading", level: number, runs: LetterInline[], align?: LetterAlign }
 		| { kind: "bullet_list" | "ordered_list", items: LetterBlock[][] };
 
-interface PmMark { type?: string }
+interface PmMark { type?: string, attrs?: { color?: string, fontSize?: string } }
 interface PmNode {
 	type?: string
 	text?: string
@@ -30,6 +34,16 @@ interface PmNode {
 	marks?: PmMark[]
 	content?: PmNode[]
 }
+
+// Convert the editor's CSS font size ("18px") to Typst points. Browsers render
+// at 96dpi where 1pt = 1.333px, so pt = px * 0.75. Returns undefined for
+// anything we can't parse (leaves the block at the default body size).
+const cssPxToPt = (css: string | undefined): number | undefined => {
+	if (!css) return undefined;
+	const m = /^(\d+(?:\.\d+)?)px$/.exec(css.trim());
+	if (!m) return undefined;
+	return Math.round(Number(m[1]) * 0.75 * 100) / 100;
+};
 
 // TipTap's TextAlign stores the alignment on the block node's attrs. We only
 // carry a non-default alignment through (left is the default — omitting it
@@ -42,9 +56,17 @@ const alignFrom = (node: PmNode): LetterAlign | undefined => {
 const runFromText = (node: PmNode): LetterInline => {
 	const run: LetterInline = { text: node.text ?? "" };
 	for (const m of node.marks ?? []) {
-		if (m.type === "bold") run.bold = true;
-		else if (m.type === "italic") run.italic = true;
-		else if (m.type === "underline") run.underline = true;
+		if (m.type === "bold") {
+			run.bold = true;
+		} else if (m.type === "italic") {
+			run.italic = true;
+		} else if (m.type === "underline") {
+			run.underline = true;
+		} else if (m.type === "textStyle") {
+			if (m.attrs?.color) run.color = m.attrs.color;
+			const pt = cssPxToPt(m.attrs?.fontSize);
+			if (pt !== undefined) run.fontSizePt = pt;
+		}
 	}
 	return run;
 };

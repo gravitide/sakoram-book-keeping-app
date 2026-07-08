@@ -45,6 +45,14 @@
 // --- inline run + block rendering ----------------------------------------
 #let render-run(r) = {
   let c = [#r.text]
+  // Colour + size come from the editor's TextStyle mark. Apply them via a
+  // single text() with only the set args (spread a dict so unset props inherit).
+  let ts = (:)
+  let col = r.at("color", default: none)
+  let sz = r.at("fontSizePt", default: none)
+  if col != none { ts.insert("fill", rgb(col)) }
+  if sz != none { ts.insert("size", sz * 1pt) }
+  if ts.len() > 0 { c = text(..ts)[#c] }
   if r.at("underline", default: false) { c = underline(c) }
   if r.at("italic", default: false) { c = emph(c) }
   if r.at("bold", default: false) { c = strong(c) }

@@ -12,6 +12,40 @@
 				:class="b.active ? 'bg-(--ui-bg-accented) text-(--ui-primary)' : ''"
 				@click="b.run"
 			/>
+
+			<div class="w-px h-4 bg-(--ui-border) mx-0.5" />
+
+			<!-- Font size -->
+			<UDropdownMenu :items="fontSizeItems">
+				<UButton icon="i-lucide-type" size="xs" variant="ghost" color="neutral" aria-label="Font size" trailing-icon="i-lucide-chevron-down" :ui="{ trailingIcon: 'size-3' }" />
+			</UDropdownMenu>
+
+			<!-- Text colour -->
+			<UPopover>
+				<UButton icon="i-lucide-palette" size="xs" variant="ghost" color="neutral" aria-label="Text colour" />
+				<template #content>
+					<div class="p-2 w-40">
+						<div class="grid grid-cols-6 gap-1.5">
+							<button
+								v-for="c in textColors"
+								:key="c"
+								type="button"
+								class="size-5 rounded border border-black/10 cursor-pointer"
+								:style="{ backgroundColor: c }"
+								:aria-label="`Colour ${c}`"
+								@click="applyColor(c)"
+							/>
+						</div>
+						<button
+							type="button"
+							class="mt-2 w-full text-xs text-(--ui-text-muted) hover:text-(--ui-text) text-left"
+							@click="clearColor"
+						>
+							Reset colour
+						</button>
+					</div>
+				</template>
+			</UPopover>
 		</div>
 		<EditorContent
 			:editor="editor"
@@ -22,18 +56,19 @@
 
 <script setup lang="ts">
 	import TextAlign from "@tiptap/extension-text-align";
+	import { Color, FontSize, TextStyle } from "@tiptap/extension-text-style";
 	// Thin TipTap wrapper on the official Vue-3 integration (`useEditor` +
-	// EditorContent, per TipTap's Nuxt guide). v-model is the ProseMirror document
-	// serialised to a JSON string (what we persist in letters.body_json).
-	// StarterKit provides bold / italic / underline / heading / bullet + ordered
-	// lists (Underline is bundled in StarterKit v3). TextAlign adds paragraph /
-	// heading alignment. `immediatelyRender: false` avoids the SSG prerender pass
-	// touching the editor before the client hydrates.
+	// EditorContent). v-model is the ProseMirror document serialised to a JSON
+	// string (persisted in letters.body_json / signature_json). StarterKit gives
+	// bold / italic / underline / heading / lists; TextAlign adds alignment;
+	// TextStyle + Color + FontSize add text colour + size (stored as a `textStyle`
+	// mark with { color, fontSize } attrs). `immediatelyRender: false` avoids the
+	// SSG prerender pass touching the editor before hydration.
 	//
 	// NOTE: a single ProseMirror copy is required — `@nuxt/ui` ships its own TipTap
 	// at a different prosemirror-model version, so `nuxt.config.ts` dedupes the
-	// prosemirror-* packages. Without that, structural commands (lists, Enter)
-	// throw "multiple versions of prosemirror-model".
+	// prosemirror-* packages. Without that, structural commands throw "multiple
+	// versions of prosemirror-model".
 	import StarterKit from "@tiptap/starter-kit";
 	import { EditorContent, useEditor } from "@tiptap/vue-3";
 
@@ -51,7 +86,10 @@
 	const editor = useEditor({
 		extensions: [
 			StarterKit,
-			TextAlign.configure({ types: ["heading", "paragraph"] })
+			TextAlign.configure({ types: ["heading", "paragraph"] }),
+			TextStyle,
+			Color.configure({ types: ["textStyle"] }),
+			FontSize.configure({ types: ["textStyle"] })
 		],
 		content: parseDoc(model.value),
 		immediatelyRender: false,
@@ -61,8 +99,7 @@
 	});
 
 	// External model changes (e.g. loading a different letter under keepalive)
-	// → replace content without looping back through onUpdate. Skip when the
-	// value already matches what the editor holds.
+	// → replace content without looping back through onUpdate.
 	watch(model, (val) => {
 		const e = editor.value;
 		if (!e) return;
@@ -88,8 +125,36 @@
 		];
 	});
 
-	// Expose the underlying TipTap instance so a parent (or a test harness) can
-	// drive commands / inspect state directly if needed.
+	// --- font size ----------------------------------------------------------
+	// null = clear (back to the default body size). px values convert to pt in
+	// the PDF (see app/lib/letter-body.ts).
+	const fontSizes: { label: string, px: string | null }[] = [
+		{ label: "Small", px: "13px" },
+		{ label: "Normal", px: null },
+		{ label: "Large", px: "18px" },
+		{ label: "Huge", px: "24px" }
+	];
+	const applyFontSize = (px: string | null) => {
+		const e = editor.value;
+		if (!e) return;
+		if (px === null) e.chain().focus().unsetFontSize().run();
+		else e.chain().focus().setFontSize(px).run();
+	};
+	const fontSizeItems = computed(() => [fontSizes.map((s) => ({
+		label: s.label,
+		onSelect: () => applyFontSize(s.px)
+	}))]);
+
+	// --- text colour --------------------------------------------------------
+	const textColors = ["#111827", "#dc2626", "#ea580c", "#ca8a04", "#16a34a", "#2563eb", "#7c3aed", "#db2777", "#0891b2", "#6b7280", "#78350f", "#334155"];
+	const applyColor = (hex: string) => {
+		editor.value?.chain().focus().setColor(hex).run();
+	};
+	const clearColor = () => {
+		editor.value?.chain().focus().unsetColor().run();
+	};
+
+	// Expose the underlying TipTap instance (parent / test harness access).
 	defineExpose({ editor });
 </script>
 

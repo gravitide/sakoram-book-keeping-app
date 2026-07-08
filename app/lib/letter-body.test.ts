@@ -89,6 +89,27 @@ describe("letterBodyToBlocks", () => {
 		]);
 	});
 
+	it("captures colour + converts font size (px → pt) from the textStyle mark", () => {
+		const json = doc([
+			{
+				type: "paragraph",
+				content: [
+					{ type: "text", text: "big red", marks: [{ type: "textStyle", attrs: { color: "#dc2626", fontSize: "24px" } }] },
+					{ type: "text", text: " bold blue", marks: [{ type: "bold" }, { type: "textStyle", attrs: { color: "#2563eb" } }] }
+				]
+			}
+		]);
+		expect(letterBodyToBlocks(json)).toEqual([
+			{
+				kind: "paragraph",
+				runs: [
+					{ text: "big red", color: "#dc2626", fontSizePt: 18 },
+					{ text: " bold blue", bold: true, color: "#2563eb" }
+				]
+			}
+		]);
+	});
+
 	it("drops unknown node types instead of throwing", () => {
 		const json = doc([
 			{ type: "horizontalRule" },
