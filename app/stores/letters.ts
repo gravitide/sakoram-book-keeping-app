@@ -128,15 +128,20 @@ export const useLettersStore = defineStore("letters", () => {
 		subject: string
 	}): Promise<number> => {
 		await bumpCounterIfSuggested(input.number, input.letter_date);
+		// Pre-fill the sign-off from the default signature template, if one is set.
+		const def = await selectOne<{ body_json: string }>(
+			"SELECT body_json FROM letter_signatures WHERE is_default = 1 LIMIT 1"
+		);
 		const result = await execute(
-			`INSERT INTO letters (number, letter_date, category, recipient_name, subject)
-			 VALUES (?, ?, ?, ?, ?)`,
+			`INSERT INTO letters (number, letter_date, category, recipient_name, subject, signature_json)
+			 VALUES (?, ?, ?, ?, ?, ?)`,
 			[
 				input.number.trim(),
 				input.letter_date,
 				input.category.trim(),
 				input.recipient_name.trim(),
-				input.subject.trim()
+				input.subject.trim(),
+				def?.body_json ?? ""
 			]
 		);
 		if (result.lastInsertId === undefined) throw new Error("create: no lastInsertId");
