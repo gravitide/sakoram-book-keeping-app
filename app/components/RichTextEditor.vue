@@ -10,17 +10,20 @@
 
 			<div class="w-px h-4 bg-(--ui-border) mx-0.5" />
 
-			<UButton
-				v-for="b in toolbar"
-				:key="b.name"
-				:icon="b.icon"
-				size="xs"
-				variant="ghost"
-				color="neutral"
-				:aria-label="b.name"
-				:class="b.active ? 'bg-(--ui-bg-accented) text-(--ui-primary)' : ''"
-				@click="b.run"
-			/>
+			<template v-for="(group, gi) in toolbarGroups" :key="gi">
+				<div v-if="gi > 0" class="w-px h-4 bg-(--ui-border) mx-0.5" />
+				<UButton
+					v-for="b in group"
+					:key="b.name"
+					:icon="b.icon"
+					size="xs"
+					variant="ghost"
+					color="neutral"
+					:aria-label="b.name"
+					:class="b.active ? 'bg-(--ui-bg-accented) text-(--ui-primary)' : ''"
+					@click="b.run"
+				/>
+			</template>
 
 			<div class="w-px h-4 bg-(--ui-border) mx-0.5" />
 
@@ -127,19 +130,27 @@
 	});
 
 	interface ToolbarButton { name: string, icon: string, active: boolean, run: () => void }
-	const toolbar = computed<ToolbarButton[]>(() => {
+	// Grouped so the template can draw a divider between logical clusters
+	// (inline marks · lists · alignment).
+	const toolbarGroups = computed<ToolbarButton[][]>(() => {
 		const e = editor.value;
 		if (!e) return [];
 		return [
-			{ name: "Bold", icon: "i-lucide-bold", active: e.isActive("bold"), run: () => e.chain().focus().toggleBold().run() },
-			{ name: "Italic", icon: "i-lucide-italic", active: e.isActive("italic"), run: () => e.chain().focus().toggleItalic().run() },
-			{ name: "Underline", icon: "i-lucide-underline", active: e.isActive("underline"), run: () => e.chain().focus().toggleUnderline().run() },
-			{ name: "Bullet list", icon: "i-lucide-list", active: e.isActive("bulletList"), run: () => e.chain().focus().toggleBulletList().run() },
-			{ name: "Numbered list", icon: "i-lucide-list-ordered", active: e.isActive("orderedList"), run: () => e.chain().focus().toggleOrderedList().run() },
-			{ name: "Align left", icon: "i-lucide-align-left", active: e.isActive({ textAlign: "left" }), run: () => e.chain().focus().setTextAlign("left").run() },
-			{ name: "Align center", icon: "i-lucide-align-center", active: e.isActive({ textAlign: "center" }), run: () => e.chain().focus().setTextAlign("center").run() },
-			{ name: "Align right", icon: "i-lucide-align-right", active: e.isActive({ textAlign: "right" }), run: () => e.chain().focus().setTextAlign("right").run() },
-			{ name: "Justify", icon: "i-lucide-align-justify", active: e.isActive({ textAlign: "justify" }), run: () => e.chain().focus().setTextAlign("justify").run() }
+			[
+				{ name: "Bold", icon: "i-lucide-bold", active: e.isActive("bold"), run: () => e.chain().focus().toggleBold().run() },
+				{ name: "Italic", icon: "i-lucide-italic", active: e.isActive("italic"), run: () => e.chain().focus().toggleItalic().run() },
+				{ name: "Underline", icon: "i-lucide-underline", active: e.isActive("underline"), run: () => e.chain().focus().toggleUnderline().run() }
+			],
+			[
+				{ name: "Bullet list", icon: "i-lucide-list", active: e.isActive("bulletList"), run: () => e.chain().focus().toggleBulletList().run() },
+				{ name: "Numbered list", icon: "i-lucide-list-ordered", active: e.isActive("orderedList"), run: () => e.chain().focus().toggleOrderedList().run() }
+			],
+			[
+				{ name: "Align left", icon: "i-lucide-align-left", active: e.isActive({ textAlign: "left" }), run: () => e.chain().focus().setTextAlign("left").run() },
+				{ name: "Align center", icon: "i-lucide-align-center", active: e.isActive({ textAlign: "center" }), run: () => e.chain().focus().setTextAlign("center").run() },
+				{ name: "Align right", icon: "i-lucide-align-right", active: e.isActive({ textAlign: "right" }), run: () => e.chain().focus().setTextAlign("right").run() },
+				{ name: "Justify", icon: "i-lucide-align-justify", active: e.isActive({ textAlign: "justify" }), run: () => e.chain().focus().setTextAlign("justify").run() }
+			]
 		];
 	});
 
