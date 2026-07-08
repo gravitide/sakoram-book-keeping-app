@@ -28,5 +28,9 @@ export const buildLetterPdfPayload = ({ row, settings }: LetterPdfArgs) => ({
 	business_name: settings?.business_name ?? null,
 	website: settings?.website ?? null,
 	phone: settings?.phone ?? null,
+	// Address fields feed the shared footer-content (business · website · phone
+	// · address) so the letter footer matches the invoice/quote footer.
+	address_line1: settings?.address_line1 ?? null,
+	city: settings?.city ?? null,
 	logo_path: settings?.pdf_header_logo_path ?? null
 });

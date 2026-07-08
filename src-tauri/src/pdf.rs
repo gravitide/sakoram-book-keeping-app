@@ -373,7 +373,9 @@ pub async fn export_letter_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "letter.typ", LETTER_TEMPLATE, data, PathBuf::from(output_path), protect_password, &[]).await
+	// letter.typ imports common.typ for the shared footer-content, so write it
+	// alongside (same as the doc-* templates).
+	render_pdf(&app, "letter.typ", LETTER_TEMPLATE, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
 }
 
 /// Copy a file from `src` to `dst`. Used by the PDF preview flow: we
