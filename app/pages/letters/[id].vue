@@ -65,7 +65,16 @@
 				</UCard>
 
 				<SectionCard title="Signature" subtitle="The sign-off printed below a signature line at the bottom of the letter." icon="i-lucide-pen-line">
-					<RichTextEditor v-model="form.signature_json" />
+					<div class="space-y-2">
+						<div v-if="sigStore.signatures.length > 0" class="flex justify-end">
+							<UDropdownMenu :items="savedSignatureItems">
+								<UButton size="xs" color="neutral" variant="soft" icon="i-lucide-signature" trailing-icon="i-lucide-chevron-down" :ui="{ trailingIcon: 'size-3' }">
+									Use a saved signature
+								</UButton>
+							</UDropdownMenu>
+						</div>
+						<RichTextEditor v-model="form.signature_json" />
+					</div>
 				</SectionCard>
 
 				<SectionCard title="Letterhead" subtitle="How the top of the printed page is handled." icon="i-lucide-file-text">
@@ -117,6 +126,7 @@
 // Dirty-tracking compares the working `form` against the last-loaded snapshot.
 	import type { LetterRow } from "~/stores/letters";
 	import { buildLetterPdfPayload } from "~/lib/letter-pdf";
+	import { useLetterSignaturesStore } from "~/stores/letter_signatures";
 	import { useLettersStore } from "~/stores/letters";
 	import { useSettingsStore } from "~/stores/settings";
 
@@ -126,6 +136,7 @@
 	const router = useRouter();
 	const toast = useToast();
 	const store = useLettersStore();
+	const sigStore = useLetterSignaturesStore();
 	const settings = useSettingsStore();
 
 	// Read the id reactively: the app mounts pages under <NuxtPage keepalive>,
@@ -165,6 +176,17 @@
 	const snapshot = ref("");
 	const saving = ref(false);
 
+	// Applying a saved signature REPLACES the letter's sign-off with a copy (then
+	// editable). The dropdown is hidden when there are no saved signatures.
+	const savedSignatureItems = computed(() => [
+		sigStore.signatures.map((s) => ({
+			label: s.name,
+			onSelect: () => {
+				form.signature_json = s.body_json;
+			}
+		}))
+	]);
+
 	const hydrate = (row: LetterRow) => {
 		letter.value = row;
 		form.number = row.number ?? "";
@@ -185,7 +207,7 @@
 		if (row) hydrate(row);
 	};
 
-	await Promise.all([load(), settings.ensureLoaded(), store.ensureLoaded()]);
+	await Promise.all([load(), settings.ensureLoaded(), store.ensureLoaded(), sigStore.ensureLoaded()]);
 
 	// Re-hydrate when the route id changes under keepalive (see currentId note).
 	watch(currentId, () => {
