@@ -78,6 +78,55 @@
 				</div>
 			</UCard>
 
+			<!-- Signatures -->
+			<UCard id="signatures" class="scroll-mt-6">
+				<template #header>
+					<div class="flex items-center justify-between gap-2">
+						<div class="font-medium">
+							Signatures
+						</div>
+						<UButton size="xs" icon="i-lucide-plus" @click="openSignature(null)">
+							New signature
+						</UButton>
+					</div>
+					<div class="text-xs text-(--ui-text-muted) mt-1">
+						Reusable sign-offs. Pick one when composing a letter (it's copied in
+						and stays editable). The default is pre-filled into every new letter.
+					</div>
+				</template>
+
+				<div v-if="sigStore.signatures.length === 0" class="text-sm text-(--ui-text-muted) py-4 text-center">
+					No signatures yet. Add one to reuse across letters.
+				</div>
+				<ul v-else class="divide-y divide-(--ui-border) border border-(--ui-border) rounded-md">
+					<li v-for="s in sigStore.signatures" :key="s.id" class="flex items-center gap-2 px-3 py-2">
+						<div class="min-w-0 flex-1">
+							<div class="text-sm font-medium truncate flex items-center gap-2">
+								{{ s.name }}
+								<UBadge v-if="s.is_default === 1" size="xs" color="primary" variant="subtle">
+									Default
+								</UBadge>
+							</div>
+							<div class="text-xs text-(--ui-text-muted) truncate">
+								{{ signaturePreview(s.body_json) || "Empty" }}
+							</div>
+						</div>
+						<UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-pencil" aria-label="Edit" @click="openSignature(s)" />
+						<UButton
+							v-if="s.is_default !== 1"
+							size="xs"
+							color="neutral"
+							variant="ghost"
+							icon="i-lucide-star"
+							aria-label="Set default"
+							:disabled="sigBusy"
+							@click="setSignatureDefault(s)"
+						/>
+						<UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" aria-label="Delete" :disabled="sigBusy" @click="removeSignature(s)" />
+					</li>
+				</ul>
+			</UCard>
+
 			<!-- Pre-printed letterhead -->
 			<UCard id="preprinted" class="scroll-mt-6">
 				<template #header>
@@ -165,6 +214,8 @@
 				</div>
 			</UCard>
 		</div>
+
+		<LetterSignatureFormModal v-model:open="signatureModalOpen" :signature="editingSignature" />
 	</div>
 </template>
 
@@ -173,16 +224,20 @@
 // the pre-printed top margin (saved onto company_settings), and a placeholder
 // for future letterhead templates.
 	import type { LetterCategoryRow } from "~/stores/letter_categories";
+	import type { LetterSignatureRow } from "~/stores/letter_signatures";
+	import { signaturePreview } from "~/lib/signature-preview";
 	import { useLetterCategoriesStore } from "~/stores/letter_categories";
+	import { useLetterSignaturesStore } from "~/stores/letter_signatures";
 	import { useSettingsStore } from "~/stores/settings";
 
 	definePageMeta({ title: "Letters" });
 
 	const catStore = useLetterCategoriesStore();
+	const sigStore = useLetterSignaturesStore();
 	const settings = useSettingsStore();
 	const toast = useToast();
 
-	await Promise.all([catStore.load(), settings.ensureLoaded()]);
+	await Promise.all([catStore.load(), sigStore.load(), settings.ensureLoaded()]);
 
 	const busy = ref(false);
 	const newName = ref("");
@@ -190,6 +245,42 @@
 	const editName = ref("");
 
 	const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+	// --- signatures ---------------------------------------------------------
+	const sigBusy = ref(false);
+	const signatureModalOpen = ref(false);
+	const editingSignature = ref<LetterSignatureRow | null>(null);
+
+	const openSignature = (s: LetterSignatureRow | null) => {
+		editingSignature.value = s;
+		signatureModalOpen.value = true;
+	};
+	// The modal writes via the store; refetch when it closes so the list reflects
+	// create / edit / set-default.
+	watch(signatureModalOpen, (open) => {
+		if (!open) void sigStore.load();
+	});
+	const setSignatureDefault = async (s: LetterSignatureRow) => {
+		sigBusy.value = true;
+		try {
+			await sigStore.setDefault(s.id);
+		} catch (err) {
+			toast.add({ title: "Could not update", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });
+		} finally {
+			sigBusy.value = false;
+		}
+	};
+	const removeSignature = async (s: LetterSignatureRow) => {
+		sigBusy.value = true;
+		try {
+			await sigStore.remove(s.id);
+			toast.add({ title: `Deleted "${s.name}"`, color: "success", icon: "i-lucide-trash-2" });
+		} catch (err) {
+			toast.add({ title: "Could not delete", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });
+		} finally {
+			sigBusy.value = false;
+		}
+	};
 
 	const addCategory = async () => {
 		const name = newName.value.trim();
