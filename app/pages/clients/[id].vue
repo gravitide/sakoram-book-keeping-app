@@ -205,14 +205,7 @@
 					subtitle="Visible only to you — never appears on a client-facing PDF."
 					class="lg:col-span-2"
 				>
-					<UFormField name="notes">
-						<UTextarea
-							v-model="form.notes"
-							:rows="4"
-							placeholder="Anything you want to remember about this client"
-							class="w-full"
-						/>
-					</UFormField>
+					<RichTextEditor v-model="form.notes" />
 				</SectionCard>
 			</div>
 

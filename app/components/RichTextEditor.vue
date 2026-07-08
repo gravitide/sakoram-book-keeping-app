@@ -1,17 +1,29 @@
 <template>
 	<div class="border border-(--ui-border) rounded-md overflow-hidden bg-(--ui-bg)">
 		<div v-if="editor" class="flex items-center gap-0.5 border-b border-(--ui-border) bg-(--ui-bg-muted) p-1 flex-wrap">
-			<UButton
-				v-for="b in toolbar"
-				:key="b.name"
-				:icon="b.icon"
-				size="xs"
-				variant="ghost"
-				color="neutral"
-				:aria-label="b.name"
-				:class="b.active ? 'bg-(--ui-bg-accented) text-(--ui-primary)' : ''"
-				@click="b.run"
-			/>
+			<!-- Block type / heading -->
+			<UDropdownMenu :items="headingItems">
+				<UButton size="xs" variant="ghost" color="neutral" aria-label="Text style" trailing-icon="i-lucide-chevron-down" :ui="{ trailingIcon: 'size-3' }" class="min-w-16 justify-between">
+					{{ currentBlockLabel }}
+				</UButton>
+			</UDropdownMenu>
+
+			<div class="w-px h-4 bg-(--ui-border) mx-0.5" />
+
+			<template v-for="(group, gi) in toolbarGroups" :key="gi">
+				<div v-if="gi > 0" class="w-px h-4 bg-(--ui-border) mx-0.5" />
+				<UButton
+					v-for="b in group"
+					:key="b.name"
+					:icon="b.icon"
+					size="xs"
+					variant="ghost"
+					color="neutral"
+					:aria-label="b.name"
+					:class="b.active ? 'bg-(--ui-bg-accented) text-(--ui-primary)' : ''"
+					@click="b.run"
+				/>
+			</template>
 
 			<div class="w-px h-4 bg-(--ui-border) mx-0.5" />
 
@@ -74,13 +86,23 @@
 
 	const model = defineModel<string>({ default: "" });
 
-	const parseDoc = (json: string): object | undefined => {
-		if (!json) return undefined;
+	// Initial editor content from the stored string. Accepts TipTap JSON (letters,
+	// and client notes once edited) OR legacy PLAIN TEXT — a field that was a plain
+	// textarea before (e.g. client internal notes) still has plain strings stored;
+	// we turn those into one paragraph per line so nothing is lost when the field
+	// is upgraded to rich text. On the next edit the value round-trips to JSON.
+	const parseDoc = (value: string): object | undefined => {
+		if (!value) return undefined;
 		try {
-			return JSON.parse(json) as object;
-		} catch {
-			return undefined;
-		}
+			const parsed = JSON.parse(value) as { type?: string };
+			if (parsed && typeof parsed === "object" && parsed.type === "doc") return parsed as object;
+		} catch { /* not JSON — fall through to plain-text handling */ }
+		return {
+			type: "doc",
+			content: value.split("\n").map((line) => line.length > 0
+				? { type: "paragraph", content: [{ type: "text", text: line }] }
+				: { type: "paragraph" })
+		};
 	};
 
 	const editor = useEditor({
@@ -108,21 +130,49 @@
 	});
 
 	interface ToolbarButton { name: string, icon: string, active: boolean, run: () => void }
-	const toolbar = computed<ToolbarButton[]>(() => {
+	// Grouped so the template can draw a divider between logical clusters
+	// (inline marks · lists · alignment).
+	const toolbarGroups = computed<ToolbarButton[][]>(() => {
 		const e = editor.value;
 		if (!e) return [];
 		return [
-			{ name: "Bold", icon: "i-lucide-bold", active: e.isActive("bold"), run: () => e.chain().focus().toggleBold().run() },
-			{ name: "Italic", icon: "i-lucide-italic", active: e.isActive("italic"), run: () => e.chain().focus().toggleItalic().run() },
-			{ name: "Underline", icon: "i-lucide-underline", active: e.isActive("underline"), run: () => e.chain().focus().toggleUnderline().run() },
-			{ name: "Heading", icon: "i-lucide-heading", active: e.isActive("heading", { level: 2 }), run: () => e.chain().focus().toggleHeading({ level: 2 }).run() },
-			{ name: "Bullet list", icon: "i-lucide-list", active: e.isActive("bulletList"), run: () => e.chain().focus().toggleBulletList().run() },
-			{ name: "Numbered list", icon: "i-lucide-list-ordered", active: e.isActive("orderedList"), run: () => e.chain().focus().toggleOrderedList().run() },
-			{ name: "Align left", icon: "i-lucide-align-left", active: e.isActive({ textAlign: "left" }), run: () => e.chain().focus().setTextAlign("left").run() },
-			{ name: "Align center", icon: "i-lucide-align-center", active: e.isActive({ textAlign: "center" }), run: () => e.chain().focus().setTextAlign("center").run() },
-			{ name: "Align right", icon: "i-lucide-align-right", active: e.isActive({ textAlign: "right" }), run: () => e.chain().focus().setTextAlign("right").run() },
-			{ name: "Justify", icon: "i-lucide-align-justify", active: e.isActive({ textAlign: "justify" }), run: () => e.chain().focus().setTextAlign("justify").run() }
+			[
+				{ name: "Bold", icon: "i-lucide-bold", active: e.isActive("bold"), run: () => e.chain().focus().toggleBold().run() },
+				{ name: "Italic", icon: "i-lucide-italic", active: e.isActive("italic"), run: () => e.chain().focus().toggleItalic().run() },
+				{ name: "Underline", icon: "i-lucide-underline", active: e.isActive("underline"), run: () => e.chain().focus().toggleUnderline().run() }
+			],
+			[
+				{ name: "Bullet list", icon: "i-lucide-list", active: e.isActive("bulletList"), run: () => e.chain().focus().toggleBulletList().run() },
+				{ name: "Numbered list", icon: "i-lucide-list-ordered", active: e.isActive("orderedList"), run: () => e.chain().focus().toggleOrderedList().run() }
+			],
+			[
+				{ name: "Align left", icon: "i-lucide-align-left", active: e.isActive({ textAlign: "left" }), run: () => e.chain().focus().setTextAlign("left").run() },
+				{ name: "Align center", icon: "i-lucide-align-center", active: e.isActive({ textAlign: "center" }), run: () => e.chain().focus().setTextAlign("center").run() },
+				{ name: "Align right", icon: "i-lucide-align-right", active: e.isActive({ textAlign: "right" }), run: () => e.chain().focus().setTextAlign("right").run() },
+				{ name: "Justify", icon: "i-lucide-align-justify", active: e.isActive({ textAlign: "justify" }), run: () => e.chain().focus().setTextAlign("justify").run() }
+			]
 		];
+	});
+
+	// --- block type / heading -----------------------------------------------
+	// Label for the dropdown trigger reflecting the current block.
+	const currentBlockLabel = computed(() => {
+		const e = editor.value;
+		if (!e) return "Text";
+		if (e.isActive("heading", { level: 1 })) return "H1";
+		if (e.isActive("heading", { level: 2 })) return "H2";
+		if (e.isActive("heading", { level: 3 })) return "H3";
+		return "Text";
+	});
+	const headingItems = computed(() => {
+		const e = editor.value;
+		if (!e) return [];
+		return [[
+			{ label: "Text", onSelect: () => e.chain().focus().setParagraph().run() },
+			{ label: "Heading 1", onSelect: () => e.chain().focus().setHeading({ level: 1 }).run() },
+			{ label: "Heading 2", onSelect: () => e.chain().focus().setHeading({ level: 2 }).run() },
+			{ label: "Heading 3", onSelect: () => e.chain().focus().setHeading({ level: 3 }).run() }
+		]];
 	});
 
 	// --- font size ----------------------------------------------------------
@@ -174,10 +224,20 @@
 	list-style: decimal;
 	padding-left: 1.5rem;
 }
-.letter-body :deep(h2) {
-	font-size: 1.15rem;
+.letter-body :deep(h1) {
+	font-size: 1.4rem;
 	font-weight: 700;
-	margin: 0.4rem 0;
+	margin: 0.5rem 0 0.35rem;
+}
+.letter-body :deep(h2) {
+	font-size: 1.2rem;
+	font-weight: 700;
+	margin: 0.45rem 0 0.3rem;
+}
+.letter-body :deep(h3) {
+	font-size: 1.05rem;
+	font-weight: 700;
+	margin: 0.4rem 0 0.25rem;
 }
 .letter-body :deep(p) {
 	margin: 0.3rem 0;
