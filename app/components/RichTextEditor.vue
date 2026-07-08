@@ -74,13 +74,23 @@
 
 	const model = defineModel<string>({ default: "" });
 
-	const parseDoc = (json: string): object | undefined => {
-		if (!json) return undefined;
+	// Initial editor content from the stored string. Accepts TipTap JSON (letters,
+	// and client notes once edited) OR legacy PLAIN TEXT — a field that was a plain
+	// textarea before (e.g. client internal notes) still has plain strings stored;
+	// we turn those into one paragraph per line so nothing is lost when the field
+	// is upgraded to rich text. On the next edit the value round-trips to JSON.
+	const parseDoc = (value: string): object | undefined => {
+		if (!value) return undefined;
 		try {
-			return JSON.parse(json) as object;
-		} catch {
-			return undefined;
-		}
+			const parsed = JSON.parse(value) as { type?: string };
+			if (parsed && typeof parsed === "object" && parsed.type === "doc") return parsed as object;
+		} catch { /* not JSON — fall through to plain-text handling */ }
+		return {
+			type: "doc",
+			content: value.split("\n").map((line) => line.length > 0
+				? { type: "paragraph", content: [{ type: "text", text: line }] }
+				: { type: "paragraph" })
+		};
 	};
 
 	const editor = useEditor({
