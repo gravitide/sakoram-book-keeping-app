@@ -792,6 +792,28 @@
 
 	await hydrate();
 
+	// Re-hydrate whenever the page is re-shown from the <NuxtPage keepalive>
+	// cache, so the "Converted from quote" banner reflects the current DB.
+	// When the source quote is deleted, quotes.remove() nulls this invoice's
+	// source_quote_id; without re-hydrating, the cached page keeps showing the
+	// stale banner (and its dead link) until the app restarts. Skips the first
+	// activation (setup already hydrated) and preserves unsaved edits.
+	let activatedOnce = false;
+	onActivated(async () => {
+		if (!activatedOnce) {
+			activatedOnce = true;
+			return;
+		}
+		if (dirty.value) return;
+		const row = await invoicesStore.get(invoiceId).catch(() => null);
+		if (!row) {
+			toast.add({ title: "This invoice no longer exists", color: "info", icon: "i-lucide-info" });
+			await router.replace("/invoices");
+			return;
+		}
+		await hydrate();
+	});
+
 	// Mark dirty when any of the directly v-model'd form fields change.
 	// Registered after the initial hydrate so the population pass doesn't trip
 	// it. Re-runs of hydrate() reset dirty to false at the end, so the watcher

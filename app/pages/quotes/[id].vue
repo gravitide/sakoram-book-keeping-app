@@ -452,6 +452,17 @@
 						number {{ quote.number }} will not be reused — it'll show as a
 						gap in your sequence.
 					</p>
+					<div v-if="quote.converted_invoice_id" class="rounded-md border border-(--ui-info)/40 bg-(--ui-info)/10 p-3 space-y-1">
+						<p class="font-medium text-(--ui-text)">
+							Linked to an invoice
+						</p>
+						<p class="text-(--ui-text-muted)">
+							This quote was converted into invoice
+							<span class="font-medium text-(--ui-text)">{{ convertedInvoice?.number ?? "an invoice" }}</span>.
+							Deleting the quote keeps that invoice but clears its
+							“converted from” link.
+						</p>
+					</div>
 					<div v-if="!isDraft" class="rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/10 p-3 space-y-2">
 						<p class="font-medium text-(--ui-text)">
 							This quote has been issued ({{ status }}).
@@ -460,9 +471,6 @@
 							Deleting issued documents breaks the rule that issued
 							records are immutable. Only do this if it's a real
 							mistake you need to scrub from your books.
-							<span v-if="quote.converted_invoice_id">
-								The linked invoice will be unlinked but kept.
-							</span>
 						</p>
 						<UFormField>
 							<template #label>
@@ -697,6 +705,28 @@
 	};
 
 	await hydrate();
+
+	// Re-hydrate whenever the page is re-shown from the <NuxtPage keepalive>
+	// cache. Without this, a quote deleted or converted elsewhere (e.g. from
+	// the linked invoice) keeps rendering its stale cached copy until the app
+	// restarts. Skips the very first activation (setup already hydrated) and
+	// preserves unsaved edits (the whole point of keep-alive). If the quote is
+	// gone, bail back to the list instead of showing a ghost.
+	let activatedOnce = false;
+	onActivated(async () => {
+		if (!activatedOnce) {
+			activatedOnce = true;
+			return;
+		}
+		if (dirty.value) return;
+		const row = await quotesStore.get(quoteId).catch(() => null);
+		if (!row) {
+			toast.add({ title: "This quote no longer exists", color: "info", icon: "i-lucide-info" });
+			await router.replace("/quotes");
+			return;
+		}
+		await hydrate();
+	});
 
 	// Mark dirty when any directly v-model'd form field changes. Registered
 	// after the initial hydrate; hydrating-flag guards re-hydrate paths.
