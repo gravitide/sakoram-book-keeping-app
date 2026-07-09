@@ -13,6 +13,10 @@
 // uppercase tracked field label. `faint` = muted grey secondary text.
 #let lbl(t) = text(weight: "bold", size: 8.5pt, tracking: 0.04em)[#upper(t)]
 #let faint(t) = text(fill: rgb("#6b7280"), size: 8.5pt)[#t]
+// `caption` = a muted, lightly-tracked small-caps label for the party / meta
+// blocks. Deliberately lighter than `lbl` so the label recedes and the value
+// (name / number / date) leads — the hierarchy the flat all-black labels lacked.
+#let caption(t) = text(fill: rgb("#9ca3af"), weight: "medium", size: 7.5pt, tracking: 0.09em)[#upper(t)]
 
 // Font cascade: the user's chosen PDF font first, bundled fallbacks after so
 // any missing glyph still resolves. Returns the tuple for `#set text(font:)`.
@@ -34,12 +38,12 @@
 
 // --- party block (client / vendor) -------------------------------------
 #let party-block(data) = [
-  #lbl(data.party_label)
-  #v(2pt)
-  #text(weight: "semibold")[#data.party.name],
+  #caption(data.party_label)
+  #v(5pt)
+  #text(weight: "semibold", size: 11.5pt, fill: rgb("#1f2937"))[#data.party.name]
   #for ln in data.party.address_lines [
     #linebreak()
-    #ln#if ln == data.party.address_lines.last() [.] else [,]
+    #text(fill: rgb("#5b636e"))[#ln]
   ]
   #if data.party.tax_id != none and data.party.tax_id != "" [
     #v(4pt)
@@ -48,33 +52,30 @@
 ]
 
 // --- meta block (number / date / secondary date / vendor invoice #) -----
-// Returns the right-aligned grid; templates wrap it (e.g. `align(right, …)`).
-#let meta-block(data) = grid(
-  columns: (auto, auto),
-  column-gutter: 24pt,
-  row-gutter: 12pt,
-  align: right,
-  grid.cell(colspan: 2)[
-    #lbl(data.primary_label) \
-    \##data.number
-  ],
-  [
-    #lbl(data.date_label) \
-    #data.date_value
-  ],
-  if data.secondary_label != none [
-    #lbl(data.secondary_label) \
-    #data.secondary_value
-  ] else [],
-  ..if data.vendor_invoice_label != none {
-    (
-      grid.cell(colspan: 2)[
-        #lbl(data.vendor_invoice_label) \
-        #data.vendor_invoice_value
-      ],
-    )
-  } else { () },
-)
+// A right-aligned label -> value grid: muted caption in the left column, the
+// value flush to the right margin in the right column, reading straight down.
+// The number is bold (but the same size as the dates); dates are muted-dark.
+// Templates wrap the whole thing in `align(right, …)`.
+#let meta-value(t) = text(fill: rgb("#3d4450"))[#t]
+#let meta-block(data) = {
+  let rows = (
+    (caption(data.primary_label), text(weight: "bold", fill: rgb("#1f2937"))[#data.number]),
+    (caption(data.date_label), meta-value(data.date_value)),
+  )
+  if data.secondary_label != none {
+    rows.push((caption(data.secondary_label), meta-value(data.secondary_value)))
+  }
+  if data.vendor_invoice_label != none {
+    rows.push((caption(data.vendor_invoice_label), meta-value(data.vendor_invoice_value)))
+  }
+  grid(
+    columns: (auto, auto),
+    column-gutter: 14pt,
+    row-gutter: 8pt,
+    align: right + horizon,
+    ..rows.flatten()
+  )
+}
 
 // --- project subtitle (centered, bold) ---------------------------------
 #let project-subtitle(data) = if data.project_title != none and data.project_title != "" [
