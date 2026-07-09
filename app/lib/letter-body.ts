@@ -3,10 +3,11 @@
 //
 // Why a normalizer (not "hand the raw TipTap JSON to Typst"): the raw
 // ProseMirror shape is broad and mark objects are verbose. We collapse it to
-// exactly what the letter template needs — paragraphs, headings, and lists of
-// inline runs with bold/italic/underline flags. Text stays as plain string
-// values throughout, so the template never builds Typst source from user
-// input (no markup-injection risk). Anything unrecognised is dropped.
+// exactly what the letter template needs — paragraphs, headings, lists, code
+// blocks, and blockquotes, as inline runs with bold/italic/underline flags.
+// Text stays as plain string values throughout, so the template never builds
+// Typst source from user input (no markup-injection risk). Only nodes with no
+// printable text (horizontalRule, image, …) are dropped.
 
 export interface LetterInline {
 	text: string
@@ -17,6 +18,8 @@ export interface LetterInline {
 	color?: string
 	/** Font size in POINTS, converted from the editor's CSS px. */
 	fontSizePt?: number
+	/** A hard line break (Shift+Enter) — rendered as a linebreak, not text. */
+	line_break?: boolean
 }
 
 export type LetterAlign = "left" | "center" | "right" | "justify";
@@ -90,8 +93,14 @@ const runFromText = (node: PmNode): LetterInline => {
 	return run;
 };
 
+// Keep text runs; turn inline hard breaks (Shift+Enter) into an explicit break
+// run so multi-line paragraphs survive. Anything else inline is dropped.
 const runsFrom = (content: PmNode[] | undefined): LetterInline[] =>
-	(content ?? []).filter((n) => n.type === "text").map(runFromText);
+	(content ?? []).flatMap((n) => {
+		if (n.type === "text") return [runFromText(n)];
+		if (n.type === "hardBreak") return [{ text: "", line_break: true }];
+		return [];
+	});
 
 // A list item's children are themselves block nodes (usually one paragraph).
 const blocksFrom = (nodes: PmNode[] | undefined): LetterBlock[] => {
@@ -115,8 +124,26 @@ const blocksFrom = (nodes: PmNode[] | undefined): LetterBlock[] => {
 			case "orderedList":
 				out.push({ kind: "ordered_list", items: (node.content ?? []).map((li) => blocksFrom(li.content)) });
 				break;
+			case "codeBlock": {
+				// A fenced / ``` code block. Its text lives in text nodes with
+				// newlines (and/or hardBreaks) between lines. Emit one paragraph
+				// per line so the content renders instead of being dropped — the
+				// single biggest silent-drop hazard for pasted technical text.
+				const raw = (node.content ?? [])
+					.map((n) => (n.type === "hardBreak" ? "\n" : (n.text ?? "")))
+					.join("");
+				for (const line of raw.split("\n")) {
+					out.push({ kind: "paragraph", runs: line.length > 0 ? [{ text: line }] : [] });
+				}
+				break;
+			}
+			case "blockquote":
+				// Flatten the quote's inner blocks in place (we don't render a
+				// quote bar, but the text must survive).
+				out.push(...blocksFrom(node.content));
+				break;
 			default:
-				// Unknown node (horizontalRule, image, codeBlock, …) — drop it.
+				// Unknown node (horizontalRule, image, …) — nothing to render.
 				break;
 		}
 	}
