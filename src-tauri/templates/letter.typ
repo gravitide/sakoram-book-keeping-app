@@ -14,7 +14,7 @@
 // ordered_list blocks whose inline runs carry bold/italic/underline flags.
 // Text is always plain JSON string values — never interpreted as Typst markup.
 
-#import "common.typ": footer-content, render-blocks
+#import "common.typ": caption, footer-content, render-blocks
 
 #let data = json("data.json")
 
@@ -68,11 +68,21 @@
 }
 
 // --- date + reference row ------------------------------------------------
+// Muted caption over a strong value, matching the quote / invoice meta block:
+// Date on the left, Reference (bold) on the right.
 #grid(
   columns: (1fr, auto),
-  [#text(fill: rgb("#6b7280"))[#data.letter_date]],
+  [
+    #caption("Date")
+    #v(3pt)
+    #text(fill: rgb("#3d4450"))[#data.letter_date]
+  ],
   if data.number != none and data.number != "" {
-    align(right, text(fill: rgb("#6b7280"))[Ref: #data.number])
+    align(right)[
+      #caption("Reference")
+      #v(3pt)
+      #text(fill: rgb("#3d4450"))[#data.number]
+    ]
   } else [],
 )
 
