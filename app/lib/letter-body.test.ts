@@ -143,4 +143,42 @@ describe("letterBodyToBlocks", () => {
 			] }
 		]);
 	});
+
+	it("renders a code block as one paragraph per line instead of dropping it", () => {
+		const json = doc([
+			{ type: "codeBlock", content: [{ type: "text", text: "line one\nline two" }] }
+		]);
+		expect(letterBodyToBlocks(json)).toEqual([
+			{ kind: "paragraph", runs: [{ text: "line one" }] },
+			{ kind: "paragraph", runs: [{ text: "line two" }] }
+		]);
+	});
+
+	it("flattens a blockquote's inner blocks instead of dropping them", () => {
+		const json = doc([
+			{ type: "blockquote", content: [
+				{ type: "paragraph", content: [{ type: "text", text: "quoted" }] }
+			] }
+		]);
+		expect(letterBodyToBlocks(json)).toEqual([
+			{ kind: "paragraph", runs: [{ text: "quoted" }] }
+		]);
+	});
+
+	it("preserves a hard break inside a paragraph as a break run", () => {
+		const json = doc([
+			{ type: "paragraph", content: [
+				{ type: "text", text: "first" },
+				{ type: "hardBreak" },
+				{ type: "text", text: "second" }
+			] }
+		]);
+		expect(letterBodyToBlocks(json)).toEqual([
+			{ kind: "paragraph", runs: [
+				{ text: "first" },
+				{ text: "", line_break: true },
+				{ text: "second" }
+			] }
+		]);
+	});
 });

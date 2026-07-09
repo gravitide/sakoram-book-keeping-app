@@ -214,17 +214,21 @@
 // and a per-block alignment. Text stays plain strings throughout, so the
 // template never builds Typst source from user input (no injection risk).
 #let render-run(r) = {
-  let c = [#r.text]
-  let ts = (:)
-  let col = r.at("color", default: none)
-  let sz = r.at("fontSizePt", default: none)
-  if col != none { ts.insert("fill", rgb(col)) }
-  if sz != none { ts.insert("size", sz * 1pt) }
-  if ts.len() > 0 { c = text(..ts)[#c] }
-  if r.at("underline", default: false) { c = underline(c) }
-  if r.at("italic", default: false) { c = emph(c) }
-  if r.at("bold", default: false) { c = strong(c) }
-  c
+  if r.at("line_break", default: false) {
+    linebreak()
+  } else {
+    let c = [#r.text]
+    let ts = (:)
+    let col = r.at("color", default: none)
+    let sz = r.at("fontSizePt", default: none)
+    if col != none { ts.insert("fill", rgb(col)) }
+    if sz != none { ts.insert("size", sz * 1pt) }
+    if ts.len() > 0 { c = text(..ts)[#c] }
+    if r.at("underline", default: false) { c = underline(c) }
+    if r.at("italic", default: false) { c = emph(c) }
+    if r.at("bold", default: false) { c = strong(c) }
+    c
+  }
 }
 #let render-runs(runs) = { for r in runs { render-run(r) } }
 #let apply-align(a, body) = {
