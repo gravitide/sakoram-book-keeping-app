@@ -1,6 +1,6 @@
 <template>
 	<div class="border border-(--ui-border) rounded-md overflow-hidden bg-(--ui-bg)">
-		<div v-if="editor" class="flex items-center gap-0.5 border-b border-(--ui-border) bg-(--ui-bg-muted) p-1 flex-wrap">
+		<div v-if="editor && editable" class="flex items-center gap-0.5 border-b border-(--ui-border) bg-(--ui-bg-muted) p-1 flex-wrap">
 			<!-- Block type / heading -->
 			<UDropdownMenu :items="headingItems">
 				<UButton size="xs" variant="ghost" color="neutral" aria-label="Text style" trailing-icon="i-lucide-chevron-down" :ui="{ trailingIcon: 'size-3' }" class="min-w-16 justify-between">
@@ -61,7 +61,9 @@
 		</div>
 		<EditorContent
 			:editor="editor"
-			class="letter-body p-3 min-h-[240px] max-h-[50vh] overflow-y-auto text-sm"
+			class="letter-body p-3 max-h-[50vh] overflow-y-auto text-sm"
+			:class="{ 'opacity-70': !editable }"
+			:style="{ minHeight: `${minHeight}px` }"
 		/>
 	</div>
 </template>
@@ -83,6 +85,15 @@
 	// versions of prosemirror-model".
 	import StarterKit from "@tiptap/starter-kit";
 	import { EditorContent, useEditor } from "@tiptap/vue-3";
+
+	// `editable` gates typing (false → read-only view, toolbar hidden) so locked
+	// documents (issued quotes / invoices / bills) can still render their notes
+	// through the same component. `minHeight` sizes the writing area — documents
+	// want a shorter box than the full-page letter editor.
+	const props = withDefaults(defineProps<{ editable?: boolean, minHeight?: number }>(), {
+		editable: true,
+		minHeight: 240
+	});
 
 	const model = defineModel<string>({ default: "" });
 
@@ -114,10 +125,16 @@
 			FontSize.configure({ types: ["textStyle"] })
 		],
 		content: parseDoc(model.value),
+		editable: props.editable,
 		immediatelyRender: false,
 		onUpdate: ({ editor: e }) => {
 			model.value = JSON.stringify(e.getJSON());
 		}
+	});
+
+	// Toggle read-only live (e.g. a draft quote gets marked sent while open).
+	watch(() => props.editable, (val) => {
+		editor.value?.setEditable(val);
 	});
 
 	// External model changes (e.g. loading a different letter under keepalive)

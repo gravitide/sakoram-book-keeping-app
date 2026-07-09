@@ -49,6 +49,12 @@ export interface QuoteRow {
 	bank_details_snapshot: string | null
 	business_bank_id: number | null
 	/**
+	 * Opt-in flag (0/1) for printing the payment/bank block on the quote PDF.
+	 * Defaults to 0 (off) — quotes are often sent before payment terms are
+	 * agreed. When on, the selected `business_bank_id` snapshot is rendered.
+	 */
+	include_bank_details: number
+	/**
 	 * Per-document override of the PDF's big header. Null/empty = the
 	 * hardcoded default ("QUOTATION"); when set, the PDF builder
 	 * upper-cases this verbatim for the header.
@@ -402,8 +408,9 @@ export const useQuotesStore = defineStore("quotes", () => {
 				number, client_id, client_snapshot, client_name, issue_date, valid_until,
 				status, pricing_mode, project_title,
 				vat_rate_basis_points, subtotal_cents, tax_cents, total_cents,
-				notes, terms, prepared_by, bank_details_snapshot, business_bank_id
-			) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				notes, terms, prepared_by, bank_details_snapshot, business_bank_id,
+				include_bank_details
+			) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				allocation.number,
 				src.client_id,
@@ -421,7 +428,8 @@ export const useQuotesStore = defineStore("quotes", () => {
 				src.terms,
 				src.prepared_by,
 				bankSnap,
-				bankId
+				bankId,
+				src.include_bank_details
 			]
 		);
 		if (result.lastInsertId === undefined) throw new Error("duplicate: no lastInsertId");
@@ -461,7 +469,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 		| "vat_rate_basis_points"
 		| "subtotal_cents" | "tax_cents" | "total_cents"
 		| "notes" | "terms" | "prepared_by" | "bank_details_snapshot" | "business_bank_id"
-		| "title_override">>;
+		| "include_bank_details" | "title_override">>;
 
 	const UPDATABLE: ReadonlyArray<keyof QuoteUpdate> = [
 		"client_id",
@@ -479,6 +487,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 		"prepared_by",
 		"bank_details_snapshot",
 		"business_bank_id",
+		"include_bank_details",
 		"title_override"
 	];
 

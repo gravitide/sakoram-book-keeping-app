@@ -46,7 +46,7 @@ function base(settings: CompanySettingsRow | null, currency: SampleCurrency, tem
 		pricing_mode: "itemized",
 		has_vat: true,
 		notes: "Thank you for your business.",
-		notes_paragraphs: ["Thank you for your business."],
+		notes_blocks: [{ kind: "paragraph", runs: [{ text: "Thank you for your business." }] }],
 		prepared_by: settings?.business_name ?? "Your Business",
 		business_name: settings?.business_name ?? "Your Business",
 		website: settings?.website ?? "yourbusiness.lk",

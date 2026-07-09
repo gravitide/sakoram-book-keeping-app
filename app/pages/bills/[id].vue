@@ -435,7 +435,7 @@
 						Notes
 					</div>
 				</template>
-				<UTextarea v-model="formNotes" :rows="4" :disabled="!editable" placeholder="Internal notes about this bill" />
+				<RichTextEditor v-model="formNotes" :editable="editable" :min-height="120" />
 			</UCard>
 
 			<!-- Attachments — scans / photos of the vendor's bill. Shared

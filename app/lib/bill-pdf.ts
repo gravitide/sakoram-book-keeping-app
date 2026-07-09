@@ -10,6 +10,7 @@
 import type { BillLineRow, BillRow, VendorSnapshot } from "~/stores/bills";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR, formatQty, formatRate } from "~/lib/money";
+import { richTextToBlocks } from "~/lib/rich-text";
 import { pdfThemeHex } from "~/lib/theme";
 
 export interface BillPdfArgs {
@@ -87,7 +88,7 @@ export const buildBillPdfPayload = ({ row: b, lines, settings, currency, paidCen
 		pricing_mode: b.pricing_mode,
 		has_vat: hasVat,
 		notes: b.notes ?? "",
-		notes_paragraphs: (b.notes ?? "").split(/\n\s*\n/).filter((p) => p.trim().length > 0),
+		notes_blocks: richTextToBlocks(b.notes),
 		prepared_by: "",
 		paid_cents: paidCents > 0 ? paidCents : null,
 		paid_display: paidCents > 0 ? fmtNoSym(paidCents) : null,
