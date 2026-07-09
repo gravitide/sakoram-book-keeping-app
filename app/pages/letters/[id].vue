@@ -109,6 +109,26 @@
 				</UButton>
 			</div>
 
+			<UModal v-model:open="deleteOpen" :title="`Delete ${form.number || 'letter'}?`">
+				<template #body>
+					<p class="text-sm">
+						This permanently deletes
+						<span class="font-medium">{{ form.subject || "this letter" }}</span>.
+						This can't be undone.
+					</p>
+				</template>
+				<template #footer>
+					<div class="flex justify-end gap-2 w-full">
+						<UButton color="neutral" variant="outline" @click="deleteOpen = false">
+							Cancel
+						</UButton>
+						<UButton color="error" icon="i-lucide-trash-2" @click="confirmDelete">
+							Delete letter
+						</UButton>
+					</div>
+				</template>
+			</UModal>
+
 			<PdfPreviewModal
 				v-model:open="pdf.state.open"
 				:asset-url="pdf.state.assetUrl"
@@ -286,7 +306,13 @@
 		}
 	};
 
-	const onDelete = async () => {
+	// Delete is confirmed via a modal — letters are permanent once removed.
+	const deleteOpen = ref(false);
+	const onDelete = () => {
+		deleteOpen.value = true;
+	};
+	const confirmDelete = async () => {
+		deleteOpen.value = false;
 		try {
 			await store.remove(currentId.value);
 			toast.add({ title: "Letter deleted", color: "success", icon: "i-lucide-trash-2" });

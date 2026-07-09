@@ -197,6 +197,27 @@
 		</UCard>
 
 		<NewLetterModal v-model:open="showNew" />
+
+		<UModal v-model:open="deleteOpen" :title="`Delete ${pendingDelete?.number || 'letter'}?`">
+			<template #body>
+				<p class="text-sm">
+					This permanently deletes
+					<span class="font-medium">{{ pendingDelete?.subject || "this letter" }}</span>.
+					This can't be undone.
+				</p>
+			</template>
+			<template #footer>
+				<div class="flex justify-end gap-2 w-full">
+					<UButton color="neutral" variant="outline" @click="deleteOpen = false">
+						Cancel
+					</UButton>
+					<UButton color="error" icon="i-lucide-trash-2" @click="confirmDelete">
+						Delete letter
+					</UButton>
+				</div>
+			</template>
+		</UModal>
+
 		<PdfPreviewModal
 			v-model:open="pdf.state.open"
 			:asset-url="pdf.state.assetUrl"
@@ -334,12 +355,25 @@
 		}
 	};
 
-	const remove = async (row: LetterRow) => {
+	// Delete goes through a confirm modal — letters are permanent once gone
+	// (no draft/trash), so a one-click row action shouldn't nuke one.
+	const deleteOpen = ref(false);
+	const pendingDelete = ref<LetterRow | null>(null);
+	const askDelete = (row: LetterRow) => {
+		pendingDelete.value = row;
+		deleteOpen.value = true;
+	};
+	const confirmDelete = async () => {
+		const row = pendingDelete.value;
+		if (!row) return;
+		deleteOpen.value = false;
 		try {
 			await store.remove(row.id);
 			toast.add({ title: "Letter deleted", color: "success", icon: "i-lucide-trash-2" });
 		} catch (err) {
 			toast.add({ title: "Could not delete", description: err instanceof Error ? err.message : String(err), color: "error", icon: "i-lucide-circle-alert" });
+		} finally {
+			pendingDelete.value = null;
 		}
 	};
 
@@ -355,9 +389,7 @@
 				} }
 			],
 			[
-				{ label: "Delete", icon: "i-lucide-trash-2", onSelect: () => {
-					void remove(letter);
-				} }
+				{ label: "Delete", icon: "i-lucide-trash-2", onSelect: () => askDelete(letter) }
 			]
 		];
 	}
