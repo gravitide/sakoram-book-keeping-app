@@ -27,9 +27,11 @@
 
 			<div class="w-px h-4 bg-(--ui-border) mx-0.5" />
 
-			<!-- Font size -->
+			<!-- Font size (numeric px). Trigger shows the current size. -->
 			<UDropdownMenu :items="fontSizeItems">
-				<UButton icon="i-lucide-type" size="xs" variant="ghost" color="neutral" aria-label="Font size" trailing-icon="i-lucide-chevron-down" :ui="{ trailingIcon: 'size-3' }" />
+				<UButton icon="i-lucide-type" size="xs" variant="ghost" color="neutral" aria-label="Font size" trailing-icon="i-lucide-chevron-down" :ui="{ trailingIcon: 'size-3' }">
+					<span v-if="currentFontSize" class="tabular-nums">{{ currentFontSize }}</span>
+				</UButton>
 			</UDropdownMenu>
 
 			<!-- Text colour -->
@@ -256,24 +258,28 @@
 	});
 
 	// --- font size ----------------------------------------------------------
-	// null = clear (back to the default body size). px values convert to pt in
-	// the PDF (see app/lib/letter-body.ts).
-	const fontSizes: { label: string, px: string | null }[] = [
-		{ label: "Small", px: "13px" },
-		{ label: "Normal", px: null },
-		{ label: "Large", px: "18px" },
-		{ label: "Huge", px: "24px" }
-	];
-	const applyFontSize = (px: string | null) => {
+	// Numeric px sizes — deliberately distinct from the heading/type dropdown
+	// (which is structural). Word-processor convention: a plain point/size box,
+	// not "Small/Large" words that collide with "Heading 1/2/3". Stored as a CSS
+	// px string on the textStyle mark; converted to pt in the PDF (px * 0.75 —
+	// see app/lib/letter-body.ts). "Default" clears the mark. The trigger shows
+	// the current size so it reads unmistakably as a size control.
+	const FONT_SIZES = [12, 14, 16, 18, 20, 24, 28, 32];
+	const currentFontSize = computed<number | null>(() => {
+		const raw = editor.value?.getAttributes("textStyle").fontSize as string | undefined;
+		const m = raw ? /^(\d+)px$/.exec(raw) : null;
+		return m ? Number(m[1]) : null;
+	});
+	const applyFontSize = (px: number | null) => {
 		const e = editor.value;
 		if (!e) return;
 		if (px === null) e.chain().focus().unsetFontSize().run();
-		else e.chain().focus().setFontSize(px).run();
+		else e.chain().focus().setFontSize(`${px}px`).run();
 	};
-	const fontSizeItems = computed(() => [fontSizes.map((s) => ({
-		label: s.label,
-		onSelect: () => applyFontSize(s.px)
-	}))]);
+	const fontSizeItems = computed(() => [[
+		{ label: "Default", onSelect: () => applyFontSize(null) },
+		...FONT_SIZES.map((n) => ({ label: String(n), onSelect: () => applyFontSize(n) }))
+	]]);
 
 	// --- text colour --------------------------------------------------------
 	const textColors = ["#111827", "#dc2626", "#ea580c", "#ca8a04", "#16a34a", "#2563eb", "#7c3aed", "#db2777", "#0891b2", "#6b7280", "#78350f", "#334155"];
