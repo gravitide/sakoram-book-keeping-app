@@ -418,18 +418,36 @@
 
 		<UModal v-model:open="showConvertDialog" title="Convert to invoice?">
 			<template #body>
-				<div class="text-sm text-(--ui-text-muted) space-y-2">
-					<p>
-						A new draft invoice will be created with the same client, line
-						items, totals, and project title from this quote. The quote will
-						be marked as <span class="font-medium text-(--ui-text)">converted</span>
-						and locked.
-					</p>
-					<p>
-						The new invoice will get its own number (next in the INV
-						sequence) and a fresh due date based on your default payment
-						terms.
-					</p>
+				<div class="space-y-4">
+					<div class="text-sm text-(--ui-text-muted) space-y-2">
+						<p>
+							A new draft invoice will be created with the same client, line
+							items, totals, and project title from this quote. The quote will
+							be marked as <span class="font-medium text-(--ui-text)">converted</span>
+							and locked.
+						</p>
+						<p>
+							The invoice gets a fresh due date based on your default payment
+							terms. Pick its number below — leave the default to take the next
+							in the INV sequence, or set one to fill a gap.
+						</p>
+					</div>
+					<UFormField label="Invoice number" required>
+						<template #help>
+							<span v-if="convertDocNum.numberTaken.value" class="text-(--ui-error)">
+								{{ convertDocNum.numberFormatted.value }} is already in use — pick another sequence.
+							</span>
+							<span v-else-if="convertDocNum.numberFormatted.value">
+								Will be saved as <span class="font-medium">{{ convertDocNum.numberFormatted.value }}</span>
+							</span>
+						</template>
+						<UInputNumber
+							v-model="convertDocNum.sequence.value"
+							:min="1"
+							:step="1"
+							class="w-1/2"
+						/>
+					</UFormField>
 				</div>
 			</template>
 			<template #footer>
@@ -437,7 +455,12 @@
 					<UButton color="neutral" variant="outline" @click="showConvertDialog = false">
 						Cancel
 					</UButton>
-					<UButton :loading="converting" icon="i-lucide-receipt" @click="confirmConvert">
+					<UButton
+						:loading="converting"
+						:disabled="!convertDocNum.numberValid.value"
+						icon="i-lucide-receipt"
+						@click="confirmConvert"
+					>
 						Create invoice
 					</UButton>
 				</div>
@@ -1005,15 +1028,32 @@
 	);
 	const showConvertDialog = ref(false);
 	const converting = ref(false);
+	// Editable invoice number for the conversion — same gap-fill affordance the
+	// New-invoice modal offers. Issue date is today (createFromQuote uses today),
+	// so a null ref lets the composable default the fiscal year to today's.
+	const convertIssueDate = ref<string | null>(null);
+	const convertDocNum = useDocumentNumber({
+		type: "invoice",
+		issueDate: convertIssueDate,
+		enabled: showConvertDialog
+	});
+	// Reseed on the next open (peek only fills when sequence is null).
+	watch(showConvertDialog, (open) => {
+		if (!open) convertDocNum.reset();
+	});
 	const askConvert = () => {
 		showConvertDialog.value = true;
 	};
 	const confirmConvert = async () => {
-		if (!quote.value || !canConvert.value) return;
+		if (!quote.value || !canConvert.value || !convertDocNum.numberValid.value) return;
 		converting.value = true;
 		try {
 			const lineRows = await quotesStore.getLines(quoteId);
-			const newInvoiceId = await invoicesStore.createFromQuote(quote.value, lineRows);
+			const newInvoiceId = await invoicesStore.createFromQuote(
+				quote.value,
+				lineRows,
+				convertDocNum.sequence.value ?? undefined
+			);
 			await quotesStore.markConverted(quoteId, newInvoiceId);
 			// markConverted persisted status='converted' + the link to the DB.
 			// This page is kept alive (<NuxtPage keepalive>), so update the local
