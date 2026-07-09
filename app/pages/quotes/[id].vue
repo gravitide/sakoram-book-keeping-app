@@ -364,8 +364,8 @@
 					<UFormField label="Terms" hint="Optional — kept for your reference; not printed on the PDF.">
 						<RichTextEditor v-model="formTerms" :editable="editable" :min-height="100" />
 					</UFormField>
-					<UFormField label="Prepared by" hint="Signature line at the bottom of the PDF.">
-						<UInput v-model="formPreparedBy" placeholder="e.g. Your name" :disabled="!editable" />
+					<UFormField label="Prepared by" hint="Rich-text sign-off, right-aligned at the bottom of the PDF.">
+						<RichTextEditor v-model="formPreparedBy" :editable="editable" :min-height="110" />
 					</UFormField>
 				</div>
 			</UCard>

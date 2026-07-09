@@ -82,6 +82,7 @@ export const buildQuotePdfPayload = ({ row: q, lines, settings, currency, entitl
 		notes: q.notes ?? "",
 		notes_blocks: richTextToBlocks(q.notes),
 		prepared_by: q.prepared_by ?? "",
+		prepared_by_blocks: richTextToBlocks(q.prepared_by),
 		// Quotes don't have payments — null suppresses the paid/balance row.
 		paid_cents: null,
 		paid_display: null,

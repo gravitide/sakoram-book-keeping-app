@@ -85,6 +85,7 @@ export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, pa
 		notes: inv.notes ?? "",
 		notes_blocks: richTextToBlocks(inv.notes),
 		prepared_by: inv.prepared_by ?? "",
+		prepared_by_blocks: richTextToBlocks(inv.prepared_by),
 		// Show paid/balance only when something has been paid; null
 		// suppresses the row entirely on a freshly-issued invoice.
 		paid_cents: paidCents > 0 ? paidCents : null,

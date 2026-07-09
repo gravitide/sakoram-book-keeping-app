@@ -119,4 +119,28 @@ describe("letterBodyToBlocks", () => {
 			{ kind: "paragraph", runs: [{ text: "kept" }] }
 		]);
 	});
+
+	it("converts an rgb() colour to hex (browsers normalise inline colour to rgb)", () => {
+		const json = doc([
+			{ type: "paragraph", content: [{ type: "text", text: "grey", marks: [{ type: "textStyle", attrs: { color: "rgb(107, 114, 128)" } }] }] }
+		]);
+		expect(letterBodyToBlocks(json)).toEqual([
+			{ kind: "paragraph", runs: [{ text: "grey", color: "#6b7280" }] }
+		]);
+	});
+
+	it("passes hex colour through and drops a named colour", () => {
+		const json = doc([
+			{ type: "paragraph", content: [
+				{ type: "text", text: "hex", marks: [{ type: "textStyle", attrs: { color: "#6b7280" } }] },
+				{ type: "text", text: "named", marks: [{ type: "textStyle", attrs: { color: "gray" } }] }
+			] }
+		]);
+		expect(letterBodyToBlocks(json)).toEqual([
+			{ kind: "paragraph", runs: [
+				{ text: "hex", color: "#6b7280" },
+				{ text: "named" }
+			] }
+		]);
+	});
 });

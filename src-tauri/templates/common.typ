@@ -233,18 +233,22 @@
   else if a == "justify" { par(justify: true, body) }
   else { body }
 }
-#let render-blocks(blocks) = {
+// `default-align` sets the alignment for blocks that don't carry their own
+// (the editor only stores a non-left alignment). Body / notes leave it `none`
+// (natural left); the sign-off passes "right" so an un-aligned name still sits
+// against the right margin like the old plain-text sign-off did.
+#let render-blocks(blocks, default-align: none) = {
   for b in blocks {
     if b.kind == "paragraph" {
-      block(width: 100%, below: 8pt, apply-align(b.at("align", default: none), render-runs(b.runs)))
+      block(width: 100%, below: 8pt, apply-align(b.at("align", default: default-align), render-runs(b.runs)))
     } else if b.kind == "heading" {
       let lvl = b.at("level", default: 2)
       let hsize = if lvl == 1 { 15pt } else if lvl == 2 { 13pt } else { 11.5pt }
-      block(width: 100%, above: 10pt, below: 6pt, apply-align(b.at("align", default: none), text(weight: "bold", size: hsize, render-runs(b.runs))))
+      block(width: 100%, above: 10pt, below: 6pt, apply-align(b.at("align", default: default-align), text(weight: "bold", size: hsize, render-runs(b.runs))))
     } else if b.kind == "bullet_list" {
-      list(..b.items.map(items => render-blocks(items)))
+      list(..b.items.map(items => render-blocks(items, default-align: default-align)))
     } else if b.kind == "ordered_list" {
-      enum(..b.items.map(items => render-blocks(items)))
+      enum(..b.items.map(items => render-blocks(items, default-align: default-align)))
     }
   }
 }
@@ -298,10 +302,14 @@
 }
 
 // --- sign-off (right-aligned) ------------------------------------------
-#let signoff-block(data) = if data.prepared_by != none and data.prepared_by != "" [
-  #v(28pt)
-  #align(right)[
-    #text(weight: "bold")[Prepared by] \
-    #text(fill: rgb("#4b5563"))[#data.prepared_by]
-  ]
-]
+#let signoff-block(data) = {
+  let blocks = data.at("prepared_by_blocks", default: ())
+  if data.prepared_by != none and data.prepared_by != "" and blocks.len() > 0 {
+    v(28pt)
+    align(right)[
+      #caption("Prepared by")
+      #v(6pt)
+      #render-blocks(blocks, default-align: "right")
+    ]
+  }
+}

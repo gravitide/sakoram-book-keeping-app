@@ -1,5 +1,5 @@
 <template>
-	<div class="border border-(--ui-border) rounded-md overflow-hidden bg-(--ui-bg)">
+	<div class="border border-(--ui-border) rounded-md overflow-hidden bg-(--ui-bg)" :style="{ '--rte-min-height': `${minHeight}px` }">
 		<div v-if="editor && editable" class="flex items-center gap-0.5 border-b border-(--ui-border) bg-(--ui-bg-muted) p-1 flex-wrap">
 			<!-- Block type / heading -->
 			<UDropdownMenu :items="headingItems">
@@ -63,7 +63,6 @@
 			:editor="editor"
 			class="letter-body p-3 max-h-[50vh] overflow-y-auto text-sm"
 			:class="{ 'opacity-70': !editable }"
-			:style="{ minHeight: `${minHeight}px` }"
 		/>
 	</div>
 </template>
@@ -228,7 +227,7 @@
 <style scoped>
 .letter-body :deep(.ProseMirror) {
 	outline: none;
-	min-height: 220px;
+	min-height: var(--rte-min-height, 240px);
 }
 .letter-body :deep(.ProseMirror:focus) {
 	outline: none;
