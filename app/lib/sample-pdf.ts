@@ -48,6 +48,7 @@ function base(settings: CompanySettingsRow | null, currency: SampleCurrency, tem
 		notes: "Thank you for your business.",
 		notes_blocks: [{ kind: "paragraph", runs: [{ text: "Thank you for your business." }] }],
 		prepared_by: settings?.business_name ?? "Your Business",
+		prepared_by_blocks: [{ kind: "paragraph", runs: [{ text: settings?.business_name ?? "Your Business" }] }],
 		business_name: settings?.business_name ?? "Your Business",
 		website: settings?.website ?? "yourbusiness.lk",
 		phone: settings?.phone ?? "+94 11 234 5678",

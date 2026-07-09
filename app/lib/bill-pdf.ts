@@ -90,6 +90,7 @@ export const buildBillPdfPayload = ({ row: b, lines, settings, currency, paidCen
 		notes: b.notes ?? "",
 		notes_blocks: richTextToBlocks(b.notes),
 		prepared_by: "",
+		prepared_by_blocks: [],
 		paid_cents: paidCents > 0 ? paidCents : null,
 		paid_display: paidCents > 0 ? fmtNoSym(paidCents) : null,
 		balance_display: paidCents > 0 ? fmtNoSym(balanceCents) : null,

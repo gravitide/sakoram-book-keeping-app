@@ -45,6 +45,24 @@ const cssPxToPt = (css: string | undefined): number | undefined => {
 	return Math.round(Number(m[1]) * 0.75 * 100) / 100;
 };
 
+// Normalise a CSS colour to a hex string Typst's `rgb()` accepts. The editor's
+// palette writes hex, but a colour can also arrive as `rgb(r, g, b)` — browsers
+// normalise an inline `style="color:…"` to that form, so pasted or DOM
+// round-tripped runs carry `rgb(107, 114, 128)` rather than `#6b7280`. Typst's
+// `rgb("rgb(…)")` throws "color string contains non-hexadecimal letters", which
+// fails the whole PDF. So: pass hex through, convert rgb()/rgba() to hex, and
+// drop anything else (named colours etc.) so the run just renders default.
+const HEX_RE = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const toHex2 = (n: number): string => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+const normalizeColor = (raw: string | undefined): string | undefined => {
+	if (!raw) return undefined;
+	const s = raw.trim();
+	if (HEX_RE.test(s)) return s;
+	const m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*[\d.]+\s*)?\)$/i.exec(s);
+	if (m) return `#${toHex2(Number(m[1]))}${toHex2(Number(m[2]))}${toHex2(Number(m[3]))}`;
+	return undefined;
+};
+
 // TipTap's TextAlign stores the alignment on the block node's attrs. We only
 // carry a non-default alignment through (left is the default — omitting it
 // keeps the block tree + PDF clean).
@@ -63,7 +81,8 @@ const runFromText = (node: PmNode): LetterInline => {
 		} else if (m.type === "underline") {
 			run.underline = true;
 		} else if (m.type === "textStyle") {
-			if (m.attrs?.color) run.color = m.attrs.color;
+			const col = normalizeColor(m.attrs?.color);
+			if (col) run.color = col;
 			const pt = cssPxToPt(m.attrs?.fontSize);
 			if (pt !== undefined) run.fontSizePt = pt;
 		}
