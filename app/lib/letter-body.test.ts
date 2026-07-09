@@ -165,6 +165,37 @@ describe("letterBodyToBlocks", () => {
 		]);
 	});
 
+	it("maps a table with a header row + a colspan cell", () => {
+		const cell = (t: string, header = false) => ({
+			type: header ? "tableHeader" : "tableCell",
+			content: [{ type: "paragraph", content: [{ type: "text", text: t }] }]
+		});
+		const json = doc([
+			{ type: "table", content: [
+				{ type: "tableRow", content: [cell("Phase", true), cell("Amount", true)] },
+				{ type: "tableRow", content: [cell("1"), cell("Rs 100")] },
+				{ type: "tableRow", content: [
+					{ type: "tableHeader", attrs: { colspan: 2, rowspan: 1 }, content: [{ type: "paragraph", content: [{ type: "text", text: "Total Rs 100" }] }] }
+				] }
+			] }
+		]);
+		expect(letterBodyToBlocks(json)).toEqual([
+			{ kind: "table", rows: [
+				[
+					{ blocks: [{ kind: "paragraph", runs: [{ text: "Phase" }] }], header: true },
+					{ blocks: [{ kind: "paragraph", runs: [{ text: "Amount" }] }], header: true }
+				],
+				[
+					{ blocks: [{ kind: "paragraph", runs: [{ text: "1" }] }] },
+					{ blocks: [{ kind: "paragraph", runs: [{ text: "Rs 100" }] }] }
+				],
+				[
+					{ blocks: [{ kind: "paragraph", runs: [{ text: "Total Rs 100" }] }], header: true, colspan: 2 }
+				]
+			] }
+		]);
+	});
+
 	it("preserves a hard break inside a paragraph as a break run", () => {
 		const json = doc([
 			{ type: "paragraph", content: [

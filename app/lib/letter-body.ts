@@ -24,16 +24,28 @@ export interface LetterInline {
 
 export type LetterAlign = "left" | "center" | "right" | "justify";
 
+// One table cell: its own block tree, whether it's a header cell, and any
+// merge spans (only present when > 1). Cells arrive in row-major order and
+// merged regions store their span on the anchor cell only (covered slots are
+// omitted) — which is exactly what Typst's `table.cell(colspan/rowspan)` wants.
+export interface LetterTableCell {
+	blocks: LetterBlock[]
+	header?: boolean
+	colspan?: number
+	rowspan?: number
+}
+
 export type LetterBlock
 	= | { kind: "paragraph", runs: LetterInline[], align?: LetterAlign }
 		| { kind: "heading", level: number, runs: LetterInline[], align?: LetterAlign }
-		| { kind: "bullet_list" | "ordered_list", items: LetterBlock[][] };
+		| { kind: "bullet_list" | "ordered_list", items: LetterBlock[][] }
+		| { kind: "table", rows: LetterTableCell[][] };
 
 interface PmMark { type?: string, attrs?: { color?: string, fontSize?: string } }
 interface PmNode {
 	type?: string
 	text?: string
-	attrs?: { level?: number, textAlign?: string }
+	attrs?: { level?: number, textAlign?: string, colspan?: number, rowspan?: number }
 	marks?: PmMark[]
 	content?: PmNode[]
 }
@@ -142,6 +154,20 @@ const blocksFrom = (nodes: PmNode[] | undefined): LetterBlock[] => {
 				// quote bar, but the text must survive).
 				out.push(...blocksFrom(node.content));
 				break;
+			case "table": {
+				const rows = (node.content ?? []).map((row) =>
+					(row.content ?? []).map((cell): LetterTableCell => {
+						const c: LetterTableCell = { blocks: blocksFrom(cell.content) };
+						if (cell.type === "tableHeader") c.header = true;
+						const cs = cell.attrs?.colspan;
+						const rs = cell.attrs?.rowspan;
+						if (typeof cs === "number" && cs > 1) c.colspan = cs;
+						if (typeof rs === "number" && rs > 1) c.rowspan = rs;
+						return c;
+					}));
+				out.push({ kind: "table", rows });
+				break;
+			}
 			default:
 				// Unknown node (horizontalRule, image, …) — nothing to render.
 				break;
