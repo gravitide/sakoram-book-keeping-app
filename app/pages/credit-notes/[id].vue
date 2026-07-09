@@ -287,7 +287,7 @@
 						annotate historical credit notes without re-opening
 						them as drafts. Matches the notes-only-after-issue
 						exception used on the other detail pages. -->
-					<RichTextEditor v-model="formNotes" :min-height="120" />
+					<RichTextEditor v-model="formNotes" :min-height="120" tables />
 				</UCard>
 			</div>
 		</div>

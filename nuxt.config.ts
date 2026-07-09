@@ -130,6 +130,7 @@ export default defineNuxtConfig({
 				"prosemirror-inputrules",
 				"prosemirror-gapcursor",
 				"prosemirror-dropcursor",
+				"prosemirror-tables",
 				"@tiptap/pm"
 			]
 		},

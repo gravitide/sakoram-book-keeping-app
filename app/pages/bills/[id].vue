@@ -435,7 +435,7 @@
 						Notes
 					</div>
 				</template>
-				<RichTextEditor v-model="formNotes" :editable="editable" :min-height="120" />
+				<RichTextEditor v-model="formNotes" :editable="editable" :min-height="120" tables />
 			</UCard>
 
 			<!-- Attachments — scans / photos of the vendor's bill. Shared

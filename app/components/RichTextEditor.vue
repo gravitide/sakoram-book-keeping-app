@@ -58,6 +58,61 @@
 					</div>
 				</template>
 			</UPopover>
+
+			<!-- Tables (opt-in via the `tables` prop). Grid picker inserts;
+				once the cursor is in a table, the row/column controls appear. -->
+			<template v-if="tables">
+				<div class="w-px h-4 bg-(--ui-border) mx-0.5" />
+				<UPopover v-model:open="tableMenuOpen">
+					<UButton
+						icon="i-lucide-table"
+						size="xs"
+						variant="ghost"
+						color="neutral"
+						aria-label="Table"
+						:class="editor?.isActive('table') ? 'bg-(--ui-bg-accented) text-(--ui-primary)' : ''"
+					/>
+					<template #content>
+						<div class="p-2 w-56 space-y-2">
+							<div class="text-xs text-(--ui-text-muted) select-none">
+								Insert table — {{ gridCols }} × {{ gridRows }}
+							</div>
+							<div
+								class="grid gap-1"
+								style="grid-template-columns: repeat(8, 1fr)"
+								@mouseleave="setGrid(0, 0)"
+							>
+								<button
+									v-for="idx in 48"
+									:key="idx"
+									type="button"
+									class="aspect-square rounded-xs border cursor-pointer transition"
+									:class="cellActive(idx)
+										? 'bg-(--ui-primary)/25 border-(--ui-primary)/50'
+										: 'bg-(--ui-bg-elevated) border-(--ui-border)'"
+									:aria-label="`${cellCol(idx)} by ${cellRow(idx)}`"
+									@mouseenter="setGrid(cellCol(idx), cellRow(idx))"
+									@click="insertTable"
+								/>
+							</div>
+							<div v-if="editor?.isActive('table')" class="pt-2 border-t border-(--ui-border) grid grid-cols-2 gap-1">
+								<UButton
+									v-for="a in tableActions"
+									:key="a.label"
+									size="xs"
+									variant="ghost"
+									color="neutral"
+									:icon="a.icon"
+									:class="a.danger ? 'text-(--ui-error) justify-start' : 'justify-start'"
+									@click="a.run"
+								>
+									{{ a.label }}
+								</UButton>
+							</div>
+						</div>
+					</template>
+				</UPopover>
+			</template>
 		</div>
 		<EditorContent
 			:editor="editor"
@@ -68,6 +123,11 @@
 </template>
 
 <script setup lang="ts">
+	// TableKit bundles Table + TableRow + TableHeader + TableCell. Only loaded
+	// when the `tables` prop is set. NOTE: it pulls `prosemirror-tables`, which
+	// is in the nuxt.config dedupe list alongside the other prosemirror-* pkgs —
+	// without that, table commands throw the "multiple versions" error.
+	import { TableKit } from "@tiptap/extension-table";
 	import TextAlign from "@tiptap/extension-text-align";
 	import { Color, FontSize, TextStyle } from "@tiptap/extension-text-style";
 	// Thin TipTap wrapper on the official Vue-3 integration (`useEditor` +
@@ -88,10 +148,13 @@
 	// `editable` gates typing (false → read-only view, toolbar hidden) so locked
 	// documents (issued quotes / invoices / bills) can still render their notes
 	// through the same component. `minHeight` sizes the writing area — documents
-	// want a shorter box than the full-page letter editor.
-	const props = withDefaults(defineProps<{ editable?: boolean, minHeight?: number }>(), {
+	// want a shorter box than the full-page letter editor. `tables` opts the
+	// editor into table support (button + grid picker) — off for the compact
+	// sign-off / terms fields.
+	const props = withDefaults(defineProps<{ editable?: boolean, minHeight?: number, tables?: boolean }>(), {
 		editable: true,
-		minHeight: 240
+		minHeight: 240,
+		tables: false
 	});
 
 	const model = defineModel<string>({ default: "" });
@@ -121,7 +184,8 @@
 			TextAlign.configure({ types: ["heading", "paragraph"] }),
 			TextStyle,
 			Color.configure({ types: ["textStyle"] }),
-			FontSize.configure({ types: ["textStyle"] })
+			FontSize.configure({ types: ["textStyle"] }),
+			...(props.tables ? [TableKit.configure({ table: { resizable: true } })] : [])
 		],
 		content: parseDoc(model.value),
 		editable: props.editable,
@@ -220,6 +284,42 @@
 		editor.value?.chain().focus().unsetColor().run();
 	};
 
+	// --- tables -------------------------------------------------------------
+	// Grid picker: 8 columns × 6 rows of hoverable cells. Hover sizes the
+	// selection; click inserts a table of that size with a header row.
+	const GRID_COLS = 8;
+	const tableMenuOpen = ref(false);
+	const gridCols = ref(0);
+	const gridRows = ref(0);
+	const cellCol = (idx: number): number => ((idx - 1) % GRID_COLS) + 1;
+	const cellRow = (idx: number): number => Math.ceil(idx / GRID_COLS);
+	const cellActive = (idx: number): boolean => cellCol(idx) <= gridCols.value && cellRow(idx) <= gridRows.value;
+	const setGrid = (cols: number, rows: number) => {
+		gridCols.value = cols;
+		gridRows.value = rows;
+	};
+	const insertTable = () => {
+		const e = editor.value;
+		if (!e || gridCols.value < 1 || gridRows.value < 1) return;
+		e.chain().focus().insertTable({ rows: gridRows.value, cols: gridCols.value, withHeaderRow: true }).run();
+		tableMenuOpen.value = false;
+	};
+	const tableActions = computed(() => {
+		const e = editor.value;
+		if (!e) return [];
+		return [
+			{ label: "Row above", icon: "i-lucide-arrow-up", run: () => e.chain().focus().addRowBefore().run() },
+			{ label: "Row below", icon: "i-lucide-arrow-down", run: () => e.chain().focus().addRowAfter().run() },
+			{ label: "Col left", icon: "i-lucide-arrow-left", run: () => e.chain().focus().addColumnBefore().run() },
+			{ label: "Col right", icon: "i-lucide-arrow-right", run: () => e.chain().focus().addColumnAfter().run() },
+			{ label: "Header row", icon: "i-lucide-heading", run: () => e.chain().focus().toggleHeaderRow().run() },
+			{ label: "Merge/split", icon: "i-lucide-table-cells-merge", run: () => e.chain().focus().mergeOrSplit().run() },
+			{ label: "Del row", icon: "i-lucide-trash", danger: true, run: () => e.chain().focus().deleteRow().run() },
+			{ label: "Del col", icon: "i-lucide-trash", danger: true, run: () => e.chain().focus().deleteColumn().run() },
+			{ label: "Del table", icon: "i-lucide-trash-2", danger: true, run: () => e.chain().focus().deleteTable().run() }
+		];
+	});
+
 	// Expose the underlying TipTap instance (parent / test harness access).
 	defineExpose({ editor });
 </script>
@@ -257,5 +357,45 @@
 }
 .letter-body :deep(p) {
 	margin: 0.3rem 0;
+}
+/* Tables (only present when the `tables` prop is on). */
+.letter-body :deep(table) {
+	border-collapse: collapse;
+	table-layout: fixed;
+	width: 100%;
+	margin: 0.6rem 0;
+}
+.letter-body :deep(td),
+.letter-body :deep(th) {
+	border: 1px solid var(--ui-border-accented);
+	padding: 4px 8px;
+	vertical-align: top;
+	position: relative;
+	min-width: 2rem;
+}
+.letter-body :deep(th) {
+	background: var(--ui-bg-elevated);
+	font-weight: 600;
+	text-align: left;
+}
+.letter-body :deep(.selectedCell::after) {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: var(--ui-primary);
+	opacity: 0.12;
+	pointer-events: none;
+}
+.letter-body :deep(.column-resize-handle) {
+	position: absolute;
+	right: -2px;
+	top: 0;
+	bottom: 0;
+	width: 3px;
+	background: var(--ui-primary);
+	cursor: col-resize;
+}
+.letter-body :deep(.tableWrapper) {
+	overflow-x: auto;
 }
 </style>

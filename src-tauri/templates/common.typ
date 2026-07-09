@@ -253,6 +253,43 @@
       list(..b.items.map(items => render-blocks(items, default-align: default-align)))
     } else if b.kind == "ordered_list" {
       enum(..b.items.map(items => render-blocks(items, default-align: default-align)))
+    } else if b.kind == "table" {
+      // Rich-text table. Inlined (not a separate helper) because it needs to
+      // call render-blocks for each cell's content, and Typst only lets a
+      // function reference names defined before it — self-recursion works,
+      // mutual recursion between two module functions does not.
+      //
+      // Column count = the widest row's total colspan (TipTap tables are
+      // rectangular). Cells arrive row-major with spans on the anchor cell
+      // only — the model Typst's table.cell(colspan/rowspan) uses — so they
+      // flow into place. Header cells get a light fill + bold; borders + inset
+      // match the items table for consistency.
+      let colcount = 1
+      for row in b.rows {
+        let w = 0
+        for cell in row { w += cell.at("colspan", default: 1) }
+        if w > colcount { colcount = w }
+      }
+      let cells = ()
+      for row in b.rows {
+        for cell in row {
+          let is-header = cell.at("header", default: false)
+          let body = render-blocks(cell.blocks)
+          if is-header { body = text(weight: "bold", body) }
+          cells.push(table.cell(
+            colspan: cell.at("colspan", default: 1),
+            rowspan: cell.at("rowspan", default: 1),
+            fill: if is-header { rgb("#fafafa") } else { none },
+            body,
+          ))
+        }
+      }
+      block(width: 100%, above: 4pt, below: 10pt, table(
+        columns: colcount,
+        stroke: 0.5pt + rgb("#e5e7eb"),
+        inset: (x: 7pt, y: 5pt),
+        ..cells,
+      ))
     }
   }
 }

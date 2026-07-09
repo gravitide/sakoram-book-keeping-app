@@ -61,7 +61,7 @@
 				<!-- Body has no header — it's obviously the letter body. Plain card
 					keeps the page rhythm without a redundant title. -->
 				<UCard>
-					<RichTextEditor v-model="form.body_json" />
+					<RichTextEditor v-model="form.body_json" tables />
 				</UCard>
 
 				<SectionCard title="Signature" subtitle="The sign-off printed below a signature line at the bottom of the letter." icon="i-lucide-pen-line">

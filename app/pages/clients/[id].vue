@@ -205,7 +205,7 @@
 					subtitle="Visible only to you — never appears on a client-facing PDF."
 					class="lg:col-span-2"
 				>
-					<RichTextEditor v-model="form.notes" />
+					<RichTextEditor v-model="form.notes" tables />
 				</SectionCard>
 			</div>
 

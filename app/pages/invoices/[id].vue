@@ -354,7 +354,7 @@
 				</template>
 				<div class="grid grid-cols-1 gap-4">
 					<UFormField label="Notes" hint="Rich text shown below the items table on the PDF.">
-						<RichTextEditor v-model="formNotes" :editable="editable" :min-height="140" />
+						<RichTextEditor v-model="formNotes" :editable="editable" :min-height="140" tables />
 					</UFormField>
 					<UFormField label="Terms" hint="Optional — kept for your reference; not printed on the PDF.">
 						<RichTextEditor v-model="formTerms" :editable="editable" :min-height="100" />
