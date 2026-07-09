@@ -205,18 +205,59 @@
   ]
 ]
 
+// --- rich-text rendering ----------------------------------------------
+// Shared with letter.typ (which imports render-blocks from here). The block
+// tree arrives pre-normalised from the JS side (app/lib/rich-text.ts /
+// letter-body.ts): paragraph / heading / bullet_list / ordered_list nodes,
+// each carrying inline runs with bold/italic/underline + optional colour/size
+// and a per-block alignment. Text stays plain strings throughout, so the
+// template never builds Typst source from user input (no injection risk).
+#let render-run(r) = {
+  let c = [#r.text]
+  let ts = (:)
+  let col = r.at("color", default: none)
+  let sz = r.at("fontSizePt", default: none)
+  if col != none { ts.insert("fill", rgb(col)) }
+  if sz != none { ts.insert("size", sz * 1pt) }
+  if ts.len() > 0 { c = text(..ts)[#c] }
+  if r.at("underline", default: false) { c = underline(c) }
+  if r.at("italic", default: false) { c = emph(c) }
+  if r.at("bold", default: false) { c = strong(c) }
+  c
+}
+#let render-runs(runs) = { for r in runs { render-run(r) } }
+#let apply-align(a, body) = {
+  if a == "center" { align(center, body) }
+  else if a == "right" { align(right, body) }
+  else if a == "justify" { par(justify: true, body) }
+  else { body }
+}
+#let render-blocks(blocks) = {
+  for b in blocks {
+    if b.kind == "paragraph" {
+      block(width: 100%, below: 8pt, apply-align(b.at("align", default: none), render-runs(b.runs)))
+    } else if b.kind == "heading" {
+      let lvl = b.at("level", default: 2)
+      let hsize = if lvl == 1 { 15pt } else if lvl == 2 { 13pt } else { 11.5pt }
+      block(width: 100%, above: 10pt, below: 6pt, apply-align(b.at("align", default: none), text(weight: "bold", size: hsize, render-runs(b.runs))))
+    } else if b.kind == "bullet_list" {
+      list(..b.items.map(items => render-blocks(items)))
+    } else if b.kind == "ordered_list" {
+      enum(..b.items.map(items => render-blocks(items)))
+    }
+  }
+}
+
 // --- notes -------------------------------------------------------------
+// Rich-text notes. `notes_blocks` is the normalised block tree; `notes` is the
+// raw stored string, kept only so we can cheaply skip the whole block when the
+// field is empty.
 #let notes-block(data) = if data.notes != none and data.notes != "" [
   #v(14pt)
   #block(breakable: false)[
-    #text(weight: "bold")[NOTES:] \
-    #for (i, para) in data.notes_paragraphs.enumerate() [
-      #if i > 0 [#v(8pt)]
-      #for (j, ln) in para.split("\n").enumerate() [
-        #if j > 0 [#linebreak()]
-        #ln
-      ]
-    ]
+    #text(weight: "bold")[NOTES:]
+    #v(4pt)
+    #render-blocks(data.notes_blocks)
   ]
 ]
 

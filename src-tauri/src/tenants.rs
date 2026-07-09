@@ -100,6 +100,7 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(43, "letter signature richtext", include_str!("../migrations/0043_letter_signature_richtext.sql")),
 	(44, "letter preprinted bottom margin", include_str!("../migrations/0044_letter_preprinted_bottom_margin.sql")),
 	(45, "letter signatures", include_str!("../migrations/0045_letter_signatures.sql")),
+	(46, "quote include bank toggle", include_str!("../migrations/0046_quote_include_bank.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

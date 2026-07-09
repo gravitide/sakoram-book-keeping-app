@@ -287,12 +287,7 @@
 						annotate historical credit notes without re-opening
 						them as drafts. Matches the notes-only-after-issue
 						exception used on the other detail pages. -->
-					<UTextarea
-						v-model="formNotes"
-						:rows="4"
-						placeholder="Optional internal note. Printed on the PDF if not blank."
-						class="w-full"
-					/>
+					<RichTextEditor v-model="formNotes" :min-height="120" />
 				</UCard>
 			</div>
 		</div>

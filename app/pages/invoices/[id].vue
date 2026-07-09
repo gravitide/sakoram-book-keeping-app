@@ -353,11 +353,11 @@
 					</div>
 				</template>
 				<div class="grid grid-cols-1 gap-4">
-					<UFormField label="Notes">
-						<UTextarea v-model="formNotes" :rows="6" :disabled="!editable" />
+					<UFormField label="Notes" hint="Rich text shown below the items table on the PDF.">
+						<RichTextEditor v-model="formNotes" :editable="editable" :min-height="140" />
 					</UFormField>
-					<UFormField label="Terms">
-						<UTextarea v-model="formTerms" :rows="3" :disabled="!editable" />
+					<UFormField label="Terms" hint="Optional — kept for your reference; not printed on the PDF.">
+						<RichTextEditor v-model="formTerms" :editable="editable" :min-height="100" />
 					</UFormField>
 					<UFormField label="Prepared by">
 						<UInput v-model="formPreparedBy" :disabled="!editable" />

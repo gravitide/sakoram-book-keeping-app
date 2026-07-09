@@ -14,7 +14,7 @@
 // ordered_list blocks whose inline runs carry bold/italic/underline flags.
 // Text is always plain JSON string values — never interpreted as Typst markup.
 
-#import "common.typ": footer-content
+#import "common.typ": footer-content, render-blocks
 
 #let data = json("data.json")
 
@@ -45,49 +45,6 @@
     ]
   },
 )
-
-// --- inline run + block rendering ----------------------------------------
-#let render-run(r) = {
-  let c = [#r.text]
-  // Colour + size come from the editor's TextStyle mark. Apply them via a
-  // single text() with only the set args (spread a dict so unset props inherit).
-  let ts = (:)
-  let col = r.at("color", default: none)
-  let sz = r.at("fontSizePt", default: none)
-  if col != none { ts.insert("fill", rgb(col)) }
-  if sz != none { ts.insert("size", sz * 1pt) }
-  if ts.len() > 0 { c = text(..ts)[#c] }
-  if r.at("underline", default: false) { c = underline(c) }
-  if r.at("italic", default: false) { c = emph(c) }
-  if r.at("bold", default: false) { c = strong(c) }
-  c
-}
-#let render-runs(runs) = { for r in runs { render-run(r) } }
-// Apply a paragraph/heading alignment ("center"/"right"/"justify"); left/none
-// falls through unchanged (the natural default).
-#let apply-align(a, body) = {
-  if a == "center" { align(center, body) }
-  else if a == "right" { align(right, body) }
-  else if a == "justify" { par(justify: true, body) }
-  else { body }
-}
-#let render-blocks(blocks) = {
-  for b in blocks {
-    if b.kind == "paragraph" {
-      // width: 100% so the block spans the page — otherwise it shrinks to the
-      // text width and align(center/right) has no room to move the line.
-      block(width: 100%, below: 8pt, apply-align(b.at("align", default: none), render-runs(b.runs)))
-    } else if b.kind == "heading" {
-      let lvl = b.at("level", default: 2)
-      let hsize = if lvl == 1 { 15pt } else if lvl == 2 { 13pt } else { 11.5pt }
-      block(width: 100%, above: 10pt, below: 6pt, apply-align(b.at("align", default: none), text(weight: "bold", size: hsize, render-runs(b.runs))))
-    } else if b.kind == "bullet_list" {
-      list(..b.items.map(items => render-blocks(items)))
-    } else if b.kind == "ordered_list" {
-      enum(..b.items.map(items => render-blocks(items)))
-    }
-  }
-}
 
 // --- letterhead header (skipped for pre-printed paper) -------------------
 // Matches doc-classic: logo top-right at 12mm (or business-name wordmark),

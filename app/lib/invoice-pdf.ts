@@ -10,6 +10,7 @@ import type { BankSnapshot, ClientSnapshot } from "~/stores/quotes";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR, formatQty, formatRate } from "~/lib/money";
 import { resolveTemplateKey } from "~/lib/pdf-templates";
+import { richTextToBlocks } from "~/lib/rich-text";
 import { pdfThemeHex } from "~/lib/theme";
 
 export interface InvoicePdfArgs {
@@ -82,7 +83,7 @@ export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, pa
 		pricing_mode: inv.pricing_mode,
 		has_vat: hasVat,
 		notes: inv.notes ?? "",
-		notes_paragraphs: (inv.notes ?? "").split(/\n\s*\n/).filter((p) => p.trim().length > 0),
+		notes_blocks: richTextToBlocks(inv.notes),
 		prepared_by: inv.prepared_by ?? "",
 		// Show paid/balance only when something has been paid; null
 		// suppresses the row entirely on a freshly-issued invoice.

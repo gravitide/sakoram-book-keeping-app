@@ -210,7 +210,13 @@
 						<UFormField label="Valid until">
 							<DateField v-model="formValidUntil" :min-value="formIssueDate || undefined" :disabled="!editable" />
 						</UFormField>
-						<UFormField label="Bank account" class="col-span-2">
+						<UFormField label="Bank details" class="col-span-2">
+							<div class="flex items-center gap-2">
+								<USwitch v-model="formIncludeBank" :disabled="!editable" />
+								<span class="text-sm text-(--ui-text-muted)">Print payment / bank details on this quote</span>
+							</div>
+						</UFormField>
+						<UFormField v-if="formIncludeBank" label="Bank account" class="col-span-2">
 							<USelect
 								v-model="formBankId"
 								:items="bankPickerOptions"
@@ -352,11 +358,11 @@
 					</div>
 				</template>
 				<div class="grid grid-cols-1 gap-4">
-					<UFormField label="Notes" hint="Free text shown below the items table on the PDF.">
-						<UTextarea v-model="formNotes" :rows="6" :disabled="!editable" />
+					<UFormField label="Notes" hint="Rich text shown below the items table on the PDF.">
+						<RichTextEditor v-model="formNotes" :editable="editable" :min-height="140" />
 					</UFormField>
-					<UFormField label="Terms" hint="Optional — if you keep terms separate from notes.">
-						<UTextarea v-model="formTerms" :rows="3" :disabled="!editable" />
+					<UFormField label="Terms" hint="Optional — kept for your reference; not printed on the PDF.">
+						<RichTextEditor v-model="formTerms" :editable="editable" :min-height="100" />
 					</UFormField>
 					<UFormField label="Prepared by" hint="Signature line at the bottom of the PDF.">
 						<UInput v-model="formPreparedBy" placeholder="e.g. Your name" :disabled="!editable" />
@@ -608,6 +614,9 @@
 	const formTerms = ref("");
 	const formPreparedBy = ref("");
 	const formBankId = ref<number | null>(null);
+	// Opt-in bank/payment block on the PDF (default off). When off, the bank
+	// picker is hidden and no payment details print regardless of formBankId.
+	const formIncludeBank = ref(false);
 	// PDF big-header override. Empty = "QUOTATION" default in the PDF
 	// builder (see app/lib/quote-pdf.ts). Stored as-is; the builder
 	// upper-cases at render time.
@@ -666,6 +675,7 @@
 		formTerms.value = row.terms ?? "";
 		formPreparedBy.value = row.prepared_by ?? "";
 		formBankId.value = row.business_bank_id;
+		formIncludeBank.value = row.include_bank_details === 1;
 		formTitleOverride.value = row.title_override ?? "";
 		vatRatePct.value = row.vat_rate_basis_points / 100;
 		vatEnabled.value = vatRatePct.value > 0;
@@ -691,7 +701,7 @@
 	// Mark dirty when any directly v-model'd form field changes. Registered
 	// after the initial hydrate; hydrating-flag guards re-hydrate paths.
 	watch(
-		[formProjectTitle, formIssueDate, formValidUntil, formNotes, formTerms, formPreparedBy, formBankId, formTitleOverride, vatRatePct, bundleSubtotalCents],
+		[formProjectTitle, formIssueDate, formValidUntil, formNotes, formTerms, formPreparedBy, formBankId, formIncludeBank, formTitleOverride, vatRatePct, bundleSubtotalCents],
 		() => {
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
@@ -815,6 +825,7 @@
 				prepared_by: formPreparedBy.value || null,
 				client_snapshot: quote.value.client_snapshot,
 				business_bank_id: formBankId.value,
+				include_bank_details: formIncludeBank.value ? 1 : 0,
 				bank_details_snapshot: bankSnapshot,
 				title_override: formTitleOverride.value.trim() || null
 			});

@@ -9,6 +9,7 @@ import type { BankSnapshot, ClientSnapshot, QuoteLineRow, QuoteRow } from "~/sto
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR, formatQty, formatRate } from "~/lib/money";
 import { resolveTemplateKey } from "~/lib/pdf-templates";
+import { richTextToBlocks } from "~/lib/rich-text";
 import { pdfThemeHex } from "~/lib/theme";
 
 export interface QuotePdfArgs {
@@ -79,7 +80,7 @@ export const buildQuotePdfPayload = ({ row: q, lines, settings, currency, entitl
 		pricing_mode: q.pricing_mode,
 		has_vat: hasVat,
 		notes: q.notes ?? "",
-		notes_paragraphs: (q.notes ?? "").split(/\n\s*\n/).filter((p) => p.trim().length > 0),
+		notes_blocks: richTextToBlocks(q.notes),
 		prepared_by: q.prepared_by ?? "",
 		// Quotes don't have payments — null suppresses the paid/balance row.
 		paid_cents: null,
@@ -91,7 +92,9 @@ export const buildQuotePdfPayload = ({ row: q, lines, settings, currency, entitl
 		address_line1: settings?.address_line1 ?? null,
 		city: settings?.city ?? null,
 		logo_path: settings?.pdf_header_logo_path ?? null,
-		bank,
+		// Bank block is opt-in per quote (migration 0046). Off → no payment
+		// details on the PDF regardless of which bank was snapshotted.
+		bank: q.include_bank_details ? bank : null,
 		lines: lines.map((l) => ({
 			item_label: l.item_label,
 			description: l.description,
