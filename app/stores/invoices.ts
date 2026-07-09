@@ -429,9 +429,12 @@ export const useInvoicesStore = defineStore("invoices", () => {
 
 	// Convert an accepted quote into a draft invoice. Clones header + lines.
 	// The caller then transitions the source quote's status to 'converted'.
+	// `sequence` lets the caller pick the invoice number (gap-fill), matching
+	// createDraft; omitted → next auto-allocated number.
 	const createFromQuote = async (
 		quote: QuoteRow,
-		quoteLines: QuoteLineRow[]
+		quoteLines: QuoteLineRow[],
+		sequence?: number
 	): Promise<number> => {
 		const settingsStore = useSettingsStore();
 		await settingsStore.ensureLoaded();
@@ -440,7 +443,9 @@ export const useInvoicesStore = defineStore("invoices", () => {
 
 		const issue = todayISO();
 		const due = addDays(issue, settings.default_payment_terms_days);
-		const allocation = await allocateDocumentNumber("invoice", issue);
+		const allocation = sequence !== undefined
+			? await allocateSpecificDocumentNumber("invoice", issue, sequence)
+			: await allocateDocumentNumber("invoice", issue);
 
 		// Inherit the source quote's chosen bank, falling back to the
 		// business default if the quote's bank has been deleted. Snapshot
