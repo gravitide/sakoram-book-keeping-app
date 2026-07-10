@@ -18,12 +18,15 @@
 					class="px-0"
 				/>
 				<template #content>
-					<UCalendar
-						:model-value="cdRange"
-						range
-						class="p-2"
-						@update:model-value="onUpdate"
-					/>
+					<div class="p-2">
+						<CalendarMonthYearNav v-model="viewDate" />
+						<UCalendar
+							v-model:placeholder="viewDate"
+							:model-value="cdRange"
+							range
+							@update:model-value="onUpdate"
+						/>
+					</div>
 				</template>
 			</UPopover>
 		</template>
@@ -39,7 +42,7 @@
 // and UCalendar consume in `range` mode.
 
 	import type { CalendarDate, DateValue } from "@internationalized/date";
-	import { parseDate } from "@internationalized/date";
+	import { getLocalTimeZone, parseDate, today } from "@internationalized/date";
 
 	interface Props {
 		from: string | null
@@ -68,6 +71,13 @@
 		start: isoToCalendarDate(props.from),
 		end: isoToCalendarDate(props.to)
 	}));
+
+	// Month shown in the calendar, driven by the month/year dropdowns + arrows.
+	// Opens on the range start (or today when empty); re-syncs when start moves.
+	const viewDate = ref<CalendarDate>(cdRange.value.start ?? today(getLocalTimeZone()));
+	watch(() => cdRange.value.start, (v) => {
+		if (v) viewDate.value = v;
+	});
 
 	// UInputDate range mode keeps showing the last value even when given
 	// `{start: null, end: null}` — its internal segment buffer doesn't

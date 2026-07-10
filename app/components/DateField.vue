@@ -21,14 +21,17 @@
 					class="px-0"
 				/>
 				<template #content>
-					<UCalendar
-						:model-value="cdValue"
-						:min-value="cdMin"
-						:max-value="cdMax"
-						:is-date-unavailable="isDateUnavailable"
-						class="p-2"
-						@update:model-value="onUpdate"
-					/>
+					<div class="p-2">
+						<CalendarMonthYearNav v-model="viewDate" />
+						<UCalendar
+							v-model:placeholder="viewDate"
+							:model-value="cdValue"
+							:min-value="cdMin"
+							:max-value="cdMax"
+							:is-date-unavailable="isDateUnavailable"
+							@update:model-value="onUpdate"
+						/>
+					</div>
 				</template>
 			</UPopover>
 		</template>
@@ -49,7 +52,7 @@
 
 	import type { CalendarDate, DateValue } from "@internationalized/date";
 	import type { ComponentPublicInstance } from "vue";
-	import { parseDate } from "@internationalized/date";
+	import { getLocalTimeZone, parseDate, today } from "@internationalized/date";
 
 	interface Props {
 		modelValue: string | null
@@ -81,6 +84,14 @@
 	const cdValue = computed<CalendarDate | null>(() => isoToCalendarDate(props.modelValue));
 	const cdMin = computed<CalendarDate | undefined>(() => isoToCalendarDate(props.minValue ?? null) ?? undefined);
 	const cdMax = computed<CalendarDate | undefined>(() => isoToCalendarDate(props.maxValue ?? null) ?? undefined);
+
+	// The month the calendar is showing, driven by the month/year dropdowns and
+	// the calendar's own arrows (`v-model:placeholder`). Opens on the selected
+	// date, or today when empty; re-syncs when the selected value changes.
+	const viewDate = ref<CalendarDate>(cdValue.value ?? today(getLocalTimeZone()));
+	watch(cdValue, (v) => {
+		if (v) viewDate.value = v;
+	});
 
 	// Reka UI's calendar renders strikethrough on dates this returns true
 	// for. Without it, dates outside [min, max] are only greyed-out — the
