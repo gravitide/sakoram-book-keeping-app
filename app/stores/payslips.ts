@@ -19,7 +19,7 @@ import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { derivePayslipStatus, payslipDerivedFrom } from "~/lib/derived-status";
 import { formatRate, sumCents } from "~/lib/money";
-import { allocateDocumentNumber, allocateSpecificDocumentNumber } from "~/lib/numbering";
+import { allocateDocumentNumber, allocateSpecificDocumentNumber, computeFiscalYear } from "~/lib/numbering";
 import { computePaye, computeStatutory } from "~/lib/statutory";
 import { useSettingsStore } from "~/stores/settings";
 import { useVouchersStore } from "~/stores/vouchers";
@@ -308,11 +308,14 @@ export const usePayslipsStore = defineStore("payslips", () => {
 		sequence?: number
 	}, opts: { reload?: boolean } = {}): Promise<number> => {
 		const allocation = input.sequence !== undefined
-			? await allocateSpecificDocumentNumber("payslip", input.payDate, input.sequence)
-			: await allocateDocumentNumber("payslip", input.payDate);
+			? await allocateSpecificDocumentNumber("payslip", input.sequence)
+			: await allocateDocumentNumber("payslip");
 		const snap = buildEmployeeSnapshot(input.employee);
 		const settings = useSettingsStore();
 		await settings.ensureLoaded();
+		// Payslip numbers are year-less now, but payroll still stamps a fiscal
+		// year on each payslip (annual grouping), derived from the pay date.
+		const fiscalYear = computeFiscalYear(input.payDate, settings.settings?.fiscal_year_start_month ?? 1);
 		const statutoryOn = (settings.settings?.statutory_auto_compute ?? 1) === 1;
 		const basic = input.employee.basic_salary_cents;
 		const stat = statutoryOn
@@ -352,7 +355,7 @@ export const usePayslipsStore = defineStore("payslips", () => {
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)`,
 			[
 				allocation.number,
-				allocation.fiscalYear,
+				fiscalYear,
 				input.employee.id,
 				snap,
 				input.employee.full_name,

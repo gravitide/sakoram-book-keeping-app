@@ -88,11 +88,17 @@ data.
    Payslips follow the same rule — see `app/pages/payslips/[id].vue`'s
    locked-form path.
 
-6. **Document numbering is atomic and gapless per (type, fiscal_year)**.
-   Implemented as `INSERT ... ON CONFLICT ... DO UPDATE ... RETURNING`
-   in `app/lib/numbering.ts`. Do NOT replace this with read-then-write
-   logic — see "Connection pool caveat" below. The `DocumentType`
-   union covers `quote | invoice | bill | voucher | payslip`.
+6. **Document numbering is atomic and continuous per type** — one
+   ever-incrementing counter per `document_type`, NO fiscal year in the
+   number (migration 0047: `QUO-2026-0004` → `QUO-0004`). Implemented as
+   `INSERT ... ON CONFLICT ... DO UPDATE ... RETURNING` in
+   `app/lib/numbering.ts`. Do NOT replace this with read-then-write logic
+   — see "Connection pool caveat" below. The `DocumentType` union covers
+   `quote | invoice | bill | voucher | payslip | credit_note | letter`.
+   The issue date no longer affects the number (so converting a quote to
+   an invoice just takes the next INV number; there's no year jump and no
+   back-date "renumber" step). `computeFiscalYear` still exists but only
+   for stamping a fiscal year on payslips (payroll grouping), not numbers.
 
 7. **Status transitions live in the store, not free-form**. See
    `STATUS_TRANSITIONS` maps in each store. The DB also enforces via
@@ -1092,8 +1098,9 @@ See `src-tauri/migrations/` for the source of truth. High-level:
 - `bill_categories` — small managed lookup (`name` UNIQUE, `color`
   swatch name, `icon` Lucide name, archived flag). Powers
   `CategoryPicker` on the bill page.
-- `document_counters` — `(document_type, fiscal_year)` → `last_number`,
-  for atomic gapless allocation.
+- `document_counters` — `document_type` → `last_number` (one row per
+  type, no fiscal year since migration 0047), for atomic continuous
+  allocation.
 - `quotes` + `quote_lines` — `pricing_mode` ∈ {bundle, itemized},
   `status` FSM, `client_snapshot` (JSON), `bank_details_snapshot`
   (JSON, frozen at issue), `converted_invoice_id` link.
@@ -1266,6 +1273,8 @@ dynamically — adding a column to a migration auto-flows into export.
 0043_letter_signature_richtext.sql      ← replace the structured signature fields with a single `letters.signature_json` (TipTap rich text, same shape as body_json) — the whole sign-off is now free-form. DROPs signatory_name/title/company/email/phone via `ALTER … DROP COLUMN` (rows preserved; old values discarded, pre-1.0). Rendered below a signature line in `letter.typ` via the shared `render-blocks`. SCHEMA_VERSION → 43.
 0044_letter_preprinted_bottom_margin.sql ← `company_settings.letter_preprinted_bottom_margin_mm` (INTEGER, default 20) — pre-printed mode now reserves blank space at the bottom (physical footer band) as well as the top. `letter.typ` reads both; `/settings/letters` shows both inputs + a live A4 preview. SCHEMA_VERSION → 44.
 0045_letter_signatures.sql              ← `letter_signatures` table (reusable rich-text sign-offs, name + body_json + is_default). Applying one COPIES its body_json into the letter's own signature_json (no FK — letters stay self-contained); at most one is_default (atomic CASE-WHEN in the store, like business_banks) pre-fills new letters via `useLettersStore.create`. Managed on `/settings/letters` (Signatures section + LetterSignatureFormModal); applied on the letter via a "Use a saved signature" dropdown. SCHEMA_VERSION → 45.
+0046_quote_include_bank.sql             ← `quotes.include_bank_details` (INTEGER, default 0) — opt-in flag for printing the payment/bank block on the quote PDF (off by default; quotes are often sent before payment terms are agreed). SCHEMA_VERSION → 46.
+0047_continuous_document_numbering.sql  ← drop the fiscal-year scope from document numbering. `document_counters` is dropped + recreated keyed on `document_type` alone (was `(document_type, fiscal_year)`); numbers go `{PREFIX}-{YYYY}-{NNNN}` → `{PREFIX}-{NNNN}` (QUO-0004). Numbering is now date-independent — no year reset, no year jump on quote→invoice conversion, no back-date renumber. `numbering.ts` dropped `parseDocumentNumber` + `renumberForIssueDate`; `formatDocumentNumber(type, seq)` lost its fiscalYear arg; `useDocumentNumber` dropped its `issueDate` option. Old YYYY-format numbers on existing docs keep their stored strings (pre-1.0, disposable). SCHEMA_VERSION → 47.
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,

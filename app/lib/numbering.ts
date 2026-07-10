@@ -1,9 +1,9 @@
-// Atomic, gapless document number allocation.
+// Atomic document number allocation — continuous per type.
 //
-// Sri Lankan tax law requires invoice numbers be gapless within a fiscal year.
-// We hold a counter row per (document_type, fiscal_year) and increment it
-// inside a transaction. The visible number is `{PREFIX}-{YYYY}-{NNNN}` —
-// never the row id.
+// One counter row per `document_type`, incremented atomically. The visible
+// number is `{PREFIX}-{NNNN}` (e.g. QUO-0004, INV-0032) — no fiscal year, and
+// never the row id. The sequence never resets, so converting a quote to an
+// invoice just takes the next invoice number regardless of dates.
 //
 // `allocateDocumentNumber` is the ONLY path that mints a number. Once a
 // document is issued the number is immutable.
@@ -36,12 +36,13 @@ const TABLE_FOR_TYPE: Record<DocumentType, string> = {
 	letter: "letters"
 };
 
-// Compute the fiscal year for a given ISO date string and the configured
-// fiscal-year-start month (1 = Jan, 4 = Apr).
+// Fiscal year for an ISO date + the configured start month (1 = Jan, 4 = Apr).
 //
-// Rule: if the issue month is >= start month, the FY label is the issue year.
-// Otherwise it's the previous calendar year. (i.e. FY 2026 starting in Apr
-// runs Apr 2026 → Mar 2027.)
+// No longer part of document NUMBERING (numbers are year-less now), but payroll
+// still stamps a fiscal year on each payslip for annual grouping, so the helper
+// stays. Rule: if the issue month is >= start month, the FY label is the issue
+// year; otherwise the previous calendar year (FY 2026 starting Apr runs
+// Apr 2026 → Mar 2027).
 export const computeFiscalYear = (
 	issueDate: string,
 	fiscalYearStartMonth: number
@@ -60,28 +61,16 @@ export const computeFiscalYear = (
 
 export const formatDocumentNumber = (
 	type: DocumentType,
-	fiscalYear: number,
 	seq: number
 ): string => {
 	if (!Number.isInteger(seq) || seq < 1) {
 		throw new Error(`formatDocumentNumber: bad sequence ${seq}`);
 	}
-	return `${PREFIX[type]}-${fiscalYear}-${seq.toString().padStart(4, "0")}`;
-};
-
-// Parse a formatted number ("QUO-2026-0003") back into its fiscal year +
-// sequence. Returns null for anything that doesn't match the shape.
-export const parseDocumentNumber = (
-	number: string
-): { fiscalYear: number, sequence: number } | null => {
-	const m = /^[A-Z]+-(\d{4})-(\d+)$/.exec(number);
-	if (!m) return null;
-	return { fiscalYear: Number(m[1]), sequence: Number(m[2]) };
+	return `${PREFIX[type]}-${seq.toString().padStart(4, "0")}`;
 };
 
 export interface AllocationResult {
 	number: string
-	fiscalYear: number
 	sequence: number
 }
 
@@ -93,79 +82,57 @@ export interface AllocationResult {
 // errors. Instead we lean on SQLite's INSERT...ON CONFLICT...DO UPDATE...
 // RETURNING form, which is intrinsically atomic at the storage layer.
 //
-// First call for a (type, fy) pair → inserts row with last_number = 1.
+// First call for a type → inserts row with last_number = 1.
 // Subsequent calls → upserts, incrementing last_number by 1.
-// In both cases RETURNING gives us the new sequence number in one shot.
 export const allocateDocumentNumber = async (
-	type: DocumentType,
-	issueDate: string
+	type: DocumentType
 ): Promise<AllocationResult> => {
-	const settings = await selectOne<{ fiscal_year_start_month: number }>(
-		"SELECT fiscal_year_start_month FROM company_settings WHERE id = 1"
-	);
-	const startMonth = settings?.fiscal_year_start_month ?? 1;
-	const fy = computeFiscalYear(issueDate, startMonth);
-
 	const rows = await select<{ last_number: number }>(
-		`INSERT INTO document_counters (document_type, fiscal_year, last_number)
-		 VALUES (?, ?, 1)
-		 ON CONFLICT(document_type, fiscal_year)
+		`INSERT INTO document_counters (document_type, last_number)
+		 VALUES (?, 1)
+		 ON CONFLICT(document_type)
 		 DO UPDATE SET last_number = document_counters.last_number + 1
 		 RETURNING last_number`,
-		[type, fy]
+		[type]
 	);
 	const row = rows[0];
 	if (!row) throw new Error("allocateDocumentNumber: counter row missing");
 	return {
-		number: formatDocumentNumber(type, fy, row.last_number),
-		fiscalYear: fy,
+		number: formatDocumentNumber(type, row.last_number),
 		sequence: row.last_number
 	};
 };
 
-// Read-only — returns what the next auto-allocated number would be for
-// (type, fy). Doesn't touch the counter. Used by the New modals to
-// preview the default number so the user can either accept it or
-// override it to fill a gap left by a deletion.
+// Read-only — returns what the next auto-allocated number would be for `type`.
+// Doesn't touch the counter. Used by the New modals to preview the default
+// number so the user can either accept it or override it to fill a gap left by
+// a deletion.
 export const peekNextSequence = async (
-	type: DocumentType,
-	issueDate: string
+	type: DocumentType
 ): Promise<AllocationResult> => {
-	const settings = await selectOne<{ fiscal_year_start_month: number }>(
-		"SELECT fiscal_year_start_month FROM company_settings WHERE id = 1"
-	);
-	const startMonth = settings?.fiscal_year_start_month ?? 1;
-	const fy = computeFiscalYear(issueDate, startMonth);
 	const row = await selectOne<{ last_number: number }>(
-		"SELECT last_number FROM document_counters WHERE document_type = ? AND fiscal_year = ?",
-		[type, fy]
+		"SELECT last_number FROM document_counters WHERE document_type = ?",
+		[type]
 	);
 	const next = (row?.last_number ?? 0) + 1;
 	return {
-		number: formatDocumentNumber(type, fy, next),
-		fiscalYear: fy,
+		number: formatDocumentNumber(type, next),
 		sequence: next
 	};
 };
 
-// Is the (type, fy, sequence) free of any existing document?
+// Is the (type, sequence) free of any existing document?
 //
-// Numbers are stored on the document tables as the full formatted
-// string ("QUO-2026-0003"), so we compose the candidate and look it up
-// directly. Used as a pre-flight check from modal inputs so the user
-// gets a "this number is already in use" warning before submit.
+// Numbers are stored on the document tables as the full formatted string
+// ("QUO-0003"), so we compose the candidate and look it up directly. Used as a
+// pre-flight check from modal inputs so the user gets a "this number is already
+// in use" warning before submit.
 export const isDocumentNumberAvailable = async (
 	type: DocumentType,
-	issueDate: string,
 	sequence: number
 ): Promise<boolean> => {
 	if (!Number.isInteger(sequence) || sequence < 1) return false;
-	const settings = await selectOne<{ fiscal_year_start_month: number }>(
-		"SELECT fiscal_year_start_month FROM company_settings WHERE id = 1"
-	);
-	const startMonth = settings?.fiscal_year_start_month ?? 1;
-	const fy = computeFiscalYear(issueDate, startMonth);
-	const formatted = formatDocumentNumber(type, fy, sequence);
+	const formatted = formatDocumentNumber(type, sequence);
 	const table = TABLE_FOR_TYPE[type];
 	const existing = await selectOne<{ id: number }>(
 		`SELECT id FROM ${table} WHERE number = ? LIMIT 1`,
@@ -186,18 +153,12 @@ export const isDocumentNumberAvailable = async (
 // If that changes, fold the uniqueness check into a single statement.
 export const allocateSpecificDocumentNumber = async (
 	type: DocumentType,
-	issueDate: string,
 	sequence: number
 ): Promise<AllocationResult> => {
 	if (!Number.isInteger(sequence) || sequence < 1) {
 		throw new Error(`allocateSpecificDocumentNumber: bad sequence ${sequence}`);
 	}
-	const settings = await selectOne<{ fiscal_year_start_month: number }>(
-		"SELECT fiscal_year_start_month FROM company_settings WHERE id = 1"
-	);
-	const startMonth = settings?.fiscal_year_start_month ?? 1;
-	const fy = computeFiscalYear(issueDate, startMonth);
-	const formatted = formatDocumentNumber(type, fy, sequence);
+	const formatted = formatDocumentNumber(type, sequence);
 	const table = TABLE_FOR_TYPE[type];
 	const existing = await selectOne<{ id: number }>(
 		`SELECT id FROM ${table} WHERE number = ? LIMIT 1`,
@@ -207,51 +168,14 @@ export const allocateSpecificDocumentNumber = async (
 		throw new Error(`Number ${formatted} is already in use`);
 	}
 	await execute(
-		`INSERT INTO document_counters (document_type, fiscal_year, last_number)
-		 VALUES (?, ?, ?)
-		 ON CONFLICT(document_type, fiscal_year)
+		`INSERT INTO document_counters (document_type, last_number)
+		 VALUES (?, ?)
+		 ON CONFLICT(document_type)
 		 DO UPDATE SET last_number = MAX(document_counters.last_number, excluded.last_number)`,
-		[type, fy, sequence]
+		[type, sequence]
 	);
 	return {
 		number: formatted,
-		fiscalYear: fy,
 		sequence
 	};
-};
-
-// Re-derive a DRAFT's number when its issue date moves to a different fiscal
-// year (back-dating a historical document). Returns the new number — and
-// bumps the counter — or null when the year is unchanged (nothing to do).
-//
-// Collision-safe by construction: it first tries to KEEP the current sequence
-// in the target year via allocateSpecificDocumentNumber (which throws if that
-// exact number already exists); on that throw it falls back to the next free
-// number for the year. The `UNIQUE(number)` constraint on the document table
-// is the final backstop, so a duplicate can never be written.
-//
-// Callers must only use this on drafts — issued documents keep their number.
-export const renumberForIssueDate = async (
-	type: DocumentType,
-	currentNumber: string,
-	newIssueDate: string
-): Promise<string | null> => {
-	const settings = await selectOne<{ fiscal_year_start_month: number }>(
-		"SELECT fiscal_year_start_month FROM company_settings WHERE id = 1"
-	);
-	const startMonth = settings?.fiscal_year_start_month ?? 1;
-	const targetFy = computeFiscalYear(newIssueDate, startMonth);
-
-	const parsed = parseDocumentNumber(currentNumber);
-	if (parsed && parsed.fiscalYear === targetFy) return null;
-
-	// Try to keep the same sequence in the new year; fall back to next free.
-	if (parsed) {
-		try {
-			return (await allocateSpecificDocumentNumber(type, newIssueDate, parsed.sequence)).number;
-		} catch {
-			/* sequence already taken in the target year — take the next free */
-		}
-	}
-	return (await allocateDocumentNumber(type, newIssueDate)).number;
 };

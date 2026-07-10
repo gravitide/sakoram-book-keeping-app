@@ -510,7 +510,7 @@ export const useRecurringInvoicesStore = defineStore("recurring_invoices", () =>
 			total = computed.reduce((s, l) => s + l.line_total_cents, 0);
 		}
 
-		const allocation = await allocateDocumentNumber("invoice", issue);
+		const allocation = await allocateDocumentNumber("invoice");
 
 		// Generated invoices start as DRAFT. The user reviews them on
 		// /invoices before issuing. That's the safety net for edge

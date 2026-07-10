@@ -407,7 +407,6 @@
 	const enabled = ref(true);
 	const docNum = useDocumentNumber({
 		type: "voucher",
-		issueDate: voucherDate,
 		enabled
 	});
 

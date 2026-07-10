@@ -15,7 +15,7 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { computeLineTotals, sumCents } from "~/lib/money";
-import { allocateDocumentNumber, allocateSpecificDocumentNumber, renumberForIssueDate } from "~/lib/numbering";
+import { allocateDocumentNumber, allocateSpecificDocumentNumber } from "~/lib/numbering";
 import { useBusinessBanksStore } from "~/stores/business_banks";
 import { purgeDocumentAttachments } from "~/stores/document_attachments";
 import { useSettingsStore } from "~/stores/settings";
@@ -342,8 +342,8 @@ export const useQuotesStore = defineStore("quotes", () => {
 		const validUntil = addDaysSafe(issue, validity);
 
 		const allocation = input.sequence !== undefined
-			? await allocateSpecificDocumentNumber("quote", issue, input.sequence)
-			: await allocateDocumentNumber("quote", issue);
+			? await allocateSpecificDocumentNumber("quote", input.sequence)
+			: await allocateDocumentNumber("quote");
 		const clientSnap = buildClientSnapshot(input.client);
 		const { id: bankId, snapshot: bankSnap } = await resolveBankForDraft();
 
@@ -396,7 +396,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 		const span = Math.max(0, daysBetween(src.issue_date, src.valid_until));
 		const validUntil = addDaysSafe(issue, span);
 
-		const allocation = await allocateDocumentNumber("quote", issue);
+		const allocation = await allocateDocumentNumber("quote");
 		// Carry forward the source quote's chosen bank if it still exists
 		// (resolveBankForDraft falls back to default when null). Snapshot
 		// is rebuilt from the bank's current row, so a renamed account
@@ -650,22 +650,6 @@ export const useQuotesStore = defineStore("quotes", () => {
 		return out;
 	};
 
-	// Re-derive a DRAFT quote's number when its issue date moves to a
-	// different fiscal year (back-dating a historical quote). Collision-safe —
-	// see renumberForIssueDate. No-op on issued quotes or when the year is
-	// unchanged. Returns the new number, or null when nothing changed.
-	const renumberDraft = async (id: number, newIssueDate: string): Promise<string | null> => {
-		const row = await get(id);
-		if (!row || row.status !== "draft") return null;
-		const newNumber = await renumberForIssueDate("quote", row.number, newIssueDate);
-		if (!newNumber) return null;
-		await execute(
-			"UPDATE quotes SET number = ?, updated_at = datetime('now') WHERE id = ?",
-			[newNumber, id]
-		);
-		return newNumber;
-	};
-
 	return {
 		quotes,
 		loading,
@@ -691,7 +675,6 @@ export const useQuotesStore = defineStore("quotes", () => {
 		createDraft,
 		duplicate,
 		update,
-		renumberDraft,
 		replaceLines,
 		setStatus,
 		markConverted,

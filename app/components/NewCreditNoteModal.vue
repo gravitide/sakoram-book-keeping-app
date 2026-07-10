@@ -85,10 +85,8 @@
 	const projectTitle = ref("");
 	const creating = ref(false);
 
-	const issueDateRef = computed(() => props.issueDate ?? null);
 	const docNum = useDocumentNumber({
 		type: "credit_note",
-		issueDate: issueDateRef,
 		enabled: openModel
 	});
 

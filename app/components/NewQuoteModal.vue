@@ -119,10 +119,8 @@
 	// auto-allocator's next sequence on open; the user can override to
 	// fill a gap left by a deletion. See `useDocumentNumber` for the
 	// reactive contract.
-	const issueDateRef = computed(() => issueDate.value || null);
 	const docNum = useDocumentNumber({
 		type: "quote",
-		issueDate: issueDateRef,
 		enabled: openModel
 	});
 

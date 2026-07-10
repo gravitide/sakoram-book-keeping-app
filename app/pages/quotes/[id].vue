@@ -882,14 +882,10 @@
 				bank_details_snapshot: bankSnapshot,
 				title_override: formTitleOverride.value.trim() || null
 			});
-			// Back-date support: if the saved issue date now falls in a
-			// different fiscal year, re-derive this draft's number to match
-			// (collision-safe; no-op when the year is unchanged).
-			const renumberedTo = await quotesStore.renumberDraft(quoteId, formIssueDate.value);
 			await quotesStore.load();
 			await hydrate();
 			toast.add({
-				title: renumberedTo ? `Saved — renumbered to ${renumberedTo}` : "Quote saved",
+				title: "Quote saved",
 				color: "success",
 				icon: "i-lucide-check"
 			});
@@ -1029,12 +1025,10 @@
 	const showConvertDialog = ref(false);
 	const converting = ref(false);
 	// Editable invoice number for the conversion — same gap-fill affordance the
-	// New-invoice modal offers. Issue date is today (createFromQuote uses today),
-	// so a null ref lets the composable default the fiscal year to today's.
-	const convertIssueDate = ref<string | null>(null);
+	// New-invoice modal offers. Numbers are year-less now, so the conversion
+	// just takes the next INV number regardless of dates (no more year jump).
 	const convertDocNum = useDocumentNumber({
 		type: "invoice",
-		issueDate: convertIssueDate,
 		enabled: showConvertDialog
 	});
 	// Reseed on the next open (peek only fills when sequence is null).

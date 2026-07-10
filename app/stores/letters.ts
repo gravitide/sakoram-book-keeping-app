@@ -34,15 +34,15 @@ const todayISO = (): string => {
 	return `${y}-${m}-${dd}`;
 };
 
-// Advance the LET counter iff the caller kept the auto-suggested reference for
-// `date`. Returns nothing — purely a side effect on document_counters. Never
-// throws (a taken sequence just means the counter already moved on).
-const bumpCounterIfSuggested = async (number: string, date: string): Promise<void> => {
+// Advance the LET counter iff the caller kept the auto-suggested reference.
+// Returns nothing — purely a side effect on document_counters. Never throws
+// (a taken sequence just means the counter already moved on).
+const bumpCounterIfSuggested = async (number: string): Promise<void> => {
 	const trimmed = number.trim();
 	if (!trimmed) return;
-	const peek = await peekNextSequence("letter", date).catch(() => null);
+	const peek = await peekNextSequence("letter").catch(() => null);
 	if (peek && trimmed === peek.number) {
-		await allocateSpecificDocumentNumber("letter", date, peek.sequence).catch(() => { /* already taken */ });
+		await allocateSpecificDocumentNumber("letter", peek.sequence).catch(() => { /* already taken */ });
 	}
 };
 
@@ -127,7 +127,7 @@ export const useLettersStore = defineStore("letters", () => {
 		recipient_name: string
 		subject: string
 	}): Promise<number> => {
-		await bumpCounterIfSuggested(input.number, input.letter_date);
+		await bumpCounterIfSuggested(input.number);
 		// Pre-fill the sign-off from the default signature template, if one is set.
 		const def = await selectOne<{ body_json: string }>(
 			"SELECT body_json FROM letter_signatures WHERE is_default = 1 LIMIT 1"
@@ -183,11 +183,11 @@ export const useLettersStore = defineStore("letters", () => {
 		const row = await get(id);
 		if (!row) throw new Error("duplicate: letter not found");
 		const date = todayISO();
-		const peek = await peekNextSequence("letter", date).catch(() => null);
+		const peek = await peekNextSequence("letter").catch(() => null);
 		let number = "";
 		if (peek) {
 			try {
-				await allocateSpecificDocumentNumber("letter", date, peek.sequence);
+				await allocateSpecificDocumentNumber("letter", peek.sequence);
 				number = peek.number;
 			} catch {
 				number = "";
