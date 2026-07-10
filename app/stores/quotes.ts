@@ -15,7 +15,7 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { computeLineTotals, sumCents } from "~/lib/money";
-import { allocateDocumentNumber, allocateSpecificDocumentNumber } from "~/lib/numbering";
+import { allocateDocumentNumber, allocateSpecificDocumentNumber, reserveDocumentNumber } from "~/lib/numbering";
 import { useBusinessBanksStore } from "~/stores/business_banks";
 import { purgeDocumentAttachments } from "~/stores/document_attachments";
 import { useSettingsStore } from "~/stores/settings";
@@ -510,6 +510,21 @@ export const useQuotesStore = defineStore("quotes", () => {
 		);
 	};
 
+	// Renumber a DRAFT quote in place (edit its number from the detail page).
+	// Refused once issued — the number is immutable then. Validates uniqueness
+	// (excluding this quote) + advances the counter via reserveDocumentNumber.
+	const setNumber = async (id: number, sequence: number): Promise<string> => {
+		const row = await get(id);
+		if (!row) throw new Error("setNumber: quote not found");
+		if (row.status !== "draft") throw new Error("Only draft quote numbers can be edited");
+		const formatted = await reserveDocumentNumber("quote", id, sequence);
+		await execute(
+			"UPDATE quotes SET number = ?, updated_at = datetime('now') WHERE id = ?",
+			[formatted, id]
+		);
+		return formatted;
+	};
+
 	// Replace all line rows for a quote in a single transaction. Simpler than
 	// diffing — line counts are small (single-digits to low-tens) and the
 	// totals recomputation lives in one place.
@@ -675,6 +690,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 		createDraft,
 		duplicate,
 		update,
+		setNumber,
 		replaceLines,
 		setStatus,
 		markConverted,

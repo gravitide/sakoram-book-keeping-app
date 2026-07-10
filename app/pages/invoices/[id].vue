@@ -198,6 +198,24 @@
 						spans both columns since it's the widest control
 						(displays bank name + account number). -->
 					<div class="grid grid-cols-2 gap-3 max-w-3xl">
+						<UFormField label="Number">
+							<template #help>
+								<span v-if="editNum.numberTaken.value" class="text-(--ui-error)">
+									{{ editNum.numberFormatted.value }} is already in use.
+								</span>
+								<span v-else-if="editNum.changed.value && editNum.numberFormatted.value">
+									Will change to <span class="font-medium">{{ editNum.numberFormatted.value }}</span>
+								</span>
+								<span v-else>{{ invoice.number }}</span>
+							</template>
+							<UInputNumber
+								v-model="editNum.sequence.value"
+								:min="1"
+								:step="1"
+								:disabled="!editable"
+								class="w-40"
+							/>
+						</UFormField>
 						<UFormField label="PDF header">
 							<UInput
 								v-model="formTitleOverride"
@@ -687,6 +705,15 @@
 	);
 	const isDraft = computed(() => persistedStatus.value === "draft");
 	const editable = computed(() => isDraft.value);
+
+	// Editable draft number — live uniqueness check (excludes this invoice),
+	// applied on save via invoicesStore.setNumber. Disabled once issued.
+	const editNum = useEditableDocumentNumber({
+		type: "invoice",
+		id: invoiceId,
+		currentNumber: computed(() => invoice.value?.number ?? null),
+		enabled: computed(() => editable.value && !hydrating.value)
+	});
 	// Receipts can only be recorded against issued, non-cancelled
 	// invoices that still have an outstanding balance. Drafts /
 	// cancellations / fully-paid invoices bail out — the persisted
@@ -783,6 +810,7 @@
 
 		// Linked receipt vouchers come from the vouchers store reactively
 		// — nothing to fetch here. See the `payments` computed above.
+		editNum.reseed();
 		dirty.value = false;
 		// Let the form-field watcher's queued run flush before unsetting the
 		// guard, so re-hydrate after save doesn't immediately re-dirty.
@@ -819,7 +847,7 @@
 	// it. Re-runs of hydrate() reset dirty to false at the end, so the watcher
 	// firing during a re-hydrate is harmless.
 	watch(
-		[formProjectTitle, formIssueDate, formDueDate, formNotes, formTerms, formPreparedBy, formBankId, formTitleOverride, vatRatePct, bundleSubtotalCents],
+		[formProjectTitle, formIssueDate, formDueDate, formNotes, formTerms, formPreparedBy, formBankId, formTitleOverride, vatRatePct, bundleSubtotalCents, editNum.sequence],
 		() => {
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
@@ -901,6 +929,10 @@
 
 	const save = async () => {
 		if (!invoice.value || !editable.value) return;
+		if (editNum.changed.value && !editNum.numberValid.value) {
+			toast.add({ title: "Pick an unused invoice number", color: "warning", icon: "i-lucide-circle-alert" });
+			return;
+		}
 		saving.value = true;
 		try {
 			const totalsFromLines = await invoicesStore.replaceLines(invoiceId, lines.value);
@@ -938,6 +970,10 @@
 				bank_details_snapshot: bankSnapshot,
 				title_override: formTitleOverride.value.trim() || null
 			});
+			// Apply a draft number change (uniqueness enforced in the store).
+			if (editNum.changed.value && editNum.numberValid.value && editNum.sequence.value !== null) {
+				await invoicesStore.setNumber(invoiceId, editNum.sequence.value);
+			}
 			await invoicesStore.load();
 			await hydrate();
 			toast.add({
