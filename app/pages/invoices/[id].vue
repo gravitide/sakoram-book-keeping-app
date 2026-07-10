@@ -120,14 +120,19 @@
 				col 3 via `lg:col-start-3` so it visually moves to the
 				right while Reference auto-flows into cols 1-2. Mirrors
 				the bills detail page's split-card pattern. -->
-			<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-				<UCard class="lg:col-span-1 lg:col-start-3">
-					<template #header>
-						<div class="app-chrome flex items-center justify-between gap-2">
-							<div class="app-chrome font-medium">
-								Bill to
-							</div>
-							<!-- Cross-doc shortcuts + re-snapshot, all as
+			<div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+				<!-- Right column (Bill to + Bank details). `contents` on narrow
+					so the three cards flow into the grid directly and `order` can
+					slot Reference between them (Bill to → Reference → Bank
+					details); `lg:block` restores the stacked right column. -->
+				<div class="contents lg:block lg:col-span-2 lg:col-start-4 lg:row-start-1 lg:space-y-6">
+					<UCard class="order-1 lg:order-none">
+						<template #header>
+							<div class="app-chrome flex items-center justify-between gap-2">
+								<div class="app-chrome font-medium">
+									Bill to
+								</div>
+								<!-- Cross-doc shortcuts + re-snapshot, all as
 								icon-only buttons so they sit inline in the
 								header of a ~340px col-span-1 card without
 								wrapping. Open client routes to the client
@@ -136,103 +141,64 @@
 								re-snapshots the client's current row data
 								(draft-only — sent invoices keep their frozen
 								snapshot). -->
-							<div class="flex items-center gap-1">
-								<UButton
-									size="xs"
-									variant="ghost"
-									color="neutral"
-									icon="i-lucide-external-link"
-									title="Open client"
-									aria-label="Open client"
-									@click="openClient"
-								/>
-								<UButton
-									size="xs"
-									variant="ghost"
-									color="neutral"
-									icon="i-lucide-receipt"
-									title="View all invoices for this client"
-									aria-label="View all invoices for this client"
-									@click="viewClientInvoices"
-								/>
-								<UButton
-									v-if="editable"
-									size="xs"
-									variant="ghost"
-									color="neutral"
-									icon="i-lucide-refresh-ccw"
-									title="Refresh client snapshot — pull the latest details from the client record"
-									aria-label="Refresh client snapshot"
-									@click="refreshClientSnapshot"
-								/>
+								<div class="flex items-center gap-1">
+									<UButton
+										size="xs"
+										variant="ghost"
+										color="neutral"
+										icon="i-lucide-external-link"
+										title="Open client"
+										aria-label="Open client"
+										@click="openClient"
+									/>
+									<UButton
+										size="xs"
+										variant="ghost"
+										color="neutral"
+										icon="i-lucide-receipt"
+										title="View all invoices for this client"
+										aria-label="View all invoices for this client"
+										@click="viewClientInvoices"
+									/>
+									<UButton
+										v-if="editable"
+										size="xs"
+										variant="ghost"
+										color="neutral"
+										icon="i-lucide-refresh-ccw"
+										title="Refresh client snapshot — pull the latest details from the client record"
+										aria-label="Refresh client snapshot"
+										@click="refreshClientSnapshot"
+									/>
+								</div>
+							</div>
+						</template>
+						<div class="text-sm">
+							<div class="font-medium">
+								{{ clientSnapshot?.name }}
+							</div>
+							<div v-if="clientSnapshot?.address_line1" class="text-(--ui-text-muted)">
+								{{ clientSnapshot.address_line1 }}
+							</div>
+							<div v-if="clientSnapshot?.address_line2" class="text-(--ui-text-muted)">
+								{{ clientSnapshot.address_line2 }}
+							</div>
+							<div v-if="clientSnapshot?.city || clientSnapshot?.country" class="text-(--ui-text-muted)">
+								{{ [clientSnapshot.city, clientSnapshot.postal_code, clientSnapshot.country].filter(Boolean).join(", ") }}
+							</div>
+							<div v-if="clientSnapshot?.tax_id" class="text-(--ui-text-muted) mt-1 text-xs">
+								Tax ID: {{ clientSnapshot.tax_id }}
 							</div>
 						</div>
-					</template>
-					<div class="text-sm">
-						<div class="font-medium">
-							{{ clientSnapshot?.name }}
-						</div>
-						<div v-if="clientSnapshot?.address_line1" class="text-(--ui-text-muted)">
-							{{ clientSnapshot.address_line1 }}
-						</div>
-						<div v-if="clientSnapshot?.address_line2" class="text-(--ui-text-muted)">
-							{{ clientSnapshot.address_line2 }}
-						</div>
-						<div v-if="clientSnapshot?.city || clientSnapshot?.country" class="text-(--ui-text-muted)">
-							{{ [clientSnapshot.city, clientSnapshot.postal_code, clientSnapshot.country].filter(Boolean).join(", ") }}
-						</div>
-						<div v-if="clientSnapshot?.tax_id" class="text-(--ui-text-muted) mt-1 text-xs">
-							Tax ID: {{ clientSnapshot.tax_id }}
-						</div>
-					</div>
-				</UCard>
+					</UCard>
 
-				<UCard class="lg:col-span-2 lg:row-start-1">
-					<template #header>
-						<div class="app-chrome font-medium">
-							Reference
-						</div>
-					</template>
-					<!-- 2-col inner grid; max-w-3xl keeps inputs from
-						stretching on wide xl/2xl cards. Bank account
-						spans both columns since it's the widest control
-						(displays bank name + account number). -->
-					<div class="grid grid-cols-2 gap-3 max-w-3xl">
-						<UFormField label="Number">
-							<template #help>
-								<span v-if="editNum.numberTaken.value" class="text-(--ui-error)">
-									{{ editNum.numberFormatted.value }} is already in use.
-								</span>
-								<span v-else-if="editNum.changed.value && editNum.numberFormatted.value">
-									Will change to <span class="font-medium">{{ editNum.numberFormatted.value }}</span>
-								</span>
-								<span v-else>{{ invoice.number }}</span>
-							</template>
-							<UInputNumber
-								v-model="editNum.sequence.value"
-								:min="1"
-								:step="1"
-								:disabled="!editable"
-								class="w-40"
-							/>
-						</UFormField>
-						<UFormField label="PDF header">
-							<UInput
-								v-model="formTitleOverride"
-								:disabled="!editable"
-								placeholder="INVOICE"
-							/>
-						</UFormField>
-						<UFormField label="Project title">
-							<UInput v-model="formProjectTitle" :disabled="!editable" placeholder="Subtitle on the PDF (optional)" />
-						</UFormField>
-						<UFormField label="Issue date">
-							<DateField v-model="formIssueDate" :disabled="!editable" />
-						</UFormField>
-						<UFormField label="Due date">
-							<DateField v-model="formDueDate" :min-value="formIssueDate || undefined" :disabled="!editable" />
-						</UFormField>
-						<UFormField label="Bank account" class="col-span-2">
+					<UCard class="order-3 lg:order-none">
+						<template #header>
+							<div class="app-chrome font-medium">
+								Bank details
+							</div>
+						</template>
+						<UFormField label="Bank account">
 							<USelect
 								v-model="formBankId"
 								:items="bankPickerOptions"
@@ -244,6 +210,54 @@
 								Printed on the PDF so the client knows where to pay.
 							</template>
 						</UFormField>
+					</UCard>
+				</div>
+
+				<UCard class="order-2 lg:order-none lg:col-span-3 lg:row-start-1">
+					<template #header>
+						<div class="app-chrome font-medium">
+							Reference
+						</div>
+					</template>
+					<!-- Number on its own row, then PDF header (half width),
+						project title full width, and the two dates side by side. -->
+					<div class="space-y-3 max-w-3xl">
+						<UFormField label="Number">
+							<div class="flex items-center gap-3">
+								<UInputNumber
+									v-model="editNum.sequence.value"
+									:min="1"
+									:step="1"
+									:disabled="!editable"
+									class="w-40"
+								/>
+								<span v-if="editNum.numberTaken.value" class="text-sm text-(--ui-error)">
+									{{ editNum.numberFormatted.value }} is already in use.
+								</span>
+								<span v-else-if="editNum.changed.value && editNum.numberFormatted.value" class="text-sm text-(--ui-text-muted)">
+									Will change to <span class="font-medium text-(--ui-text)">{{ editNum.numberFormatted.value }}</span>
+								</span>
+								<span v-else class="text-sm text-(--ui-text-muted)">{{ invoice.number }}</span>
+							</div>
+						</UFormField>
+						<UFormField label="PDF header" class="w-1/2">
+							<UInput
+								v-model="formTitleOverride"
+								:disabled="!editable"
+								placeholder="INVOICE"
+							/>
+						</UFormField>
+						<UFormField label="Project title">
+							<UInput v-model="formProjectTitle" :disabled="!editable" placeholder="Subtitle on the PDF (optional)" />
+						</UFormField>
+						<div class="grid grid-cols-2 gap-3">
+							<UFormField label="Issue date">
+								<DateField v-model="formIssueDate" :disabled="!editable" />
+							</UFormField>
+							<UFormField label="Due date">
+								<DateField v-model="formDueDate" :min-value="formIssueDate || undefined" :disabled="!editable" />
+							</UFormField>
+						</div>
 					</div>
 				</UCard>
 			</div>
