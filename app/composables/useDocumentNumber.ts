@@ -53,10 +53,16 @@ export const useDocumentNumber = (opts: UseDocumentNumberOptions) => {
 	const numberTaken = ref(false);
 
 	// Peek the counter on enable + whenever the issue date changes.
-	// Always reseeds `sequence` to the freshly peeked default — this
-	// gives the user an obvious starting point even if they previously
-	// edited the field; the open/close watcher should reset() before
-	// re-enabling.
+	//
+	// Reseed the suggested `sequence` when it's unset (first open — the
+	// open/close watcher reset()s it) OR when the fiscal year changes. The
+	// second case is the important one for BACK-DATING: numbers are scoped
+	// per (type, fiscal_year), so moving the issue date into a different
+	// fiscal year must re-suggest THAT year's next number — otherwise the
+	// year in the preview changes but the sequence stays stuck on the old
+	// year's value (which is usually already taken). Within the same fiscal
+	// year we leave `sequence` alone so a manual gap-fill edit survives a
+	// day-only date change.
 	watch(
 		[opts.enabled, opts.issueDate],
 		async ([on, raw]) => {
@@ -64,8 +70,9 @@ export const useDocumentNumber = (opts: UseDocumentNumberOptions) => {
 			const date = raw || todayISO();
 			try {
 				const peek = await peekNextSequence(opts.type, date);
+				const fyChanged = fiscalYear.value !== null && peek.fiscalYear !== fiscalYear.value;
 				fiscalYear.value = peek.fiscalYear;
-				if (sequence.value === null) sequence.value = peek.sequence;
+				if (sequence.value === null || fyChanged) sequence.value = peek.sequence;
 			} catch {
 				// On a fresh tenant the counter table may not yet have a row
 				// for this (type, fy) — peekNextSequence handles that and
