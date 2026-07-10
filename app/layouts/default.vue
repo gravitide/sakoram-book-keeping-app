@@ -675,6 +675,15 @@
 						{ hash: "#encryption", label: "Database", icon: "i-lucide-database" },
 						{ hash: "#pdf-protection", label: "PDF protection", icon: "i-lucide-file-text" }
 					]
+				},
+				{
+					to: "/settings/maintenance",
+					label: "Maintenance",
+					icon: "i-lucide-database",
+					sections: [
+						{ hash: "#optimize", label: "Optimize", icon: "i-lucide-sparkles" },
+						{ hash: "#integrity", label: "Check integrity", icon: "i-lucide-shield-check" }
+					]
 				}
 			]
 		},
