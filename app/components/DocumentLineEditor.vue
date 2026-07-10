@@ -45,6 +45,7 @@
 						:model-value="line.description"
 						placeholder="Details (optional). Use line breaks for sub-points."
 						:rows="2"
+						autoresize
 						:disabled="disabled"
 						class="w-full"
 						@update:model-value="updateField(idx, 'description', String($event))"
@@ -70,6 +71,7 @@
 						:model-value="line.description"
 						placeholder="Description (optional)"
 						:rows="2"
+						autoresize
 						:disabled="disabled"
 						class="w-full"
 						@update:model-value="updateField(idx, 'description', String($event))"
