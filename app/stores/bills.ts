@@ -365,8 +365,8 @@ export const useBillsStore = defineStore("bills", () => {
 		const issue = input.issue_date ?? todayISO();
 		const due = issue;
 		const allocation = input.sequence !== undefined
-			? await allocateSpecificDocumentNumber("bill", issue, input.sequence)
-			: await allocateDocumentNumber("bill", issue);
+			? await allocateSpecificDocumentNumber("bill", input.sequence)
+			: await allocateDocumentNumber("bill");
 		const snap = buildVendorSnapshot(input.vendor);
 		// Default due_date = today (vendor probably wants payment "now"); user
 		// can change it on the editor. We don't depend on company_settings here

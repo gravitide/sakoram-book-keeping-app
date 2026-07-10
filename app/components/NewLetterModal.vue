@@ -73,7 +73,7 @@
 	// changes (fiscal year can flip the LET-YYYY prefix).
 	const refreshSuggestion = async () => {
 		try {
-			reference.value = (await peekNextSequence("letter", letterDate.value)).number;
+			reference.value = (await peekNextSequence("letter")).number;
 		} catch {
 			reference.value = "";
 		}

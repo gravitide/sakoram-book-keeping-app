@@ -500,7 +500,7 @@ export const useRecurringBillsStore = defineStore("recurring_bills", () => {
 			total = computed.reduce((s, l) => s + l.line_total_cents, 0);
 		}
 
-		const allocation = await allocateDocumentNumber("bill", issue);
+		const allocation = await allocateDocumentNumber("bill");
 
 		// Generated bills land in status 'open' (the persisted state)
 		// which the bills store derives as 'unpaid' until payments come

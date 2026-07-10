@@ -137,12 +137,9 @@
 	const payDate = ref<string | null>(null);
 	const creating = ref(false);
 
-	// Editable payslip number — driven by pay date because the payslip
-	// store keys the counter off pay_date too. See NewQuoteModal for the
-	// gap-filling rationale.
+	// Editable payslip number. See NewQuoteModal for the gap-filling rationale.
 	const docNum = useDocumentNumber({
 		type: "payslip",
-		issueDate: payDate,
 		enabled: openModel
 	});
 

@@ -98,10 +98,8 @@
 	const creating = ref(false);
 
 	// Editable bill number with live uniqueness check — see NewQuoteModal.
-	const issueDateRef = computed(() => props.issueDate ?? null);
 	const docNum = useDocumentNumber({
 		type: "bill",
-		issueDate: issueDateRef,
 		enabled: openModel
 	});
 

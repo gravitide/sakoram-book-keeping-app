@@ -116,10 +116,8 @@
 	const issueDate = ref<string>(todayISO());
 
 	// Editable number with live uniqueness check — see NewQuoteModal.
-	const issueDateRef = computed(() => issueDate.value || null);
 	const docNum = useDocumentNumber({
 		type: "invoice",
-		issueDate: issueDateRef,
 		enabled: openModel
 	});
 

@@ -162,8 +162,8 @@ export const useVouchersStore = defineStore("vouchers", () => {
 		// the specific-allocator (validates uniqueness, bumps counter to
 		// MAX). When absent we auto-allocate as usual.
 		const allocation = input.sequence !== undefined
-			? await allocateSpecificDocumentNumber("voucher", issue, input.sequence)
-			: await allocateDocumentNumber("voucher", issue);
+			? await allocateSpecificDocumentNumber("voucher", input.sequence)
+			: await allocateDocumentNumber("voucher");
 		const result = await execute(
 			`INSERT INTO vouchers (
 				number, voucher_type, voucher_date, party_name, amount_cents,

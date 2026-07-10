@@ -237,8 +237,8 @@ export const useCreditNotesStore = defineStore("credit_notes", () => {
 
 		const issue = input.issue_date ?? todayISO();
 		const allocation = input.sequence !== undefined
-			? await allocateSpecificDocumentNumber("credit_note", issue, input.sequence)
-			: await allocateDocumentNumber("credit_note", issue);
+			? await allocateSpecificDocumentNumber("credit_note", input.sequence)
+			: await allocateDocumentNumber("credit_note");
 		const clientSnap = buildClientSnapshot(input.client);
 		const defaultVatBp = settings.default_vat_rate ?? 0;
 
@@ -275,7 +275,7 @@ export const useCreditNotesStore = defineStore("credit_notes", () => {
 		invoiceLines: InvoiceLineRow[]
 	): Promise<number> => {
 		const issue = todayISO();
-		const allocation = await allocateDocumentNumber("credit_note", issue);
+		const allocation = await allocateDocumentNumber("credit_note");
 
 		const result = await execute(
 			`INSERT INTO credit_notes (
