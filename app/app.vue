@@ -4,7 +4,7 @@
 			<!-- Toasts pop at the top-centre so they don't fight the
 				sticky save bar pinned to the bottom-right of the
 				content area on every detail / settings page. -->
-			<UApp :toaster="{ position: 'top-center' }">
+			<UApp :locale="en_gb" :toaster="{ position: 'top-center' }">
 				<!-- Top-of-viewport progress bar that animates whenever
 					a route transition is in flight. -->
 				<NuxtLoadingIndicator color="var(--ui-primary)" :height="2" />
@@ -28,3 +28,12 @@
 		</Body>
 	</Html>
 </template>
+
+<script setup lang="ts">
+	// App-wide locale = en-GB. NuxtUI's UInputDate / UCalendar omit a per-
+	// component `locale` prop and read it from UApp's ConfigProvider instead;
+	// the locale's BCP47 code drives the date SEGMENT ORDER via
+	// @internationalized/date. en-GB gives day/month/year (dd/mm/yyyy) — the
+	// Sri Lankan convention — instead of the en-US default of month/day/year.
+	import { en_gb } from "@nuxt/ui/locale";
+</script>
