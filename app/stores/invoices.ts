@@ -26,7 +26,7 @@ import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { deriveInvoiceStatus, invoiceDerivedFrom } from "~/lib/derived-status";
 import { computeLineTotals, sumCents } from "~/lib/money";
-import { allocateDocumentNumber, allocateSpecificDocumentNumber } from "~/lib/numbering";
+import { allocateDocumentNumber, allocateSpecificDocumentNumber, reserveDocumentNumber } from "~/lib/numbering";
 import { useBusinessBanksStore } from "~/stores/business_banks";
 import { purgeDocumentAttachments } from "~/stores/document_attachments";
 import { useSettingsStore } from "~/stores/settings";
@@ -637,6 +637,21 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		);
 	};
 
+	// Renumber a DRAFT invoice in place (edit its number from the detail page).
+	// Refused once issued — the number is immutable then. Validates uniqueness
+	// (excluding this invoice) + advances the counter via reserveDocumentNumber.
+	const setNumber = async (id: number, sequence: number): Promise<string> => {
+		const row = await get(id);
+		if (!row) throw new Error("setNumber: invoice not found");
+		if (row.status !== "draft") throw new Error("Only draft invoice numbers can be edited");
+		const formatted = await reserveDocumentNumber("invoice", id, sequence);
+		await execute(
+			"UPDATE invoices SET number = ?, updated_at = datetime('now') WHERE id = ?",
+			[formatted, id]
+		);
+		return formatted;
+	};
+
 	const replaceLines = async (
 		invoiceId: number,
 		lines: InvoiceLineDraft[]
@@ -767,6 +782,7 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		get,
 		getLines,
 		createDraft,
+		setNumber,
 		createFromQuote,
 		duplicate,
 		update,

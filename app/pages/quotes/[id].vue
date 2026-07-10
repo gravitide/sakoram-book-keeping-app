@@ -194,6 +194,24 @@
 						spans both columns since it's the widest control
 						(displays bank name + account number). -->
 					<div class="grid grid-cols-2 gap-3 max-w-3xl">
+						<UFormField label="Number">
+							<template #help>
+								<span v-if="editNum.numberTaken.value" class="text-(--ui-error)">
+									{{ editNum.numberFormatted.value }} is already in use.
+								</span>
+								<span v-else-if="editNum.changed.value && editNum.numberFormatted.value">
+									Will change to <span class="font-medium">{{ editNum.numberFormatted.value }}</span>
+								</span>
+								<span v-else>{{ quote.number }}</span>
+							</template>
+							<UInputNumber
+								v-model="editNum.sequence.value"
+								:min="1"
+								:step="1"
+								:disabled="!editable"
+								class="w-40"
+							/>
+						</UFormField>
 						<UFormField label="PDF header">
 							<UInput
 								v-model="formTitleOverride"
@@ -671,6 +689,15 @@
 	const isDraft = computed(() => status.value === "draft");
 	const editable = computed(() => isDraft.value);
 
+	// Editable draft number — live uniqueness check (excludes this quote),
+	// applied on save via quotesStore.setNumber. Disabled once issued.
+	const editNum = useEditableDocumentNumber({
+		type: "quote",
+		id: quoteId,
+		currentNumber: computed(() => quote.value?.number ?? null),
+		enabled: computed(() => editable.value && !hydrating.value)
+	});
+
 	const clientSnapshot = computed<ClientSnapshot | null>(() => {
 		if (!quote.value?.client_snapshot) return null;
 		try {
@@ -722,6 +749,7 @@
 			unit_price_cents: l.unit_price_cents,
 			tax_rate_basis_points: l.tax_rate_basis_points
 		}));
+		editNum.reseed();
 		dirty.value = false;
 		await nextTick();
 		hydrating.value = false;
@@ -754,7 +782,7 @@
 	// Mark dirty when any directly v-model'd form field changes. Registered
 	// after the initial hydrate; hydrating-flag guards re-hydrate paths.
 	watch(
-		[formProjectTitle, formIssueDate, formValidUntil, formNotes, formTerms, formPreparedBy, formBankId, formIncludeBank, formTitleOverride, vatRatePct, bundleSubtotalCents],
+		[formProjectTitle, formIssueDate, formValidUntil, formNotes, formTerms, formPreparedBy, formBankId, formIncludeBank, formTitleOverride, vatRatePct, bundleSubtotalCents, editNum.sequence],
 		() => {
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
@@ -840,6 +868,10 @@
 
 	const save = async () => {
 		if (!quote.value || !editable.value) return;
+		if (editNum.changed.value && !editNum.numberValid.value) {
+			toast.add({ title: "Pick an unused quote number", color: "warning", icon: "i-lucide-circle-alert" });
+			return;
+		}
 		saving.value = true;
 		try {
 			// Re-write all line rows. In bundle mode we still persist whatever
@@ -882,6 +914,10 @@
 				bank_details_snapshot: bankSnapshot,
 				title_override: formTitleOverride.value.trim() || null
 			});
+			// Apply a draft number change (uniqueness enforced in the store).
+			if (editNum.changed.value && editNum.numberValid.value && editNum.sequence.value !== null) {
+				await quotesStore.setNumber(quoteId, editNum.sequence.value);
+			}
 			await quotesStore.load();
 			await hydrate();
 			toast.add({

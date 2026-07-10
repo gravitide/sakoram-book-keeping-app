@@ -129,15 +129,17 @@ export const peekNextSequence = async (
 // in use" warning before submit.
 export const isDocumentNumberAvailable = async (
 	type: DocumentType,
-	sequence: number
+	sequence: number,
+	// When editing an existing document's number, pass its id so the check
+	// ignores the document's own current row (it doesn't clash with itself).
+	exceptId?: number
 ): Promise<boolean> => {
 	if (!Number.isInteger(sequence) || sequence < 1) return false;
 	const formatted = formatDocumentNumber(type, sequence);
 	const table = TABLE_FOR_TYPE[type];
-	const existing = await selectOne<{ id: number }>(
-		`SELECT id FROM ${table} WHERE number = ? LIMIT 1`,
-		[formatted]
-	);
+	const existing = exceptId === undefined
+		? await selectOne<{ id: number }>(`SELECT id FROM ${table} WHERE number = ? LIMIT 1`, [formatted])
+		: await selectOne<{ id: number }>(`SELECT id FROM ${table} WHERE number = ? AND id != ? LIMIT 1`, [formatted, exceptId]);
 	return existing === null;
 };
 
@@ -178,4 +180,37 @@ export const allocateSpecificDocumentNumber = async (
 		number: formatted,
 		sequence
 	};
+};
+
+// Validate + reserve a number for an EXISTING document — i.e. renumbering a
+// draft from its detail page. Uniqueness excludes the document itself (so
+// keeping the same number is a no-op, not a clash); bumps the counter so future
+// auto-allocations stay ahead of a manual jump. Returns the formatted number;
+// the caller writes it onto the document row. Throws if the number is taken by
+// another document (belt-and-suspenders with the UNIQUE(number) constraint).
+export const reserveDocumentNumber = async (
+	type: DocumentType,
+	exceptId: number,
+	sequence: number
+): Promise<string> => {
+	if (!Number.isInteger(sequence) || sequence < 1) {
+		throw new Error(`reserveDocumentNumber: bad sequence ${sequence}`);
+	}
+	const formatted = formatDocumentNumber(type, sequence);
+	const table = TABLE_FOR_TYPE[type];
+	const clash = await selectOne<{ id: number }>(
+		`SELECT id FROM ${table} WHERE number = ? AND id != ? LIMIT 1`,
+		[formatted, exceptId]
+	);
+	if (clash) {
+		throw new Error(`Number ${formatted} is already in use`);
+	}
+	await execute(
+		`INSERT INTO document_counters (document_type, last_number)
+		 VALUES (?, ?)
+		 ON CONFLICT(document_type)
+		 DO UPDATE SET last_number = MAX(document_counters.last_number, excluded.last_number)`,
+		[type, sequence]
+	);
+	return formatted;
 };
