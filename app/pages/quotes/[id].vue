@@ -477,11 +477,14 @@
 							and locked.
 						</p>
 						<p>
-							The invoice gets a fresh due date based on your default payment
-							terms. Pick its number below — leave the default to take the next
-							in the INV sequence, or set one to fill a gap.
+							Pick the invoice's issue date — the due date follows from it
+							plus your default payment terms. Leave the number as-is to take
+							the next in the INV sequence, or set one to fill a gap.
 						</p>
 					</div>
+					<UFormField label="Issue date">
+						<DateField v-model="convertIssueDate" class="w-1/2" />
+					</UFormField>
 					<UFormField label="Invoice number" required>
 						<template #help>
 							<span v-if="convertDocNum.numberTaken.value" class="text-(--ui-error)">
@@ -1166,9 +1169,21 @@
 		type: "invoice",
 		enabled: showConvertDialog
 	});
+	// Local YYYY-MM-DD "today" (not UTC — toISOString would drift a day near
+	// midnight for +ve timezones).
+	const todayISO = (): string => {
+		const d = new Date();
+		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+	};
+	// Editable issue date for the invoice the conversion creates. Refreshed
+	// to today on every open (this page is kept alive — a ref seeded once
+	// would go stale across days). The due date derives from it + the
+	// default payment terms inside createFromQuote.
+	const convertIssueDate = ref<string>(todayISO());
 	// Reseed on the next open (peek only fills when sequence is null).
 	watch(showConvertDialog, (open) => {
-		if (!open) convertDocNum.reset();
+		if (open) convertIssueDate.value = todayISO();
+		else convertDocNum.reset();
 	});
 	const askConvert = () => {
 		showConvertDialog.value = true;
@@ -1181,7 +1196,8 @@
 			const newInvoiceId = await invoicesStore.createFromQuote(
 				quote.value,
 				lineRows,
-				convertDocNum.sequence.value ?? undefined
+				convertDocNum.sequence.value ?? undefined,
+				convertIssueDate.value || undefined
 			);
 			await quotesStore.markConverted(quoteId, newInvoiceId);
 			// markConverted persisted status='converted' + the link to the DB.
