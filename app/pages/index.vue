@@ -706,20 +706,35 @@
 		&& payslipsStore.loaded
 	);
 
-	onMounted(async () => {
-		// KPI aggregates first — they're fast and the user sees a
-		// useful page within a fraction of a second.
+	// KPI aggregates reload on EVERY activation, not just first mount —
+	// this page is kept alive (<NuxtPage keepalive>), so onMounted fires
+	// once per app session and money recorded after the first dashboard
+	// visit would otherwise stay frozen at the first snapshot until the
+	// app restarts (the "dashboard stuck at Rs 0.00" bug). The aggregates
+	// are four small GROUP BYs, sub-second at any volume, so re-running
+	// them per visit is free.
+	const refreshKpis = async () => {
 		try {
 			kpis.value = await loadDashboardKpis();
+			loadError.value = null;
 		} catch (err) {
 			loadError.value = err instanceof Error ? err.message : String(err);
-			return;
 		}
+	};
 
-		// Then the stores in the background — chart components subscribe
-		// to them and paint as they fill in. We don't `await` the
-		// outer onMounted on these; the dashboard renders KPI tiles +
-		// the chart skeleton meanwhile.
+	// onActivated also fires on the initial mount (right after
+	// onMounted), so this is the ONLY kpi load — no double fetch on the
+	// first visit.
+	onActivated(() => {
+		void refreshKpis();
+	});
+
+	onMounted(async () => {
+		// Stores in the background — chart components subscribe to them
+		// and paint as they fill in (the dashboard renders KPI tiles +
+		// the chart skeleton meanwhile). Load-once is fine here: every
+		// store mutation elsewhere reloads its own array, so these stay
+		// fresh for the charts / activity lists after the first visit.
 		try {
 			await Promise.all([
 				invoicesStore.ensureLoaded(),
