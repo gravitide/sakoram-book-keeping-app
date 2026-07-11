@@ -392,7 +392,12 @@
 						<RichTextEditor v-model="formTerms" :editable="editable" :min-height="100" />
 					</UFormField>
 					<UFormField label="Prepared by" hint="Rich-text sign-off, right-aligned at the bottom of the PDF.">
-						<RichTextEditor v-model="formPreparedBy" :editable="editable" :min-height="110" />
+						<div class="space-y-2">
+							<div v-if="editable" class="flex justify-end">
+								<SignaturePicker v-model="formPreparedBy" />
+							</div>
+							<RichTextEditor v-model="formPreparedBy" :editable="editable" :min-height="110" />
+						</div>
 					</UFormField>
 				</div>
 			</UCard>
