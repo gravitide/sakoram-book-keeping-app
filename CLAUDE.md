@@ -355,7 +355,7 @@ sakoram_app/
 │  │  ├─ vendors/                     ← list, [id] (mirrors clients)
 │  │  ├─ employees/                   ← list w/ row context menu, [id] (mirrors vendors + payroll fields)
 │  │  ├─ categories/                  ← list w/ row context menu (Show bills) + bill counts — modal-driven CRUD
-│  │  ├─ quotes/                      ← list w/ row context menu, [id] (PDF, convert to invoice). "New quote" opens NewQuoteModal — no /new page.
+│  │  ├─ quotes/                      ← list w/ row context menu, [id] (PDF, convert to invoice — the dialog picks the invoice's issue date, due derives from it + payment terms; a converted quote offers "Revert to draft" which deletes the linked invoice, guarded on recorded payments). "New quote" opens NewQuoteModal — no /new page.
 │  │  ├─ invoices/                    ← list w/ row context menu, [id] (PDF, payment ledger). "New invoice" opens NewInvoiceModal.
 │  │  ├─ credit-notes/                ← list, [id] (negative-invoice document for refunds / returns; optional source_invoice_id link). "New credit note" opens NewCreditNoteModal. No PDF yet — follow-up PR.
 │  │  ├─ recurring-invoices/         ← list, [id] (invoice TEMPLATES that materialise as draft invoices on a user-initiated cadence). "New recurring" opens NewRecurringInvoiceModal. Pending count + RecurringGenerateModal for bulk generation. No PDF — templates aren't issued documents.
@@ -393,7 +393,7 @@ sakoram_app/
 │  │  ├─ NewBillModal.vue             ← "New bill" form-in-a-modal (vendor picker) — replaces /bills/new
 │  │  ├─ NewPayslipModal.vue          ← "New payslip" form-in-a-modal (employee + 3 dates + dup-period guard) — replaces /payslips/new
 │  │  ├─ SectionCard.vue              ← header-with-icon card; used on company / client / vendor / employee edit pages
-│  │  ├─ DateField.vue                ← UInputDate + UCalendar wrapper; ISO-string v-model + min/max with is-date-unavailable strikethrough
+│  │  ├─ DateField.vue                ← UInputDate + UCalendar wrapper; ISO-string v-model + min/max with is-date-unavailable strikethrough. Renders shrink-to-content by default — pass class="w-full" when it sits in a row next to full-width inputs (heights already match; width is the only mismatch)
 │  │  ├─ DateRangeField.vue           ← same idea, range mode (v-model:from / v-model:to)
 │  │  ├─ DayOfMonthField.vue          ← 1–31 integer input + "Last day of month" toggle (used on payroll settings)
 │  │  ├─ DocumentLineEditor.vue       ← bundle/itemized line-item editor for quotes/invoices/bills
@@ -612,6 +612,14 @@ Code-signing requires a CA cert (~$200–400/year), out of scope.
 - **Tauri/JS plugin version mismatch** errors on `tauri:build`: the
   Rust crate and JS package must match on **major.minor**. If `tauri`
   bumps, `@tauri-apps/api` must follow.
+- **Browser-testing a DB-free component** (no Tauri shell): plain
+  `bun run dev` crashes at boot (window-title plugin calls Tauri APIs;
+  tenant guard redirects everything). Recipe: temporarily add
+  `if (!("__TAURI_INTERNALS__" in window)) return;` at the top of
+  `app/plugins/window-title.client.ts`, early-return your scratch route in
+  `app/middleware/tenant.global.ts`, drop a throwaway page under
+  `app/pages/`, and hit it on the dev server (port 4004 — already running
+  when `tauri:dev` is up, HMR picks the edits up). Revert all three after.
 - **Background dev server exit code 255** = user closed the window. Not
   an error.
 - **Dev server port lives in `scripts/tauri-dev.ts`, not `tauri.conf.json`.**
@@ -1298,6 +1306,10 @@ quotes:    draft → sent → accepted → converted (terminal)
                        ↘ rejected | expired
                 draft → rejected (cancel)
                 rejected | expired → draft (reopen — common mistake escape)
+                converted → draft (revertConversion() — NOT a STATUS_TRANSITIONS
+                entry; a named compound op that DELETES the linked invoice and
+                reopens the quote. Refused while receipt vouchers exist on the
+                invoice — the confirm dialog lists them with links. v0.141.0)
 
 invoices:  persisted: draft ↔ sent ↔ cancelled (the only user transitions)
            derived:   draft           → draft
