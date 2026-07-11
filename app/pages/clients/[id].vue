@@ -106,17 +106,22 @@
 			Replaces the old header-row View quotes / View invoices /
 			Statement buttons; numbers come from SQL aggregates in
 			loadStats(), refreshed on keep-alive re-entry. -->
+		<!-- Each card owns a semantic colour so the row reads as three
+			distinct destinations, not one grey strip: quotes = info blue,
+			invoices = primary green, outstanding = warning amber. Tints
+			ride the --ui-* theme tokens so light / dark and the user's
+			accent swatch all keep working. -->
 		<section v-if="!isNew" class="mb-10 grid grid-cols-1 md:grid-cols-3 gap-4">
 			<button
 				type="button"
-				class="group text-left rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated)/40 hover:border-(--ui-primary)/60 hover:bg-(--ui-bg-elevated) transition p-4 flex items-start gap-3 cursor-pointer shadow-md shadow-black/10"
+				class="group text-left rounded-lg border border-(--ui-info)/40 bg-(--ui-info)/10 hover:border-(--ui-info)/80 hover:bg-(--ui-info)/15 transition p-4 flex items-start gap-3 cursor-pointer shadow-md shadow-black/10"
 				@click="viewQuotes"
 			>
-				<span class="size-10 shrink-0 rounded-md bg-(--ui-primary)/10 flex items-center justify-center">
-					<UIcon name="i-lucide-file-text" class="size-5 text-(--ui-primary)" />
+				<span class="size-10 shrink-0 rounded-md bg-(--ui-info)/20 flex items-center justify-center">
+					<UIcon name="i-lucide-file-text" class="size-5 text-(--ui-info)" />
 				</span>
 				<span class="min-w-0 flex-1">
-					<span class="block text-xs uppercase tracking-wider text-(--ui-text-muted)">Quotes</span>
+					<span class="block text-xs font-medium uppercase tracking-wider text-(--ui-info)">Quotes</span>
 					<span class="block text-2xl font-semibold tabular-nums leading-tight">{{ stats.loaded ? stats.quotesTotal : "—" }}</span>
 					<span class="block text-xs text-(--ui-text-muted) mt-0.5">
 						{{ !stats.loaded ? "Loading…"
@@ -124,19 +129,19 @@
 								: stats.quotesOpen > 0 ? `${stats.quotesOpen} open · view all` : "View all" }}
 					</span>
 				</span>
-				<UIcon name="i-lucide-arrow-right" class="size-4 mt-1 text-(--ui-text-dimmed) group-hover:text-(--ui-primary) transition" />
+				<UIcon name="i-lucide-arrow-right" class="size-4 mt-1 text-(--ui-info)/50 group-hover:text-(--ui-info) group-hover:translate-x-0.5 transition" />
 			</button>
 
 			<button
 				type="button"
-				class="group text-left rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated)/40 hover:border-(--ui-primary)/60 hover:bg-(--ui-bg-elevated) transition p-4 flex items-start gap-3 cursor-pointer shadow-md shadow-black/10"
+				class="group text-left rounded-lg border border-(--ui-primary)/40 bg-(--ui-primary)/10 hover:border-(--ui-primary)/80 hover:bg-(--ui-primary)/15 transition p-4 flex items-start gap-3 cursor-pointer shadow-md shadow-black/10"
 				@click="viewInvoices"
 			>
-				<span class="size-10 shrink-0 rounded-md bg-(--ui-primary)/10 flex items-center justify-center">
+				<span class="size-10 shrink-0 rounded-md bg-(--ui-primary)/20 flex items-center justify-center">
 					<UIcon name="i-lucide-receipt" class="size-5 text-(--ui-primary)" />
 				</span>
 				<span class="min-w-0 flex-1">
-					<span class="block text-xs uppercase tracking-wider text-(--ui-text-muted)">Invoices</span>
+					<span class="block text-xs font-medium uppercase tracking-wider text-(--ui-primary)">Invoices</span>
 					<span class="block text-2xl font-semibold tabular-nums leading-tight">{{ stats.loaded ? stats.invoicesTotal : "—" }}</span>
 					<span class="block text-xs text-(--ui-text-muted) mt-0.5">
 						{{ !stats.loaded ? "Loading…"
@@ -144,7 +149,7 @@
 								: stats.invoicesOpen > 0 ? `${stats.invoicesOpen} awaiting payment · view all` : "All settled · view all" }}
 					</span>
 				</span>
-				<UIcon name="i-lucide-arrow-right" class="size-4 mt-1 text-(--ui-text-dimmed) group-hover:text-(--ui-primary) transition" />
+				<UIcon name="i-lucide-arrow-right" class="size-4 mt-1 text-(--ui-primary)/50 group-hover:text-(--ui-primary) group-hover:translate-x-0.5 transition" />
 			</button>
 
 			<!-- Statement card carries the money headline: what this client
@@ -155,14 +160,14 @@
 				type="button"
 				class="group text-left rounded-lg border transition p-4 flex items-start gap-3 shadow-md shadow-black/10"
 				:class="stats.invoicesOpen > 0
-					? 'border-(--ui-warning)/40 bg-(--ui-warning)/5 hover:border-(--ui-warning) hover:bg-(--ui-warning)/10 cursor-pointer'
+					? 'border-(--ui-warning)/50 bg-(--ui-warning)/10 hover:border-(--ui-warning) hover:bg-(--ui-warning)/15 cursor-pointer'
 					: 'border-(--ui-border) bg-(--ui-bg-elevated)/40 cursor-not-allowed opacity-70'"
 				:disabled="stats.invoicesOpen === 0 || statementPdf.state.rendering"
 				@click="openStatement"
 			>
 				<span
 					class="size-10 shrink-0 rounded-md flex items-center justify-center"
-					:class="stats.invoicesOpen > 0 ? 'bg-(--ui-warning)/15' : 'bg-(--ui-bg-elevated)'"
+					:class="stats.invoicesOpen > 0 ? 'bg-(--ui-warning)/20' : 'bg-(--ui-bg-elevated)'"
 				>
 					<UIcon
 						:name="statementPdf.state.rendering ? 'i-lucide-loader-circle' : 'i-lucide-file-clock'"
@@ -171,8 +176,14 @@
 					/>
 				</span>
 				<span class="min-w-0 flex-1">
-					<span class="block text-xs uppercase tracking-wider text-(--ui-text-muted)">Outstanding</span>
-					<span class="block text-2xl font-semibold tabular-nums leading-tight truncate">
+					<span
+						class="block text-xs font-medium uppercase tracking-wider"
+						:class="stats.invoicesOpen > 0 ? 'text-(--ui-warning)' : 'text-(--ui-text-muted)'"
+					>Outstanding</span>
+					<span
+						class="block text-2xl font-semibold tabular-nums leading-tight truncate"
+						:class="stats.invoicesOpen > 0 && 'text-(--ui-warning)'"
+					>
 						{{ stats.loaded ? formatLKR(stats.outstandingCents) : "—" }}
 					</span>
 					<span class="block text-xs text-(--ui-text-muted) mt-0.5">
@@ -184,7 +195,7 @@
 				<UIcon
 					v-if="stats.invoicesOpen > 0"
 					name="i-lucide-arrow-right"
-					class="size-4 mt-1 text-(--ui-text-dimmed) group-hover:text-(--ui-warning) transition"
+					class="size-4 mt-1 text-(--ui-warning)/50 group-hover:text-(--ui-warning) group-hover:translate-x-0.5 transition"
 				/>
 			</button>
 		</section>
