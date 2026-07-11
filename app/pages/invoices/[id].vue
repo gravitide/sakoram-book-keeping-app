@@ -1063,8 +1063,9 @@
 		const cur = persistedStatus.value;
 		const items: TransitionAction[] = [];
 		if (cur === "draft") {
+			// No Cancel on drafts — a never-issued invoice is just deleted
+			// (Delete draft button); cancelled is for voiding issued docs.
 			items.push({ label: "Send", icon: "i-lucide-send", onSelect: () => setPersistedStatus("sent") });
-			items.push({ label: "Cancel", icon: "i-lucide-ban", onSelect: () => setPersistedStatus("cancelled") });
 		} else if (cur === "sent") {
 			// Hide Revert/Cancel once any payment has landed — the store
 			// also refuses both with a clear error, but keeping the

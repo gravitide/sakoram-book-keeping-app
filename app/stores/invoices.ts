@@ -700,9 +700,11 @@ export const useInvoicesStore = defineStore("invoices", () => {
 	/// Move between the three persisted states. The legal transitions
 	/// are now extremely simple:
 	///   draft     ↔ sent            (issue / revert to draft)
-	///   draft     → cancelled       (kill before issuing)
 	///   sent      → cancelled       (void after issuing)
 	///   cancelled → sent | draft    (reopen — refund flow / full re-edit)
+	///
+	/// Drafts are never cancelled — a never-issued invoice is just
+	/// deleted; the UI doesn't offer Cancel in draft.
 	///
 	/// Owner-takes-responsibility: sent/cancelled → draft reopens the
 	/// document for editing. Both destructive-ish moves (cancel, revert
