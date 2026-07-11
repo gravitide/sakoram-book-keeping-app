@@ -399,15 +399,10 @@
 					<UFormField label="Prepared by" hint="Rich-text sign-off, right-aligned at the bottom of the PDF.">
 						<div class="space-y-2">
 							<div v-if="editable" class="flex justify-end">
-								<UDropdownMenu :items="signatureMenuItems">
-									<UButton size="xs" color="neutral" variant="soft" icon="i-lucide-signature" trailing-icon="i-lucide-chevron-down" :ui="{ trailingIcon: 'size-3' }">
-										Signatures
-									</UButton>
-								</UDropdownMenu>
+								<SignaturePicker v-model="formPreparedBy" />
 							</div>
 							<RichTextEditor v-model="formPreparedBy" :editable="editable" :min-height="110" />
 						</div>
-						<LetterSignatureFormModal v-model:open="signatureModalOpen" :signature="null" :initial-body="formPreparedBy" />
 					</UFormField>
 				</div>
 			</UCard>
@@ -608,7 +603,6 @@
 	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
-	import { useLetterSignaturesStore } from "~/stores/letter_signatures";
 	import { useLicenseStore } from "~/stores/license";
 	import { canTransition, useQuotesStore } from "~/stores/quotes";
 	import { useSettingsStore } from "~/stores/settings";
@@ -621,7 +615,6 @@
 	const toast = useToast();
 
 	const settingsStore = useSettingsStore();
-	const sigStore = useLetterSignaturesStore();
 	const license = useLicenseStore();
 	const banksStore = useBusinessBanksStore();
 	const clientsStore = useClientsStore();
@@ -737,35 +730,8 @@
 		settingsStore.ensureLoaded(),
 		clientsStore.ensureLoaded(),
 		banksStore.ensureLoaded(),
-		vouchersStore.ensureLoaded(),
-		sigStore.ensureLoaded()
+		vouchersStore.ensureLoaded()
 	]);
-
-	// Saved signature templates (shared with letters) for the Prepared-by
-	// field: pick one to copy its rich text in, or save the current sign-off as
-	// a new reusable template. Applying just sets formPreparedBy → the dirty
-	// watcher picks it up. See app/pages/letters/[id].vue for the same pattern.
-	const signatureModalOpen = ref(false);
-	const signatureMenuItems = computed(() => {
-		const saved = sigStore.signatures.map((s) => ({
-			label: s.name,
-			icon: "i-lucide-pen-line",
-			onSelect: () => {
-				formPreparedBy.value = s.body_json;
-			}
-		}));
-		const create = {
-			label: "New signature…",
-			icon: "i-lucide-plus",
-			onSelect: () => {
-				signatureModalOpen.value = true;
-			}
-		};
-		return saved.length > 0 ? [saved, [create]] : [[create]];
-	});
-	watch(signatureModalOpen, (open) => {
-		if (!open) void sigStore.load();
-	});
 
 	const hydrate = async () => {
 		hydrating.value = true;
