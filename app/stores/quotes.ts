@@ -8,7 +8,9 @@
 //   accepted  → converted     (set automatically when an invoice is created)
 //   rejected  → (terminal)
 //   expired   → (terminal)
-//   converted → (terminal)
+//   converted → (terminal via transitions; revertConversion() is the
+//               named escape hatch — deletes the linked invoice and
+//               returns the quote to draft)
 
 import type { QuoteListFilters } from "~/lib/quote-query";
 import { defineStore } from "pinia";
@@ -18,6 +20,7 @@ import { computeLineTotals, sumCents } from "~/lib/money";
 import { allocateDocumentNumber, allocateSpecificDocumentNumber, reserveDocumentNumber } from "~/lib/numbering";
 import { useBusinessBanksStore } from "~/stores/business_banks";
 import { purgeDocumentAttachments } from "~/stores/document_attachments";
+import { useInvoicesStore } from "~/stores/invoices";
 import { useSettingsStore } from "~/stores/settings";
 
 export type QuoteStatus = "draft" | "sent" | "accepted" | "rejected" | "expired" | "converted";
@@ -599,6 +602,48 @@ export const useQuotesStore = defineStore("quotes", () => {
 		await load();
 	};
 
+	// Inverse of markConverted — the escape hatch for a conversion done in
+	// error. Deletes the linked invoice (via the invoices store, which also
+	// nulls voucher links, cascades lines, and purges attachments) and
+	// returns the quote to an editable draft. Refused while the invoice has
+	// recorded payments: money records are never silently touched — the
+	// receipt vouchers must be deleted first (mirrors the invoice cancel
+	// guard). Not a STATUS_TRANSITIONS entry: this is a compound operation
+	// invoked by name, exactly like markConverted on the way in.
+	//
+	// Sequential auto-commits (connection-pool caveat): the invoice is
+	// deleted BEFORE the quote flips, so a crash mid-way can never leave a
+	// draft quote pointing at a live invoice. The worst crash window is a
+	// 'converted' quote with a null link — re-running the revert recovers
+	// (the null-link case skips straight to the flip).
+	const revertConversion = async (quoteId: number): Promise<void> => {
+		const row = await get(quoteId);
+		if (!row) throw new Error("Quote not found");
+		if (row.status !== "converted") {
+			throw new Error("Only converted quotes can be reverted");
+		}
+		const invoiceId = row.converted_invoice_id;
+		if (invoiceId != null) {
+			// Direct SQL, not the vouchers store — it may not be loaded here.
+			const receipts = await selectOne<{ n: number }>(
+				`SELECT COUNT(*) AS n FROM vouchers
+				 WHERE related_invoice_id = ? AND voucher_type = 'receipt'`,
+				[invoiceId]
+			);
+			if ((receipts?.n ?? 0) > 0) {
+				throw new Error("This invoice has recorded payments. Delete the receipt vouchers first, then revert.");
+			}
+			await useInvoicesStore().remove(invoiceId);
+		}
+		await execute(
+			`UPDATE quotes
+			 SET status = 'draft', converted_invoice_id = NULL, updated_at = datetime('now')
+			 WHERE id = ?`,
+			[quoteId]
+		);
+		await load();
+	};
+
 	// Drafts can be deleted. Issued quotes cannot.
 	const deleteDraft = async (id: number): Promise<void> => {
 		const row = await get(id);
@@ -694,6 +739,7 @@ export const useQuotesStore = defineStore("quotes", () => {
 		replaceLines,
 		setStatus,
 		markConverted,
+		revertConversion,
 		deleteDraft,
 		remove,
 		expireOverdue,
