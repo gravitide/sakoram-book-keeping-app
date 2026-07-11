@@ -529,8 +529,34 @@
 					<p class="text-(--ui-text-muted)">
 						The invoice number won't be reused automatically — it'll show as
 						a gap you can fill from the next convert or New-invoice dialog.
-						If the invoice has recorded payments the revert is refused —
-						delete those receipt vouchers first.
+					</p>
+					<!-- Payments recorded against the invoice block the revert.
+						List them with links so the user can jump straight to
+						each voucher and delete it, instead of hunting the
+						ledger for whatever the guard message meant. -->
+					<div v-if="revertVouchers.length > 0" class="rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/10 p-3 space-y-2">
+						<p class="font-medium text-(--ui-text)">
+							{{ revertVouchers.length === 1 ? "A payment is" : `${revertVouchers.length} payments are` }} recorded against this invoice
+						</p>
+						<p class="text-(--ui-text-muted)">
+							Reverting is blocked while these receipt vouchers exist.
+							Delete them first, then revert.
+						</p>
+						<ul class="space-y-1">
+							<li v-for="v in revertVouchers" :key="v.id">
+								<NuxtLink
+									:to="`/vouchers/${v.id}`"
+									class="inline-flex items-center gap-1.5 text-(--ui-text) hover:text-(--ui-primary) underline underline-offset-2"
+								>
+									<UIcon name="i-lucide-receipt" class="size-3.5 shrink-0" />
+									<span class="font-medium">{{ v.number }}</span>
+									<span class="text-(--ui-text-muted)">· {{ v.voucher_date }} · {{ formatLKR(v.amount_cents) }}</span>
+								</NuxtLink>
+							</li>
+						</ul>
+					</div>
+					<p v-else class="text-(--ui-text-muted)">
+						No payments are recorded against this invoice.
 					</p>
 				</div>
 			</template>
@@ -542,6 +568,7 @@
 					<UButton
 						color="error"
 						:loading="reverting"
+						:disabled="revertVouchers.length > 0"
 						icon="i-lucide-undo-2"
 						@click="confirmRevert"
 					>
@@ -645,6 +672,7 @@
 	import type { InvoiceRow } from "~/stores/invoices";
 	import type { ClientSnapshot, PricingMode, QuoteLineRow, QuoteRow, QuoteStatus } from "~/stores/quotes";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
+	import { select } from "~/lib/db";
 	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
 	import { buildQuotePdfPayload } from "~/lib/quote-pdf";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
@@ -1186,7 +1214,29 @@
 	const canRevert = computed(() => status.value === "converted");
 	const showRevertDialog = ref(false);
 	const reverting = ref(false);
-	const askRevert = () => {
+	// Receipt vouchers linked to the invoice, fetched when the dialog opens.
+	// Shown in the modal so the user sees exactly which payments block the
+	// revert (the store guard would refuse anyway — this surfaces the WHY
+	// and links each voucher for one-click cleanup). Scoped SQL rather than
+	// the vouchers store: this page doesn't load the full voucher ledger.
+	interface RevertBlockingVoucher {
+		id: number
+		number: string
+		voucher_date: string
+		amount_cents: number
+	}
+	const revertVouchers = ref<RevertBlockingVoucher[]>([]);
+	const askRevert = async () => {
+		revertVouchers.value = [];
+		const invId = quote.value?.converted_invoice_id;
+		if (invId != null) {
+			revertVouchers.value = await select<RevertBlockingVoucher>(
+				`SELECT id, number, voucher_date, amount_cents FROM vouchers
+				 WHERE related_invoice_id = ? AND voucher_type = 'receipt'
+				 ORDER BY voucher_date DESC, id DESC`,
+				[invId]
+			).catch(() => []);
+		}
 		showRevertDialog.value = true;
 	};
 	const confirmRevert = async () => {
