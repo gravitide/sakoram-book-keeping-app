@@ -18,48 +18,12 @@
 			</NuxtLink>
 
 			<!-- Hidden for new clients since there's nothing to act on.
-				Delete is blocked by the DB once any quote / invoice
+				View quotes / invoices / statement moved into the shortcut
+				cards below the hero — only record-level actions stay up
+				here. Delete is blocked by the DB once any quote / invoice
 				references the client — the handler catches the FK error
 				and surfaces a friendly nudge toward Archive. -->
 			<div v-if="!isNew" class="flex items-center gap-2 flex-wrap shrink-0">
-				<UButton
-					size="sm"
-					icon="i-lucide-file-text"
-					variant="soft"
-					color="neutral"
-					@click="viewQuotes"
-				>
-					View quotes
-				</UButton>
-				<UButton
-					size="sm"
-					icon="i-lucide-receipt"
-					variant="soft"
-					color="neutral"
-					@click="viewInvoices"
-				>
-					View invoices
-				</UButton>
-				<!-- Customer statement PDF — point-in-time "you owe us X
-					across these N invoices" snapshot. Disabled when the
-					client has nothing outstanding so the user gets a
-					hint before clicking; the click handler also
-					double-checks and toasts a friendly message in case
-					the state was stale. -->
-				<UButton
-					size="sm"
-					icon="i-lucide-file-clock"
-					variant="soft"
-					color="primary"
-					:loading="statementPdf.state.rendering"
-					:disabled="openInvoicesForClient.length === 0"
-					:title="openInvoicesForClient.length === 0
-						? 'No outstanding invoices to chase'
-						: `${openInvoicesForClient.length} outstanding invoice${openInvoicesForClient.length === 1 ? '' : 's'}`"
-					@click="openStatement"
-				>
-					Statement
-				</UButton>
 				<UButton
 					size="sm"
 					:icon="isArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
@@ -135,6 +99,107 @@
 					</dl>
 				</div>
 			</div>
+		</section>
+
+		<!-- Activity shortcut cards — live per-client numbers with one-click
+			jumps to the pre-filtered lists, plus the statement PDF.
+			Replaces the old header-row View quotes / View invoices /
+			Statement buttons; numbers come from SQL aggregates in
+			loadStats(), refreshed on keep-alive re-entry. -->
+		<!-- Each card owns a semantic colour so the row reads as three
+			distinct destinations, not one grey strip: quotes = info blue,
+			invoices = primary green, outstanding = warning amber. Tints
+			ride the --ui-* theme tokens so light / dark and the user's
+			accent swatch all keep working. -->
+		<section v-if="!isNew" class="mb-10 grid grid-cols-1 md:grid-cols-3 gap-4">
+			<button
+				type="button"
+				class="group text-left rounded-lg border border-(--ui-info)/40 bg-(--ui-info)/10 hover:border-(--ui-info)/80 hover:bg-(--ui-info)/15 transition p-4 flex items-start gap-3 cursor-pointer shadow-md shadow-black/10"
+				@click="viewQuotes"
+			>
+				<span class="size-10 shrink-0 rounded-md bg-(--ui-info)/20 flex items-center justify-center">
+					<UIcon name="i-lucide-file-text" class="size-5 text-(--ui-info)" />
+				</span>
+				<span class="min-w-0 flex-1">
+					<span class="block text-xs font-medium uppercase tracking-wider text-(--ui-info)">Quotes</span>
+					<span class="block text-2xl font-semibold tabular-nums leading-tight">{{ stats.loaded ? stats.quotesTotal : "—" }}</span>
+					<span class="block text-xs text-(--ui-text-muted) mt-0.5">
+						{{ !stats.loaded ? "Loading…"
+							: stats.quotesTotal === 0 ? "None yet — view all"
+								: stats.quotesOpen > 0 ? `${stats.quotesOpen} open · view all` : "View all" }}
+					</span>
+				</span>
+				<UIcon name="i-lucide-arrow-right" class="size-4 mt-1 text-(--ui-info)/50 group-hover:text-(--ui-info) group-hover:translate-x-0.5 transition" />
+			</button>
+
+			<button
+				type="button"
+				class="group text-left rounded-lg border border-(--ui-primary)/40 bg-(--ui-primary)/10 hover:border-(--ui-primary)/80 hover:bg-(--ui-primary)/15 transition p-4 flex items-start gap-3 cursor-pointer shadow-md shadow-black/10"
+				@click="viewInvoices"
+			>
+				<span class="size-10 shrink-0 rounded-md bg-(--ui-primary)/20 flex items-center justify-center">
+					<UIcon name="i-lucide-receipt" class="size-5 text-(--ui-primary)" />
+				</span>
+				<span class="min-w-0 flex-1">
+					<span class="block text-xs font-medium uppercase tracking-wider text-(--ui-primary)">Invoices</span>
+					<span class="block text-2xl font-semibold tabular-nums leading-tight">{{ stats.loaded ? stats.invoicesTotal : "—" }}</span>
+					<span class="block text-xs text-(--ui-text-muted) mt-0.5">
+						{{ !stats.loaded ? "Loading…"
+							: stats.invoicesTotal === 0 ? "None yet — view all"
+								: stats.invoicesOpen > 0 ? `${stats.invoicesOpen} awaiting payment · view all` : "All settled · view all" }}
+					</span>
+				</span>
+				<UIcon name="i-lucide-arrow-right" class="size-4 mt-1 text-(--ui-primary)/50 group-hover:text-(--ui-primary) group-hover:translate-x-0.5 transition" />
+			</button>
+
+			<!-- Statement card carries the money headline: what this client
+				still owes, and the one action that chases it. Two equally
+				visible states: warning amber with money owed (click =
+				generate statement), success green when settled (the "all
+				clear" is information, not a disabled leftover). -->
+			<button
+				type="button"
+				class="group text-left rounded-lg border transition p-4 flex items-start gap-3 shadow-md shadow-black/10"
+				:class="stats.invoicesOpen > 0
+					? 'border-(--ui-warning)/50 bg-(--ui-warning)/10 hover:border-(--ui-warning) hover:bg-(--ui-warning)/15 cursor-pointer'
+					: 'border-(--ui-success)/40 bg-(--ui-success)/10 cursor-default'"
+				:disabled="stats.invoicesOpen === 0 || statementPdf.state.rendering"
+				@click="openStatement"
+			>
+				<span
+					class="size-10 shrink-0 rounded-md flex items-center justify-center"
+					:class="stats.invoicesOpen > 0 ? 'bg-(--ui-warning)/20' : 'bg-(--ui-success)/20'"
+				>
+					<UIcon
+						:name="statementPdf.state.rendering ? 'i-lucide-loader-circle'
+							: stats.invoicesOpen > 0 ? 'i-lucide-file-clock' : 'i-lucide-circle-check'"
+						class="size-5"
+						:class="[statementPdf.state.rendering && 'animate-spin', stats.invoicesOpen > 0 ? 'text-(--ui-warning)' : 'text-(--ui-success)']"
+					/>
+				</span>
+				<span class="min-w-0 flex-1">
+					<span
+						class="block text-xs font-medium uppercase tracking-wider"
+						:class="stats.invoicesOpen > 0 ? 'text-(--ui-warning)' : 'text-(--ui-success)'"
+					>Outstanding</span>
+					<span
+						class="block text-2xl font-semibold tabular-nums leading-tight truncate"
+						:class="stats.invoicesOpen > 0 ? 'text-(--ui-warning)' : 'text-(--ui-success)'"
+					>
+						{{ stats.loaded ? formatLKR(stats.outstandingCents) : "—" }}
+					</span>
+					<span class="block text-xs text-(--ui-text-muted) mt-0.5">
+						{{ !stats.loaded ? "Loading…"
+							: stats.invoicesOpen === 0 ? "All settled — nothing to chase"
+								: `Across ${stats.invoicesOpen} invoice${stats.invoicesOpen === 1 ? "" : "s"} · generate statement` }}
+					</span>
+				</span>
+				<UIcon
+					v-if="stats.invoicesOpen > 0"
+					name="i-lucide-arrow-right"
+					class="size-4 mt-1 text-(--ui-warning)/50 group-hover:text-(--ui-warning) group-hover:translate-x-0.5 transition"
+				/>
+			</button>
 		</section>
 
 		<!-- Form -------------------------------------------------------------- -->
@@ -300,6 +365,9 @@
 	import { z } from "zod";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
+	import { selectOne } from "~/lib/db";
+	import { invoiceDerivedFrom } from "~/lib/derived-status";
+	import { formatLKR } from "~/lib/money";
 	import { buildCustomerStatementPdfPayload, customerStatementFileName } from "~/lib/statement-pdf";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useClientsStore } from "~/stores/clients";
@@ -385,6 +453,56 @@
 		}
 		hydrate(row);
 	}
+
+	// Local YYYY-MM-DD "today" (not UTC — toISOString would drift a day near
+	// midnight for +ve timezones).
+	const todayISO = (): string => {
+		const d = new Date();
+		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+	};
+
+	// Live per-client numbers for the shortcut cards between the hero and
+	// the form. SQL aggregates, not store sums — the quotes/invoices
+	// stores may not be loaded when the user lands here directly, and the
+	// derived-status subquery gives the same paid/balance math the list
+	// pages use. Reloaded on keep-alive re-entry so recording a payment
+	// elsewhere and coming back shows fresh numbers.
+	const stats = reactive({
+		loaded: false,
+		quotesTotal: 0,
+		quotesOpen: 0,
+		invoicesTotal: 0,
+		invoicesOpen: 0,
+		outstandingCents: 0
+	});
+	const loadStats = async () => {
+		if (clientId === null) return;
+		const q = await selectOne<{ total: number, open: number }>(
+			`SELECT COUNT(*) AS total,
+				COALESCE(SUM(CASE WHEN status IN ('draft', 'sent', 'accepted') THEN 1 ELSE 0 END), 0) AS open
+			 FROM quotes WHERE client_id = ?`,
+			[clientId]
+		);
+		const inv = await selectOne<{ total: number, open: number, outstanding: number }>(
+			`SELECT COUNT(*) AS total,
+				COALESCE(SUM(CASE WHEN _status IN ('sent', 'partial', 'overdue') THEN 1 ELSE 0 END), 0) AS open,
+				COALESCE(SUM(CASE WHEN _status IN ('sent', 'partial', 'overdue') THEN _balance ELSE 0 END), 0) AS outstanding
+			 FROM ${invoiceDerivedFrom(todayISO())} WHERE client_id = ?`,
+			[clientId]
+		);
+		stats.quotesTotal = q?.total ?? 0;
+		stats.quotesOpen = q?.open ?? 0;
+		stats.invoicesTotal = inv?.total ?? 0;
+		stats.invoicesOpen = inv?.open ?? 0;
+		stats.outstandingCents = inv?.outstanding ?? 0;
+		stats.loaded = true;
+	};
+	if (!isNew) void loadStats();
+	// Keep-alive: setup runs once, so refresh the aggregates every time
+	// the user navigates back to this cached page.
+	onActivated(() => {
+		if (!isNew) void loadStats();
+	});
 
 	// Dirty tracking via JSON snapshot. Re-baselined after save / discard.
 	// On the new-client path the baseline is the empty form, so any
@@ -539,7 +657,15 @@
 	// Pre-load settings + invoices + banks so the payload builder sees
 	// real data. The page renders without waiting on these (no spinner)
 	// — they're only needed when the user actually generates a PDF.
+	// The zero-check runs AFTER ensureLoaded: openInvoicesForClient sums
+	// the in-memory store, which is empty until then on a fresh landing
+	// (the card's own disabled state gates on the SQL stats instead).
 	const openStatement = async () => {
+		await Promise.all([
+			settingsStore.ensureLoaded(),
+			invoicesStore.ensureLoaded(),
+			banksStore.ensureLoaded()
+		]);
 		if (openInvoicesForClient.value.length === 0) {
 			toast.add({
 				title: "No outstanding invoices",
@@ -549,11 +675,6 @@
 			});
 			return;
 		}
-		await Promise.all([
-			settingsStore.ensureLoaded(),
-			invoicesStore.ensureLoaded(),
-			banksStore.ensureLoaded()
-		]);
 		await statementPdf.open();
 	};
 
