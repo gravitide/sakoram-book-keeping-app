@@ -1305,7 +1305,10 @@ sides.**
 quotes:    draft → sent → accepted → converted (terminal)
                        ↘ rejected | expired
                 draft → rejected (cancel)
-                rejected | expired → draft (reopen — common mistake escape)
+                sent | accepted | rejected | expired → draft (reopen — common
+                mistake escape; sent = un-send, accepted = misclick /
+                renegotiation before conversion. Quotes carry no payments,
+                so nothing to guard)
                 converted → draft (revertConversion() — NOT a STATUS_TRANSITIONS
                 entry; a named compound op that DELETES the linked invoice and
                 reopens the quote. Refused while receipt vouchers exist on the
@@ -1318,10 +1321,13 @@ invoices:  persisted: draft ↔ sent ↔ cancelled (the only user transitions)
                       cancelled is sticky
            ("Record payment" creates a receipt voucher with
             related_invoice_id; partial/paid/overdue states fall
-            out of that.) Cancel is refused once any receipt
-            voucher is linked — vouchers must be deleted first.
-            The detail page also hides "Record payment" once the
-            balance hits zero.
+            out of that.) Cancel AND revert-to-draft are refused once
+            any receipt voucher is linked — vouchers must be deleted
+            first (the setStatus guard counts vouchers via direct SQL,
+            not the maybe-unloaded vouchers store). "Revert to draft"
+            is offered on sent-with-no-payments and on cancelled
+            (detail header + list row menu, v0.142.0). The detail page
+            also hides "Record payment" once the balance hits zero.
 
 bills:     persisted: open ↔ cancelled (the only user transitions)
            derived:   open + payments → unpaid | partial | paid
@@ -1336,9 +1342,12 @@ payslips:  persisted: draft ↔ issued ↔ cancelled
                       issued + payments → unpaid | partial | paid
                       cancelled is sticky
            ("Record payment" creates a payment voucher with
-            related_payslip_id. Cancel is refused once any payment
-            is linked — voucher must be deleted first. The detail
-            page hides Cancel in that state.)
+            related_payslip_id. Cancel AND revert-to-draft are refused
+            once any payment is linked — voucher must be deleted first
+            (setStatus guard counts vouchers via direct SQL). "Revert
+            to draft" is offered on issued-with-no-payments and on
+            cancelled — detail header + list row menu, v0.142.0. The
+            detail page hides Cancel in that state.)
 
 vouchers:  no transitions; voucher_type (receipt/payment) is locked at create
 

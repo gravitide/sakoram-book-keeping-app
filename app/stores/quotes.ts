@@ -4,8 +4,9 @@
 // Status transitions are enforced here, not in the SQL CHECK alone — the UI
 // shouldn't even offer illegal moves. Allowed paths:
 //   draft     → sent | rejected (cancel)
-//   sent      → accepted | rejected | expired
+//   sent      → accepted | rejected | expired | draft (un-send)
 //   accepted  → converted     (set automatically when an invoice is created)
+//               | draft       (reopen — accepted in error / terms changed)
 //   rejected  → (terminal)
 //   expired   → (terminal)
 //   converted → (terminal via transitions; revertConversion() is the
@@ -111,8 +112,14 @@ export interface BankSnapshot {
 
 const STATUS_TRANSITIONS: Record<QuoteStatus, QuoteStatus[]> = {
 	draft: ["sent", "rejected"],
-	sent: ["accepted", "rejected", "expired"],
-	accepted: ["converted"],
+	// Sent can pull back to draft (un-send — typo spotted after issuing).
+	// Quotes carry no payments, so there's nothing to guard.
+	sent: ["accepted", "rejected", "expired", "draft"],
+	// Accepted can reopen to draft too — same owner-takes-responsibility
+	// rationale as rejected/expired below (accepted on a misclick, or the
+	// client renegotiates before conversion). Once CONVERTED, reopening
+	// goes through revertConversion() instead, because an invoice exists.
+	accepted: ["converted", "draft"],
 	// Rejected and expired are user-decision states, not data-loss
 	// states — allow reopening back to draft so an accidental click
 	// or a customer change of mind doesn't burn the quote number.

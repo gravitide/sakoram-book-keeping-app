@@ -581,6 +581,25 @@
 		}
 	};
 
+	// Mirror of the detail page's "Revert to draft" — offered on sent rows
+	// with no recorded payments and on cancelled rows (the store refuses
+	// with payments as the backstop).
+	const revertToDraft = async (i: InvoiceRow) => {
+		try {
+			await store.setStatus(i.id, "draft");
+			toast.add({ title: `${i.number} reverted to draft`, color: "info", icon: "i-lucide-rotate-ccw" });
+			await table.reload();
+			await refreshStats();
+		} catch (err) {
+			toast.add({
+				title: "Action failed",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
 	const recordPayment = (i: InvoiceRow) => {
 		router.push(`/vouchers/new?invoice=${i.id}`);
 	};
@@ -625,6 +644,17 @@
 				label: "Record payment",
 				icon: "i-lucide-circle-dollar-sign",
 				onSelect: () => recordPayment(i)
+			});
+		}
+		// Revert to draft: sent with no payments yet, or cancelled —
+		// mirrors the detail page's transition buttons.
+		if ((i.status === "sent" && i._paid === 0) || i.status === "cancelled") {
+			lifecycle.push({
+				label: "Revert to draft",
+				icon: "i-lucide-rotate-ccw",
+				onSelect: () => {
+					void revertToDraft(i);
+				}
 			});
 		}
 		const duplicateAction = [{
