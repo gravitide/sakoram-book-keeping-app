@@ -90,13 +90,14 @@
 						</UButton>
 					</div>
 					<div class="text-xs text-(--ui-text-muted) mt-1">
-						Reusable sign-offs. Pick one when composing a letter (it's copied in
-						and stays editable). The default is pre-filled into every new letter.
+						Reusable sign-offs, shared across letters and the "Prepared by" on
+						quotes and invoices. Pick one to copy it in (it stays editable). The
+						default is pre-filled into every new letter.
 					</div>
 				</template>
 
 				<div v-if="sigStore.signatures.length === 0" class="text-sm text-(--ui-text-muted) py-4 text-center">
-					No signatures yet. Add one to reuse across letters.
+					No signatures yet. Add one to reuse across letters, quotes, and invoices.
 				</div>
 				<ul v-else class="divide-y divide-(--ui-border) border border-(--ui-border) rounded-md">
 					<li v-for="s in sigStore.signatures" :key="s.id" class="flex items-center gap-2 px-3 py-2">
