@@ -6,7 +6,7 @@
 					{{ formatLKR(grandTotal) }}
 				</div>
 				<div class="text-xs text-(--ui-text-muted) mt-0.5">
-					Last 12 months · {{ totalInvoiceCount }} invoice{{ totalInvoiceCount === 1 ? "" : "s" }}
+					{{ windowLabel }} · {{ totalInvoiceCount }} invoice{{ totalInvoiceCount === 1 ? "" : "s" }}
 				</div>
 			</div>
 			<div v-if="topRow && totalClients > 1" class="text-xs text-(--ui-text-muted)">
@@ -18,7 +18,7 @@
 
 		<div v-if="rows.length === 0" class="py-8 text-center text-sm text-(--ui-text-muted)">
 			<UIcon name="i-lucide-users" class="size-8 block mx-auto mb-2 opacity-50" />
-			No invoiced revenue in the last 12 months yet.
+			No invoiced revenue — {{ windowLabel.toLowerCase() }}.
 		</div>
 
 		<!-- Horizontal bar list. Each row is a name on top of a tinted
@@ -74,9 +74,19 @@
 	import { formatLKR } from "~/lib/money";
 	import { useInvoicesStore } from "~/stores/invoices";
 
+	// `from` / `to` are the dashboard range chips' inclusive ISO bounds
+	// (null = unbounded); when absent the chart keeps its original
+	// trailing-365-days window. `rangeLabel` feeds the subtitle /
+	// empty-state copy.
+	const props = defineProps<{
+		from?: string | null
+		to?: string | null
+		rangeLabel?: string
+	}>();
+
 	const invoicesStore = useInvoicesStore();
 
-	// Window: the most recent 365 days.
+	// Legacy window when no range props: the most recent 365 days.
 	const cutoffISO = computed(() => {
 		const d = new Date();
 		d.setHours(0, 0, 0, 0);
@@ -86,6 +96,16 @@
 		const day = String(d.getDate()).padStart(2, "0");
 		return `${y}-${m}-${day}`;
 	});
+
+	const hasRange = computed(() => props.from !== undefined || props.to !== undefined);
+	const windowLabel = computed(() => props.rangeLabel ?? "Last 12 months");
+
+	const inWindow = (isoDate: string): boolean => {
+		if (!hasRange.value) return isoDate >= cutoffISO.value;
+		if (props.from && isoDate < props.from) return false;
+		if (props.to && isoDate > props.to) return false;
+		return true;
+	};
 
 	interface ClientRow {
 		id: number | string // numeric for real clients, "__other" for the rollup
@@ -98,7 +118,7 @@
 		const map = new Map<number, ClientRow>();
 		for (const inv of invoicesStore.invoices) {
 			if (inv.status === "cancelled" || inv.status === "draft") continue;
-			if (inv.issue_date < cutoffISO.value) continue;
+			if (!inWindow(inv.issue_date)) continue;
 			const existing = map.get(inv.client_id);
 			if (existing) {
 				existing.amount += inv.total_cents;

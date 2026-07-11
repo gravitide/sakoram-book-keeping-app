@@ -243,6 +243,25 @@
 			if the stores below are still loading — that's the whole
 			point of the two-tier split. -->
 		<template v-if="kpis">
+			<!-- Range chips: one global lens for the FLOW widgets (net
+				cash tile, monthly cash flow, expenses by category, top
+				clients). Snapshot tiles (receivables / payables / open
+				quotes / aging) always read "as of today" and ignore it.
+				Selection persists per business — see useDashboardRange. -->
+			<div class="flex items-center gap-1 flex-wrap mb-4">
+				<UIcon name="i-lucide-calendar-range" class="size-3.5 text-(--ui-text-muted) mr-1" />
+				<UButton
+					v-for="p in presets"
+					:key="p.id"
+					size="xs"
+					:color="preset === p.id ? 'primary' : 'neutral'"
+					:variant="preset === p.id ? 'soft' : 'ghost'"
+					@click="preset = p.id"
+				>
+					{{ p.label }}
+				</UButton>
+			</div>
+
 			<!-- KPI tiles -->
 			<!-- Layout: 1 col (mobile) → 4 col (md+). The money figures
 			switch to compact form (K/M/B) at md and lg where tile width
@@ -329,20 +348,20 @@
 				<UCard class="h-full">
 					<div class="flex items-start justify-between gap-2">
 						<div class="text-xs md:text-[11px] xl:text-xs uppercase tracking-wide text-(--ui-text-muted) leading-tight min-h-[2lh]">
-							Net cash · {{ monthLabel }}
+							Net cash · {{ range.label }}
 						</div>
-						<UIcon name="i-lucide-trending-up" class="size-4" :class="netCashThisMonth >= 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'" />
+						<UIcon name="i-lucide-trending-up" class="size-4" :class="netCashInRange >= 0 ? 'text-(--ui-success)' : 'text-(--ui-error)'" />
 					</div>
 					<div
 						class="mt-2 text-2xl md:text-xl 2xl:text-2xl font-semibold tabular-nums"
-						:class="netCashThisMonth >= 0 ? 'text-(--ui-text)' : 'text-(--ui-error)'"
-						:title="`${netCashThisMonth >= 0 ? '+' : '−'}${formatLKR(Math.abs(netCashThisMonth))}`"
+						:class="netCashInRange >= 0 ? 'text-(--ui-text)' : 'text-(--ui-error)'"
+						:title="`${netCashInRange >= 0 ? '+' : '−'}${formatLKR(Math.abs(netCashInRange))}`"
 					>
-						{{ netCashThisMonth >= 0 ? '+' : '−' }}{{ kpiMoney(Math.abs(netCashThisMonth)) }}
+						{{ netCashInRange >= 0 ? '+' : '−' }}{{ kpiMoney(Math.abs(netCashInRange)) }}
 					</div>
 					<div class="mt-1 text-xs text-(--ui-text-muted) flex items-center gap-3">
-						<span class="text-(--ui-success)" :title="formatLKR(receiptsThisMonth)">+{{ kpiMoney(receiptsThisMonth) }}</span>
-						<span class="text-(--ui-error)" :title="formatLKR(paymentsThisMonth)">−{{ kpiMoney(paymentsThisMonth) }}</span>
+						<span class="text-(--ui-success)" :title="formatLKR(receiptsInRange)">+{{ kpiMoney(receiptsInRange) }}</span>
+						<span class="text-(--ui-error)" :title="formatLKR(paymentsInRange)">−{{ kpiMoney(paymentsInRange) }}</span>
 					</div>
 				</UCard>
 			</div>
@@ -377,13 +396,18 @@
 									Monthly cash flow
 								</div>
 								<div class="text-xs text-(--ui-text-muted) mt-0.5">
-									Receipts in, payments out — last {{ cashflowMonths }} months from the voucher ledger.
+									Receipts in, payments out — {{ range.label.toLowerCase() }}, from the voucher ledger.
 								</div>
 							</div>
 							<UIcon name="i-lucide-bar-chart-3" class="size-4 text-(--ui-text-muted)" />
 						</div>
 					</template>
-					<MonthlyCashFlowChart :vouchers="vouchersStore.vouchers" :months-back="cashflowMonths" />
+					<MonthlyCashFlowChart
+						:vouchers="vouchersStore.vouchers"
+						:months-back="cashflowMonths"
+						:from="range.from"
+						:to="range.to"
+					/>
 				</UCard>
 
 				<UCard
@@ -399,7 +423,7 @@
 									Expenses by category
 								</div>
 								<div class="text-xs text-(--ui-text-muted) mt-0.5">
-									Where the money's going, last 90 days.
+									Where the money's going — {{ range.label.toLowerCase() }}.
 								</div>
 							</div>
 							<!-- Toggle only renders at lg-xl (where it has
@@ -423,7 +447,12 @@
 							/>
 						</div>
 					</template>
-					<ExpensesByCategoryChart :show-donut="showExpensesDonut" />
+					<ExpensesByCategoryChart
+						:show-donut="showExpensesDonut"
+						:from="range.from"
+						:to="range.to"
+						:range-label="range.label"
+					/>
 				</UCard>
 			</div>
 
@@ -569,13 +598,13 @@
 								Top clients
 							</div>
 							<div class="text-xs text-(--ui-text-muted) mt-0.5">
-								Invoiced revenue over the last 12 months — concentration check.
+								Invoiced revenue — {{ range.label.toLowerCase() }} — concentration check.
 							</div>
 						</div>
 						<UIcon name="i-lucide-users" class="size-4 text-(--ui-text-muted)" />
 					</div>
 				</template>
-				<TopClientsChart />
+				<TopClientsChart :from="range.from" :to="range.to" :range-label="range.label" />
 			</UCard>
 		</template>
 	</div>
@@ -606,6 +635,11 @@
 	const quotesStore = useQuotesStore();
 	const vouchersStore = useVouchersStore();
 	const payslipsStore = usePayslipsStore();
+
+	// Global range lens for the flow widgets (net cash tile + the three
+	// charts). Preset chips render above the KPI strip; the selection
+	// persists per business. Snapshot tiles ignore it by design.
+	const { preset, range, presets } = useDashboardRange();
 
 	// Expand/collapse state for the Expenses-by-category card. Only
 	// meaningful at lg-xl (1024-1535px) — below lg cards stack with
@@ -706,20 +740,41 @@
 		&& payslipsStore.loaded
 	);
 
-	onMounted(async () => {
-		// KPI aggregates first — they're fast and the user sees a
-		// useful page within a fraction of a second.
+	// KPI aggregates reload on EVERY activation, not just first mount —
+	// this page is kept alive (<NuxtPage keepalive>), so onMounted fires
+	// once per app session and money recorded after the first dashboard
+	// visit would otherwise stay frozen at the first snapshot until the
+	// app restarts (the "dashboard stuck at Rs 0.00" bug). The aggregates
+	// are four small GROUP BYs, sub-second at any volume, so re-running
+	// them per visit is free.
+	const refreshKpis = async () => {
 		try {
-			kpis.value = await loadDashboardKpis();
+			kpis.value = await loadDashboardKpis({ from: range.value.from, to: range.value.to });
+			loadError.value = null;
 		} catch (err) {
 			loadError.value = err instanceof Error ? err.message : String(err);
-			return;
 		}
+	};
 
-		// Then the stores in the background — chart components subscribe
-		// to them and paint as they fill in. We don't `await` the
-		// outer onMounted on these; the dashboard renders KPI tiles +
-		// the chart skeleton meanwhile.
+	// Chip clicks re-run the (cheap) KPI aggregates so the net-cash tile
+	// follows the picked range; the charts react to the range via props.
+	watch(range, () => {
+		void refreshKpis();
+	});
+
+	// onActivated also fires on the initial mount (right after
+	// onMounted), so this is the ONLY kpi load — no double fetch on the
+	// first visit.
+	onActivated(() => {
+		void refreshKpis();
+	});
+
+	onMounted(async () => {
+		// Stores in the background — chart components subscribe to them
+		// and paint as they fill in (the dashboard renders KPI tiles +
+		// the chart skeleton meanwhile). Load-once is fine here: every
+		// store mutation elsewhere reloads its own array, so these stay
+		// fresh for the charts / activity lists after the first visit.
 		try {
 			await Promise.all([
 				invoicesStore.ensureLoaded(),
@@ -736,11 +791,6 @@
 	const todayLabel = computed(() => {
 		const d = new Date();
 		return d.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-	});
-
-	const monthLabel = computed(() => {
-		const d = new Date();
-		return d.toLocaleDateString(undefined, { month: "short", year: "numeric" });
 	});
 
 	// Header "New" dropdown — the create actions, moved out of the
@@ -804,9 +854,9 @@
 	const openQuotesCount = computed(() => kpis.value?.quotes.open_count ?? 0);
 	const acceptedQuotesCount = computed(() => kpis.value?.quotes.accepted_count ?? 0);
 	const openQuotesValue = computed(() => kpis.value?.quotes.open_value_cents ?? 0);
-	const receiptsThisMonth = computed(() => kpis.value?.cash.receipts_cents ?? 0);
-	const paymentsThisMonth = computed(() => kpis.value?.cash.payments_cents ?? 0);
-	const netCashThisMonth = computed(() => receiptsThisMonth.value - paymentsThisMonth.value);
+	const receiptsInRange = computed(() => kpis.value?.cash.receipts_cents ?? 0);
+	const paymentsInRange = computed(() => kpis.value?.cash.payments_cents ?? 0);
+	const netCashInRange = computed(() => receiptsInRange.value - paymentsInRange.value);
 
 	// --- Recent activity feed ---
 

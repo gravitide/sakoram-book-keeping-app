@@ -109,42 +109,60 @@ export async function getQuoteKpis(): Promise<QuoteKpis> {
 	return row ?? { open_value_cents: 0, open_count: 0, accepted_count: 0 };
 }
 
-/// Current-month cash flow — receipts vs payments for the calendar
-/// month containing today. SQLite's strftime keeps this date-safe
-/// across timezones (we treat voucher_date as a local-date ISO
-/// string, same as everywhere else in the app).
-export interface CashFlowThisMonth {
+/// Cash flow over the dashboard's picked range — receipts vs payments
+/// between the (inclusive) ISO bounds. Null bound = unbounded, so
+/// "All time" is (null, null). voucher_date is a local-date ISO string
+/// and ISO strings compare lexicographically, so plain >= / <= work.
+export interface CashFlowKpis {
 	receipts_cents: number
 	payments_cents: number
 }
 
-export async function getCashFlowThisMonth(): Promise<CashFlowThisMonth> {
-	const row = await selectOne<CashFlowThisMonth>(`
+export async function getCashFlowForRange(
+	from: string | null,
+	to: string | null
+): Promise<CashFlowKpis> {
+	const clauses: string[] = [];
+	const params: string[] = [];
+	if (from) {
+		clauses.push("voucher_date >= ?");
+		params.push(from);
+	}
+	if (to) {
+		clauses.push("voucher_date <= ?");
+		params.push(to);
+	}
+	const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+	const row = await selectOne<CashFlowKpis>(`
 		SELECT
 			COALESCE(SUM(CASE WHEN voucher_type = 'receipt' THEN amount_cents ELSE 0 END), 0) AS receipts_cents,
 			COALESCE(SUM(CASE WHEN voucher_type = 'payment' THEN amount_cents ELSE 0 END), 0) AS payments_cents
 		FROM vouchers
-		WHERE strftime('%Y-%m', voucher_date) = strftime('%Y-%m', 'now')
-	`);
+		${where}
+	`, params);
 	return row ?? { receipts_cents: 0, payments_cents: 0 };
 }
 
 /// Shape returned by `loadDashboardKpis()` — bundles all four KPI
 /// query results so the dashboard can pull them in a single
 /// `Promise.all`. Pages should treat null fields as "still loading".
+/// Only the cash KPI follows the picked range; invoices / bills /
+/// quotes are point-in-time snapshots by design.
 export interface DashboardKpis {
 	invoices: InvoiceKpis
 	bills: BillKpis
 	quotes: QuoteKpis
-	cash: CashFlowThisMonth
+	cash: CashFlowKpis
 }
 
-export async function loadDashboardKpis(): Promise<DashboardKpis> {
+export async function loadDashboardKpis(
+	range: { from: string | null, to: string | null }
+): Promise<DashboardKpis> {
 	const [invoices, bills, quotes, cash] = await Promise.all([
 		getInvoiceKpis(),
 		getBillKpis(),
 		getQuoteKpis(),
-		getCashFlowThisMonth()
+		getCashFlowForRange(range.from, range.to)
 	]);
 	return { invoices, bills, quotes, cash };
 }

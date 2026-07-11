@@ -347,7 +347,7 @@ sakoram_app/
 │  │  ├─ sakoram-icon.svg             ← square mark used in the titlebar
 │  │  └─ sakoram-wordmark.svg         ← wide wordmark used in the welcome screen + About modal
 │  ├─ pages/
-│  │  ├─ index.vue                    ← Dashboard (KPI tiles + cashflow/expenses row + Upcoming calendar embed + receivables aging + recent activity + top clients)
+│  │  ├─ index.vue                    ← Dashboard (KPI tiles + cashflow/expenses row + Upcoming calendar embed + receivables aging + recent activity + top clients). A range chip row (This month … Fiscal year / All time, persisted per business via useDashboardRange) drives the FLOW widgets — net-cash tile + the three charts; snapshot tiles (receivables/payables/open quotes/aging) always read "as of today". KPIs reload on every onActivated (keep-alive) AND on range change.
 │  │  ├─ welcome.vue                  ← business picker (landing screen); demo-seed overlay while building
 │  │  ├─ onboarding.vue               ← 4-step wizard after creating a new tenant
 │  │  ├─ calendar.vue                 ← full-page month-grid view of every upcoming due-date (invoices / bills / quote expiries / payslips), with kind filter chips

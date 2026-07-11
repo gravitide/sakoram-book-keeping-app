@@ -6,7 +6,7 @@
 					{{ formatLKR(total) }}
 				</div>
 				<div class="text-xs text-(--ui-text-muted) mt-0.5">
-					Last 90 days · {{ paidCount }} payment{{ paidCount === 1 ? "" : "s" }}
+					{{ windowLabel }} · {{ paidCount }} payment{{ paidCount === 1 ? "" : "s" }}
 				</div>
 			</div>
 			<div v-if="categoryRows.length > 1" class="text-xs text-(--ui-text-muted)">
@@ -16,7 +16,7 @@
 
 		<div v-if="total === 0" class="py-8 text-center text-sm text-(--ui-text-muted)">
 			<UIcon name="i-lucide-piggy-bank" class="size-8 block mx-auto mb-2 opacity-50" />
-			No expenses recorded in the last 90 days.
+			No expenses recorded — {{ windowLabel.toLowerCase() }}.
 		</div>
 
 		<template v-else>
@@ -125,8 +125,16 @@
 	// `showDonut` lets the dashboard collapse the SVG when the card
 	// sits in a narrow slot (lg-range, before the user expands it).
 	// Defaults to true so the chart still works as a standalone block
-	// for any other caller.
-	withDefaults(defineProps<{ showDonut?: boolean }>(), { showDonut: true });
+	// for any other caller. `from` / `to` are the dashboard range
+	// chips' inclusive ISO bounds (null = unbounded); when absent the
+	// chart keeps its original trailing-90-days window. `rangeLabel`
+	// feeds the subtitle / empty-state copy.
+	const props = withDefaults(defineProps<{
+		showDonut?: boolean
+		from?: string | null
+		to?: string | null
+		rangeLabel?: string
+	}>(), { showDonut: true });
 
 	const billsStore = useBillsStore();
 	const currency = useActiveCurrency();
@@ -137,8 +145,9 @@
 	// units; 2πr with r=40 ≈ 251.33. We pre-compute it once.
 	const CIRC = 2 * Math.PI * 40;
 
-	// Window: last 90 days. Calendar-day boundary so the same
-	// bill doesn't drift in/out as the clock ticks past midnight.
+	// Legacy window when no range props: last 90 days. Calendar-day
+	// boundary so the same bill doesn't drift in/out as the clock
+	// ticks past midnight.
 	const cutoffISO = computed(() => {
 		const d = new Date();
 		d.setHours(0, 0, 0, 0);
@@ -148,6 +157,17 @@
 		const day = String(d.getDate()).padStart(2, "0");
 		return `${y}-${m}-${day}`;
 	});
+
+	const hasRange = computed(() => props.from !== undefined || props.to !== undefined);
+	const windowLabel = computed(() => props.rangeLabel ?? "Last 90 days");
+
+	// Shared date predicate for both aggregates below.
+	const inWindow = (isoDate: string): boolean => {
+		if (!hasRange.value) return isoDate >= cutoffISO.value;
+		if (props.from && isoDate < props.from) return false;
+		if (props.to && isoDate > props.to) return false;
+		return true;
+	};
 
 	interface CategoryRow {
 		id: string // category snapshot's name, or "__uncat" / "__other"
@@ -164,7 +184,7 @@
 		const map = new Map<string, CategoryRow>();
 		for (const b of billsStore.bills) {
 			if (b.status === "cancelled") continue;
-			if (b.issue_date < cutoffISO.value) continue;
+			if (!inWindow(b.issue_date)) continue;
 			let snap: { name: string, color: string, icon: string } | null = null;
 			if (b.category_snapshot) {
 				try {
@@ -209,7 +229,7 @@
 		let n = 0;
 		for (const b of billsStore.bills) {
 			if (b.status === "cancelled") continue;
-			if (b.issue_date < cutoffISO.value) continue;
+			if (!inWindow(b.issue_date)) continue;
 			n++;
 		}
 		return n;

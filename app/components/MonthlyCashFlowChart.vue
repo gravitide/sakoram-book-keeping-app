@@ -180,10 +180,58 @@
 
 	const props = defineProps<{
 		vouchers: VoucherRow[]
-		/// How many months of history to show, ending at the current
-		/// month inclusive. Default 12.
+		/// Maximum number of month columns that fit the current layout
+		/// (12 wide / 6 narrow on the dashboard). Default 12. Without an
+		/// explicit range this is also the window: trailing N months.
 		monthsBack?: number
+		/// Optional inclusive ISO date bounds from the dashboard's range
+		/// chips. `undefined` = prop not used (legacy trailing window);
+		/// `null` = unbounded on that side ("All time" starts at the
+		/// earliest voucher, an open end finishes at the current month).
+		from?: string | null
+		to?: string | null
 	}>();
+
+	// First-of-month Date for an ISO YYYY-MM-DD string (local time).
+	const isoMonthStart = (isoDate: string): Date =>
+		new Date(Number(isoDate.slice(0, 4)), Number(isoDate.slice(5, 7)) - 1, 1);
+
+	// The month window actually drawn: [start, start + colCount). With a
+	// range that spans more months than the layout cap, we keep the MOST
+	// RECENT cap months of the range — the freshest slice is the useful
+	// one on a dashboard.
+	const visibleMonthRange = computed(() => {
+		const cap = props.monthsBack ?? 12;
+		const now = new Date();
+		const end = props.to ? isoMonthStart(props.to) : new Date(now.getFullYear(), now.getMonth(), 1);
+		if (props.from === undefined && props.to === undefined) {
+			// Legacy behaviour: trailing `cap` months ending now.
+			return { start: new Date(end.getFullYear(), end.getMonth() - (cap - 1), 1), colCount: cap };
+		}
+		let start: Date;
+		if (props.from) {
+			start = isoMonthStart(props.from);
+		} else {
+			// Unbounded start (All time): begin at the earliest voucher
+			// that's inside the range's end bound.
+			let earliest: string | null = null;
+			for (const v of props.vouchers) {
+				if (props.to && v.voucher_date > props.to) continue;
+				if (earliest === null || v.voucher_date < earliest) earliest = v.voucher_date;
+			}
+			start = earliest ? isoMonthStart(earliest) : end;
+		}
+		let colCount = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
+		if (colCount < 1) {
+			start = end;
+			colCount = 1;
+		}
+		if (colCount > cap) {
+			start = new Date(end.getFullYear(), end.getMonth() - (cap - 1), 1);
+			colCount = cap;
+		}
+		return { start, colCount };
+	});
 
 	const hover = ref<number | null>(null);
 
@@ -196,16 +244,17 @@
 	const PADDING_RIGHT = 12;
 	const PADDING_TOP = 12;
 	const PADDING_BOTTOM = 32;
-	// Bar geometry scales with the horizon so a shorter series doesn't
-	// look anaemic (e.g. at 6 months each column is ~2x wider, so we
-	// double the bar width to keep the column ~55%-filled). Baseline:
-	// 14px bars + 3px gap tuned for 12 months.
+	// Bar geometry scales with the DRAWN month count so a shorter series
+	// doesn't look anaemic (e.g. at 6 months each column is ~2x wider, so
+	// we double the bar width to keep the column ~55%-filled). Baseline:
+	// 14px bars + 3px gap tuned for 12 months. Clamped at the 3-month
+	// scale so a 1-2 column range doesn't produce comically fat bars.
 	const BAR_WIDTH = computed(() => {
-		const totalMonths = props.monthsBack ?? 12;
+		const totalMonths = Math.max(3, visibleMonthRange.value.colCount);
 		return Math.round(14 * (12 / totalMonths));
 	});
 	const BAR_GAP = computed(() => {
-		const totalMonths = props.monthsBack ?? 12;
+		const totalMonths = Math.max(3, visibleMonthRange.value.colCount);
 		return Math.round(3 * (12 / totalMonths));
 	});
 
@@ -219,17 +268,18 @@
 	const monthFull = (d: Date) =>
 		d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
-	// Build the rolling-12 (or N) month buckets ending at this month.
-	// We always emit a full series so empty months show as no-bars
-	// rather than a gap.
+	// Build the month buckets for the visible window. We always emit a
+	// full series so empty months show as no-bars rather than a gap.
 	const months = computed(() => {
-		const totalMonths = props.monthsBack ?? 12;
-		const today = new Date();
-		const startMonth = new Date(today.getFullYear(), today.getMonth() - (totalMonths - 1), 1);
+		const { start: startMonth, colCount } = visibleMonthRange.value;
 
-		// Pre-aggregate vouchers into a {month: {income, expense}} map.
+		// Pre-aggregate vouchers into a {month: {income, expense}} map,
+		// honouring the range bounds (full-date compare — a mid-month
+		// `to` like "today" must exclude later same-month vouchers).
 		const buckets = new Map<string, { income: number, expense: number }>();
 		for (const v of props.vouchers) {
+			if (props.from && v.voucher_date < props.from) continue;
+			if (props.to && v.voucher_date > props.to) continue;
 			// voucher_date is ISO `YYYY-MM-DD`; the first 7 chars are
 			// the YYYY-MM key. Avoids `new Date()` parsing surprises.
 			const key = v.voucher_date.slice(0, 7);
@@ -239,7 +289,6 @@
 			buckets.set(key, slot);
 		}
 
-		const colCount = totalMonths;
 		const usableWidth = SVG_WIDTH - PADDING_LEFT - PADDING_RIGHT;
 		const colWidth = usableWidth / colCount;
 		const usableHeight = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
@@ -308,13 +357,13 @@
 		return out;
 	});
 
-	// Reactive column width: must track `props.monthsBack` so the
+	// Reactive column width: must track the drawn month count so the
 	// hover hit-zone and label/tooltip positions match the bars when
-	// the parent swaps horizons (e.g. 12mo → 6mo at the lg tier).
-	const COL_WIDTH = computed(() => {
-		const totalMonths = props.monthsBack ?? 12;
-		return (SVG_WIDTH - PADDING_LEFT - PADDING_RIGHT) / totalMonths;
-	});
+	// the parent swaps horizons (e.g. 12mo → 6mo at the lg tier) or the
+	// range narrows the series.
+	const COL_WIDTH = computed(() =>
+		(SVG_WIDTH - PADDING_LEFT - PADDING_RIGHT) / visibleMonthRange.value.colCount
+	);
 
 	// Y-axis tick values + their pixel positions. Three lines: 0, mid,
 	// max — minimal but enough to read the magnitudes.
