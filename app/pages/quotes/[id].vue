@@ -35,6 +35,19 @@
 				>
 					Convert to invoice
 				</UButton>
+				<!-- Escape hatch for a conversion done in error: deletes the
+					linked invoice and returns this quote to draft. The store
+					refuses while the invoice has recorded payments. -->
+				<UButton
+					v-if="canRevert"
+					size="sm"
+					color="warning"
+					variant="outline"
+					icon="i-lucide-undo-2"
+					@click="askRevert"
+				>
+					Revert to draft
+				</UButton>
 				<!-- Legal next-state transitions as individual buttons —
 					replaces an opaque 'Status' dropdown so the available
 					moves are visible at a glance. Hidden when no
@@ -464,27 +477,38 @@
 							and locked.
 						</p>
 						<p>
-							The invoice gets a fresh due date based on your default payment
-							terms. Pick its number below — leave the default to take the next
-							in the INV sequence, or set one to fill a gap.
+							Pick the invoice's issue date — the due date follows from it
+							plus your default payment terms. Leave the number as-is to take
+							the next in the INV sequence, or set one to fill a gap.
 						</p>
 					</div>
-					<UFormField label="Invoice number" required>
-						<template #help>
-							<span v-if="convertDocNum.numberTaken.value" class="text-(--ui-error)">
-								{{ convertDocNum.numberFormatted.value }} is already in use — pick another sequence.
-							</span>
-							<span v-else-if="convertDocNum.numberFormatted.value">
-								Will be saved as <span class="font-medium">{{ convertDocNum.numberFormatted.value }}</span>
-							</span>
-						</template>
-						<UInputNumber
-							v-model="convertDocNum.sequence.value"
-							:min="1"
-							:step="1"
-							class="w-1/2"
-						/>
-					</UFormField>
+					<!-- Side by side: both inputs are short, and the pair reads as
+						one "stamp the new invoice" decision. items-start keeps the
+						date field pinned to the top when the number's help line
+						wraps below it. -->
+					<div class="grid grid-cols-2 gap-4 items-start">
+						<UFormField label="Issue date">
+							<!-- w-full: UInputDate shrinks to content by default, which
+								reads as a mismatched box next to the full-width number
+								input in the same row. -->
+							<DateField v-model="convertIssueDate" class="w-full" />
+						</UFormField>
+						<UFormField label="Invoice number" required>
+							<template #help>
+								<span v-if="convertDocNum.numberTaken.value" class="text-(--ui-error)">
+									{{ convertDocNum.numberFormatted.value }} is already in use — pick another sequence.
+								</span>
+								<span v-else-if="convertDocNum.numberFormatted.value">
+									Will be saved as <span class="font-medium">{{ convertDocNum.numberFormatted.value }}</span>
+								</span>
+							</template>
+							<UInputNumber
+								v-model="convertDocNum.sequence.value"
+								:min="1"
+								:step="1"
+							/>
+						</UFormField>
+					</div>
 				</div>
 			</template>
 			<template #footer>
@@ -499,6 +523,72 @@
 						@click="confirmConvert"
 					>
 						Create invoice
+					</UButton>
+				</div>
+			</template>
+		</UModal>
+
+		<UModal v-model:open="showRevertDialog" title="Revert to draft?">
+			<template #body>
+				<div class="space-y-3 text-sm">
+					<p class="text-(--ui-text-muted)">
+						Invoice
+						<span class="font-medium text-(--ui-text)">{{ convertedInvoice?.number ?? "linked to this quote" }}</span>
+						and its attachments will be <span class="font-medium text-(--ui-text)">permanently deleted</span>,
+						and this quote returns to an editable draft.
+					</p>
+					<p class="text-(--ui-text-muted)">
+						The invoice number won't be reused automatically — it'll show as
+						a gap you can fill from the next convert or New-invoice dialog.
+					</p>
+					<!-- Payments recorded against the invoice block the revert.
+						List them with links so the user can jump straight to
+						each voucher and delete it, instead of hunting the
+						ledger for whatever the guard message meant. -->
+					<div v-if="revertVouchers.length > 0" class="rounded-md border border-(--ui-warning)/40 bg-(--ui-warning)/10 p-3 space-y-2">
+						<p class="font-medium text-(--ui-text)">
+							{{ revertVouchers.length === 1 ? "A payment is" : `${revertVouchers.length} payments are` }} recorded against this invoice
+						</p>
+						<p class="text-(--ui-text-muted)">
+							Reverting is blocked while these receipt vouchers exist.
+							Delete them first, then revert.
+						</p>
+						<ul class="space-y-1">
+							<li v-for="v in revertVouchers" :key="v.id">
+								<!-- Close on navigate: this page is kept alive, so a
+									still-open dialog would show a stale voucher list
+									when the user comes back after deleting one.
+									Re-opening re-fetches. -->
+								<NuxtLink
+									:to="`/vouchers/${v.id}`"
+									class="inline-flex items-center gap-1.5 text-(--ui-text) hover:text-(--ui-primary) underline underline-offset-2"
+									@click="showRevertDialog = false"
+								>
+									<UIcon name="i-lucide-receipt" class="size-3.5 shrink-0" />
+									<span class="font-medium">{{ v.number }}</span>
+									<span class="text-(--ui-text-muted)">· {{ v.voucher_date }} · {{ formatLKR(v.amount_cents) }}</span>
+								</NuxtLink>
+							</li>
+						</ul>
+					</div>
+					<p v-else class="text-(--ui-text-muted)">
+						No payments are recorded against this invoice.
+					</p>
+				</div>
+			</template>
+			<template #footer>
+				<div class="flex justify-end gap-2 w-full">
+					<UButton color="neutral" variant="outline" @click="showRevertDialog = false">
+						Cancel
+					</UButton>
+					<UButton
+						color="error"
+						:loading="reverting"
+						:disabled="revertVouchers.length > 0"
+						icon="i-lucide-undo-2"
+						@click="confirmRevert"
+					>
+						Revert to draft
 					</UButton>
 				</div>
 			</template>
@@ -598,6 +688,7 @@
 	import type { InvoiceRow } from "~/stores/invoices";
 	import type { ClientSnapshot, PricingMode, QuoteLineRow, QuoteRow, QuoteStatus } from "~/stores/quotes";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
+	import { select } from "~/lib/db";
 	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
 	import { buildQuotePdfPayload } from "~/lib/quote-pdf";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
@@ -1086,9 +1177,21 @@
 		type: "invoice",
 		enabled: showConvertDialog
 	});
+	// Local YYYY-MM-DD "today" (not UTC — toISOString would drift a day near
+	// midnight for +ve timezones).
+	const todayISO = (): string => {
+		const d = new Date();
+		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+	};
+	// Editable issue date for the invoice the conversion creates. Refreshed
+	// to today on every open (this page is kept alive — a ref seeded once
+	// would go stale across days). The due date derives from it + the
+	// default payment terms inside createFromQuote.
+	const convertIssueDate = ref<string>(todayISO());
 	// Reseed on the next open (peek only fills when sequence is null).
 	watch(showConvertDialog, (open) => {
-		if (!open) convertDocNum.reset();
+		if (open) convertIssueDate.value = todayISO();
+		else convertDocNum.reset();
 	});
 	const askConvert = () => {
 		showConvertDialog.value = true;
@@ -1101,7 +1204,8 @@
 			const newInvoiceId = await invoicesStore.createFromQuote(
 				quote.value,
 				lineRows,
-				convertDocNum.sequence.value ?? undefined
+				convertDocNum.sequence.value ?? undefined,
+				convertIssueDate.value || undefined
 			);
 			await quotesStore.markConverted(quoteId, newInvoiceId);
 			// markConverted persisted status='converted' + the link to the DB.
@@ -1129,6 +1233,70 @@
 			});
 		} finally {
 			converting.value = false;
+		}
+	};
+
+	// Revert-conversion. The escape hatch for a conversion done in error —
+	// deletes the linked invoice and returns this quote to draft. Offered
+	// only in the converted state; the store refuses while the invoice has
+	// recorded payments (owner must delete the receipt vouchers first).
+	const canRevert = computed(() => status.value === "converted");
+	const showRevertDialog = ref(false);
+	const reverting = ref(false);
+	// Receipt vouchers linked to the invoice, fetched when the dialog opens.
+	// Shown in the modal so the user sees exactly which payments block the
+	// revert (the store guard would refuse anyway — this surfaces the WHY
+	// and links each voucher for one-click cleanup). Scoped SQL rather than
+	// the vouchers store: this page doesn't load the full voucher ledger.
+	interface RevertBlockingVoucher {
+		id: number
+		number: string
+		voucher_date: string
+		amount_cents: number
+	}
+	const revertVouchers = ref<RevertBlockingVoucher[]>([]);
+	const askRevert = async () => {
+		revertVouchers.value = [];
+		const invId = quote.value?.converted_invoice_id;
+		if (invId != null) {
+			revertVouchers.value = await select<RevertBlockingVoucher>(
+				`SELECT id, number, voucher_date, amount_cents FROM vouchers
+				 WHERE related_invoice_id = ? AND voucher_type = 'receipt'
+				 ORDER BY voucher_date DESC, id DESC`,
+				[invId]
+			).catch(() => []);
+		}
+		showRevertDialog.value = true;
+	};
+	const confirmRevert = async () => {
+		if (!quote.value || !canRevert.value) return;
+		reverting.value = true;
+		try {
+			await quotesStore.revertConversion(quoteId);
+			// Patch the keep-alive local refs — same reason confirmConvert
+			// does: returning to this cached page must not show a stale
+			// CONVERTED header.
+			const current = quote.value;
+			if (current) {
+				quote.value = { ...current, status: "draft", converted_invoice_id: null };
+			}
+			convertedInvoice.value = null;
+			showRevertDialog.value = false;
+			toast.add({
+				title: "Conversion reverted",
+				description: "The linked invoice was deleted and this quote is a draft again.",
+				color: "success",
+				icon: "i-lucide-undo-2"
+			});
+		} catch (err) {
+			toast.add({
+				title: "Revert failed",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		} finally {
+			reverting.value = false;
 		}
 	};
 
@@ -1182,6 +1350,13 @@
 				onSelect: () => {
 					void router.push(`/invoices/${linkedId}`);
 				}
+			});
+		}
+		if (canRevert.value) {
+			primary.push({
+				label: "Revert to draft",
+				icon: "i-lucide-undo-2",
+				onSelect: askRevert
 			});
 		}
 

@@ -14,10 +14,10 @@
 						<ClientPicker v-model="clientId" @create-new="openModel = false" />
 					</UFormField>
 
-					<!-- Issue date drives the document number's YEAR
-						(PREFIX-YEAR-SEQUENCE). Defaults to today; back-date it to
-						file an old invoice and the number's year + preview follow. -->
-					<UFormField label="Issue date" help="Sets the invoice's year. Leave as today, or back-date to file an old invoice.">
+					<!-- Numbering is year-less (migration 0047), so this only dates
+						the document. Defaults to today; back-date it to file an
+						old invoice. -->
+					<UFormField label="Issue date" help="Leave as today, or back-date to file an old invoice.">
 						<DateField v-model="issueDate" />
 					</UFormField>
 
@@ -112,7 +112,7 @@
 	};
 
 	// Editable issue date. Defaults to today (or the calendar-picked date via
-	// props), and drives the document number's fiscal year.
+	// props). Numbering is year-less, so this only dates the document.
 	const issueDate = ref<string>(todayISO());
 
 	// Editable number with live uniqueness check — see NewQuoteModal.
