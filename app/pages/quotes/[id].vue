@@ -488,7 +488,10 @@
 						wraps below it. -->
 					<div class="grid grid-cols-2 gap-4 items-start">
 						<UFormField label="Issue date">
-							<DateField v-model="convertIssueDate" />
+							<!-- w-full: UInputDate shrinks to content by default, which
+								reads as a mismatched box next to the full-width number
+								input in the same row. -->
+							<DateField v-model="convertIssueDate" class="w-full" />
 						</UFormField>
 						<UFormField label="Invoice number" required>
 							<template #help>
