@@ -699,20 +699,32 @@ export const useInvoicesStore = defineStore("invoices", () => {
 
 	/// Move between the three persisted states. The legal transitions
 	/// are now extremely simple:
-	///   draft     ↔ sent            (issue / un-issue)
+	///   draft     ↔ sent            (issue / revert to draft)
 	///   draft     → cancelled       (kill before issuing)
 	///   sent      → cancelled       (void after issuing)
-	///   cancelled ↔ sent            (reopen — refund flow)
+	///   cancelled → sent | draft    (reopen — refund flow / full re-edit)
 	///
-	/// We don't model "draft → cancelled → draft" since the user is
-	/// likely to just delete a never-sent invoice instead.
+	/// Owner-takes-responsibility: sent/cancelled → draft reopens the
+	/// document for editing. Both destructive-ish moves (cancel, revert
+	/// to draft) are refused while receipt vouchers exist — money records
+	/// are never silently orphaned; delete the vouchers first.
 	const setStatus = async (id: number, target: InvoicePersistedStatus): Promise<void> => {
-		// Cancelling an invoice with recorded receipts would orphan
-		// those vouchers (cash in the bank, no liability on record).
-		// Refuse and tell the user to delete the receipts first, same
-		// guard payslips uses for the equivalent flow.
-		if (target === "cancelled" && paidCentsFor(id) > 0) {
-			throw new Error("This invoice has recorded payments. Delete the receipt vouchers first, then cancel.");
+		// Direct SQL, not paidCentsFor() — that helper sums the vouchers
+		// store, which is toothless when the store hasn't loaded (list
+		// pages dropped the vouchers-store load; rows carry _paid instead).
+		if (target === "cancelled" || target === "draft") {
+			const receipts = await selectOne<{ n: number }>(
+				`SELECT COUNT(*) AS n FROM vouchers
+				 WHERE related_invoice_id = ? AND voucher_type = 'receipt'`,
+				[id]
+			);
+			if ((receipts?.n ?? 0) > 0) {
+				throw new Error(
+					target === "cancelled"
+						? "This invoice has recorded payments. Delete the receipt vouchers first, then cancel."
+						: "This invoice has recorded payments. Delete the receipt vouchers first, then revert to draft."
+				);
+			}
 		}
 		await execute(
 			"UPDATE invoices SET status = ?, updated_at = datetime('now') WHERE id = ?",

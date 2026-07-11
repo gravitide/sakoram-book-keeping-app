@@ -1319,10 +1319,13 @@ invoices:  persisted: draft ↔ sent ↔ cancelled (the only user transitions)
                       cancelled is sticky
            ("Record payment" creates a receipt voucher with
             related_invoice_id; partial/paid/overdue states fall
-            out of that.) Cancel is refused once any receipt
-            voucher is linked — vouchers must be deleted first.
-            The detail page also hides "Record payment" once the
-            balance hits zero.
+            out of that.) Cancel AND revert-to-draft are refused once
+            any receipt voucher is linked — vouchers must be deleted
+            first (the setStatus guard counts vouchers via direct SQL,
+            not the maybe-unloaded vouchers store). "Revert to draft"
+            is offered on sent-with-no-payments and on cancelled
+            (detail header + list row menu, v0.142.0). The detail page
+            also hides "Record payment" once the balance hits zero.
 
 bills:     persisted: open ↔ cancelled (the only user transitions)
            derived:   open + payments → unpaid | partial | paid
