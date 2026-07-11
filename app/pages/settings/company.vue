@@ -237,6 +237,66 @@
 					</SectionCard>
 				</div>
 
+				<!-- Signatures: reusable rich-text sign-offs shared across letters
+					and the "Prepared by" block on quotes / invoices. Managed here
+					because they're no longer letters-specific. Like bank accounts,
+					the row actions write immediately — they don't ride the main
+					form submit. -->
+				<div id="signatures" class="scroll-mt-6">
+					<SectionCard
+						icon="i-lucide-pen-line"
+						title="Signatures"
+						subtitle="Reusable sign-offs shared across letters and the 'Prepared by' on quotes / invoices. The default pre-fills every new letter."
+					>
+						<div v-if="sigStore.signatures.length === 0" class="text-sm text-muted py-4 text-center">
+							No signatures yet. Add one to reuse across letters, quotes, and invoices.
+						</div>
+						<ul v-else class="divide-y divide-default -mt-2">
+							<li
+								v-for="s in sigStore.signatures"
+								:key="s.id"
+								class="py-3 flex items-center gap-3"
+							>
+								<div class="min-w-0 flex-1">
+									<div class="flex items-center gap-2 flex-wrap">
+										<span class="font-medium truncate">{{ s.name }}</span>
+										<UBadge
+											v-if="s.is_default === 1"
+											color="primary"
+											variant="subtle"
+											size="sm"
+										>
+											Default
+										</UBadge>
+									</div>
+									<div class="text-xs text-muted truncate mt-0.5">
+										{{ signaturePreview(s.body_json) || "Empty" }}
+									</div>
+								</div>
+								<UDropdownMenu :items="signatureMenuItems(s)">
+									<UButton
+										size="sm"
+										variant="ghost"
+										color="neutral"
+										icon="i-lucide-ellipsis-vertical"
+										aria-label="Signature actions"
+									/>
+								</UDropdownMenu>
+							</li>
+						</ul>
+						<UButton
+							block
+							size="sm"
+							variant="soft"
+							icon="i-lucide-plus"
+							class="mt-3"
+							@click="openSignature(null)"
+						>
+							Add signature
+						</UButton>
+					</SectionCard>
+				</div>
+
 				<div id="defaults" class="scroll-mt-6">
 					<SectionCard
 						icon="i-lucide-sliders-horizontal"
@@ -336,6 +396,9 @@
 		<!-- Bank account create / edit modal. -->
 		<BusinessBankFormModal v-model:open="bankModalOpen" :bank="editingBank" />
 
+		<!-- Signature create / edit modal (shared with letters + quotes/invoices). -->
+		<LetterSignatureFormModal v-model:open="signatureModalOpen" :signature="editingSignature" />
+
 		<!-- Delete confirmation. Bank rows on issued quotes / invoices have
 			their data frozen in bank_details_snapshot, so deletion can't
 			corrupt history — drafts with the deleted bank linked fall back
@@ -382,11 +445,14 @@
 
 <script setup lang="ts">
 	import type { BusinessBankRow } from "~/stores/business_banks";
+	import type { LetterSignatureRow } from "~/stores/letter_signatures";
 	import type { SettingsUpdate } from "~/stores/settings";
 	import { invoke } from "@tauri-apps/api/core";
 	import { z } from "zod";
 	import CurrencyPicker from "~/components/CurrencyPicker.vue";
+	import { signaturePreview } from "~/lib/signature-preview";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
+	import { useLetterSignaturesStore } from "~/stores/letter_signatures";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
 
@@ -394,6 +460,7 @@
 
 	const store = useSettingsStore();
 	const banksStore = useBusinessBanksStore();
+	const sigStore = useLetterSignaturesStore();
 	const tenants = useTenantsStore();
 	const toast = useToast();
 
@@ -472,8 +539,76 @@
 		vatRatePct.value = s.default_vat_rate / 100;
 	};
 
-	await Promise.all([store.ensureLoaded(), banksStore.ensureLoaded()]);
+	await Promise.all([store.ensureLoaded(), banksStore.ensureLoaded(), sigStore.load()]);
 	hydrate();
+
+	// --- Signatures management ------------------------------------------
+	// Shared reusable sign-offs (letter_signatures table) — the same list
+	// injected into letters and the quote/invoice "Prepared by" field.
+	// Row actions write directly via the store; the modal writes on its
+	// own, so we refetch when it closes.
+	const sigBusy = ref(false);
+	const signatureModalOpen = ref(false);
+	const editingSignature = ref<LetterSignatureRow | null>(null);
+	const sigErr = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+	const openSignature = (s: LetterSignatureRow | null) => {
+		editingSignature.value = s;
+		signatureModalOpen.value = true;
+	};
+	watch(signatureModalOpen, (open) => {
+		if (!open) void sigStore.load();
+	});
+	const setSignatureDefault = async (s: LetterSignatureRow) => {
+		sigBusy.value = true;
+		try {
+			await sigStore.setDefault(s.id);
+		} catch (err) {
+			toast.add({ title: "Could not update", description: sigErr(err), color: "error", icon: "i-lucide-circle-alert" });
+		} finally {
+			sigBusy.value = false;
+		}
+	};
+	const removeSignature = async (s: LetterSignatureRow) => {
+		sigBusy.value = true;
+		try {
+			await sigStore.remove(s.id);
+			toast.add({ title: `Deleted "${s.name}"`, color: "success", icon: "i-lucide-trash-2" });
+		} catch (err) {
+			toast.add({ title: "Could not delete", description: sigErr(err), color: "error", icon: "i-lucide-circle-alert" });
+		} finally {
+			sigBusy.value = false;
+		}
+	};
+
+	// Per-row dropdown, mirroring the bank-account menu: Set-default only
+	// when the row isn't already default, then Delete in its own group so
+	// the menu draws a divider above it.
+	const signatureMenuItems = (s: LetterSignatureRow) => {
+		const primary: { label: string, icon: string, disabled?: boolean, onSelect: () => void | Promise<void> }[] = [];
+		if (s.is_default !== 1) {
+			primary.push({
+				label: "Set as default",
+				icon: "i-lucide-star",
+				disabled: sigBusy.value,
+				onSelect: () => setSignatureDefault(s)
+			});
+		}
+		primary.push({
+			label: "Edit",
+			icon: "i-lucide-pencil",
+			onSelect: () => openSignature(s)
+		});
+		return [primary, [
+			{
+				label: "Delete",
+				icon: "i-lucide-trash-2",
+				disabled: sigBusy.value,
+				class: "text-(--ui-error) hover:bg-(--ui-error)/10 [&>span>span:first-child]:text-(--ui-error)",
+				onSelect: () => removeSignature(s)
+			}
+		]];
+	};
 
 	// --- Bank accounts management ---------------------------------------
 	// The list lives inside the same form for layout rhythm but its row

@@ -633,6 +633,7 @@
 						{ hash: "#company", label: "Company", icon: "i-lucide-building-2" },
 						{ hash: "#address", label: "Address", icon: "i-lucide-map-pin" },
 						{ hash: "#bank-accounts", label: "Bank accounts", icon: "i-lucide-landmark" },
+						{ hash: "#signatures", label: "Signatures", icon: "i-lucide-pen-line" },
 						{ hash: "#defaults", label: "Defaults", icon: "i-lucide-sliders-horizontal" }
 					]
 				},
@@ -662,7 +663,6 @@
 					icon: "i-lucide-mail",
 					sections: [
 						{ hash: "#categories", label: "Categories", icon: "i-lucide-tags" },
-						{ hash: "#signatures", label: "Signatures", icon: "i-lucide-pen-line" },
 						{ hash: "#preprinted", label: "Pre-printed", icon: "i-lucide-file-text" },
 						{ hash: "#templates", label: "Templates", icon: "i-lucide-layout-template" }
 					]
