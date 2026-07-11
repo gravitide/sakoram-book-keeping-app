@@ -1305,8 +1305,10 @@ sides.**
 quotes:    draft → sent → accepted → converted (terminal)
                        ↘ rejected | expired
                 draft → rejected (cancel)
-                accepted | rejected | expired → draft (reopen — common mistake
-                escape; for accepted: misclick / renegotiation before conversion)
+                sent | accepted | rejected | expired → draft (reopen — common
+                mistake escape; sent = un-send, accepted = misclick /
+                renegotiation before conversion. Quotes carry no payments,
+                so nothing to guard)
                 converted → draft (revertConversion() — NOT a STATUS_TRANSITIONS
                 entry; a named compound op that DELETES the linked invoice and
                 reopens the quote. Refused while receipt vouchers exist on the
