@@ -1340,9 +1340,12 @@ payslips:  persisted: draft ↔ issued ↔ cancelled
                       issued + payments → unpaid | partial | paid
                       cancelled is sticky
            ("Record payment" creates a payment voucher with
-            related_payslip_id. Cancel is refused once any payment
-            is linked — voucher must be deleted first. The detail
-            page hides Cancel in that state.)
+            related_payslip_id. Cancel AND revert-to-draft are refused
+            once any payment is linked — voucher must be deleted first
+            (setStatus guard counts vouchers via direct SQL). "Revert
+            to draft" is offered on issued-with-no-payments and on
+            cancelled — detail header + list row menu, v0.142.0. The
+            detail page hides Cancel in that state.)
 
 vouchers:  no transitions; voucher_type (receipt/payment) is locked at create
 

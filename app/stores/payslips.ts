@@ -468,10 +468,13 @@ export const usePayslipsStore = defineStore("payslips", () => {
 
 	// Persisted FSM transitions. The UI consults canTransition() before
 	// offering buttons; the DB CHECK constraint is a safety net.
+	// Owner-takes-responsibility: issued/cancelled can revert to draft for
+	// a full re-edit (same reopen affordance quotes + invoices have) —
+	// refused while payment vouchers exist, see the setStatus guard.
 	const TRANSITIONS: Record<PayslipPersistedStatus, PayslipPersistedStatus[]> = {
 		draft: ["issued", "cancelled"],
-		issued: ["cancelled"],
-		cancelled: []
+		issued: ["cancelled", "draft"],
+		cancelled: ["draft"]
 	};
 
 	const canTransition = (from: PayslipPersistedStatus, to: PayslipPersistedStatus): boolean =>
@@ -480,11 +483,25 @@ export const usePayslipsStore = defineStore("payslips", () => {
 	const setStatus = async (id: number, next: PayslipPersistedStatus, opts: { reload?: boolean } = {}): Promise<void> => {
 		const row = await get(id);
 		if (!row) throw new Error("Payslip not found");
-		// Issued + paid is locked: cancellation requires deleting the
-		// payment vouchers first. Surface a clear error rather than
-		// quietly leaving the books wrong.
-		if (next === "cancelled" && row.status === "issued" && paidCentsFor(id) > 0) {
-			throw new Error("This payslip has recorded payments. Delete the payment vouchers first, then cancel.");
+		// Issued + paid is locked: cancel / revert-to-draft require
+		// deleting the payment vouchers first. Surface a clear error
+		// rather than quietly leaving the books wrong. Direct SQL, not
+		// paidCentsFor() — that helper sums the vouchers store, which is
+		// toothless when the store hasn't loaded (list pages carry _paid
+		// on the row instead of loading vouchers).
+		if (next === "cancelled" || next === "draft") {
+			const payments = await selectOne<{ n: number }>(
+				`SELECT COUNT(*) AS n FROM vouchers
+				 WHERE related_payslip_id = ? AND voucher_type = 'payment'`,
+				[id]
+			);
+			if ((payments?.n ?? 0) > 0) {
+				throw new Error(
+					next === "cancelled"
+						? "This payslip has recorded payments. Delete the payment vouchers first, then cancel."
+						: "This payslip has recorded payments. Delete the payment vouchers first, then revert to draft."
+				);
+			}
 		}
 		if (!canTransition(row.status, next)) {
 			throw new Error(`Cannot move payslip from ${row.status} to ${next}`);

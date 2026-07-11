@@ -647,6 +647,25 @@
 		}
 	};
 
+	// Mirror of the detail page's "Revert to draft" — offered on issued
+	// rows with no recorded payments and on cancelled rows (the store
+	// refuses with payments as the backstop).
+	const revertToDraft = async (r: PayslipRow) => {
+		try {
+			await store.setStatus(r.id, "draft");
+			toast.add({ title: `${r.number} reverted to draft`, color: "info", icon: "i-lucide-rotate-ccw" });
+			await table.reload();
+			await refreshStats();
+		} catch (err) {
+			toast.add({
+				title: "Could not revert",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
 	// Two-group row-actions menu: lifecycle (Open + Mark issued when
 	// available), then Generate PDF.
 	function itemsFor(r: PayslipRowVM) {
@@ -659,6 +678,15 @@
 				icon: "i-lucide-send",
 				onSelect: () => {
 					void markIssued(r);
+				}
+			});
+		}
+		if ((r.status === "issued" && r._paid === 0) || r.status === "cancelled") {
+			lifecycle.push({
+				label: "Revert to draft",
+				icon: "i-lucide-rotate-ccw",
+				onSelect: () => {
+					void revertToDraft(r);
 				}
 			});
 		}

@@ -51,6 +51,17 @@
 					Mark issued
 				</UButton>
 				<UButton
+					v-if="canRevert"
+					size="sm"
+					color="neutral"
+					variant="outline"
+					icon="i-lucide-rotate-ccw"
+					:disabled="busy || licLocked"
+					@click="revertToDraft"
+				>
+					Revert to draft
+				</UButton>
+				<UButton
 					v-if="canCancel"
 					size="sm"
 					color="neutral"
@@ -524,6 +535,15 @@
 		return true;
 	});
 
+	// Revert-to-draft mirrors the same store guard: issued needs zero
+	// payments; cancelled always qualifies (cancel already required
+	// deleting any payments).
+	const canRevert = computed(() => {
+		if (!row.value) return false;
+		if (row.value.status === "issued") return paidCents.value === 0;
+		return row.value.status === "cancelled";
+	});
+
 	const canIssue = computed(() => {
 		if (!row.value) return false;
 		if (row.value.status !== "draft") return false;
@@ -633,6 +653,29 @@
 		} catch (err) {
 			toast.add({
 				title: "Could not cancel",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		} finally {
+			busy.value = false;
+		}
+	};
+
+	// Revert to draft — unlocks the form for a full re-edit. Offered on
+	// issued-with-no-payments and cancelled; the store refuses with
+	// payments as the backstop (delete the vouchers first).
+	const revertToDraft = async () => {
+		if (!row.value) return;
+		busy.value = true;
+		try {
+			await store.setStatus(row.value.id, "draft");
+			await hydrate();
+			refreshBaseline();
+			toast.add({ title: "Reverted to draft", color: "info", icon: "i-lucide-rotate-ccw" });
+		} catch (err) {
+			toast.add({
+				title: "Could not revert",
 				description: err instanceof Error ? err.message : String(err),
 				color: "error",
 				icon: "i-lucide-circle-alert"
