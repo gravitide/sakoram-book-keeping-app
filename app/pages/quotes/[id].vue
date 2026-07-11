@@ -35,6 +35,19 @@
 				>
 					Convert to invoice
 				</UButton>
+				<!-- Escape hatch for a conversion done in error: deletes the
+					linked invoice and returns this quote to draft. The store
+					refuses while the invoice has recorded payments. -->
+				<UButton
+					v-if="canRevert"
+					size="sm"
+					color="warning"
+					variant="outline"
+					icon="i-lucide-undo-2"
+					@click="askRevert"
+				>
+					Revert to draft
+				</UButton>
 				<!-- Legal next-state transitions as individual buttons —
 					replaces an opaque 'Status' dropdown so the available
 					moves are visible at a glance. Hidden when no
@@ -499,6 +512,40 @@
 						@click="confirmConvert"
 					>
 						Create invoice
+					</UButton>
+				</div>
+			</template>
+		</UModal>
+
+		<UModal v-model:open="showRevertDialog" title="Revert to draft?">
+			<template #body>
+				<div class="space-y-3 text-sm">
+					<p class="text-(--ui-text-muted)">
+						Invoice
+						<span class="font-medium text-(--ui-text)">{{ convertedInvoice?.number ?? "linked to this quote" }}</span>
+						and its attachments will be <span class="font-medium text-(--ui-text)">permanently deleted</span>,
+						and this quote returns to an editable draft.
+					</p>
+					<p class="text-(--ui-text-muted)">
+						The invoice number won't be reused automatically — it'll show as
+						a gap you can fill from the next convert or New-invoice dialog.
+						If the invoice has recorded payments the revert is refused —
+						delete those receipt vouchers first.
+					</p>
+				</div>
+			</template>
+			<template #footer>
+				<div class="flex justify-end gap-2 w-full">
+					<UButton color="neutral" variant="outline" @click="showRevertDialog = false">
+						Cancel
+					</UButton>
+					<UButton
+						color="error"
+						:loading="reverting"
+						icon="i-lucide-undo-2"
+						@click="confirmRevert"
+					>
+						Revert to draft
 					</UButton>
 				</div>
 			</template>
@@ -1132,6 +1179,48 @@
 		}
 	};
 
+	// Revert-conversion. The escape hatch for a conversion done in error —
+	// deletes the linked invoice and returns this quote to draft. Offered
+	// only in the converted state; the store refuses while the invoice has
+	// recorded payments (owner must delete the receipt vouchers first).
+	const canRevert = computed(() => status.value === "converted");
+	const showRevertDialog = ref(false);
+	const reverting = ref(false);
+	const askRevert = () => {
+		showRevertDialog.value = true;
+	};
+	const confirmRevert = async () => {
+		if (!quote.value || !canRevert.value) return;
+		reverting.value = true;
+		try {
+			await quotesStore.revertConversion(quoteId);
+			// Patch the keep-alive local refs — same reason confirmConvert
+			// does: returning to this cached page must not show a stale
+			// CONVERTED header.
+			const current = quote.value;
+			if (current) {
+				quote.value = { ...current, status: "draft", converted_invoice_id: null };
+			}
+			convertedInvoice.value = null;
+			showRevertDialog.value = false;
+			toast.add({
+				title: "Conversion reverted",
+				description: "The linked invoice was deleted and this quote is a draft again.",
+				color: "success",
+				icon: "i-lucide-undo-2"
+			});
+		} catch (err) {
+			toast.add({
+				title: "Revert failed",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		} finally {
+			reverting.value = false;
+		}
+	};
+
 	// Legal next-state actions for the current status. Rendered as
 	// individual buttons in the header so the available transitions are
 	// visible at a glance — no dropdown to click through. Short verbs
@@ -1182,6 +1271,13 @@
 				onSelect: () => {
 					void router.push(`/invoices/${linkedId}`);
 				}
+			});
+		}
+		if (canRevert.value) {
+			primary.push({
+				label: "Revert to draft",
+				icon: "i-lucide-undo-2",
+				onSelect: askRevert
 			});
 		}
 
