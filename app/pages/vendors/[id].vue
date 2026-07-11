@@ -18,19 +18,12 @@
 			</NuxtLink>
 
 			<!-- Hidden for new vendors since there's nothing to act on.
-				Delete is blocked by the DB once any bill references the
-				vendor — the handler catches the FK error and surfaces a
-				friendly nudge toward Archive. -->
+				View bills moved into the shortcut cards below the hero —
+				only record-level actions stay up here. Delete is blocked
+				by the DB once any bill references the vendor — the handler
+				catches the FK error and surfaces a friendly nudge toward
+				Archive. -->
 			<div v-if="!isNew" class="flex items-center gap-2 flex-wrap shrink-0">
-				<UButton
-					size="sm"
-					icon="i-lucide-file-input"
-					variant="soft"
-					color="neutral"
-					@click="viewBills"
-				>
-					View bills
-				</UButton>
 				<UButton
 					size="sm"
 					:icon="isArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
@@ -106,6 +99,81 @@
 					</dl>
 				</div>
 			</div>
+		</section>
+
+		<!-- Activity shortcut cards — live per-vendor numbers, mirroring the
+			client page's row. Bills = info blue; Payable = warning amber
+			while we owe them money (click jumps to the bills list
+			pre-filtered to this vendor's outstanding bills), success green
+			once settled. Numbers come from SQL aggregates in loadStats(),
+			refreshed on keep-alive re-entry. -->
+		<section v-if="!isNew" class="mb-10 grid grid-cols-1 md:grid-cols-2 gap-4">
+			<button
+				type="button"
+				class="group text-left rounded-lg border border-(--ui-info)/40 bg-(--ui-info)/10 hover:border-(--ui-info)/80 hover:bg-(--ui-info)/15 transition p-4 flex items-start gap-3 cursor-pointer shadow-md shadow-black/10"
+				@click="viewBills"
+			>
+				<span class="size-10 shrink-0 rounded-md bg-(--ui-info)/20 flex items-center justify-center">
+					<UIcon name="i-lucide-file-input" class="size-5 text-(--ui-info)" />
+				</span>
+				<span class="min-w-0 flex-1">
+					<span class="block text-xs font-medium uppercase tracking-wider text-(--ui-info)">Bills</span>
+					<span class="block text-2xl font-semibold tabular-nums leading-tight">{{ stats.loaded ? stats.billsTotal : "—" }}</span>
+					<span class="block text-xs text-(--ui-text-muted) mt-0.5">
+						{{ !stats.loaded ? "Loading…"
+							: stats.billsTotal === 0 ? "None yet — view all"
+								: stats.billsOpen > 0 ? `${stats.billsOpen} awaiting payment · view all` : "View all" }}
+					</span>
+				</span>
+				<UIcon name="i-lucide-arrow-right" class="size-4 mt-1 text-(--ui-info)/50 group-hover:text-(--ui-info) group-hover:translate-x-0.5 transition" />
+			</button>
+
+			<!-- Payable card carries the money headline: what we still owe
+				this vendor. Two equally visible states: warning amber with
+				money due (click = bills list filtered to the outstanding
+				ones), success green when settled. -->
+			<button
+				type="button"
+				class="group text-left rounded-lg border transition p-4 flex items-start gap-3 shadow-md shadow-black/10"
+				:class="stats.billsOpen > 0
+					? 'border-(--ui-warning)/50 bg-(--ui-warning)/10 hover:border-(--ui-warning) hover:bg-(--ui-warning)/15 cursor-pointer'
+					: 'border-(--ui-success)/40 bg-(--ui-success)/10 cursor-default'"
+				:disabled="stats.billsOpen === 0"
+				@click="viewOutstandingBills"
+			>
+				<span
+					class="size-10 shrink-0 rounded-md flex items-center justify-center"
+					:class="stats.billsOpen > 0 ? 'bg-(--ui-warning)/20' : 'bg-(--ui-success)/20'"
+				>
+					<UIcon
+						:name="stats.billsOpen > 0 ? 'i-lucide-hand-coins' : 'i-lucide-circle-check'"
+						class="size-5"
+						:class="stats.billsOpen > 0 ? 'text-(--ui-warning)' : 'text-(--ui-success)'"
+					/>
+				</span>
+				<span class="min-w-0 flex-1">
+					<span
+						class="block text-xs font-medium uppercase tracking-wider"
+						:class="stats.billsOpen > 0 ? 'text-(--ui-warning)' : 'text-(--ui-success)'"
+					>Payable</span>
+					<span
+						class="block text-2xl font-semibold tabular-nums leading-tight truncate"
+						:class="stats.billsOpen > 0 ? 'text-(--ui-warning)' : 'text-(--ui-success)'"
+					>
+						{{ stats.loaded ? formatLKR(stats.payableCents) : "—" }}
+					</span>
+					<span class="block text-xs text-(--ui-text-muted) mt-0.5">
+						{{ !stats.loaded ? "Loading…"
+							: stats.billsOpen === 0 ? "All settled — nothing due"
+								: `Across ${stats.billsOpen} bill${stats.billsOpen === 1 ? "" : "s"} · view outstanding` }}
+					</span>
+				</span>
+				<UIcon
+					v-if="stats.billsOpen > 0"
+					name="i-lucide-arrow-right"
+					class="size-4 mt-1 text-(--ui-warning)/50 group-hover:text-(--ui-warning) group-hover:translate-x-0.5 transition"
+				/>
+			</button>
 		</section>
 
 		<!-- Form -------------------------------------------------------------- -->
@@ -263,6 +331,9 @@
 <script setup lang="ts">
 	import type { VendorInput } from "~/stores/vendors";
 	import { z } from "zod";
+	import { selectOne } from "~/lib/db";
+	import { billDerivedFrom } from "~/lib/derived-status";
+	import { formatLKR } from "~/lib/money";
 	import { useBillsStore } from "~/stores/bills";
 	import { useVendorsStore } from "~/stores/vendors";
 
@@ -423,6 +494,57 @@
 		billsStore.vendorFilter = vendorId;
 		void router.push("/bills");
 	};
+
+	// Payable-card click: same jump, but pre-ticks the outstanding status
+	// chips so the list shows only what still needs paying.
+	const viewOutstandingBills = () => {
+		if (vendorId === null) return;
+		billsStore.search = "";
+		billsStore.clearDateFilters();
+		billsStore.statusFilters = ["unpaid", "partial", "overdue"];
+		billsStore.vendorFilter = vendorId;
+		void router.push("/bills");
+	};
+
+	// Local YYYY-MM-DD "today" (not UTC — toISOString would drift a day near
+	// midnight for +ve timezones).
+	const todayISO = (): string => {
+		const d = new Date();
+		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+	};
+
+	// Live per-vendor numbers for the shortcut cards between the hero and
+	// the form. SQL aggregates, not store sums — the bills store may not
+	// be loaded when the user lands here directly, and the derived-status
+	// subquery gives the same paid/balance math the list pages use.
+	// Reloaded on keep-alive re-entry so paying a bill elsewhere and
+	// coming back shows fresh numbers.
+	const stats = reactive({
+		loaded: false,
+		billsTotal: 0,
+		billsOpen: 0,
+		payableCents: 0
+	});
+	const loadStats = async () => {
+		if (vendorId === null) return;
+		const b = await selectOne<{ total: number, open: number, payable: number }>(
+			`SELECT COUNT(*) AS total,
+				COALESCE(SUM(CASE WHEN _status IN ('unpaid', 'partial', 'overdue') THEN 1 ELSE 0 END), 0) AS open,
+				COALESCE(SUM(CASE WHEN _status IN ('unpaid', 'partial', 'overdue') THEN _balance ELSE 0 END), 0) AS payable
+			 FROM ${billDerivedFrom(todayISO())} WHERE vendor_id = ?`,
+			[vendorId]
+		);
+		stats.billsTotal = b?.total ?? 0;
+		stats.billsOpen = b?.open ?? 0;
+		stats.payableCents = b?.payable ?? 0;
+		stats.loaded = true;
+	};
+	if (!isNew) void loadStats();
+	// Keep-alive: setup runs once, so refresh the aggregates every time
+	// the user navigates back to this cached page.
+	onActivated(() => {
+		if (!isNew) void loadStats();
+	});
 
 	const onDelete = async () => {
 		if (vendorId === null) return;
