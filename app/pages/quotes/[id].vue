@@ -482,25 +482,30 @@
 							the next in the INV sequence, or set one to fill a gap.
 						</p>
 					</div>
-					<UFormField label="Issue date">
-						<DateField v-model="convertIssueDate" class="w-1/2" />
-					</UFormField>
-					<UFormField label="Invoice number" required>
-						<template #help>
-							<span v-if="convertDocNum.numberTaken.value" class="text-(--ui-error)">
-								{{ convertDocNum.numberFormatted.value }} is already in use — pick another sequence.
-							</span>
-							<span v-else-if="convertDocNum.numberFormatted.value">
-								Will be saved as <span class="font-medium">{{ convertDocNum.numberFormatted.value }}</span>
-							</span>
-						</template>
-						<UInputNumber
-							v-model="convertDocNum.sequence.value"
-							:min="1"
-							:step="1"
-							class="w-1/2"
-						/>
-					</UFormField>
+					<!-- Side by side: both inputs are short, and the pair reads as
+						one "stamp the new invoice" decision. items-start keeps the
+						date field pinned to the top when the number's help line
+						wraps below it. -->
+					<div class="grid grid-cols-2 gap-4 items-start">
+						<UFormField label="Issue date">
+							<DateField v-model="convertIssueDate" />
+						</UFormField>
+						<UFormField label="Invoice number" required>
+							<template #help>
+								<span v-if="convertDocNum.numberTaken.value" class="text-(--ui-error)">
+									{{ convertDocNum.numberFormatted.value }} is already in use — pick another sequence.
+								</span>
+								<span v-else-if="convertDocNum.numberFormatted.value">
+									Will be saved as <span class="font-medium">{{ convertDocNum.numberFormatted.value }}</span>
+								</span>
+							</template>
+							<UInputNumber
+								v-model="convertDocNum.sequence.value"
+								:min="1"
+								:step="1"
+							/>
+						</UFormField>
+					</div>
 				</div>
 			</template>
 			<template #footer>
