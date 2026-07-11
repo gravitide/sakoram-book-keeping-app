@@ -544,9 +544,14 @@
 						</p>
 						<ul class="space-y-1">
 							<li v-for="v in revertVouchers" :key="v.id">
+								<!-- Close on navigate: this page is kept alive, so a
+									still-open dialog would show a stale voucher list
+									when the user comes back after deleting one.
+									Re-opening re-fetches. -->
 								<NuxtLink
 									:to="`/vouchers/${v.id}`"
 									class="inline-flex items-center gap-1.5 text-(--ui-text) hover:text-(--ui-primary) underline underline-offset-2"
+									@click="showRevertDialog = false"
 								>
 									<UIcon name="i-lucide-receipt" class="size-3.5 shrink-0" />
 									<span class="font-medium">{{ v.number }}</span>
