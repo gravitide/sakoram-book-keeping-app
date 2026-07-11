@@ -153,42 +153,44 @@
 			</button>
 
 			<!-- Statement card carries the money headline: what this client
-				still owes, and the one action that chases it. Muted when
-				nothing is outstanding (still rendered so the layout doesn't
-				jump, and the state itself is information). -->
+				still owes, and the one action that chases it. Two equally
+				visible states: warning amber with money owed (click =
+				generate statement), success green when settled (the "all
+				clear" is information, not a disabled leftover). -->
 			<button
 				type="button"
 				class="group text-left rounded-lg border transition p-4 flex items-start gap-3 shadow-md shadow-black/10"
 				:class="stats.invoicesOpen > 0
 					? 'border-(--ui-warning)/50 bg-(--ui-warning)/10 hover:border-(--ui-warning) hover:bg-(--ui-warning)/15 cursor-pointer'
-					: 'border-(--ui-border) bg-(--ui-bg-elevated)/40 cursor-not-allowed opacity-70'"
+					: 'border-(--ui-success)/40 bg-(--ui-success)/10 cursor-default'"
 				:disabled="stats.invoicesOpen === 0 || statementPdf.state.rendering"
 				@click="openStatement"
 			>
 				<span
 					class="size-10 shrink-0 rounded-md flex items-center justify-center"
-					:class="stats.invoicesOpen > 0 ? 'bg-(--ui-warning)/20' : 'bg-(--ui-bg-elevated)'"
+					:class="stats.invoicesOpen > 0 ? 'bg-(--ui-warning)/20' : 'bg-(--ui-success)/20'"
 				>
 					<UIcon
-						:name="statementPdf.state.rendering ? 'i-lucide-loader-circle' : 'i-lucide-file-clock'"
+						:name="statementPdf.state.rendering ? 'i-lucide-loader-circle'
+							: stats.invoicesOpen > 0 ? 'i-lucide-file-clock' : 'i-lucide-circle-check'"
 						class="size-5"
-						:class="[statementPdf.state.rendering && 'animate-spin', stats.invoicesOpen > 0 ? 'text-(--ui-warning)' : 'text-(--ui-text-muted)']"
+						:class="[statementPdf.state.rendering && 'animate-spin', stats.invoicesOpen > 0 ? 'text-(--ui-warning)' : 'text-(--ui-success)']"
 					/>
 				</span>
 				<span class="min-w-0 flex-1">
 					<span
 						class="block text-xs font-medium uppercase tracking-wider"
-						:class="stats.invoicesOpen > 0 ? 'text-(--ui-warning)' : 'text-(--ui-text-muted)'"
+						:class="stats.invoicesOpen > 0 ? 'text-(--ui-warning)' : 'text-(--ui-success)'"
 					>Outstanding</span>
 					<span
 						class="block text-2xl font-semibold tabular-nums leading-tight truncate"
-						:class="stats.invoicesOpen > 0 && 'text-(--ui-warning)'"
+						:class="stats.invoicesOpen > 0 ? 'text-(--ui-warning)' : 'text-(--ui-success)'"
 					>
 						{{ stats.loaded ? formatLKR(stats.outstandingCents) : "—" }}
 					</span>
 					<span class="block text-xs text-(--ui-text-muted) mt-0.5">
 						{{ !stats.loaded ? "Loading…"
-							: stats.invoicesOpen === 0 ? "Nothing to chase"
+							: stats.invoicesOpen === 0 ? "All settled — nothing to chase"
 								: `Across ${stats.invoicesOpen} invoice${stats.invoicesOpen === 1 ? "" : "s"} · generate statement` }}
 					</span>
 				</span>
