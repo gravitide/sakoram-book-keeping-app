@@ -251,6 +251,15 @@
 						<div class="truncate text-(--ui-text-muted)">
 							{{ methodLabel(data.payment_method) }}
 						</div>
+						<!-- Which account the money moved through. Hover
+							reveals the full bank name / number / branch. -->
+						<div
+							v-if="bankFor(data)"
+							class="truncate text-xs text-(--ui-text-dimmed) mt-0.5"
+							:title="bankTitleFor(data)"
+						>
+							<UIcon name="i-lucide-landmark" class="size-3 inline-block align-[-1px] mr-1" />{{ bankFor(data)!.label }}
+						</div>
 					</template>
 				</Column>
 				<Column field="reference" header="Reference" sortable>
@@ -365,6 +374,7 @@
 	import { resolveProtectPassword } from "~/lib/pdf";
 	import { buildVoucherPdfPayload, resolveVoucherRelatedLabel } from "~/lib/voucher-pdf";
 	import { useBillsStore } from "~/stores/bills";
+	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
@@ -379,6 +389,9 @@
 	const invoicesStore = useInvoicesStore();
 	const billsStore = useBillsStore();
 	const payslipsStore = usePayslipsStore();
+	// For the bank line under Method — vouchers carry business_bank_id
+	// (null on cash), and the user-facing label lives on the banks table.
+	const banksStore = useBusinessBanksStore();
 	const currency = useActiveCurrency();
 
 	// Loading state owned by `usePageLoading` — see the composable for
@@ -393,7 +406,8 @@
 			invoicesStore.ensureLoaded(),
 			billsStore.ensureLoaded(),
 			payslipsStore.ensureLoaded(),
-			settingsStore.ensureLoaded()
+			settingsStore.ensureLoaded(),
+			banksStore.ensureLoaded()
 		]);
 	}));
 
@@ -508,6 +522,22 @@
 			card: "Card",
 			other: "Other"
 		} as Record<string, string>)[m] ?? m;
+	};
+
+	// Which business bank the money moved through — rendered as a muted
+	// second line under the method so "Bank transfer" also answers "via
+	// which account" at a glance. Any voucher with a linked bank
+	// qualifies (bank transfers primarily, but cheques/cards carry the
+	// FK too; cash vouchers have it null).
+	const bankById = computed(() =>
+		new Map(banksStore.banks.map((b) => [b.id, b]))
+	);
+	const bankFor = (v: VoucherRow) =>
+		(v.business_bank_id != null ? bankById.value.get(v.business_bank_id) ?? null : null);
+	const bankTitleFor = (v: VoucherRow): string => {
+		const b = bankFor(v);
+		if (!b) return "";
+		return [b.bank_name, b.bank_account_number, b.bank_branch].filter(Boolean).join(" · ");
 	};
 
 	// --- Row selection (for bulk PDF) -------------------------------------
