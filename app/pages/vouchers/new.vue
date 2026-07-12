@@ -177,7 +177,15 @@
 						:items="bankPickerOptions"
 						value-key="value"
 						class="w-full"
-					/>
+					>
+						<!-- Colour dot per account (grey = none) — see BankColorDot. -->
+						<template #leading>
+							<BankColorDot :color="bankPickerOptions.find((o) => o.value === bankId)?.color" />
+						</template>
+						<template #item-leading="{ item }">
+							<BankColorDot :color="item.color" />
+						</template>
+					</USelect>
 				</UFormField>
 
 				<UFormField label="Description">
@@ -446,14 +454,15 @@
 		{ label: "—", value: null }
 	];
 
-	const bankPickerOptions = computed<{ label: string, value: number | null }[]>(() => {
-		const items: { label: string, value: number | null }[] = [
-			{ label: "—", value: null }
+	const bankPickerOptions = computed<{ label: string, value: number | null, color: string | null }[]>(() => {
+		const items: { label: string, value: number | null, color: string | null }[] = [
+			{ label: "—", value: null, color: null }
 		];
 		for (const b of banksStore.activeBanks) {
 			items.push({
 				label: b.bank_name ? `${b.label} · ${b.bank_name}` : b.label,
-				value: b.id
+				value: b.id,
+				color: b.color
 			});
 		}
 		return items;

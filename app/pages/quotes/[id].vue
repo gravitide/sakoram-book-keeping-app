@@ -219,7 +219,16 @@
 									value-key="value"
 									class="w-full"
 									:disabled="!editable"
-								/>
+								>
+									<!-- Colour dot per account (grey = no bank) so the
+										picker reads at a glance — see BankColorDot. -->
+									<template #leading>
+										<BankColorDot :color="bankPickerOptions.find((o) => o.value === formBankId)?.color" />
+									</template>
+									<template #item-leading="{ item }">
+										<BankColorDot :color="item.color" />
+									</template>
+								</USelect>
 								<template #help>
 									Printed on the PDF so the client knows where to pay.
 								</template>
@@ -784,12 +793,12 @@
 	// Bank picker options: every active bank plus a "no bank" entry so the
 	// user can deliberately render a quote without a bank block on the PDF.
 	const bankPickerOptions = computed(() => {
-		const items: { label: string, value: number | null }[] = [
-			{ label: "— No bank —", value: null }
+		const items: { label: string, value: number | null, color: string | null }[] = [
+			{ label: "— No bank —", value: null, color: null }
 		];
 		for (const b of banksStore.activeBanks) {
 			const suffix = b.bank_account_number ? ` · ${b.bank_account_number}` : "";
-			items.push({ label: `${b.label}${suffix}`, value: b.id });
+			items.push({ label: `${b.label}${suffix}`, value: b.id, color: b.color });
 		}
 		return items;
 	});

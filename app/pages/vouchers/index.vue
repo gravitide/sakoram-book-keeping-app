@@ -251,14 +251,16 @@
 						<div class="truncate text-(--ui-text-muted)">
 							{{ methodLabel(data.payment_method) }}
 						</div>
-						<!-- Which account the money moved through. Hover
-							reveals the full bank name / number / branch. -->
+						<!-- Which account the money moved through — colour dot
+							+ label. Hover reveals the full bank name /
+							number / branch. -->
 						<div
 							v-if="bankFor(data)"
-							class="truncate text-xs text-(--ui-text-dimmed) mt-0.5"
+							class="flex items-center gap-1.5 text-xs text-(--ui-text-dimmed) mt-0.5 min-w-0"
 							:title="bankTitleFor(data)"
 						>
-							<UIcon name="i-lucide-landmark" class="size-3 inline-block align-[-1px] mr-1" />{{ bankFor(data)!.label }}
+							<BankColorDot :color="bankFor(data)!.color" />
+							<span class="truncate">{{ bankFor(data)!.label }}</span>
 						</div>
 					</template>
 				</Column>

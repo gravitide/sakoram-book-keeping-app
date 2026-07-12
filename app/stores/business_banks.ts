@@ -19,6 +19,10 @@ export interface BusinessBankRow {
 	bank_account_name: string | null
 	bank_account_number: string | null
 	bank_branch: string | null
+	/// One of the 8 predefined THEME_COLORS swatch names (migration 0048).
+	/// Rendered as a small BankColorDot in front of the bank identity
+	/// everywhere so multiple accounts are recognisable at a glance.
+	color: string
 	is_default: number
 	archived: number
 	created_at: string
@@ -27,7 +31,7 @@ export interface BusinessBankRow {
 
 export type BusinessBankInput = Pick<
 	BusinessBankRow,
-	"label" | "bank_name" | "bank_account_name" | "bank_account_number" | "bank_branch"
+	"label" | "bank_name" | "bank_account_name" | "bank_account_number" | "bank_branch" | "color"
 >;
 
 const UPSERTABLE_COLUMNS: ReadonlyArray<keyof BusinessBankInput> = [
@@ -35,7 +39,8 @@ const UPSERTABLE_COLUMNS: ReadonlyArray<keyof BusinessBankInput> = [
 	"bank_name",
 	"bank_account_name",
 	"bank_account_number",
-	"bank_branch"
+	"bank_branch",
+	"color"
 ];
 
 // Build the JSON snapshot that lives on a quote / invoice row. Shape is

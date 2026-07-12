@@ -22,6 +22,26 @@
 				<UFormField label="Account number">
 					<UInput v-model="form.bank_account_number" placeholder="012345678900" />
 				</UFormField>
+
+				<!-- Colour marker — shown as a small dot in front of this
+					account everywhere (vouchers list, bank pickers,
+					reconcile) so multiple accounts read at a glance. Same
+					8-swatch pattern as CategoryFormModal. -->
+				<UFormField label="Colour tag" hint="Marks this account across the app.">
+					<div class="flex items-center gap-2 flex-wrap">
+						<button
+							v-for="c in THEME_COLORS"
+							:key="c.value"
+							type="button"
+							class="size-7 rounded-full border-2 transition cursor-pointer"
+							:class="form.color === c.value ? 'border-(--ui-text)' : 'border-transparent hover:border-(--ui-border)'"
+							:style="{ backgroundColor: c.hex }"
+							:title="c.label"
+							:aria-label="c.label"
+							@click="form.color = c.value"
+						/>
+					</div>
+				</UFormField>
 			</div>
 		</template>
 		<template #footer>
@@ -39,6 +59,7 @@
 
 <script setup lang="ts">
 	import type { BusinessBankInput, BusinessBankRow } from "~/stores/business_banks";
+	import { THEME_COLORS } from "~/lib/theme";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
 
 	// Create / edit modal for a business bank account. Used from
@@ -64,12 +85,33 @@
 
 	const editing = computed(() => props.bank !== null);
 
+	// New banks pre-select the least-used swatch across current banks so
+	// consecutive accounts stay distinguishable without the user having
+	// to think about it (ties break on palette order).
+	const leastUsedColor = (): string => {
+		const counts = new Map<string, number>(THEME_COLORS.map((c) => [c.value, 0]));
+		for (const b of store.banks) {
+			if (counts.has(b.color)) counts.set(b.color, (counts.get(b.color) ?? 0) + 1);
+		}
+		let best: string = THEME_COLORS[0]!.value;
+		let bestCount = Number.POSITIVE_INFINITY;
+		for (const c of THEME_COLORS) {
+			const n = counts.get(c.value) ?? 0;
+			if (n < bestCount) {
+				best = c.value;
+				bestCount = n;
+			}
+		}
+		return best;
+	};
+
 	const blankForm = (): BusinessBankInput => ({
 		label: "",
 		bank_name: "",
 		bank_account_name: "",
 		bank_account_number: "",
-		bank_branch: ""
+		bank_branch: "",
+		color: leastUsedColor()
 	});
 
 	const form = reactive<BusinessBankInput>(blankForm());
@@ -86,6 +128,7 @@
 			form.bank_account_name = props.bank.bank_account_name ?? "";
 			form.bank_account_number = props.bank.bank_account_number ?? "";
 			form.bank_branch = props.bank.bank_branch ?? "";
+			form.color = props.bank.color;
 		} else {
 			Object.assign(form, blankForm());
 		}
@@ -112,7 +155,8 @@
 				bank_name: trimOrNull(form.bank_name),
 				bank_account_name: trimOrNull(form.bank_account_name),
 				bank_account_number: trimOrNull(form.bank_account_number),
-				bank_branch: trimOrNull(form.bank_branch)
+				bank_branch: trimOrNull(form.bank_branch),
+				color: form.color
 			};
 			let id: number;
 			if (props.bank) {

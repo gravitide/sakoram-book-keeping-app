@@ -197,6 +197,9 @@
 							>
 								<div class="flex-1 min-w-0">
 									<div class="flex items-center gap-2 flex-wrap">
+										<!-- Colour tag — the same dot marks this account on the
+											vouchers list, bank pickers, and reconcile. -->
+										<BankColorDot :color="bank.color" />
 										<span class="font-medium truncate">{{ bank.label }}</span>
 										<UBadge
 											v-if="bank.is_default === 1"
