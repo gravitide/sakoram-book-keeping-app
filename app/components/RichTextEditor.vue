@@ -116,11 +116,30 @@
 				</UPopover>
 			</template>
 		</div>
-		<EditorContent
-			:editor="editor"
-			class="letter-body p-3 max-h-[50vh] overflow-y-auto text-sm"
-			:class="{ 'opacity-70': !editable }"
-		/>
+		<div class="relative">
+			<EditorContent
+				:editor="editor"
+				class="letter-body p-3 max-h-[50vh] overflow-y-auto text-sm"
+				:class="{ 'opacity-70 select-text cursor-text': !editable }"
+			/>
+			<!-- Copy-for-reuse on locked documents: issued quotes / invoices
+				freeze notes & terms, but that text is routinely reused on
+				the next document. `select-text` above restores drag-select
+				(the page root is select-none and a contenteditable=false
+				body doesn't hit the main.css re-enable rule); this button
+				is the one-click path. -->
+			<UButton
+				v-if="!editable && hasContent"
+				:icon="copied ? 'i-lucide-check' : 'i-lucide-copy'"
+				size="xs"
+				variant="ghost"
+				color="neutral"
+				class="absolute top-1.5 right-1.5"
+				:title="copied ? 'Copied' : 'Copy text'"
+				aria-label="Copy text"
+				@click="copyContent"
+			/>
+		</div>
 	</div>
 </template>
 
@@ -196,6 +215,37 @@
 			model.value = JSON.stringify(e.getJSON());
 		}
 	});
+
+	// --- Copy-for-reuse (read-only mode) -----------------------------------
+	// Writes BOTH rich HTML and plain text to the clipboard, so pasting
+	// into another RichTextEditor keeps lists / bold / colours while a
+	// plain input receives clean text. Feedback is an icon swap (copy →
+	// check) rather than a toast — this is a tiny inline affordance.
+	const hasContent = computed(() => !!editor.value && !editor.value.isEmpty);
+	const copied = ref(false);
+	const copyContent = async () => {
+		const e = editor.value;
+		if (!e) return;
+		try {
+			const text = e.getText();
+			if ("ClipboardItem" in window) {
+				await navigator.clipboard.write([
+					new ClipboardItem({
+						"text/html": new Blob([e.getHTML()], { type: "text/html" }),
+						"text/plain": new Blob([text], { type: "text/plain" })
+					})
+				]);
+			} else {
+				await navigator.clipboard.writeText(text);
+			}
+			copied.value = true;
+			setTimeout(() => {
+				copied.value = false;
+			}, 1600);
+		} catch {
+			// Clipboard denied / unavailable — drag-select copy still works.
+		}
+	};
 
 	// Toggle read-only live (e.g. a draft quote gets marked sent while open).
 	watch(() => props.editable, (val) => {
