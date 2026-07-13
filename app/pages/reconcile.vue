@@ -28,7 +28,15 @@
 							:items="bankOptions"
 							value-key="value"
 							class="md:w-72"
-						/>
+						>
+							<!-- Colour dot per account — see BankColorDot. -->
+							<template #leading>
+								<BankColorDot :color="bankOptions.find((o) => o.value === selectedBankId)?.color" />
+							</template>
+							<template #item-leading="{ item }">
+								<BankColorDot :color="item.color" />
+							</template>
+						</USelect>
 					</UFormField>
 					<div class="text-sm text-(--ui-text-muted) tabular-nums">
 						<span class="font-medium text-(--ui-text)">{{ matchedCount }}</span> of
@@ -294,7 +302,8 @@
 	const bankOptions = computed(() =>
 		banks.activeBanks.map((b) => ({
 			label: b.bank_name ? `${b.label} · ${b.bank_name}` : b.label,
-			value: b.id
+			value: b.id,
+			color: b.color
 		}))
 	);
 

@@ -115,7 +115,8 @@ const seedBanks = async () => {
 		bank_name: "Hatton National Bank",
 		bank_account_name: "Acme Trading Co",
 		bank_account_number: "0049-1234-5678",
-		bank_branch: "Colombo Main"
+		bank_branch: "Colombo Main",
+		color: "green"
 	});
 	await store.setDefault(id);
 };
