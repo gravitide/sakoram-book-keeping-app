@@ -417,6 +417,15 @@
 		type: "voucher",
 		enabled
 	});
+	// This page is kept alive and `enabled` never flips, so the
+	// composable's open-edge peek runs once per app session — after
+	// creating a voucher and coming back, the field would still show the
+	// previous (now consumed) number with no "already in use" warning
+	// (the uniqueness watcher only fires on change). Re-seed to the
+	// fresh next number on every re-entry.
+	onActivated(() => {
+		void docNum.refresh();
+	});
 
 	// Voucher type rendered as two selectable tiles (not a dropdown) —
 	// directional arrows carry the money-in / money-out meaning.
