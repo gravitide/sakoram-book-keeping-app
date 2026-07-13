@@ -1192,14 +1192,16 @@
 		const d = new Date();
 		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 	};
-	// Editable issue date for the invoice the conversion creates. Refreshed
-	// to today on every open (this page is kept alive — a ref seeded once
-	// would go stale across days). The due date derives from it + the
-	// default payment terms inside createFromQuote.
+	// Editable issue date for the invoice the conversion creates. Seeds
+	// from the QUOTE's issue date on every open (falling back to today) —
+	// converting a back-filled historical quote should produce an invoice
+	// dated in the same period, not stamped with today. Re-seeded per
+	// open because this page is kept alive. The due date derives from it
+	// + the default payment terms inside createFromQuote.
 	const convertIssueDate = ref<string>(todayISO());
 	// Reseed on the next open (peek only fills when sequence is null).
 	watch(showConvertDialog, (open) => {
-		if (open) convertIssueDate.value = todayISO();
+		if (open) convertIssueDate.value = quote.value?.issue_date || todayISO();
 		else convertDocNum.reset();
 	});
 	const askConvert = () => {
