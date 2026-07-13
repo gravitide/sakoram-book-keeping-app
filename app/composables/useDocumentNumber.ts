@@ -101,11 +101,28 @@ export const useDocumentNumber = (opts: UseDocumentNumberOptions) => {
 		numberTaken.value = false;
 	};
 
+	// Force re-seed to the fresh next number, overwriting whatever the
+	// field holds. Modals don't need this (reset() on close + the
+	// enabled open-edge re-peek cover them), but kept-alive PAGES whose
+	// `enabled` never flips (/vouchers/new) do: without it, returning to
+	// the form shows the previous visit's — by now consumed — number,
+	// and the uniqueness watcher (which only fires on change) never
+	// flags it. Call from onActivated.
+	const refresh = async () => {
+		try {
+			const peek = await peekNextSequence(opts.type);
+			sequence.value = peek.sequence;
+		} catch {
+			// Same tolerance as the enable-edge peek above.
+		}
+	};
+
 	return {
 		sequence,
 		numberFormatted,
 		numberTaken,
 		numberValid,
-		reset
+		reset,
+		refresh
 	};
 };
