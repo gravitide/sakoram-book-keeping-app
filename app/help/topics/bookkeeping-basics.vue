@@ -182,7 +182,7 @@
 				</NuxtLink> totals all of this for any period.
 			</HelpCallout>
 			<HelpCallout variant="tax" title="Fiscal year is April–March">
-				The Sri Lankan government fiscal year runs April through March, not the calendar year. Sakoram defaults to this — invoice numbers carry the FY (e.g. <span class="font-mono text-xs">INV-2026-0001</span> for the first invoice of FY 2026, which runs Apr 2026 → Mar 2027), and report presets like "Fiscal year" use the gov FY.
+				The Sri Lankan government fiscal year runs April through March, not the calendar year. Sakoram defaults to this — report presets like "Fiscal year" (and the dashboard's range chips) use the gov FY. Document numbers themselves are one continuous sequence (<span class="font-mono text-xs">INV-0001</span>, <span class="font-mono text-xs">INV-0002</span>, …) that never resets at year end.
 			</HelpCallout>
 			<HelpCallout variant="tax" title="Payroll: EPF, ETF, PAYE">
 				Hiring anyone? You're now on the hook for EPF (8% employee + 12% employer), ETF (3% employer), and possibly PAYE income tax depending on the employee's salary. See the <NuxtLink to="/help/payslips" class="text-(--ui-primary) hover:underline">

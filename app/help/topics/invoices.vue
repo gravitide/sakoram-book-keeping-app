@@ -78,6 +78,9 @@
 			<HelpCallout variant="info" title="Partial / paid / overdue are derived, not set">
 				You only set <strong>draft</strong>, <strong>sent</strong>, or <strong>cancelled</strong>. The other three states come from summing the linked receipt vouchers against the total and comparing today's date to the due date. Means you can't accidentally mark an invoice "paid" without a real receipt voucher to back it up.
 			</HelpCallout>
+			<HelpCallout variant="tip" title="Sent by mistake? Revert to draft">
+				A sent invoice with <strong>no payments recorded</strong> offers <strong>Revert to draft</strong> — un-issue it, fix the typo or swap the bank account, and send again. A cancelled invoice can also revert to draft for a full re-edit (or <strong>Reopen</strong> straight back to sent). The moment a receipt voucher is linked, both paths are refused — corrections then go through a credit note.
+			</HelpCallout>
 		</HelpSection>
 
 		<HelpSection title="How to create one in Sakoram" icon="i-lucide-circle-play">
@@ -88,7 +91,7 @@
 					</NuxtLink> and click <strong>New invoice</strong>.
 				</li>
 				<li>
-					Pick the <strong>client</strong>. The number auto-allocates (e.g. <span class="font-mono text-xs">INV-2026-0001</span>); change it if you need to fill a gap from a deleted draft.
+					Pick the <strong>client</strong>. The number auto-allocates (e.g. <span class="font-mono text-xs">INV-0001</span> — one continuous sequence, no yearly reset); change it if you need to fill a gap from a deleted draft.
 				</li>
 				<li>
 					Optional <strong>project title</strong> — appears as the subtitle on the PDF.
@@ -107,7 +110,7 @@
 					Pick the <strong>bank account</strong> to print on the PDF (so the client knows where to pay). Defaults to your primary; switch via the picker if needed.
 				</li>
 				<li>
-					Click <strong>Mark sent</strong> when you're ready to issue. The invoice locks; only notes stay editable.
+					Click <strong>Mark sent</strong> when you're ready to issue. The invoice locks; only notes stay editable. (Locked notes and terms carry a small <strong>Copy</strong> button, so you can reuse the text on the next invoice with formatting intact.)
 				</li>
 				<li>
 					When the client pays, click <strong>Record payment</strong> on the invoice. That spins up a receipt voucher linked back to this invoice; the status updates to partial / paid automatically.
@@ -137,9 +140,9 @@
 				</NuxtLink> totals it for any period — that's the number you transfer to your VAT return form.
 			</p>
 			<HelpCallout variant="info" title="Fiscal year is April–March">
-				Sri Lankan businesses report on the gov FY (Apr-Mar). Sakoram's invoice numbers carry the FY in their number (e.g. <span class="font-mono text-xs">INV-2026-0001</span> = first invoice of FY 2026, which runs Apr 2026 → Mar 2027). The <NuxtLink to="/reports/profit-loss" class="text-(--ui-primary) hover:underline">
+				Sri Lankan businesses report on the gov FY (Apr-Mar). Invoice numbers are one continuous sequence (<span class="font-mono text-xs">INV-0001</span>, <span class="font-mono text-xs">INV-0002</span>, …) that never resets — the fiscal year lives in the reports, not the number. The <NuxtLink to="/reports/profit-loss" class="text-(--ui-primary) hover:underline">
 					Profit & Loss report
-				</NuxtLink>'s "Fiscal year" preset defaults to this.
+				</NuxtLink>'s "Fiscal year" preset (and the dashboard's range chips) default to Apr-Mar.
 			</HelpCallout>
 		</HelpSection>
 
@@ -156,7 +159,7 @@
 				Cancelling would orphan the receipt vouchers (cash in the bank with no liability on record). Sakoram refuses this — delete the receipt vouchers first, then cancel the invoice.
 			</HelpCallout>
 			<HelpCallout variant="warning" title="Pick the bank account before sending">
-				The bank picker is editable while the invoice is a draft. Once sent, the bank snapshot is frozen on the PDF — the client sees whichever bank was selected at issue time. Re-issuing with a different bank means cancelling + creating a new invoice.
+				The bank picker is editable while the invoice is a draft. Once sent, the bank snapshot is frozen on the PDF — the client sees whichever bank was selected at issue time. Sent it with the wrong bank and no payment has landed yet? <strong>Revert to draft</strong>, swap the bank, and re-send. (Each account carries a colour dot in the picker so it's hard to grab the wrong one.)
 			</HelpCallout>
 		</HelpSection>
 	</div>

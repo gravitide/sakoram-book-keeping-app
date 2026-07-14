@@ -125,6 +125,11 @@
 			<p>
 				The method shows up on the voucher PDF and on the cash-flow report's drill-down so you can reconcile against your bank statement line by line.
 			</p>
+			<HelpCallout variant="tip" title="Which bank account did the money move through?">
+				Non-cash vouchers also record the <strong>business bank account</strong> — the vouchers list shows it under the Method column, and every account carries a small <strong>colour dot</strong> (set per account in Settings → Business details → Bank accounts) so multiple accounts read at a glance without deciphering labels. The same dot appears in every bank picker and on the <NuxtLink to="/help/reconciliation" class="text-(--ui-primary) hover:underline">
+					reconciliation
+				</NuxtLink> page's account selector.
+			</HelpCallout>
 		</HelpSection>
 
 		<HelpSection title="Common mistakes" icon="i-lucide-triangle-alert">
