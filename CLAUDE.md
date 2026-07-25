@@ -506,7 +506,8 @@ sakoram_app/
 .github/
 └─ workflows/
    ├─ release-windows.yml             ← Windows MSI + NSIS build, triggered by tag push or manual dispatch. Also mirrors installers to Cloudflare R2 (when secrets configured).
-   └─ release-macos.yml               ← macOS Apple Silicon DMG + .app.tar.gz build, same triggers + R2 mirror.
+   ├─ release-macos.yml               ← macOS Apple Silicon DMG + .app.tar.gz build, same triggers + R2 mirror.
+   └─ publish-latest.yml              ← manual workflow_dispatch that points `sakoram/releases.json` in R2 at an already-uploaded build, per platform (windows/mac/linux). Builds nothing — it lists the version's R2 prefix to derive filename/size/upload-date, then merges one platform's entry into the manifest. Merge logic is the pure, unit-tested `scripts/release-manifest.mjs`. `latest.json` (the old flat manifest the website still reads) is deliberately left frozen — migrating the site to `releases.json` is separate work.
 ```
 
 ---
