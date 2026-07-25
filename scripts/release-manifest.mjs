@@ -8,6 +8,9 @@
 // that touches the filesystem or stdio. Driven by
 // .github/workflows/publish-latest.yml.
 
+import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
 export const SCHEMA_VERSION = 1;
 
 export const PLATFORMS = ["windows", "mac", "linux"];
@@ -97,4 +100,55 @@ export function mergeRelease(existing, entry, now = new Date()) {
 			}
 		}
 	};
+}
+
+function parseArgs(argv) {
+	const args = {};
+	for (let index = 0; index < argv.length; index += 2) {
+		const key = argv[index];
+		if (!key.startsWith("--"))
+			throw new Error(`Unexpected argument ${JSON.stringify(key)}`);
+		args[key.slice(2)] = argv[index + 1] ?? "";
+	}
+	return args;
+}
+
+async function readStdin() {
+	process.stdin.setEncoding("utf8");
+	let data = "";
+	for await (const chunk of process.stdin) data += chunk;
+	return data.trim();
+}
+
+async function main() {
+	const args = parseArgs(process.argv.slice(2));
+	const version = normalizeVersion(args.version);
+
+	const listing = JSON.parse(readFileSync(args.listing, "utf8"));
+	const artifact = pickArtifact(listing.Contents, args.platform);
+
+	// Empty stdin means the manifest doesn't exist in the bucket yet.
+	const raw = await readStdin();
+	const existing = raw ? JSON.parse(raw) : null;
+
+	const next = mergeRelease(existing, {
+		platform: args.platform,
+		version,
+		released: artifact.released,
+		url: buildUrl(args["base-url"], version, artifact.filename),
+		filename: artifact.filename,
+		size: artifact.size,
+		notes: args.notes ?? ""
+	});
+
+	process.stdout.write(`${JSON.stringify(next, null, 2)}\n`);
+}
+
+// Only runs when invoked directly, so the test suite can import the pure
+// helpers above without triggering any I/O.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+	main().catch((error) => {
+		console.error(error.message);
+		process.exit(1);
+	});
 }
