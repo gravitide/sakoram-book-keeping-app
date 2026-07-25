@@ -54,3 +54,47 @@ export function pickArtifact(contents, platform) {
 		released: String(winner.LastModified).slice(0, 10)
 	};
 }
+
+export function buildUrl(baseUrl, version, filename) {
+	return `${String(baseUrl).replace(/\/+$/, "")}/sakoram/${version}/${filename}`;
+}
+
+// A malformed existing manifest is a hard failure rather than something we
+// paper over — silently starting from scratch would drop the OTHER platforms'
+// download URLs, which is exactly the data this file exists to protect.
+function readExistingPlatforms(existing) {
+	if (existing === null || existing === undefined) return {};
+	if (typeof existing !== "object" || Array.isArray(existing))
+		throw new Error("Existing manifest is not a JSON object — refusing to overwrite it.");
+
+	const platforms = existing.platforms ?? {};
+	if (typeof platforms !== "object" || Array.isArray(platforms))
+		throw new Error("Existing manifest has a malformed `platforms` key — refusing to overwrite it.");
+
+	return platforms;
+}
+
+export function mergeRelease(existing, entry, now = new Date()) {
+	if (!PLATFORMS.includes(entry.platform))
+		throw new Error(`Unknown platform ${JSON.stringify(entry.platform)} — expected one of ${PLATFORMS.join(", ")}`);
+
+	const platforms = readExistingPlatforms(existing);
+	const supplied = String(entry.notes ?? "").trim();
+	const notes = supplied || platforms[entry.platform]?.notes || "";
+
+	return {
+		schema: SCHEMA_VERSION,
+		updated: now.toISOString(),
+		platforms: {
+			...platforms,
+			[entry.platform]: {
+				version: normalizeVersion(entry.version),
+				released: entry.released,
+				url: entry.url,
+				filename: entry.filename,
+				size: entry.size,
+				notes
+			}
+		}
+	};
+}
