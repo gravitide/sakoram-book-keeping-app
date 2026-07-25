@@ -43,7 +43,7 @@
 					Click into the client you want to chase.
 				</li>
 				<li>
-					In the header action cluster, click the primary-coloured <strong>Statement</strong> button (clock icon). It's disabled — with a tooltip — if the client has nothing outstanding.
+					Click the amber <strong>Outstanding</strong> card between the client's name and the form — it shows the balance owed and "generate statement". When the client owes nothing, the card turns green ("All settled — nothing to chase") and the statement is unavailable.
 				</li>
 				<li>
 					The PDF preview opens with the full statement. Click <strong>Save as…</strong> to keep a copy, or <strong>Print</strong> to send it straight to a printer or PDF re-printer for emailing.
@@ -52,7 +52,7 @@
 			<HelpCallout variant="tip" title="Two ways to find clients to chase">
 				The <NuxtLink to="/reports/aged-receivables" class="text-(--ui-primary) hover:underline">
 					Aged receivables report
-				</NuxtLink> is the deeper view — same list of clients, but broken down by how late each balance is (current / 1-30 / 31-60 / 61-90 / 90+ days past due). Use it when you want to focus on the truly delinquent rather than everyone with an open invoice. Click any client row to land on their detail page, then hit Statement from there.
+				</NuxtLink> is the deeper view — same list of clients, but broken down by how late each balance is (current / 1-30 / 31-60 / 61-90 / 90+ days past due). Use it when you want to focus on the truly delinquent rather than everyone with an open invoice. Click any client row to land on their detail page, then generate the statement from the Outstanding card there.
 			</HelpCallout>
 		</HelpSection>
 

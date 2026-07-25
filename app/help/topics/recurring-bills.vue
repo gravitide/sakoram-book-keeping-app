@@ -72,7 +72,7 @@
 				Confirm, and Sakoram does this for each ticked template:
 			</p>
 			<ol class="list-decimal pl-5 space-y-1.5">
-				<li>Allocates a fresh bill number (<span class="font-mono text-xs">BIL-2026-NNNN</span>) — the next in your sequence.</li>
+				<li>Allocates a fresh bill number (<span class="font-mono text-xs">BIL-NNNN</span>) — the next in your sequence.</li>
 				<li>Copies the vendor, line items, category, VAT rate, and notes from the template.</li>
 				<li>Sets <strong>issue date = today</strong> and <strong>due date = today + the template's payment terms</strong>.</li>
 				<li>Saves the new row in your bills table with status <strong>unpaid</strong>.</li>

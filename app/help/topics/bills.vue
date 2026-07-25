@@ -85,7 +85,7 @@
 					</NuxtLink>. Vendors snapshot onto the bill at create time, so renaming a vendor later doesn't rewrite history.
 				</li>
 				<li>
-					Type the vendor's <strong>bill number</strong> as they printed it on the document — this is for your records, not Sakoram's auto-numbering. Sakoram allocates its own internal number too (e.g. <span class="font-mono text-xs">BIL-2026-0001</span>) for the cash ledger trail.
+					Type the vendor's <strong>bill number</strong> as they printed it on the document — this is for your records, not Sakoram's auto-numbering. Sakoram allocates its own internal number too (e.g. <span class="font-mono text-xs">BIL-0001</span>) for the cash ledger trail.
 				</li>
 				<li>
 					Set the <strong>issue date</strong> (when the vendor dated their bill) and <strong>due date</strong> (when they expect payment). The vendor usually prints both.

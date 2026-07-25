@@ -77,8 +77,8 @@
 					</tbody>
 				</table>
 			</div>
-			<HelpCallout variant="tip" title="Reopening a rejected or expired quote">
-				If the client changes their mind, or if the price needs adjusting and re-sending, you can move a rejected / expired quote back to draft. This is the only "edit after issue" path — saves you from burning a quote number on a misclick.
+			<HelpCallout variant="tip" title="Every state can get back to draft">
+				Sent, accepted, rejected, and expired quotes all offer <strong>Reopen as draft</strong> — un-send a typo, walk back a misclicked Accept, or revive an expired quote after the client comes around. Quotes carry no payments, so nothing is at risk. Even a <strong>converted</strong> quote has an escape hatch: <strong>Revert to draft</strong> deletes the linked invoice and reopens the quote — refused while the invoice has recorded payments (delete those receipt vouchers first; the confirm dialog lists them).
 			</HelpCallout>
 		</HelpSection>
 
@@ -90,7 +90,7 @@
 					</NuxtLink> and click <strong>New quote</strong>.
 				</li>
 				<li>
-					Pick the <strong>client</strong> and optional <strong>project title</strong>. The quote number auto-allocates (e.g. <span class="font-mono text-xs">QUO-2026-0001</span>).
+					Pick the <strong>client</strong> and optional <strong>project title</strong>. The quote number auto-allocates (e.g. <span class="font-mono text-xs">QUO-0001</span>).
 				</li>
 				<li>
 					On the detail page, set the <strong>issue date</strong> and <strong>valid until</strong> date. The validity defaults to issue + your quote-validity setting (Settings → Business details, typically 30 days).
@@ -105,7 +105,7 @@
 					When the client responds: <strong>Mark accepted</strong> or <strong>Mark rejected</strong>. If they don't respond by the validity date, Sakoram nudges it to <strong>expired</strong>.
 				</li>
 				<li>
-					From an accepted quote, click <strong>Convert to invoice</strong>. A new draft invoice opens pre-filled with the quote's lines + client + project. The original quote flips to <strong>converted</strong> and links to the new invoice.
+					From an accepted quote, click <strong>Convert to invoice</strong>. The dialog asks for the invoice's <strong>issue date</strong> (pre-filled with the quote's own date — handy when back-filling history; the due date follows from it plus your payment terms) and its <strong>number</strong>. A new draft invoice opens pre-filled with the quote's lines + client + project. The original quote flips to <strong>converted</strong> and links to the new invoice.
 				</li>
 			</ol>
 		</HelpSection>
@@ -170,8 +170,8 @@
 					Profit & Loss report
 				</NuxtLink> follows the same rule (only counts invoices, not quotes), so don't worry about over-reporting income from outstanding quotes.
 			</HelpCallout>
-			<HelpCallout variant="warning" title="Don't edit a converted quote">
-				If you converted a quote to an invoice and then realize the price was wrong, edit the invoice (if still draft) or issue a credit note (if sent). Don't try to retro-edit the quote — the audit trail breaks.
+			<HelpCallout variant="warning" title="Converted by mistake? Revert, don't retro-edit">
+				If you converted a quote and then realize the price was wrong: while the invoice is still an unpaid draft, use <strong>Revert to draft</strong> on the quote — it deletes the linked invoice and reopens the quote for editing. Once the invoice has been sent and paid against, fix it with a credit note instead. Never try to retro-edit a converted quote around the invoice — the audit trail breaks.
 			</HelpCallout>
 		</HelpSection>
 	</div>

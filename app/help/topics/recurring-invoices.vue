@@ -67,7 +67,7 @@
 				Confirm, and Sakoram does this for each ticked template:
 			</p>
 			<ol class="list-decimal pl-5 space-y-1.5">
-				<li>Allocates a fresh invoice number (<span class="font-mono text-xs">INV-2026-NNNN</span>) — the next in your sequence.</li>
+				<li>Allocates a fresh invoice number (<span class="font-mono text-xs">INV-NNNN</span>) — the next in your sequence.</li>
 				<li>Copies the client, line items, project title, VAT rate, notes, and bank from the template.</li>
 				<li>Sets <strong>issue date = today</strong> and <strong>due date = today + the template's payment terms</strong>.</li>
 				<li>Saves the new row in your invoices table with status <strong>draft</strong>.</li>

@@ -62,7 +62,7 @@
 					</NuxtLink> and click <strong>New payslip</strong>.
 				</li>
 				<li>
-					Pick the <strong>employee</strong>. The payslip number auto-allocates (e.g. <span class="font-mono text-xs">PSL-2026-0027</span>).
+					Pick the <strong>employee</strong>. The payslip number auto-allocates (e.g. <span class="font-mono text-xs">PSL-0027</span>).
 				</li>
 				<li>
 					Set the three dates: <strong>period start</strong>, <strong>period end</strong>, <strong>pay date</strong>. By default they're filled from your payroll cycle settings (Settings → Payroll); adjust if this is a partial period.
@@ -76,7 +76,7 @@
 					</NuxtLink>. Add anything else manually: salary advances, no-pay leave, loan instalments.
 				</li>
 				<li>
-					Click <strong>Mark issued</strong> when the numbers are right. The payslip locks (only notes stay editable).
+					Click <strong>Mark issued</strong> when the numbers are right. The payslip locks (only notes stay editable). Issued in error? As long as no payment voucher is linked, <strong>Revert to draft</strong> unlocks it for a full re-edit — cancelled payslips offer the same escape hatch.
 				</li>
 				<li>
 					When you actually pay the employee, click <strong>Record payment</strong>. A payment voucher is created linked to the payslip; the status flips to paid.

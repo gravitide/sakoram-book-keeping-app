@@ -108,6 +108,9 @@
 					Reconcile against your bank statement line-by-line — the voucher payment method + reference are visible in the drill-down to match against bank entries.
 				</li>
 			</ol>
+			<HelpCallout variant="tip" title="The dashboard has the same lens">
+				The dashboard's flow widgets — the Net cash tile, Monthly cash flow chart, Expenses by category, and Top clients — follow their own <strong>range chip row</strong> (This month … Fiscal year, plus <strong>All time</strong>). Your pick is remembered per business. Handy while back-filling history: switch to All time or Last year and the numbers you just entered show up immediately. The snapshot tiles (receivables, payables, open quotes) always read "as of today" regardless.
+			</HelpCallout>
 		</HelpSection>
 
 		<HelpSection title="Reconciling against the bank" icon="i-lucide-check">

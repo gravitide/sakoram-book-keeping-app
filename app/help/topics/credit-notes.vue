@@ -38,7 +38,7 @@
 					</NuxtLink> in the sidebar and click <strong>New credit note</strong>.
 				</li>
 				<li>
-					Pick the <strong>client</strong> the credit is for. The number auto-allocates (e.g. <span class="font-mono text-xs">CRN-2026-0001</span>); change it if you need to fill a gap from a deleted draft.
+					Pick the <strong>client</strong> the credit is for. The number auto-allocates (e.g. <span class="font-mono text-xs">CRN-0001</span>); change it if you need to fill a gap from a deleted draft.
 				</li>
 				<li>
 					Optional: type a <strong>project title</strong> — appears as the subtitle on the PDF, e.g. "Refund for damaged stock."
