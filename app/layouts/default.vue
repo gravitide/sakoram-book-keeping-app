@@ -9,7 +9,14 @@
 						class="w-full px-4 py-3 border-b border-(--ui-border) flex items-center gap-2 min-w-0 hover:bg-(--ui-bg-accented) transition text-left"
 						title="Switch business"
 					>
-						<div class="size-9 shrink-0 rounded-md bg-(--ui-bg-muted) border border-(--ui-border) flex items-center justify-center overflow-hidden">
+						<!-- White plate when a logo is present: business marks are
+							usually drawn for light backgrounds, and a dark-on-transparent
+							one vanishes against the themed surface. The empty state keeps
+							the muted background so the placeholder icon stays legible. -->
+						<div
+							class="size-9 shrink-0 rounded-md border border-(--ui-border) flex items-center justify-center overflow-hidden"
+							:class="settings.logoSrc ? 'bg-white' : 'bg-(--ui-bg-muted)'"
+						>
 							<img
 								v-if="settings.logoSrc"
 								:src="settings.logoSrc"

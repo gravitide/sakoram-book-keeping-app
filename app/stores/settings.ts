@@ -94,6 +94,9 @@ export interface CompanySettingsRow {
 	// last crop rect JSON {x,y,w,h} in source px, null for SVG / uncropped.
 	pdf_logo_scale: number
 	pdf_logo_crop: string | null
+	// Square identity-logo crop rect (migration 0053). Same shape as
+	// pdf_logo_crop; null for SVG or a logo uploaded before the cropper.
+	logo_crop: string | null
 	// Customizable page chrome (migration 0052). The *_custom flags are the
 	// opt-in; the *_text columns hold TipTap JSON that may contain {token}
 	// fields resolved at render time. Flags default 0 = hardcoded chrome.
@@ -155,6 +158,7 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"payslip_show_signatures",
 	"pdf_logo_scale",
 	"pdf_logo_crop",
+	"logo_crop",
 	"pdf_header_custom",
 	"pdf_header_text",
 	"pdf_footer_custom",

@@ -35,7 +35,12 @@
 				]"
 				@click="onCardClick(t)"
 			>
-				<div class="size-12 shrink-0 rounded-md bg-(--ui-bg-muted) border border-(--ui-border) flex items-center justify-center overflow-hidden">
+				<!-- White plate only when a logo is present — see the note in
+					layouts/default.vue. -->
+				<div
+					class="size-12 shrink-0 rounded-md border border-(--ui-border) flex items-center justify-center overflow-hidden"
+					:class="logoSrcs[t.id] ? 'bg-white' : 'bg-(--ui-bg-muted)'"
+				>
 					<img
 						v-if="logoSrcs[t.id]"
 						:src="logoSrcs[t.id]!"
