@@ -252,15 +252,24 @@
 								</dd>
 							</dl>
 
-							<div class="text-xs text-(--ui-text-muted) border-t border-(--ui-border) pt-4 flex items-center justify-between gap-2">
+							<div class="text-xs text-(--ui-text-muted) border-t border-(--ui-border) pt-4 flex items-center justify-between gap-3">
 								<span>© {{ copyrightYear }} Gravitide. All rights reserved.</span>
-								<button
-									type="button"
-									class="text-(--ui-primary) hover:underline cursor-pointer shrink-0"
-									@click="termsOpen = true"
-								>
-									Terms &amp; conditions
-								</button>
+								<div class="flex items-center gap-3 shrink-0">
+									<button
+										type="button"
+										class="text-(--ui-primary) hover:underline cursor-pointer"
+										@click="licencesOpen = true"
+									>
+										Fonts &amp; licences
+									</button>
+									<button
+										type="button"
+										class="text-(--ui-primary) hover:underline cursor-pointer"
+										@click="termsOpen = true"
+									>
+										Terms &amp; conditions
+									</button>
+								</div>
 							</div>
 						</div>
 					</template>
@@ -277,6 +286,64 @@
 					<template #body>
 						<div class="max-h-[60vh] overflow-y-auto pr-1">
 							<TermsContent />
+						</div>
+					</template>
+				</UModal>
+
+				<!-- Attribution for the bundled fonts. Every family is OFL 1.1,
+					which requires the copyright notice and licence to travel with
+					the files — `src-tauri/fonts/OFL.txt` is the on-disk copy, this
+					is the in-app one. -->
+				<UModal v-model:open="licencesOpen" title="Fonts &amp; licences">
+					<template #body>
+						<div class="max-h-[60vh] overflow-y-auto pr-1 space-y-4 select-none">
+							<p class="text-sm text-(--ui-text-muted) leading-relaxed">
+								Sakoram bundles these typefaces so documents look identical on
+								every machine, online or off. All are licensed under the
+								{{ FONT_LICENCE_NAME }}. Our thanks to their designers.
+							</p>
+
+							<ul class="space-y-3">
+								<li
+									v-for="f in FONT_LICENCES"
+									:key="f.name"
+									class="border-b border-(--ui-border) last:border-b-0 pb-3 last:pb-0"
+								>
+									<div class="text-sm font-medium" :style="{ fontFamily: `'${f.name}', sans-serif` }">
+										{{ f.name }}
+									</div>
+									<div class="text-xs text-(--ui-text-muted) mt-0.5">
+										Designed by {{ f.designer }}
+									</div>
+									<div class="text-xs text-(--ui-text-muted)">
+										{{ f.copyright }}
+									</div>
+									<button
+										v-if="f.url"
+										type="button"
+										class="text-xs text-(--ui-primary) hover:underline inline-flex items-center gap-1 cursor-pointer mt-0.5"
+										@click="openLink(f.url)"
+									>
+										{{ f.url }}
+										<UIcon name="i-lucide-external-link" class="size-3" />
+									</button>
+								</li>
+							</ul>
+
+							<div class="text-xs text-(--ui-text-muted) border-t border-(--ui-border) pt-3">
+								The full licence text ships with the app in
+								<code class="text-(--ui-text)">fonts/OFL.txt</code> and is
+								available online at
+								<button
+									type="button"
+									class="text-(--ui-primary) hover:underline cursor-pointer"
+									@click="openLink(FONT_LICENCE_URL)"
+								>
+									{{ FONT_LICENCE_URL }}
+								</button>.
+								Sakoram itself is not licensed under the OFL — these terms
+								cover the bundled font files only.
+							</div>
 						</div>
 					</template>
 				</UModal>
@@ -317,6 +384,7 @@
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import { useHelpWindow } from "~/composables/useHelpWindow";
 	import { applyPrimaryColor } from "~/lib/color-ramp";
+	import { FONT_LICENCE_NAME, FONT_LICENCE_URL, FONT_LICENCES } from "~/lib/font-licences";
 	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -343,6 +411,7 @@
 	// version number.
 	const aboutOpen = ref(false);
 	const termsOpen = ref(false);
+	const licencesOpen = ref(false);
 
 	const license = useLicenseStore();
 	const settings = useSettingsStore();
