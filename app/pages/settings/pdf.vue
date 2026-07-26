@@ -201,7 +201,7 @@
 					<SectionCard
 						icon="i-lucide-layout-template"
 						title="Templates"
-						subtitle="Pick a layout for your client-facing PDFs. Your theme colour, font, and header logo apply to every template — only the layout changes."
+						subtitle="Pick one layout for your quote, invoice, bill, and payslip PDFs. Your theme colour, font, and header logo apply to every template — only the layout changes."
 					>
 						<FeatureLock
 							v-if="!entitledToTemplates"
@@ -210,13 +210,12 @@
 							feature="pdf_templates"
 						/>
 
-						<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-							<!-- Invoice template picker -->
-							<div>
-								<div class="flex items-center justify-between mb-2 gap-2">
-									<div class="text-sm font-medium">
-										Invoice template
-									</div>
+						<div>
+							<div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
+								<div class="text-sm font-medium">
+									PDF template
+								</div>
+								<div class="flex items-center gap-2">
 									<UButton
 										size="xs"
 										variant="soft"
@@ -224,44 +223,8 @@
 										:loading="invoicePreview.state.rendering"
 										@click="invoicePreview.open()"
 									>
-										Preview
+										Invoice
 									</UButton>
-								</div>
-								<div class="space-y-2">
-									<button
-										v-for="t in TEMPLATES"
-										:key="`inv-${t.key}`"
-										type="button"
-										:disabled="!canPick(t.key)"
-										class="w-full text-left p-3 rounded-md border transition flex items-center gap-3"
-										:class="[
-											form.pdf_template_invoice === t.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)',
-											canPick(t.key) ? 'cursor-pointer hover:border-(--ui-primary)/50' : 'opacity-50 cursor-not-allowed'
-										]"
-										@click="form.pdf_template_invoice = t.key"
-									>
-										<div class="w-11 shrink-0 rounded-sm overflow-hidden ring-1 ring-(--ui-border)">
-											<PdfTemplateThumb :template-key="t.key" :color="themeColor" />
-										</div>
-										<div class="min-w-0">
-											<div class="text-sm font-medium flex items-center gap-1.5">
-												{{ t.label }}
-												<UIcon v-if="!canPick(t.key)" name="i-lucide-lock" class="size-3 text-(--ui-text-muted)" />
-											</div>
-											<div class="text-xs text-(--ui-text-muted) mt-0.5">
-												{{ t.description }}
-											</div>
-										</div>
-									</button>
-								</div>
-							</div>
-
-							<!-- Quote template picker -->
-							<div>
-								<div class="flex items-center justify-between mb-2 gap-2">
-									<div class="text-sm font-medium">
-										Quote template
-									</div>
 									<UButton
 										size="xs"
 										variant="soft"
@@ -269,36 +232,36 @@
 										:loading="quotePreview.state.rendering"
 										@click="quotePreview.open()"
 									>
-										Preview
+										Quote
 									</UButton>
 								</div>
-								<div class="space-y-2">
-									<button
-										v-for="t in TEMPLATES"
-										:key="`quo-${t.key}`"
-										type="button"
-										:disabled="!canPick(t.key)"
-										class="w-full text-left p-3 rounded-md border transition flex items-center gap-3"
-										:class="[
-											form.pdf_template_quote === t.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)',
-											canPick(t.key) ? 'cursor-pointer hover:border-(--ui-primary)/50' : 'opacity-50 cursor-not-allowed'
-										]"
-										@click="form.pdf_template_quote = t.key"
-									>
-										<div class="w-11 shrink-0 rounded-sm overflow-hidden ring-1 ring-(--ui-border)">
-											<PdfTemplateThumb :template-key="t.key" :color="themeColor" />
+							</div>
+							<div class="space-y-2">
+								<button
+									v-for="t in TEMPLATES"
+									:key="t.key"
+									type="button"
+									:disabled="!canPick(t.key)"
+									class="w-full text-left p-3 rounded-md border transition flex items-center gap-3"
+									:class="[
+										form.pdf_template === t.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)',
+										canPick(t.key) ? 'cursor-pointer hover:border-(--ui-primary)/50' : 'opacity-50 cursor-not-allowed'
+									]"
+									@click="form.pdf_template = t.key"
+								>
+									<div class="w-11 shrink-0 rounded-sm overflow-hidden ring-1 ring-(--ui-border)">
+										<PdfTemplateThumb :template-key="t.key" :color="themeColor" />
+									</div>
+									<div class="min-w-0">
+										<div class="text-sm font-medium flex items-center gap-1.5">
+											{{ t.label }}
+											<UIcon v-if="!canPick(t.key)" name="i-lucide-lock" class="size-3 text-(--ui-text-muted)" />
 										</div>
-										<div class="min-w-0">
-											<div class="text-sm font-medium flex items-center gap-1.5">
-												{{ t.label }}
-												<UIcon v-if="!canPick(t.key)" name="i-lucide-lock" class="size-3 text-(--ui-text-muted)" />
-											</div>
-											<div class="text-xs text-(--ui-text-muted) mt-0.5">
-												{{ t.description }}
-											</div>
+										<div class="text-xs text-(--ui-text-muted) mt-0.5">
+											{{ t.description }}
 										</div>
-									</button>
-								</div>
+									</div>
+								</button>
 							</div>
 						</div>
 					</SectionCard>
@@ -406,14 +369,13 @@
 	// Only the PDF-flavoured fields live on this page. Logo paths are kept on
 	// the form so dirty-tracking can spot a removal/upload that would otherwise
 	// only mutate the store. (Document protection moved to /settings/security.)
-	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_theme_color" | "pdf_template_invoice" | "pdf_template_quote">;
+	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_theme_color" | "pdf_template">;
 
 	const form = reactive<PdfForm>({
 		pdf_header_logo_path: null,
 		pdf_font: "Akt",
 		pdf_theme_color: "green",
-		pdf_template_invoice: "classic",
-		pdf_template_quote: "classic"
+		pdf_template: "classic"
 	});
 
 	// PDF templates are a Plus feature. Basic users see the pickers but can
@@ -432,13 +394,13 @@
 	// template through the real Typst pipeline (PdfPreviewModal).
 	const invoicePreview = usePdfPreview({
 		command: "export_invoice_pdf",
-		buildPayload: () => sampleInvoicePayload(store.settings, currency.value, form.pdf_template_invoice),
+		buildPayload: () => sampleInvoicePayload(store.settings, currency.value, form.pdf_template),
 		fileName: () => "sample-invoice.pdf",
 		title: "Invoice template preview"
 	});
 	const quotePreview = usePdfPreview({
 		command: "export_quote_pdf",
-		buildPayload: () => sampleQuotePayload(store.settings, currency.value, form.pdf_template_quote),
+		buildPayload: () => sampleQuotePayload(store.settings, currency.value, form.pdf_template),
 		fileName: () => "sample-quote.pdf",
 		title: "Quote template preview"
 	});
@@ -465,8 +427,7 @@
 		// Fall back to the UI theme colour for businesses that predate the
 		// split (0039 seeds it, but a defensive fallback keeps a null safe).
 		form.pdf_theme_color = s.pdf_theme_color ?? s.theme_color ?? "green";
-		form.pdf_template_invoice = s.pdf_template_invoice || "classic";
-		form.pdf_template_quote = s.pdf_template_quote || "classic";
+		form.pdf_template = s.pdf_template || "classic";
 	};
 
 	await store.ensureLoaded();
@@ -485,8 +446,7 @@
 			await store.save({
 				pdf_font: form.pdf_font.trim() || "Akt",
 				pdf_theme_color: form.pdf_theme_color,
-				pdf_template_invoice: form.pdf_template_invoice,
-				pdf_template_quote: form.pdf_template_quote
+				pdf_template: form.pdf_template
 			});
 			refreshBaseline();
 			toast.add({ title: "PDF settings saved", color: "success", icon: "i-lucide-check" });

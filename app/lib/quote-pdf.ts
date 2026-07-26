@@ -55,7 +55,7 @@ export const buildQuotePdfPayload = ({ row: q, lines, settings, currency, entitl
 	return {
 		kind: "quote",
 		number: q.number,
-		template: resolveTemplateKey(settings?.pdf_template_quote, entitledToTemplates),
+		template: resolveTemplateKey(settings?.pdf_template, entitledToTemplates),
 		title,
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
