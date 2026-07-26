@@ -62,20 +62,21 @@
 		const c = props.color;
 		switch (props.templateKey) {
 		case "modern":
-			// Left-aligned letterhead: logo, address lines beneath it, then the
-			// tapered accent rule (one long bar + three shortening dashes).
-			// Segment widths mirror the 76/7/5/3 fr split in common.typ's
-			// tapered-rule so the thumb matches what actually prints.
+			// Left-aligned letterhead: logo and header text SIDE BY SIDE, the
+			// text vertically centred on the logo, then the tapered accent rule
+			// (one long bar + three shortening dashes). Segment widths mirror
+			// the 76/7/5/3 fr split in common.typ's tapered-rule so the thumb
+			// matches what actually prints.
 			return [
 				{ x: 6, y: 6, w: 11, h: 5.5, fill: MARK },
-				{ x: 6, y: 13.5, w: 16, h: 1.4, fill: MARK },
-				{ x: 6, y: 15.6, w: 20, h: 1.4, fill: MARK },
-				{ x: 6, y: 17.7, w: 18, h: 1.4, fill: MARK },
-				{ x: 6, y: 21.5, w: 34.5, h: 1.3, rx: 0, fill: c },
-				{ x: 41.4, y: 21.5, w: 3.2, h: 1.3, rx: 0, fill: c },
-				{ x: 45.5, y: 21.5, w: 2.3, h: 1.3, rx: 0, fill: c },
-				{ x: 48.7, y: 21.5, w: 1.4, h: 1.3, rx: 0, fill: c },
-				...body(27)
+				{ x: 20, y: 6, w: 14, h: 1.4, fill: MARK },
+				{ x: 20, y: 8.1, w: 18, h: 1.4, fill: MARK },
+				{ x: 20, y: 10.2, w: 16, h: 1.4, fill: MARK },
+				{ x: 6, y: 15, w: 34.5, h: 1.3, rx: 0, fill: c },
+				{ x: 41.4, y: 15, w: 3.2, h: 1.3, rx: 0, fill: c },
+				{ x: 45.5, y: 15, w: 2.3, h: 1.3, rx: 0, fill: c },
+				{ x: 48.7, y: 15, w: 1.4, h: 1.3, rx: 0, fill: c },
+				...body(21)
 			];
 		case "minimal":
 			return [
