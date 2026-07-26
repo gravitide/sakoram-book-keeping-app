@@ -2,12 +2,14 @@
 	<UModal
 		v-model:open="openModel"
 		:ui="{ content: 'max-w-3xl' }"
-		title="Crop header logo"
-		:description="sourceNote || 'Drag to reposition; pull a corner to resize. The crop is applied to the PDF header only — your original upload is kept.'"
+		:title="title"
+		:description="sourceNote || hint"
 	>
 		<template #body>
-			<!-- White stage: the PDF background is white, so the crop is judged
-				against the truth. Fixed even in dark mode. -->
+			<!-- White stage, fixed even in dark mode: both callers render the
+				result on white — the PDF onto paper, the identity logo onto the
+				white plate in the sidebar / welcome / business list — so the crop
+				is judged against the real substrate. -->
 			<div
 				ref="stageEl"
 				class="relative w-full select-none bg-white rounded-md ring-1 ring-(--ui-border) overflow-hidden touch-none"
@@ -55,11 +57,23 @@
 	import type { CropRect } from "~/lib/crop-rect";
 	import { fullRect, moveRect, resizeRect } from "~/lib/crop-rect";
 
-	const props = defineProps<{
+	const props = withDefaults(defineProps<{
 		imageBlob: Blob | null
 		initialRect?: CropRect | null
 		sourceNote?: string
-	}>();
+		/**
+		 * Lock the crop to width/height = aspect (1 = square, for the identity
+		 * logo). Omitted means free-form, which is what the wide PDF letterhead
+		 * wants — so leaving it off preserves that behaviour exactly.
+		 */
+		aspect?: number
+		/** Modal copy. Defaults describe the PDF header, this modal's first caller. */
+		title?: string
+		hint?: string
+	}>(), {
+		title: "Crop header logo",
+		hint: "Drag to reposition; pull a corner to resize. The crop is applied to the PDF header only — your original upload is kept."
+	});
 	const emit = defineEmits<{
 		cropped: [rect: CropRect, blob: Blob]
 		cancel: []
@@ -101,7 +115,7 @@
 			ox: (stageW - el.naturalWidth * scale) / 2,
 			oy: (stageH - el.naturalHeight * scale) / 2
 		};
-		rect.value = props.initialRect ?? fullRect(el.naturalWidth, el.naturalHeight);
+		rect.value = props.initialRect ?? fullRect(el.naturalWidth, el.naturalHeight, props.aspect);
 	};
 
 	watch(() => [openModel.value, props.imageBlob] as const, async ([open]) => {
@@ -179,14 +193,14 @@
 		const ih = img.value.naturalHeight;
 		rect.value = dragMode.value === "move"
 			? moveRect(rect.value, dx, dy, iw, ih)
-			: resizeRect(rect.value, dragMode.value, dx, dy, iw, ih);
+			: resizeRect(rect.value, dragMode.value, dx, dy, iw, ih, 16, props.aspect);
 	};
 	const onPointerUp = () => {
 		dragMode.value = null;
 	};
 
 	const onReset = () => {
-		if (img.value) rect.value = fullRect(img.value.naturalWidth, img.value.naturalHeight);
+		if (img.value) rect.value = fullRect(img.value.naturalWidth, img.value.naturalHeight, props.aspect);
 	};
 	const onCancel = () => {
 		openModel.value = false;

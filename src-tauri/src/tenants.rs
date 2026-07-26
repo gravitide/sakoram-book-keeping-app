@@ -107,6 +107,7 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(50, "unified pdf template", include_str!("../migrations/0050_unified_pdf_template.sql")),
 	(51, "pdf logo controls", include_str!("../migrations/0051_pdf_logo_controls.sql")),
 	(52, "pdf header footer text", include_str!("../migrations/0052_pdf_header_footer_text.sql")),
+	(53, "logo crop", include_str!("../migrations/0053_logo_crop.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -733,6 +734,13 @@ pub async fn tenant_logo_path(
 /// `kind` is "logo" (→ <folder>/logos/logo.<ext>) or "pdf-header"
 /// (→ <folder>/pdf-header.<ext>). Any stale same-stem file of a different
 /// extension is removed so there's never two.
+///
+/// The "-original" variants ("logo-original", "pdf-header-original") hold the
+/// untouched upload that Re-crop reopens; the un-suffixed file is the cropped
+/// derivative every render path actually uses. The stale-extension sweep keys
+/// on `file_stem`, and "logo-original" != "logo", so the pair never collide.
+/// Originals are deliberately LOCAL-ONLY — `data_io` bundles the derivative
+/// alone, so Re-crop is unavailable after a backup import until re-upload.
 #[tauri::command]
 pub fn save_business_asset(
 	app: AppHandle,
@@ -747,6 +755,7 @@ pub fn save_business_asset(
 	};
 	let (dir, stem) = match kind.as_str() {
 		"logo" => (logos_dir_for(&app, &id)?, "logo"),
+		"logo-original" => (logos_dir_for(&app, &id)?, "logo-original"),
 		"pdf-header" => (folder_for(&app, &id)?, "pdf-header"),
 		"pdf-header-original" => (folder_for(&app, &id)?, "pdf-header-original"),
 		_ => return Err(format!("unknown asset kind: {kind}")),
@@ -785,6 +794,7 @@ pub fn read_business_asset(
 ) -> Result<(String, Vec<u8>), String> {
 	let (dir, stem) = match kind.as_str() {
 		"logo" => (logos_dir_for(&app, &id)?, "logo"),
+		"logo-original" => (logos_dir_for(&app, &id)?, "logo-original"),
 		"pdf-header" => (folder_for(&app, &id)?, "pdf-header"),
 		"pdf-header-original" => (folder_for(&app, &id)?, "pdf-header-original"),
 		_ => return Err(format!("unknown asset kind: {kind}")),

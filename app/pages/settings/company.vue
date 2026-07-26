@@ -7,11 +7,18 @@
 		<section class="mb-10">
 			<div class="flex flex-col md:flex-row md:items-center gap-6">
 				<!-- Logo upload / drop zone -->
+				<!-- The tile goes fixed white once a logo is set: this mark renders
+					on a white plate in the sidebar, welcome screen and Businesses
+					list, so the preview has to show the same substrate. The empty
+					state keeps the muted theme background — a white square holding
+					a grey icon reads as a broken image in dark mode. -->
 				<div
 					class="group relative size-32 shrink-0 rounded-2xl border-2 border-dashed flex items-center justify-center overflow-hidden transition cursor-pointer" :class="[
 						dragOver
 							? 'border-(--ui-primary) bg-(--ui-primary)/5 scale-[1.02]'
-							: 'border-(--ui-border-accented) bg-(--ui-bg-muted) hover:border-(--ui-primary)/60'
+							: store.logoSrc
+								? 'border-(--ui-border-accented) bg-white hover:border-(--ui-primary)/60'
+								: 'border-(--ui-border-accented) bg-(--ui-bg-muted) hover:border-(--ui-primary)/60'
 					]"
 					role="button"
 					tabindex="0"
@@ -78,6 +85,17 @@
 						</div>
 					</dl>
 					<div class="mt-4 flex flex-wrap items-center gap-2">
+						<!-- SVG has no crop: it passes through as vector, so there's
+							no raster source to re-crop. -->
+						<UButton
+							v-if="store.settings?.logo_path && !isSvgLogo"
+							icon="i-lucide-crop"
+							size="xs"
+							variant="soft"
+							@click="openLogoRecrop"
+						>
+							Re-crop
+						</UButton>
 						<UButton
 							v-if="store.settings?.logo_path"
 							icon="i-lucide-trash-2"
@@ -443,16 +461,32 @@
 				</div>
 			</template>
 		</UModal>
+
+		<!-- aspect=1: every surface that shows this mark is a square slot, so a
+			square crop fills it instead of letterboxing. -->
+		<ImageCropModal
+			v-model:open="cropOpen"
+			:image-blob="cropBlob"
+			:initial-rect="cropInitial"
+			:source-note="cropSourceNote"
+			:aspect="1"
+			title="Crop business logo"
+			hint="Drag to reposition; pull a corner to resize. Locked to a square, because this mark appears in square slots in the sidebar, welcome screen and business list. Your original upload is kept."
+			@cropped="onLogoCropped"
+			@cancel="onLogoCropCancel"
+		/>
 	</div>
 </template>
 
 <script setup lang="ts">
+	import type { CropRect } from "~/lib/crop-rect";
 	import type { BusinessBankRow } from "~/stores/business_banks";
 	import type { LetterSignatureRow } from "~/stores/letter_signatures";
 	import type { SettingsUpdate } from "~/stores/settings";
 	import { invoke } from "@tauri-apps/api/core";
 	import { z } from "zod";
 	import CurrencyPicker from "~/components/CurrencyPicker.vue";
+	import ImageCropModal from "~/components/ImageCropModal.vue";
 	import { signaturePreview } from "~/lib/signature-preview";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useLetterSignaturesStore } from "~/stores/letter_signatures";
@@ -787,6 +821,56 @@
 	// folder (<folder>/logos/logo.<ext>) is done by the Rust `save_business_asset`
 	// command (std::fs, unscoped) — the business folder can live on ANY drive
 	// (e.g. D:\), which the fs plugin's capability scope can't cover.
+	// Raster uploads keep the untouched original (logos/logo-original.<ext>)
+	// and open the crop modal locked to 1:1; the crop writes the
+	// logos/logo.<ext> derivative every surface renders. SVG bypasses cropping
+	// — rasterising a vector mark would throw away the sharpness that's the
+	// whole reason to upload one.
+	const cropOpen = ref(false);
+	const cropBlob = ref<Blob | null>(null);
+	const cropInitial = ref<CropRect | null>(null);
+	const cropSourceNote = ref<string | undefined>(undefined);
+	// Extension of the source being cropped; the derivative is always PNG.
+	const cropExt = ref("png");
+	// True while the open modal belongs to a just-uploaded file, as opposed to
+	// a Re-crop of the existing logo.
+	const freshUpload = ref(false);
+
+	const isSvgLogo = computed(() =>
+		(store.settings?.logo_path ?? "").toLowerCase().endsWith(".svg"));
+
+	const parseCropRect = (json: string | null): CropRect | null => {
+		if (!json) return null;
+		try {
+			const r = JSON.parse(json) as CropRect;
+			return Number.isFinite(r.x) && Number.isFinite(r.y) && r.w > 0 && r.h > 0 ? r : null;
+		} catch {
+			return null;
+		}
+	};
+
+	// Write the derivative every surface renders.
+	//
+	// `ext` MUST be the extension of the file actually written: cropping emits
+	// a PNG, so a JPEG upload lands as logo.png. tenants.json mirrors this
+	// filename and the welcome screen + Businesses list read it DIRECTLY,
+	// without going through the DB — handing them the pre-crop extension would
+	// point both at a file that no longer exists.
+	const saveLogoDerivative = async (bytes: number[], ext: string, cropJson: string | null) => {
+		const tenantId = tenants.activeTenantId;
+		if (!tenantId) return;
+		const target = await invoke<string>("save_business_asset", {
+			id: tenantId,
+			kind: "logo",
+			ext,
+			bytes
+		});
+		await store.save({ logo_path: target, logo_crop: cropJson });
+		await tenants.setLogoFile(tenantId, `logo.${ext}`);
+		form.logo_path = target;
+		refreshBaseline();
+	};
+
 	const uploadLogo = async (file: File) => {
 		const tenantId = tenants.activeTenantId;
 		if (!tenantId) {
@@ -797,22 +881,93 @@
 		try {
 			const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
 			const ext = (file.name.split(".").pop() ?? "png").toLowerCase();
-			const target = await invoke<string>("save_business_asset", {
+
+			if (ext === "svg") {
+				await saveLogoDerivative(bytes, ext, null);
+				toast.add({ title: "Logo updated", color: "success", icon: "i-lucide-check" });
+				return;
+			}
+
+			// Raster: keep the untouched original, then offer the crop.
+			await invoke<string>("save_business_asset", {
 				id: tenantId,
-				kind: "logo",
+				kind: "logo-original",
 				ext,
 				bytes
 			});
-			await store.save({ logo_path: target });
-			// Sync the filename into tenants.json so the welcome screen +
-			// sidebar can find it without round-tripping through the DB.
-			await tenants.setLogoFile(tenantId, `logo.${ext}`);
-			form.logo_path = target;
-			refreshBaseline();
-			toast.add({ title: "Logo updated", color: "success", icon: "i-lucide-check" });
+			cropExt.value = ext;
+			cropBlob.value = new Blob([new Uint8Array(bytes)], { type: file.type || "image/png" });
+			cropInitial.value = null;
+			cropSourceNote.value = undefined;
+			freshUpload.value = true;
+			cropOpen.value = true;
 		} catch (err) {
 			toast.add({
 				title: "Logo upload failed",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	const onLogoCropped = async (rect: CropRect, blob: Blob) => {
+		try {
+			const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
+			await saveLogoDerivative(bytes, "png", JSON.stringify(rect));
+			toast.add({ title: "Logo updated", color: "success", icon: "i-lucide-check" });
+		} catch (err) {
+			toast.add({
+				title: "Crop failed",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	const onLogoCropCancel = async () => {
+		// Only a FRESH upload needs the fallback save — the file mustn't be
+		// lost just because the user skipped cropping. Cancelling a re-crop
+		// leaves the existing derivative alone.
+		if (!cropBlob.value || !freshUpload.value) return;
+		try {
+			const bytes = Array.from(new Uint8Array(await cropBlob.value.arrayBuffer()));
+			await saveLogoDerivative(bytes, cropExt.value, null);
+			toast.add({ title: "Logo saved (uncropped)", color: "info", icon: "i-lucide-check" });
+		} catch (err) {
+			toast.add({
+				title: "Logo upload failed",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	const openLogoRecrop = async () => {
+		const tenantId = tenants.activeTenantId;
+		if (!tenantId) return;
+		freshUpload.value = false;
+		try {
+			let ext = "png";
+			let bytes: number[] = [];
+			try {
+				[ext, bytes] = await invoke<[string, number[]]>("read_business_asset", { id: tenantId, kind: "logo-original" });
+				cropSourceNote.value = undefined;
+			} catch {
+				// Original missing (uploaded before the cropper, or restored from
+				// a backup — originals are local-only): crop the derivative.
+				[ext, bytes] = await invoke<[string, number[]]>("read_business_asset", { id: tenantId, kind: "logo" });
+				cropSourceNote.value = "Original file not found — cropping the current logo instead.";
+			}
+			cropExt.value = ext;
+			cropBlob.value = new Blob([new Uint8Array(bytes)], { type: `image/${ext === "jpg" ? "jpeg" : ext}` });
+			cropInitial.value = cropSourceNote.value ? null : parseCropRect(store.settings?.logo_crop ?? null);
+			cropOpen.value = true;
+		} catch (err) {
+			toast.add({
+				title: "Couldn't open crop",
 				description: err instanceof Error ? err.message : String(err),
 				color: "error",
 				icon: "i-lucide-circle-alert"
@@ -843,7 +998,7 @@
 	};
 
 	const removeLogo = async () => {
-		await store.save({ logo_path: null });
+		await store.save({ logo_path: null, logo_crop: null });
 		form.logo_path = null;
 		refreshBaseline();
 		if (tenants.activeTenantId) {
