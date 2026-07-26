@@ -435,6 +435,23 @@
   }
   image(data.logo_file, width: w, height: h)
 }
+// --- tapered rule -------------------------------------------------------
+// The modern template's accent divider: one long bar, then three dashes
+// stepping down in length. Built as a grid of fractional columns so it
+// always spans the full text width whatever the page margins are — the
+// empty cells are the gaps.
+//
+// MUST stay above doc-header, which calls it: Typst resolves module names in
+// definition order (see the CLAUDE.md landmine).
+#let tapered-rule(col, thickness: 2pt) = {
+  let seg = rect(width: 100%, height: thickness, fill: col, stroke: none)
+  grid(
+    columns: (76fr, 2fr, 7fr, 2fr, 5fr, 2fr, 3fr),
+    rows: (thickness,),
+    seg, [], seg, [], seg, [], seg,
+  )
+}
+
 // --- shared document header --------------------------------------------
 // The five selectable header treatments. Needs data.title and data.number.
 // NOTE: doc-*.typ still carry their own inline copies — this function is
@@ -458,31 +475,23 @@
   let ht = data.at("header_blocks", default: ())
 
   if key == "modern" [
-    #block(width: 100%, fill: rgb(data.theme_color), inset: (x: 16pt, y: 14pt), radius: 3pt)[
-      #set text(fill: white)
-      #grid(
-        columns: (1fr, auto),
-        align: horizon,
-        gutter: 16pt,
-        [
-          #text(weight: "bold", size: 20pt, tracking: 0.04em)[#data.title]
-          #v(2pt)
-          #text(size: 10.5pt)[\##data.number]
-          // Smaller than the body default: inside the band this is a
-          // secondary detail line sitting under a 20pt title, and at full
-          // size three lines crowd the number above them.
-          #if ht.len() > 0 {
-            v(5pt)
-            text(size: 8pt, render-blocks(ht, spacing: 2pt))
-          }
-        ],
-        if data.logo_file != none {
-          header-logo(data, 12mm)
-        } else if data.business_name != none and data.business_name != "" {
-          text(weight: "bold", size: 15pt, tracking: 0.02em)[#data.business_name]
-        } else { [] },
-      )
+    // Left-aligned letterhead: logo, then the custom text beneath it, then a
+    // segmented accent rule. No document title or number here — meta-block
+    // below already prints primary_label + number, so repeating them was
+    // pure duplication.
+    #align(left)[
+      #if data.logo_file != none {
+        header-logo(data, 12mm)
+      } else if data.business_name != none and data.business_name != "" {
+        text(weight: "bold", size: 16pt, tracking: 0.02em)[#data.business_name]
+      } else { [] }
     ]
+    #if ht.len() > 0 {
+      v(10pt)
+      render-blocks(ht, spacing: 3pt)
+    }
+    #v(10pt)
+    #tapered-rule(rgb(data.theme_color), thickness: 3pt)
     #v(16pt)
   ] else if key == "minimal" [
     #grid(
