@@ -102,3 +102,54 @@ export function sampleQuotePayload(settings: CompanySettingsRow | null, currency
 		party_label: "Quote to"
 	};
 }
+
+// Payslip sample. Deliberately does NOT spread `base()` — payslip.typ reads a
+// different shape (employee / earnings / deductions / net) than the doc family.
+export function samplePayslipPayload(settings: CompanySettingsRow | null, currency: SampleCurrency, templateKey: string) {
+	return {
+		template: templateKey,
+		title: "PAY SLIP",
+		number: "PSL-0042",
+		theme_color: pdfThemeHex(settings),
+		font_family: settings?.pdf_font ?? "Akt",
+		currency_code: currency.code,
+		currency_symbol: currency.symbol,
+		period_start: "2026-06-01",
+		period_end: "2026-06-30",
+		period_display: "2026-06-01 → 2026-06-30",
+		pay_date: "2026-06-30",
+		employee: {
+			full_name: "Nimal Perera",
+			employee_number: "EMP-004",
+			designation: "Senior Engineer",
+			nic: "199012345678",
+			bank_name: "Commercial Bank",
+			bank_branch: "Colombo 03",
+			bank_account_number: "1234567890",
+			bank_account_name: "N Perera"
+		},
+		earnings: [
+			{ label: "Basic", amount_display: "150,000.00" },
+			{ label: "Transport allowance", amount_display: "15,000.00" }
+		],
+		deductions: [
+			{ label: "EPF (employee 8%)", amount_display: "12,000.00" }
+		],
+		formatted: { earnings: "165,000.00", deductions: "12,000.00", net: "153,000.00" },
+		paid_cents: null,
+		paid_display: null,
+		balance_display: null,
+		statutory_enabled: true,
+		epf_employer_display: "18,000.00",
+		etf_display: "4,500.00",
+		total_cost_display: "187,500.00",
+		show_signatures: settings?.payslip_show_signatures === 1,
+		notes: "Paid by bank transfer.",
+		business_name: settings?.business_name ?? "Your Business",
+		website: settings?.website ?? "yourbusiness.lk",
+		phone: settings?.phone ?? "+94 11 234 5678",
+		address_line1: settings?.address_line1 ?? "42 Galle Road",
+		city: settings?.city ?? "Colombo",
+		logo_path: settings?.pdf_header_logo_path ?? null
+	};
+}

@@ -234,6 +234,15 @@
 									>
 										Quote
 									</UButton>
+									<UButton
+										size="xs"
+										variant="soft"
+										icon="i-lucide-eye"
+										:loading="payslipPreview.state.rendering"
+										@click="payslipPreview.open()"
+									>
+										Payslip
+									</UButton>
 								</div>
 							</div>
 							<div class="space-y-2">
@@ -345,6 +354,16 @@
 			@save="quotePreview.onSave"
 			@cancel="quotePreview.onCancel"
 		/>
+		<PdfPreviewModal
+			v-model:open="payslipPreview.state.open"
+			:asset-url="payslipPreview.state.assetUrl"
+			:temp-path="payslipPreview.state.tempPath"
+			:suggested-file-name="payslipPreview.state.suggestedFileName"
+			:saving="payslipPreview.state.saving"
+			title="Payslip template preview"
+			@save="payslipPreview.onSave"
+			@cancel="payslipPreview.onCancel"
+		/>
 	</div>
 </template>
 
@@ -354,7 +373,7 @@
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { PDF_TEMPLATES } from "~/lib/pdf-templates";
-	import { sampleInvoicePayload, sampleQuotePayload } from "~/lib/sample-pdf";
+	import { sampleInvoicePayload, samplePayslipPayload, sampleQuotePayload } from "~/lib/sample-pdf";
 	import { THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
@@ -403,6 +422,12 @@
 		buildPayload: () => sampleQuotePayload(store.settings, currency.value, form.pdf_template),
 		fileName: () => "sample-quote.pdf",
 		title: "Quote template preview"
+	});
+	const payslipPreview = usePdfPreview({
+		command: "export_payslip_pdf",
+		buildPayload: () => samplePayslipPayload(store.settings, currency.value, form.pdf_template),
+		fileName: () => "sample-payslip.pdf",
+		title: "Payslip template preview"
 	});
 
 	// Same curated list the Appearance page used. The Typst template falls
