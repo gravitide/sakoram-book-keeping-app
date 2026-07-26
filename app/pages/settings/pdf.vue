@@ -3,30 +3,30 @@
 		<!-- select-none on the page root: static labels and copy aren't
 			selectable; form fields stay selectable via the input rule
 			in main.css. -->
-		<!-- Sticky so Preview stays reachable from every section: header logo,
-			header/footer text and templates all want it, and they all render
-			through the same sample document. One page-level control beats a
-			preview button on each card. -->
-		<header class="sticky top-0 z-10 -mt-4 pt-4 pb-4 mb-2 backdrop-blur-md bg-(--ui-bg)/80">
-			<div class="max-w-5xl mx-auto flex items-start justify-between gap-4">
-				<div>
-					<h1 class="text-2xl font-semibold">
-						PDF
-					</h1>
-					<p class="text-sm text-(--ui-text-muted)">
-						Font, colour, header logo, and templates for your generated PDFs.
-					</p>
-				</div>
-				<UButton
-					icon="i-lucide-eye"
-					size="md"
-					class="shrink-0 shadow-md shadow-(--ui-primary)/25"
-					:loading="invoicePreview.state.rendering"
-					@click="invoicePreview.open()"
-				>
-					Preview on PDF
-				</UButton>
+		<!-- Preview sits in the page header rather than on each card: header
+			logo, header/footer text and templates all want it, and they all
+			render through the same sample invoice. Deliberately NOT floating —
+			a sticky band's full-bleed edge never lines up with the padded
+			content column, and a bare floating pill reads as stray chrome. -->
+		<header class="mb-6 max-w-5xl mx-auto flex items-start justify-between gap-4">
+			<div>
+				<h1 class="text-2xl font-semibold">
+					PDF
+				</h1>
+				<p class="text-sm text-(--ui-text-muted)">
+					Font, colour, header logo, and templates for your generated PDFs.
+				</p>
 			</div>
+			<UButton
+				icon="i-lucide-eye"
+				variant="soft"
+				size="md"
+				class="shrink-0"
+				:loading="invoicePreview.state.rendering"
+				@click="invoicePreview.open()"
+			>
+				Preview on PDF
+			</UButton>
 		</header>
 
 		<UForm
