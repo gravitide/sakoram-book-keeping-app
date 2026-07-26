@@ -279,22 +279,28 @@
 ]
 
 // ============================================================
-// Sign-off (two columns)
+// Sign-off (two columns) — opt-in
 // ============================================================
-// Generous lead-in so the signature lines have actual writing room
-// above them on a printed copy.
-#v(72pt)
-#grid(
-  columns: (1fr, 1fr),
-  column-gutter: 60pt,
-  [
-    #line(length: 80%, stroke: 0.5pt + rgb("#9ca3af"))
-    #v(2pt)
-    #faint("Authorised by")
-  ],
-  [
-    #line(length: 80%, stroke: 0.5pt + rgb("#9ca3af"))
-    #v(2pt)
-    #faint("Received by (employee)")
-  ],
-)
+// Off by default, driven by company_settings.payslip_show_signatures
+// (migration 0049). The 72pt lead-in sits INSIDE the conditional on
+// purpose: with signatures off the page should end after the notes
+// block rather than trailing an inch of whitespace.
+#if data.show_signatures == true [
+  // Generous lead-in so the signature lines have actual writing room
+  // above them on a printed copy.
+  #v(72pt)
+  #grid(
+    columns: (1fr, 1fr),
+    column-gutter: 60pt,
+    [
+      #line(length: 80%, stroke: 0.5pt + rgb("#9ca3af"))
+      #v(2pt)
+      #faint("Authorised by")
+    ],
+    [
+      #line(length: 80%, stroke: 0.5pt + rgb("#9ca3af"))
+      #v(2pt)
+      #faint("Received by (employee)")
+    ],
+  )
+]
