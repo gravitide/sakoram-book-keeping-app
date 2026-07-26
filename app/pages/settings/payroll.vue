@@ -212,6 +212,31 @@
 					</div>
 				</div>
 			</UCard>
+
+			<UCard id="signatures" class="scroll-mt-6">
+				<template #header>
+					<div class="font-medium">
+						Payslip PDF signatures
+					</div>
+					<div class="text-xs text-(--ui-text-muted) mt-1">
+						Controls the sign-off block at the foot of every payslip PDF.
+					</div>
+				</template>
+
+				<div class="flex items-start justify-between gap-4">
+					<div class="text-sm">
+						<div class="font-medium">
+							Print signature lines
+						</div>
+						<div class="text-xs text-(--ui-text-muted) mt-1">
+							Adds "Authorised by" and "Received by (employee)" ruled lines at
+							the foot of the page. Leave off if you pay by bank transfer and
+							don't collect a signed acknowledgement.
+						</div>
+					</div>
+					<USwitch v-model="signaturesOn" />
+				</div>
+			</UCard>
 		</div>
 	</div>
 </template>
@@ -240,6 +265,10 @@
 	const epfEmployeePct = ref<number>((store.settings?.epf_employee_rate_bp ?? 800) / 100);
 	const epfEmployerPct = ref<number>((store.settings?.epf_employer_rate_bp ?? 1200) / 100);
 	const etfPct = ref<number>((store.settings?.etf_rate_bp ?? 300) / 100);
+
+	// Sign-off block on the payslip PDF. Off by default — see
+	// migration 0049 and src-tauri/templates/payslip.typ.
+	const signaturesOn = ref<boolean>((store.settings?.payslip_show_signatures ?? 0) === 1);
 
 	const toBp = (pct: number) => Math.round((pct || 0) * 100);
 
@@ -321,7 +350,8 @@
 		payeOn: payeOn.value,
 		payeRelief: payeReliefCents.value,
 		payeDeductEpf: payeDeductEpf.value,
-		payeBrackets: payeBracketsJson()
+		payeBrackets: payeBracketsJson(),
+		signatures: signaturesOn.value
 	});
 
 	const dirty = computed(() =>
@@ -336,6 +366,7 @@
 		|| payeReliefCents.value !== initial.value.payeRelief
 		|| payeDeductEpf.value !== initial.value.payeDeductEpf
 		|| payeBracketsJson() !== initial.value.payeBrackets
+		|| signaturesOn.value !== initial.value.signatures
 	);
 
 	// Preview against today's month so the user sees concrete dates for
@@ -367,7 +398,8 @@
 				paye_auto_compute: payeOn.value ? 1 : 0,
 				paye_relief_cents: payeReliefCents.value,
 				paye_deduct_epf: payeDeductEpf.value,
-				paye_brackets: payeBracketsJson()
+				paye_brackets: payeBracketsJson(),
+				payslip_show_signatures: signaturesOn.value ? 1 : 0
 			});
 			initial.value = {
 				start: periodStart.value,
@@ -380,7 +412,8 @@
 				payeOn: payeOn.value,
 				payeRelief: payeReliefCents.value,
 				payeDeductEpf: payeDeductEpf.value,
-				payeBrackets: payeBracketsJson()
+				payeBrackets: payeBracketsJson(),
+				signatures: signaturesOn.value
 			};
 			toast.add({ title: "Payroll cycle saved", color: "success", icon: "i-lucide-check" });
 		} catch (err) {
@@ -407,5 +440,6 @@
 		payeReliefCents.value = initial.value.payeRelief;
 		payeDeductEpf.value = initial.value.payeDeductEpf;
 		payeBands.value = parsePayeBands(initial.value.payeBrackets);
+		signaturesOn.value = initial.value.signatures;
 	};
 </script>

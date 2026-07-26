@@ -83,6 +83,10 @@ export interface CompanySettingsRow {
 	// "pre-printed letterhead paper". Default 55. See app/pages/settings/letters.vue.
 	letter_preprinted_top_margin_mm: number
 	letter_preprinted_bottom_margin_mm: number
+	// Opt-in sign-off block on the payslip PDF ("Authorised by" / "Received
+	// by (employee)"). 0/1, defaults 0. Read by app/lib/payslip-pdf.ts and
+	// rendered by src-tauri/templates/payslip.typ.
+	payslip_show_signatures: number
 	updated_at: string
 }
 
@@ -134,7 +138,8 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"pdf_protect_voucher",
 	"pdf_protect_payslip",
 	"letter_preprinted_top_margin_mm",
-	"letter_preprinted_bottom_margin_mm"
+	"letter_preprinted_bottom_margin_mm",
+	"payslip_show_signatures"
 ];
 
 export const useSettingsStore = defineStore("settings", () => {
