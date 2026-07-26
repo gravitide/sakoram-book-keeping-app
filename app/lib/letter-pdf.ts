@@ -33,5 +33,6 @@ export const buildLetterPdfPayload = ({ row, settings }: LetterPdfArgs) => ({
 	// · address) so the letter footer matches the invoice/quote footer.
 	address_line1: settings?.address_line1 ?? null,
 	city: settings?.city ?? null,
+	logo_scale: settings?.pdf_logo_scale ?? 100,
 	logo_path: settings?.pdf_header_logo_path ?? null
 });

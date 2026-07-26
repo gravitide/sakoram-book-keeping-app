@@ -14,7 +14,7 @@
 // ordered_list blocks whose inline runs carry bold/italic/underline flags.
 // Text is always plain JSON string values — never interpreted as Typst markup.
 
-#import "common.typ": caption, footer-content, render-blocks
+#import "common.typ": caption, footer-content, header-logo, render-blocks
 
 #let data = json("data.json")
 
@@ -52,7 +52,7 @@
 #if not pre-printed {
   align(right)[
     #if data.logo_file != none {
-      image(data.logo_file, height: 12mm)
+      header-logo(data, 12mm)
     } else if data.business_name != none and data.business_name != "" {
       box(height: 12mm)[
         #set align(right + horizon)

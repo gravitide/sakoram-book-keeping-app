@@ -412,7 +412,7 @@
 #let doc-header(data) = {
   let key = data.at("template", default: "classic")
   let logo-or-wordmark(logo-h, name-size) = if data.logo_file != none {
-    image(data.logo_file, height: logo-h)
+    header-logo(data, logo-h)
   } else if data.business_name != none and data.business_name != "" {
     box(height: logo-h)[
       #set align(right + horizon)
@@ -435,7 +435,7 @@
           #text(size: 10.5pt)[\##data.number]
         ],
         if data.logo_file != none {
-          image(data.logo_file, height: 12mm)
+          header-logo(data, 12mm)
         } else if data.business_name != none and data.business_name != "" {
           text(weight: "bold", size: 15pt, tracking: 0.02em)[#data.business_name]
         } else { [] },
@@ -477,4 +477,25 @@
     #align(center, text(weight: "bold", size: 14pt, tracking: 0.04em)[#data.title])
     #v(14pt)
   ]
+}
+
+// --- header logo --------------------------------------------------------
+// The logo at the template's baseline height x the user's scale
+// (company_settings.pdf_logo_scale, percent), with a hard width cap so a
+// banner-shaped crop scales down instead of colliding with the title.
+// measure() supplies the natural aspect ratio, so nothing ever distorts.
+// The cap is fixed (not scaled): it exists for page-layout safety.
+#let header-logo(data, base-h) = context {
+  let s = data.at("logo_scale", default: 100) / 100
+  let m = measure(image(data.logo_file))
+  let h = base-h * s
+  // Parenthesised so the division happens first: length x (ratio). Typst
+  // rejects length x length, which is what left-to-right order would do.
+  let w = h * (m.width / m.height)
+  let w-max = 55mm
+  if w > w-max {
+    h = h * (w-max / w)
+    w = w-max
+  }
+  image(data.logo_file, width: w, height: h)
 }

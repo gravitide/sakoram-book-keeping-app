@@ -37,7 +37,7 @@
       #text(size: 10.5pt)[\##data.number]
     ],
     if data.logo_file != none {
-      image(data.logo_file, height: 12mm)
+      header-logo(data, 12mm)
     } else if data.business_name != none and data.business_name != "" {
       text(weight: "bold", size: 15pt, tracking: 0.02em)[#data.business_name]
     } else { [] },

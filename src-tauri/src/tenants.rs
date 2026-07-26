@@ -105,6 +105,7 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(48, "bank colors", include_str!("../migrations/0048_bank_colors.sql")),
 	(49, "payslip signatures", include_str!("../migrations/0049_payslip_signatures.sql")),
 	(50, "unified pdf template", include_str!("../migrations/0050_unified_pdf_template.sql")),
+	(51, "pdf logo controls", include_str!("../migrations/0051_pdf_logo_controls.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -746,6 +747,7 @@ pub fn save_business_asset(
 	let (dir, stem) = match kind.as_str() {
 		"logo" => (logos_dir_for(&app, &id)?, "logo"),
 		"pdf-header" => (folder_for(&app, &id)?, "pdf-header"),
+		"pdf-header-original" => (folder_for(&app, &id)?, "pdf-header-original"),
 		_ => return Err(format!("unknown asset kind: {kind}")),
 	};
 	std::fs::create_dir_all(&dir).map_err(|e| format!("create asset dir: {e}"))?;
@@ -767,6 +769,39 @@ pub fn save_business_asset(
 	let dest = dir.join(format!("{stem}.{ext}"));
 	std::fs::write(&dest, &bytes).map_err(|e| format!("write asset: {e}"))?;
 	Ok(dest.to_string_lossy().to_string())
+}
+
+/// Read a business asset's bytes for the frontend. Needed by the logo crop
+/// modal: canvas pixel access requires a same-origin image, and the asset
+/// protocol's convertFileSrc URLs are cross-origin (drawing one taints the
+/// canvas, making toBlob throw). Bytes -> blob URL keeps the canvas clean.
+/// Returns (extension, bytes); errors when no file exists for the stem.
+#[tauri::command]
+pub fn read_business_asset(
+	app: AppHandle,
+	id: String,
+	kind: String,
+) -> Result<(String, Vec<u8>), String> {
+	let (dir, stem) = match kind.as_str() {
+		"logo" => (logos_dir_for(&app, &id)?, "logo"),
+		"pdf-header" => (folder_for(&app, &id)?, "pdf-header"),
+		"pdf-header-original" => (folder_for(&app, &id)?, "pdf-header-original"),
+		_ => return Err(format!("unknown asset kind: {kind}")),
+	};
+	let entries = std::fs::read_dir(&dir).map_err(|e| format!("read asset dir: {e}"))?;
+	for entry in entries.flatten() {
+		let p = entry.path();
+		if p.file_stem().and_then(|s| s.to_str()) == Some(stem) && p.is_file() {
+			let ext = p
+				.extension()
+				.and_then(|s| s.to_str())
+				.unwrap_or("png")
+				.to_lowercase();
+			let bytes = std::fs::read(&p).map_err(|e| format!("read asset: {e}"))?;
+			return Ok((ext, bytes));
+		}
+	}
+	Err(format!("no {kind} asset found"))
 }
 
 /// Whether a path exists on disk. Used by the welcome / Businesses pages to

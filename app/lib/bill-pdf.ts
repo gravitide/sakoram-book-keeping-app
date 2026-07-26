@@ -102,6 +102,7 @@ export const buildBillPdfPayload = ({ row: b, lines, settings, currency, paidCen
 		phone: settings?.phone ?? null,
 		address_line1: settings?.address_line1 ?? null,
 		city: settings?.city ?? null,
+		logo_scale: settings?.pdf_logo_scale ?? 100,
 		logo_path: settings?.pdf_header_logo_path ?? null,
 		// Bills are inbound — we don't print bank details (those belong
 		// on outbound documents where the recipient needs to know where

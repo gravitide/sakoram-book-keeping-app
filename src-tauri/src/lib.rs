@@ -81,6 +81,7 @@ pub fn run() {
 			tenants::set_tenant_logo,
 			tenants::tenant_logo_path,
 			tenants::save_business_asset,
+			tenants::read_business_asset,
 			tenants::path_exists,
 			data_io::export_tenant_data,
 			data_io::peek_export_manifest,

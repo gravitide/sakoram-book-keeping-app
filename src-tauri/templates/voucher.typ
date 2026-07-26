@@ -4,6 +4,8 @@
 // method, reference, description as a labelled grid. Sign-off at the
 // bottom with two signature lines (authorised by / received by).
 
+#import "common.typ": header-logo
+
 #let data = json("data.json")
 
 #set document(title: data.number, author: data.business_name)
@@ -33,7 +35,7 @@
 // when no logo has been uploaded.
 #align(right)[
   #if data.logo_file != none {
-    image(data.logo_file, height: 14mm)
+    header-logo(data, 14mm)
   } else if data.business_name != none and data.business_name != "" {
     box(height: 14mm)[
       #set align(right + horizon)

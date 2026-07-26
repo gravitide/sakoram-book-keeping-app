@@ -23,6 +23,7 @@ interface ReportPdfPayload {
 	phone: string | null
 	website: string | null
 	tax_id: string | null
+	logo_scale: number
 	logo_path: string | null
 	theme_color: string
 	font_family: string | null
@@ -71,13 +72,14 @@ interface ReportDetailSection {
 const businessHeader = (
 	settings: CompanySettingsRow | null
 ): Pick<ReportPdfPayload,	"business_name" | "address_line1" | "city" | "phone" | "website"
-| "tax_id" | "logo_path" | "theme_color" | "font_family"> => ({
+| "tax_id" | "logo_scale" | "logo_path" | "theme_color" | "font_family"> => ({
 	business_name: settings?.business_name ?? null,
 	address_line1: settings?.address_line1 ?? null,
 	city: settings?.city ?? null,
 	phone: settings?.phone ?? null,
 	website: settings?.website ?? null,
 	tax_id: settings?.tax_id ?? null,
+	logo_scale: settings?.pdf_logo_scale ?? 100,
 	logo_path: settings?.pdf_header_logo_path ?? null,
 	theme_color: pdfThemeHex(settings),
 	font_family: settings?.pdf_font ?? null

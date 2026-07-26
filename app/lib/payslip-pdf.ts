@@ -100,6 +100,7 @@ export function buildPayslipPdfPayload(args: PayslipPdfPayloadArgs): Record<stri
 		phone: settings?.phone ?? null,
 		address_line1: settings?.address_line1 ?? null,
 		city: settings?.city ?? null,
+		logo_scale: settings?.pdf_logo_scale ?? 100,
 		logo_path: settings?.pdf_header_logo_path ?? null
 	};
 }
