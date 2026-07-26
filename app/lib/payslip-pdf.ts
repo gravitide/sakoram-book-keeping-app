@@ -89,6 +89,7 @@ export function buildPayslipPdfPayload(args: PayslipPdfPayloadArgs): Record<stri
 		epf_employer_display: row.epf_employer_cents > 0 ? formatLKR(row.epf_employer_cents, { withSymbol: false }) : null,
 		etf_display: row.etf_cents > 0 ? formatLKR(row.etf_cents, { withSymbol: false }) : null,
 		total_cost_display: formatLKR(earningsTotal + row.epf_employer_cents + row.etf_cents, { withSymbol: false }),
+		show_signatures: (settings?.payslip_show_signatures ?? 0) === 1,
 		notes: row.notes,
 		business_name: settings?.business_name ?? null,
 		website: settings?.website ?? null,
