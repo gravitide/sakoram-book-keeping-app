@@ -19,32 +19,8 @@
 #set text(font: resolve-font(data), size: 9.5pt, lang: "en", number-width: "tabular")
 #set par(leading: 0.55em, spacing: 0.65em)
 
-// Header band — full text width, theme colour, white content.
-#block(
-  width: 100%,
-  fill: rgb(data.theme_color),
-  inset: (x: 16pt, y: 14pt),
-  radius: 3pt,
-)[
-  #set text(fill: white)
-  #grid(
-    columns: (1fr, auto),
-    align: horizon,
-    gutter: 16pt,
-    [
-      #text(weight: "bold", size: 20pt, tracking: 0.04em)[#data.title]
-      #v(2pt)
-      #text(size: 10.5pt)[\##data.number]
-    ],
-    if data.logo_file != none {
-      header-logo(data, 12mm)
-    } else if data.business_name != none and data.business_name != "" {
-      text(weight: "bold", size: 15pt, tracking: 0.02em)[#data.business_name]
-    } else { [] },
-  )
-]
-
-#v(16pt)
+// Header + title — see doc-header in common.typ.
+#doc-header(data)
 
 // Party block (left) + meta rows (right)
 #grid(

@@ -2283,6 +2283,20 @@ the next "feels native" win.
 - **UModal slot is `#body`, not `#content`.** Putting body content in
   a `#content` slot eats the sibling `#footer` and the dialog renders
   with no buttons — confusing failure mode.
+- **Typst resolves module names in DEFINITION ORDER.** A `#let` function can
+  only reference names defined *above* it in the same file — self-recursion
+  works, but calling a helper defined later fails at render time with
+  `unknown variable: <name>`. Appending a new helper to the bottom of
+  `common.typ` is therefore only safe if nothing above it calls it. This
+  shipped a real bug once: `header-logo` was appended below `doc-header`,
+  which calls it, so **any payslip with a header logo failed to render** —
+  and it survived review because the verification renders all used
+  `logo_file: null`, exercising only the wordmark fallback. When adding a
+  shared Typst helper, place it above its callers and render at least one
+  case that actually takes the new branch.
+- **Typst rejects `length * length`.** `h * m.width / m.height` parses
+  left-to-right and multiplies two lengths; parenthesise so the ratio is
+  computed first: `h * (m.width / m.height)`.
 - **Typst markup quirks** — bare `#` in markup starts an expression;
   `#:` inside a string is fine, but `Account #:` outside a string
   trips the parser. Same for `.map().flatten()` style — use

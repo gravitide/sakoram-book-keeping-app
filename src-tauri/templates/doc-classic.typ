@@ -20,26 +20,10 @@
 #set text(font: resolve-font(data), size: 9.5pt, lang: "en", number-width: "tabular")
 #set par(leading: 0.55em, spacing: 0.65em)
 
-// Header: logo top-right (or business-name wordmark), red rule below.
-#align(right)[
-  #if data.logo_file != none {
-    header-logo(data, 12mm)
-  } else if data.business_name != none and data.business_name != "" {
-    box(height: 12mm)[
-      #set align(right + horizon)
-      #text(weight: "bold", size: 16pt, tracking: 0.02em)[#data.business_name]
-    ]
-  } else {
-    box(height: 12mm)
-  }
-]
-#v(2mm)
-#line(length: 100%, stroke: 2pt + rgb(data.theme_color))
-
-// Title
-#v(8pt)
-#align(center, text(weight: "bold", size: 14pt, tracking: 0.04em)[#data.title])
-#v(14pt)
+// Header + title. The five selectable header treatments live in one place
+// (doc-header in common.typ) so a change lands on every template at once —
+// they used to be six inline copies that had to be kept in sync by hand.
+#doc-header(data)
 
 // Party block (left) + meta rows (right)
 #grid(

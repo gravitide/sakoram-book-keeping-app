@@ -20,12 +20,9 @@
 #set text(font: resolve-font(data), size: 9.5pt, lang: "en", number-width: "tabular")
 #set par(leading: 0.55em, spacing: 0.65em)
 
-// No header logo — the top margin is reserved for pre-printed letterhead.
-// Start with the title + accent rule.
-#align(center, text(weight: "bold", size: 14pt, tracking: 0.04em)[#data.title])
-#v(6pt)
-#line(length: 100%, stroke: 2pt + rgb(data.theme_color))
-#v(14pt)
+// Header + title — see doc-header in common.typ. The letterhead branch draws
+// no logo: the reserved top margin belongs to the pre-printed stationery.
+#doc-header(data)
 
 // Party block (left) + meta rows (right)
 #grid(
