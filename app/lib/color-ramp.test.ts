@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPrimaryRamp, SHADES } from "./color-ramp";
+import { buildPrimaryRamp, resolvePrimary, SHADES } from "./color-ramp";
 
 const lightnessOf = (s: string): number => Number(/oklch\(([\d.]+)/.exec(s)![1]);
 const chromaOf = (s: string): number => Number(/oklch\([\d.]+ ([\d.]+)/.exec(s)![1]);
@@ -48,5 +48,35 @@ describe("buildPrimaryRamp", () => {
 
 	it("falls back to a neutral ramp for unparseable input", () => {
 		expect(chromaOf(buildPrimaryRamp("not-a-colour")[500]!)).toBe(0);
+	});
+});
+
+describe("resolvePrimary", () => {
+	it("builds a ramp for a hex", () => {
+		const plan = resolvePrimary("#1d4ed8");
+		expect(plan.kind).toBe("custom");
+		if (plan.kind !== "custom") return;
+		expect(Object.keys(plan.ramp)).toHaveLength(SHADES.length);
+	});
+
+	it("passes a known palette name through", () => {
+		expect(resolvePrimary("violet")).toEqual({ kind: "named", name: "violet" });
+	});
+
+	it("falls back for an unknown name rather than trusting it", () => {
+		// NuxtUI would turn an unrecognised name into var(--color-<name>-500),
+		// which resolves to nothing and strips every accent in the app. A
+		// legacy or hand-edited theme_color must not be able to do that.
+		expect(resolvePrimary("purple")).toEqual({ kind: "named", name: "red" });
+		expect(resolvePrimary("chartreuse; --evil: 1")).toEqual({ kind: "named", name: "red" });
+		expect(resolvePrimary("#nothex")).toEqual({ kind: "named", name: "red" });
+	});
+
+	it("leaves the accent alone when nothing is stored yet", () => {
+		// Settings load async; forcing a fallback here would flash the seeded
+		// app.config colour to red and back on every boot.
+		expect(resolvePrimary(null)).toEqual({ kind: "unset" });
+		expect(resolvePrimary(undefined)).toEqual({ kind: "unset" });
+		expect(resolvePrimary("   ")).toEqual({ kind: "unset" });
 	});
 });

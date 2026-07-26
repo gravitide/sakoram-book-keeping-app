@@ -13,6 +13,9 @@
 // Maths is hand-rolled (sRGB → linear → OKLab → OKLCH). A colour library
 // would be ~15 kB for one conversion in an app that ships offline.
 
+import type { ThemeColor } from "./theme";
+import { DEFAULT_THEME_COLOR, isValidThemeColor } from "./theme";
+
 export const SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950] as const;
 
 /** Tailwind v4's lightness curve, averaged across its palettes. */
@@ -92,6 +95,30 @@ export function buildPrimaryRamp(hex: string): Record<number, string> {
 
 const HEX_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
+/** What a stored `theme_color` resolves to, decided before touching the DOM. */
+export type PrimaryPlan
+	= | { kind: "custom", ramp: Record<number, string> }
+		| { kind: "named", name: ThemeColor }
+		| { kind: "unset" };
+
+/**
+ * Interpret a stored `theme_color`. Split out from `applyPrimaryColor` so the
+ * decision is unit-testable — the test env is `node`, with no DOM.
+ */
+export function resolvePrimary(value: string | null | undefined): PrimaryPlan {
+	if (typeof value === "string" && HEX_RE.test(value.trim())) {
+		return { kind: "custom", ramp: buildPrimaryRamp(value) };
+	}
+	// Nothing stored yet — settings are still loading. Leave whatever
+	// app.config.ts seeded, so boot doesn't flash through a fallback colour.
+	if (value === null || value === undefined || value.trim() === "") return { kind: "unset" };
+	// Anything else has to be a KNOWN palette name. NuxtUI turns the name into
+	// `var(--color-<name>-500)`; an unrecognised one resolves to nothing and
+	// the app loses every accent. So an unknown, malformed or legacy value
+	// falls back rather than being passed through on trust.
+	return { kind: "named", name: isValidThemeColor(value) ? value : DEFAULT_THEME_COLOR };
+}
+
 /**
  * Apply the accent app-wide.
  *
@@ -107,11 +134,11 @@ export function applyPrimaryColor(
 	value: string | null | undefined
 ): void {
 	const root = document.documentElement;
-	if (typeof value === "string" && HEX_RE.test(value.trim())) {
-		const ramp = buildPrimaryRamp(value);
-		for (const shade of SHADES) root.style.setProperty(`--ui-color-primary-${shade}`, ramp[shade]!);
+	const plan = resolvePrimary(value);
+	if (plan.kind === "custom") {
+		for (const shade of SHADES) root.style.setProperty(`--ui-color-primary-${shade}`, plan.ramp[shade]!);
 		return;
 	}
 	for (const shade of SHADES) root.style.removeProperty(`--ui-color-primary-${shade}`);
-	if (value) appConfig.ui.colors.primary = value;
+	if (plan.kind === "named") appConfig.ui.colors.primary = plan.name;
 }

@@ -264,7 +264,7 @@
 	import { useUiState, ZOOM_LEVELS } from "~/composables/useUiState";
 	import { applyPrimaryColor } from "~/lib/color-ramp";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
-	import { isHexColor, isValidThemeColor, THEME_COLORS, themeHex } from "~/lib/theme";
+	import { DEFAULT_THEME_COLOR, isHexColor, isValidThemeColor, THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 
 	definePageMeta({ title: "Appearance" });
@@ -321,7 +321,7 @@
 	// the eight preset names or a literal custom hex.
 	const storedColor = store.settings?.theme_color;
 	const themeColor = ref<string>(
-		isValidThemeColor(storedColor) || isHexColor(storedColor) ? String(storedColor) : "red"
+		isValidThemeColor(storedColor) || isHexColor(storedColor) ? String(storedColor) : DEFAULT_THEME_COLOR
 	);
 
 	const initialUiFont = ref<string>(uiFont.value);
