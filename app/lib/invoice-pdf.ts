@@ -9,6 +9,7 @@ import type { InvoiceLineRow, InvoiceRow } from "~/stores/invoices";
 import type { BankSnapshot, ClientSnapshot } from "~/stores/quotes";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR, formatQty, formatRate } from "~/lib/money";
+import { buildFooterBlocks, buildHeaderBlocks } from "~/lib/pdf-chrome";
 import { resolveTemplateKey } from "~/lib/pdf-templates";
 import { richTextToBlocks } from "~/lib/rich-text";
 import { pdfThemeHex } from "~/lib/theme";
@@ -97,6 +98,8 @@ export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, pa
 		address_line1: settings?.address_line1 ?? null,
 		city: settings?.city ?? null,
 		logo_scale: settings?.pdf_logo_scale ?? 100,
+		header_blocks: buildHeaderBlocks(settings),
+		footer_blocks: buildFooterBlocks(settings),
 		logo_path: settings?.pdf_header_logo_path ?? null,
 		bank,
 		lines: lines.map((l) => ({

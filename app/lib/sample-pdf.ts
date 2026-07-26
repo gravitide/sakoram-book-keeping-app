@@ -6,6 +6,7 @@
 // come from the live settings so the preview reflects the user's branding.
 
 import type { CompanySettingsRow } from "~/stores/settings";
+import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
 import { pdfThemeHex } from "./theme";
 
 interface SampleCurrency {
@@ -55,6 +56,8 @@ function base(settings: CompanySettingsRow | null, currency: SampleCurrency, tem
 		address_line1: settings?.address_line1 ?? "42 Galle Road",
 		city: settings?.city ?? "Colombo",
 		logo_scale: settings?.pdf_logo_scale ?? 100,
+		header_blocks: buildHeaderBlocks(settings),
+		footer_blocks: buildFooterBlocks(settings),
 		logo_path: settings?.pdf_header_logo_path ?? null,
 		bank: {
 			bank_account_number: "0011 2233 4455",
@@ -152,6 +155,8 @@ export function samplePayslipPayload(settings: CompanySettingsRow | null, curren
 		address_line1: settings?.address_line1 ?? "42 Galle Road",
 		city: settings?.city ?? "Colombo",
 		logo_scale: settings?.pdf_logo_scale ?? 100,
+		header_blocks: buildHeaderBlocks(settings),
+		footer_blocks: buildFooterBlocks(settings),
 		logo_path: settings?.pdf_header_logo_path ?? null
 	};
 }

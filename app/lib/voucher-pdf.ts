@@ -12,6 +12,7 @@
 import type { CompanySettingsRow } from "~/stores/settings";
 import type { VoucherMethod, VoucherRow } from "~/stores/vouchers";
 import { formatLKR } from "~/lib/money";
+import { buildFooterBlocks } from "~/lib/pdf-chrome";
 import { pdfThemeHex } from "~/lib/theme";
 
 export interface VoucherPdfArgs {
@@ -73,6 +74,7 @@ export const buildVoucherPdfPayload = ({ row: v, settings, currency, relatedLabe
 		website: settings?.website ?? null,
 		phone: settings?.phone ?? null,
 		logo_scale: settings?.pdf_logo_scale ?? 100,
+		footer_blocks: buildFooterBlocks(settings),
 		logo_path: settings?.pdf_header_logo_path ?? null
 	};
 };

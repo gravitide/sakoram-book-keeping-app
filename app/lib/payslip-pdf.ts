@@ -13,6 +13,7 @@ import type { CurrencyMeta } from "~/lib/money";
 import type { EmployeeSnapshot, PayslipLineRow, PayslipRow } from "~/stores/payslips";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR } from "~/lib/money";
+import { buildFooterBlocks, buildHeaderBlocks } from "~/lib/pdf-chrome";
 import { resolveTemplateKey } from "~/lib/pdf-templates";
 import { pdfThemeHex } from "~/lib/theme";
 
@@ -101,6 +102,8 @@ export function buildPayslipPdfPayload(args: PayslipPdfPayloadArgs): Record<stri
 		address_line1: settings?.address_line1 ?? null,
 		city: settings?.city ?? null,
 		logo_scale: settings?.pdf_logo_scale ?? 100,
+		header_blocks: buildHeaderBlocks(settings),
+		footer_blocks: buildFooterBlocks(settings),
 		logo_path: settings?.pdf_header_logo_path ?? null
 	};
 }

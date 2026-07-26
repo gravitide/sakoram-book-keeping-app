@@ -20,6 +20,7 @@ import type { ClientRow } from "~/stores/clients";
 import type { InvoiceRow } from "~/stores/invoices";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatMoney } from "~/lib/money";
+import { buildFooterBlocks } from "~/lib/pdf-chrome";
 import { pdfThemeHex } from "~/lib/theme";
 
 // One row in the statement's invoice table.
@@ -259,6 +260,7 @@ export const buildCustomerStatementPdfPayload = (
 		website: input.settings?.website ?? null,
 		phone: input.settings?.phone ?? null,
 		logo_scale: input.settings?.pdf_logo_scale ?? 100,
+		footer_blocks: buildFooterBlocks(input.settings),
 		logo_path: input.settings?.pdf_header_logo_path ?? null,
 		theme_color: pdfThemeHex(input.settings),
 		font_family: input.settings?.pdf_font ?? null,
