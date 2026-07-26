@@ -114,114 +114,177 @@
 						title="Header logo"
 						subtitle="Letterhead-style PNG, JPG, or SVG. Different from the square Company logo, which is only used in the sidebar."
 					>
-						<div class="flex flex-col gap-3">
-							<div
-								class="group relative h-28 w-full rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition cursor-pointer"
-								:class="[
-									pdfLogoDragOver
-										? 'border-(--ui-primary) bg-white scale-[1.01]'
-										: 'border-(--ui-border-accented) bg-white hover:border-(--ui-primary)/60'
-								]"
-								role="button"
-								tabindex="0"
-								aria-label="Upload PDF header logo"
-								@click="pickPdfLogo"
-								@keydown.enter.prevent="pickPdfLogo"
-								@keydown.space.prevent="pickPdfLogo"
-								@dragover.prevent="pdfLogoDragOver = true"
-								@dragenter.prevent="pdfLogoDragOver = true"
-								@dragleave.prevent="pdfLogoDragOver = false"
-								@drop.prevent="onPdfLogoDrop"
-							>
-								<input
-									ref="pdfLogoInput"
-									type="file"
-									accept="image/png,image/jpeg,image/webp,image/svg+xml"
-									class="hidden"
-									@change="onPdfLogoFileChange"
+						<div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-6 items-start">
+							<div class="flex flex-col gap-3">
+								<div
+									class="group relative h-28 w-full rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition cursor-pointer"
+									:class="[
+										pdfLogoDragOver
+											? 'border-(--ui-primary) bg-white scale-[1.01]'
+											: 'border-(--ui-border-accented) bg-white hover:border-(--ui-primary)/60'
+									]"
+									role="button"
+									tabindex="0"
+									aria-label="Upload PDF header logo"
+									@click="pickPdfLogo"
+									@keydown.enter.prevent="pickPdfLogo"
+									@keydown.space.prevent="pickPdfLogo"
+									@dragover.prevent="pdfLogoDragOver = true"
+									@dragenter.prevent="pdfLogoDragOver = true"
+									@dragleave.prevent="pdfLogoDragOver = false"
+									@drop.prevent="onPdfLogoDrop"
 								>
-								<img
-									v-if="store.pdfHeaderLogoSrc"
-									:src="store.pdfHeaderLogoSrc"
-									alt="PDF header logo"
-									class="max-w-full max-h-full object-contain p-3"
-								>
-								<!-- Fixed zinc hint: the tile is white in both themes (it
+									<input
+										ref="pdfLogoInput"
+										type="file"
+										accept="image/png,image/jpeg,image/webp,image/svg+xml"
+										class="hidden"
+										@change="onPdfLogoFileChange"
+									>
+									<img
+										v-if="store.pdfHeaderLogoSrc"
+										:src="store.pdfHeaderLogoSrc"
+										alt="PDF header logo"
+										class="max-w-full max-h-full object-contain p-3"
+									>
+									<!-- Fixed zinc hint: the tile is white in both themes (it
 									previews against the PDF's actual background), so the
 									theme-reactive muted token would vanish in dark mode. -->
-								<div v-else class="flex flex-col items-center gap-1 text-zinc-400">
-									<UIcon name="i-lucide-image-up" class="size-7" />
-									<div class="text-[10px] uppercase tracking-wider">
-										Drop wide logo
+									<div v-else class="flex flex-col items-center gap-1 text-zinc-400">
+										<UIcon name="i-lucide-image-up" class="size-7" />
+										<div class="text-[10px] uppercase tracking-wider">
+											Drop wide logo
+										</div>
+									</div>
+									<div
+										v-if="store.pdfHeaderLogoSrc"
+										class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100"
+									>
+										<UIcon name="i-lucide-upload" class="size-5 text-white" />
+										<span class="text-[10px] uppercase tracking-wider text-white">
+											Replace
+										</span>
 									</div>
 								</div>
-								<div
-									v-if="store.pdfHeaderLogoSrc"
-									class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100"
-								>
-									<UIcon name="i-lucide-upload" class="size-5 text-white" />
-									<span class="text-[10px] uppercase tracking-wider text-white">
-										Replace
+								<div class="flex flex-wrap items-center gap-2">
+									<UButton
+										v-if="!store.settings?.pdf_header_logo_path"
+										icon="i-lucide-upload"
+										size="xs"
+										variant="soft"
+										@click="pickPdfLogo"
+									>
+										Upload header
+									</UButton>
+									<template v-else>
+										<UButton icon="i-lucide-upload" size="xs" variant="soft" @click="pickPdfLogo">
+											Replace
+										</UButton>
+										<UButton
+											v-if="!isSvgLogo"
+											icon="i-lucide-crop"
+											size="xs"
+											variant="soft"
+											color="neutral"
+											@click="openRecrop"
+										>
+											Re-crop
+										</UButton>
+										<UButton
+											icon="i-lucide-eye"
+											size="xs"
+											variant="soft"
+											color="neutral"
+											:loading="invoicePreview.state.rendering"
+											@click="invoicePreview.open()"
+										>
+											Preview on PDF
+										</UButton>
+										<UButton
+											icon="i-lucide-trash-2"
+											size="xs"
+											variant="ghost"
+											color="neutral"
+											@click="removePdfLogo"
+										>
+											Remove
+										</UButton>
+									</template>
+									<span v-if="pdfLogoFileName" class="text-xs text-(--ui-text-muted) truncate">
+										{{ pdfLogoFileName }}
 									</span>
 								</div>
-							</div>
-							<div class="flex flex-wrap items-center gap-2">
-								<UButton
-									v-if="!store.settings?.pdf_header_logo_path"
-									icon="i-lucide-upload"
-									size="xs"
-									variant="soft"
-									@click="pickPdfLogo"
-								>
-									Upload header
-								</UButton>
-								<template v-else>
-									<UButton icon="i-lucide-upload" size="xs" variant="soft" @click="pickPdfLogo">
-										Replace
-									</UButton>
-									<UButton
-										v-if="!isSvgLogo"
-										icon="i-lucide-crop"
-										size="xs"
-										variant="soft"
-										color="neutral"
-										@click="openRecrop"
-									>
-										Re-crop
-									</UButton>
-									<UButton
-										icon="i-lucide-eye"
-										size="xs"
-										variant="soft"
-										color="neutral"
-										:loading="invoicePreview.state.rendering"
-										@click="invoicePreview.open()"
-									>
-										Preview on PDF
-									</UButton>
-									<UButton
-										icon="i-lucide-trash-2"
-										size="xs"
-										variant="ghost"
-										color="neutral"
-										@click="removePdfLogo"
-									>
-										Remove
-									</UButton>
-								</template>
-								<span v-if="pdfLogoFileName" class="text-xs text-(--ui-text-muted) truncate">
-									{{ pdfLogoFileName }}
-								</span>
+
+								<div>
+									<div class="flex items-baseline justify-between mb-1.5 gap-2 flex-wrap">
+										<span class="text-sm font-medium">Logo size</span>
+										<span class="text-xs text-(--ui-text-muted) tabular-nums">
+											{{ form.pdf_logo_scale }}% — prints ≈ {{ previewLogoMm.h.toFixed(1) }}mm tall
+										</span>
+									</div>
+									<USlider v-model="form.pdf_logo_scale" :min="50" :max="150" :step="5" />
+									<p v-if="previewClamped" class="text-xs text-(--ui-text-muted) mt-2 flex items-start gap-1.5">
+										<UIcon name="i-lucide-info" class="size-3.5 shrink-0 mt-0.5" />
+										<span>Capped at 55mm wide so the logo can't collide with the document title — growing the size won't widen it further.</span>
+									</p>
+								</div>
 							</div>
 
-							<div class="max-w-md">
-								<div class="flex items-baseline justify-between mb-1.5">
-									<span class="text-sm font-medium">Logo size</span>
-									<span class="text-xs text-(--ui-text-muted) tabular-nums">
-										{{ form.pdf_logo_scale }}% — classic prints ≈ {{ (12 * form.pdf_logo_scale / 100).toFixed(1) }}mm tall
-									</span>
+							<!-- Live A4 preview. Reads the form, not the saved settings, so
+							the slider and colour take effect immediately. Only the top
+							band is shown — the header is what's being tuned here. -->
+							<div class="justify-self-center lg:justify-self-end">
+								<div
+									class="relative rounded-md ring-1 ring-(--ui-border) bg-white overflow-hidden shadow-sm"
+									:style="{ width: `${PAPER_W_PX}px`, height: `${mmPx(105)}px` }"
+								>
+									<div :style="{ padding: `${mmPx(16)}px ${mmPx(18)}px 0` }">
+										<div class="flex justify-end items-end" :style="{ height: `${mmPx(18)}px` }">
+											<img
+												v-if="store.pdfHeaderLogoSrc"
+												:src="store.pdfHeaderLogoSrc"
+												alt=""
+												:style="previewLogoStyle"
+												class="object-contain"
+												@load="onPreviewLogoLoad"
+											>
+											<span
+												v-else
+												class="font-bold text-zinc-800 leading-none"
+												:style="{ fontSize: `${mmPx(5)}px` }"
+											>
+												{{ store.settings?.business_name || "Your business" }}
+											</span>
+										</div>
+										<div :style="{ height: `${mmPx(2)}px` }" />
+										<div :style="{ height: '2px', backgroundColor: themeColor }" />
+										<!-- Skeleton body: conveys where the header sits relative
+										to the rest of the page without pretending to be real. -->
+										<div :style="{ marginTop: `${mmPx(6)}px` }" class="flex justify-center">
+											<div class="rounded-sm bg-zinc-300" :style="{ width: `${mmPx(30)}px`, height: `${mmPx(3.5)}px` }" />
+										</div>
+										<div :style="{ marginTop: `${mmPx(7)}px` }" class="flex justify-between">
+											<div class="space-y-1">
+												<div class="rounded-sm bg-zinc-200" :style="{ width: `${mmPx(28)}px`, height: `${mmPx(1.8)}px` }" />
+												<div class="rounded-sm bg-zinc-200" :style="{ width: `${mmPx(22)}px`, height: `${mmPx(1.8)}px` }" />
+											</div>
+											<div class="space-y-1 flex flex-col items-end">
+												<div class="rounded-sm bg-zinc-200" :style="{ width: `${mmPx(20)}px`, height: `${mmPx(1.8)}px` }" />
+												<div class="rounded-sm bg-zinc-200" :style="{ width: `${mmPx(16)}px`, height: `${mmPx(1.8)}px` }" />
+											</div>
+										</div>
+										<div :style="{ marginTop: `${mmPx(7)}px` }" class="space-y-1">
+											<div class="rounded-sm bg-zinc-100" :style="{ height: `${mmPx(4)}px` }" />
+											<div class="rounded-sm bg-zinc-200" :style="{ height: `${mmPx(2.6)}px` }" />
+											<div class="rounded-sm bg-zinc-200" :style="{ height: `${mmPx(2.6)}px` }" />
+										</div>
+									</div>
+									<!-- Fade to signal the page continues below the crop. -->
+									<div class="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-b from-transparent to-white" />
 								</div>
-								<USlider v-model="form.pdf_logo_scale" :min="50" :max="150" :step="5" />
+								<div class="mt-1.5 text-[10px] uppercase tracking-wider text-(--ui-text-muted) text-center">
+									A4 preview · classic
+								</div>
 							</div>
 						</div>
 					</SectionCard>
@@ -411,7 +474,7 @@
 
 <script setup lang="ts">
 	import type { CropRect } from "~/lib/crop-rect";
-	import type { SettingsUpdate } from "~/stores/settings";
+	import type { CompanySettingsRow, SettingsUpdate } from "~/stores/settings";
 	import { invoke } from "@tauri-apps/api/core";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
@@ -454,23 +517,74 @@
 	// PDF colour selection so picking a swatch updates the previews instantly.
 	const themeColor = computed(() => themeHex(form.pdf_theme_color));
 
+	// ---- live paper preview --------------------------------------------
+	// A scaled A4 sheet rendered from the LIVE form values, so the logo size
+	// slider shows its effect without saving. Geometry mirrors doc-classic:
+	// 210mm wide, 18mm side margins, 16mm top, 12mm baseline logo height,
+	// and the same 55mm width clamp header-logo() applies in common.typ.
+	// Only the top band is shown — the header is what's being tuned.
+	const PAPER_W_PX = 300;
+	const PAPER_MM = 210;
+	const mmPx = (mm: number) => (mm * PAPER_W_PX) / PAPER_MM;
+
+	// Natural aspect of the uploaded logo, needed to derive width from height
+	// exactly as measure() does in Typst. 4:1 is a placeholder until it loads.
+	const logoAspect = ref(4);
+	const onPreviewLogoLoad = (e: Event) => {
+		const el = e.target as HTMLImageElement;
+		if (el.naturalWidth > 0 && el.naturalHeight > 0) {
+			logoAspect.value = el.naturalWidth / el.naturalHeight;
+		}
+	};
+
+	// Same clamp as header-logo(data, 12mm): scale the baseline, then if the
+	// derived width exceeds 55mm, shrink both axes to fit.
+	const previewLogoMm = computed(() => {
+		let h = 12 * (form.pdf_logo_scale / 100);
+		let w = h * logoAspect.value;
+		if (w > 55) {
+			h = h * (55 / w);
+			w = 55;
+		}
+		return { w, h };
+	});
+	const previewLogoStyle = computed(() => ({
+		width: `${mmPx(previewLogoMm.value.w)}px`,
+		height: `${mmPx(previewLogoMm.value.h)}px`
+	}));
+	const previewClamped = computed(() => 12 * (form.pdf_logo_scale / 100) * logoAspect.value > 55);
+
 	// Live preview: render a sample invoice / quote with the currently-selected
 	// template through the real Typst pipeline (PdfPreviewModal).
+	// The whole point of a preview is to see edits BEFORE saving them. The
+	// sample*Payload builders read font / colour / logo scale off the settings
+	// row, which only updates on save — so overlay the live form values on top.
+	// (The template key is already passed separately, which is why it was the
+	// one control that appeared to work.)
+	const previewSettings = computed<CompanySettingsRow | null>(() => (store.settings
+		? {
+			...store.settings,
+			pdf_font: form.pdf_font,
+			pdf_theme_color: form.pdf_theme_color,
+			pdf_logo_scale: form.pdf_logo_scale
+		}
+		: null));
+
 	const invoicePreview = usePdfPreview({
 		command: "export_invoice_pdf",
-		buildPayload: () => sampleInvoicePayload(store.settings, currency.value, form.pdf_template),
+		buildPayload: () => sampleInvoicePayload(previewSettings.value, currency.value, form.pdf_template),
 		fileName: () => "sample-invoice.pdf",
 		title: "Invoice template preview"
 	});
 	const quotePreview = usePdfPreview({
 		command: "export_quote_pdf",
-		buildPayload: () => sampleQuotePayload(store.settings, currency.value, form.pdf_template),
+		buildPayload: () => sampleQuotePayload(previewSettings.value, currency.value, form.pdf_template),
 		fileName: () => "sample-quote.pdf",
 		title: "Quote template preview"
 	});
 	const payslipPreview = usePdfPreview({
 		command: "export_payslip_pdf",
-		buildPayload: () => samplePayslipPayload(store.settings, currency.value, form.pdf_template),
+		buildPayload: () => samplePayslipPayload(previewSettings.value, currency.value, form.pdf_template),
 		fileName: () => "sample-payslip.pdf",
 		title: "Payslip template preview"
 	});
