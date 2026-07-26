@@ -1009,9 +1009,27 @@ across every page:
   the rest of the chrome). Form inputs inside the body still pick up
   `user-select:text` via the global rule in main.css.
 - `ui.colors: { primary: "green", neutral: "zinc" }` — the source of
-  the app's accent. Settings → Appearance writes a CSS-variable
-  override on `:root` (`--ui-primary` etc.) that flows through
-  every component without needing to touch this config.
+  the app's accent. Settings → Appearance overrides it at runtime via
+  `applyPrimaryColor()` in `app/lib/color-ramp.ts`, which every accent
+  call site routes through (the `default.vue` settings watcher and the
+  Appearance live preview). Two paths:
+  - **A named preset** sets `appConfig.ui.colors.primary`, which is what
+    NuxtUI is built for — it emits a `:root` block mapping
+    `--ui-color-primary-{50..950}` onto the Tailwind palette and derives
+    `--ui-primary` from shade 500 (light) / 400 (dark).
+  - **A custom hex** can't use that path: NuxtUI needs all eleven steps,
+    not one colour. `buildPrimaryRamp()` synthesises them in OKLCH —
+    taking only the input's hue and chroma and forcing Tailwind's
+    lightness curve, so a near-white or near-black pick still lands at a
+    readable 500 lightness — and writes them as **inline styles on
+    `<html>`**, which outrank NuxtUI's `:root` block. `--ui-primary`
+    re-derives automatically, so light and dark both work with no extra
+    branch. Switching back to a preset must clear those inline
+    properties or they keep winning.
+
+  Note `bg-primary` compiles to `--color-primary`, which tracks shade
+  **500** in both modes, while `--ui-primary` tracks 400 in dark. Both
+  read from the same ramp, so a custom accent flows to both.
 
 `<UApp :toaster="{ position: 'top-center' }">` in `app/app.vue`
 pushes every toast to top-centre — keeps them out of the way of the

@@ -20,6 +20,13 @@ export type ThemeColor
 		| "blue"
 		| "violet";
 
+/**
+ * Where an unrecognised stored colour lands. Shared so the applied accent,
+ * the swatch the picker shows as selected, and the PDF hex fallback can't
+ * drift apart.
+ */
+export const DEFAULT_THEME_COLOR: ThemeColor = "red";
+
 export const THEME_COLORS: ReadonlyArray<{ value: ThemeColor, label: string, hex: string }> = [
 	{ value: "red", label: "Red", hex: "#ef4444" },
 	{ value: "orange", label: "Orange", hex: "#f97316" },
@@ -46,7 +53,7 @@ export const themeHex = (name: string | null | undefined): string => {
 	// red fallback.
 	if (isHexColor(name)) return name!.trim().toLowerCase();
 	const found = THEME_COLORS.find((c) => c.value === name);
-	return found?.hex ?? "#ef4444";
+	return found?.hex ?? THEME_COLORS.find((c) => c.value === DEFAULT_THEME_COLOR)!.hex;
 };
 
 // The PDF accent is split from the UI theme colour (company_settings has a
