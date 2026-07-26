@@ -191,16 +191,6 @@
 											Re-crop
 										</UButton>
 										<UButton
-											icon="i-lucide-eye"
-											size="xs"
-											variant="soft"
-											color="neutral"
-											:loading="invoicePreview.state.rendering"
-											@click="invoicePreview.open()"
-										>
-											Preview on PDF
-										</UButton>
-										<UButton
 											icon="i-lucide-trash-2"
 											size="xs"
 											variant="ghost"
@@ -210,9 +200,6 @@
 											Remove
 										</UButton>
 									</template>
-									<span v-if="pdfLogoFileName" class="text-xs text-(--ui-text-muted) truncate">
-										{{ pdfLogoFileName }}
-									</span>
 								</div>
 
 								<div>
@@ -364,39 +351,8 @@
 						/>
 
 						<div>
-							<div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
-								<div class="text-sm font-medium">
-									PDF template
-								</div>
-								<div class="flex items-center gap-2">
-									<UButton
-										size="xs"
-										variant="soft"
-										icon="i-lucide-eye"
-										:loading="invoicePreview.state.rendering"
-										@click="invoicePreview.open()"
-									>
-										Invoice
-									</UButton>
-									<UButton
-										size="xs"
-										variant="soft"
-										icon="i-lucide-eye"
-										:loading="quotePreview.state.rendering"
-										@click="quotePreview.open()"
-									>
-										Quote
-									</UButton>
-									<UButton
-										size="xs"
-										variant="soft"
-										icon="i-lucide-eye"
-										:loading="payslipPreview.state.rendering"
-										@click="payslipPreview.open()"
-									>
-										Payslip
-									</UButton>
-								</div>
+							<div class="text-sm font-medium mb-2">
+								PDF template
 							</div>
 							<div class="grid grid-cols-5 gap-3">
 								<button
@@ -455,21 +411,40 @@
 				Only appears when textarea contents differ from the loaded
 				settings; logo upload/remove writes immediately so the user
 				doesn't have to chase a save button afterwards. -->
-			<div
-				class="sticky bottom-0 -mx-2 mt-6 transition-all duration-200"
-				:class="dirty
-					? 'opacity-100 translate-y-0 pointer-events-auto'
-					: 'opacity-0 translate-y-3 pointer-events-none'"
-			>
+			<div class="sticky bottom-0 -mx-2 mt-6">
 				<div class="rounded-xl backdrop-blur-md bg-(--ui-bg)/90 border border-(--ui-border) shadow-lg px-4 py-3 flex items-center justify-between gap-4">
-					<div class="flex items-center gap-2 text-sm">
-						<span class="relative flex size-2">
-							<span class="absolute inline-flex h-full w-full rounded-full bg-(--ui-warning) opacity-75 animate-ping" />
-							<span class="relative inline-flex size-2 rounded-full bg-(--ui-warning)" />
-						</span>
-						<span class="text-(--ui-text)">Unsaved changes</span>
+					<!-- Preview lives here rather than on each card: header logo,
+						header/footer text and templates all want it, and they all
+						render through the same sample document. One page-level
+						action bar beats four scattered buttons plus a second
+						floating layer fighting this one for the same corner. -->
+					<div class="flex items-center gap-3">
+						<UDropdownMenu :items="previewItems">
+							<UButton
+								variant="soft"
+								color="neutral"
+								icon="i-lucide-eye"
+								trailing-icon="i-lucide-chevron-up"
+								:loading="anyPreviewRendering"
+							>
+								Preview on PDF
+							</UButton>
+						</UDropdownMenu>
+						<div
+							class="flex items-center gap-2 text-sm transition-opacity duration-200"
+							:class="dirty ? 'opacity-100' : 'opacity-0'"
+						>
+							<span class="relative flex size-2">
+								<span class="absolute inline-flex h-full w-full rounded-full bg-(--ui-warning) opacity-75 animate-ping" />
+								<span class="relative inline-flex size-2 rounded-full bg-(--ui-warning)" />
+							</span>
+							<span class="text-(--ui-text)">Unsaved changes</span>
+						</div>
 					</div>
-					<div class="flex items-center gap-2">
+					<div
+						class="flex items-center gap-2 transition-all duration-200"
+						:class="dirty ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'"
+					>
 						<UButton
 							variant="ghost"
 							color="neutral"
@@ -701,6 +676,17 @@
 		title: "Payslip template preview"
 	});
 
+	// Single preview entry point for the whole page (sticky action bar) —
+	// header logo, header/footer text and templates all want it, and they all
+	// render through the same sample document.
+	const previewItems = computed(() => [[
+		{ label: "Invoice", icon: "i-lucide-file-text", onSelect: () => invoicePreview.open() },
+		{ label: "Quote", icon: "i-lucide-file-check", onSelect: () => quotePreview.open() },
+		{ label: "Payslip", icon: "i-lucide-receipt", onSelect: () => payslipPreview.open() }
+	]]);
+	const anyPreviewRendering = computed(() =>
+		invoicePreview.state.rendering || quotePreview.state.rendering || payslipPreview.state.rendering);
+
 	// Same curated list the Appearance page used. The Typst template falls
 	// through these for any missing glyph; free-text input lets the user pick
 	// any face installed on their machine, but only the bundled faces are
@@ -809,12 +795,6 @@
 	const pdfLogoInput = useTemplateRef<HTMLInputElement>("pdfLogoInput");
 	const pdfLogoDragOver = ref(false);
 	const pickPdfLogo = () => pdfLogoInput.value?.click();
-
-	const pdfLogoFileName = computed(() => {
-		const p = store.settings?.pdf_header_logo_path;
-		if (!p) return null;
-		return p.split(/[\\/]/).pop() ?? p;
-	});
 
 	// ---- crop flow (migration 0051) ------------------------------------
 	// Raster uploads keep the untouched original (pdf-header-original.<ext>)
