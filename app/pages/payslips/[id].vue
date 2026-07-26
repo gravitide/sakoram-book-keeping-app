@@ -716,7 +716,8 @@
 			settings: settingsStore.settings,
 			currency: currency.value,
 			paidCents: paidCents.value,
-			balanceCents: balanceCents.value
+			balanceCents: balanceCents.value,
+			entitledToTemplates: license.hasFeature("pdf_templates")
 		});
 	};
 
