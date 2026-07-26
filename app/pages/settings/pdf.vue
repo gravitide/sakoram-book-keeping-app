@@ -10,8 +10,11 @@
 			pointer-events are re-enabled only on the button, so it never blocks
 			the page beneath. Solid + shadow, with no surrounding panel: the
 			button is its own surface, and a wrapper card behind it just reads as
-			an unexplained dark box. -->
-		<div class="sticky top-3 z-20 h-0 max-w-5xl mx-auto flex justify-end pointer-events-none">
+			an unexplained dark box.
+			`items-start` is load-bearing — a flex container defaults to
+			align-items: stretch, so with h-0 the button would be stretched to
+			zero height and collapse into a squashed pill. -->
+		<div class="sticky top-3 z-20 h-0 max-w-5xl mx-auto flex items-start justify-end pointer-events-none">
 			<UButton
 				icon="i-lucide-eye"
 				class="pointer-events-auto shadow-lg"
