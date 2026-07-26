@@ -115,9 +115,6 @@
 						>
 							Upload logo
 						</UButton>
-						<span v-if="logoFileName" class="text-xs text-(--ui-text-muted) truncate">
-							{{ logoFileName }}
-						</span>
 					</div>
 				</div>
 			</div>
@@ -806,14 +803,6 @@
 	const fileInput = useTemplateRef<HTMLInputElement>("fileInput");
 	const dragOver = ref(false);
 	const pickLogo = () => fileInput.value?.click();
-
-	// Show just the basename, not the absolute OS path. Handles both Windows
-	// backslashes and POSIX slashes so it stays correct on either platform.
-	const logoFileName = computed(() => {
-		const p = store.settings?.logo_path;
-		if (!p) return null;
-		return p.split(/[\\/]/).pop() ?? p;
-	});
 
 	// Use an HTML <input type="file"> rather than the Tauri dialog plugin: it
 	// gives us the raw File bytes directly, so we never need fs-read capability
