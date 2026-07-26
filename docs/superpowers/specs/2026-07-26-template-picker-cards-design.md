@@ -39,7 +39,7 @@ different controls depending on where you meet it.
 |---|---|---|
 | Card content | **Thumbnail + name only** | The thumbnail conveys the layout better than the prose does — that is what it is for. Matches onboarding. |
 | Description | **Native tooltip via `:title`** | Nothing is lost, nothing is truncated, and `PDF_TEMPLATES` needs no rewrite. Fitting the text into a ~120px card would have meant shortening all five entries. |
-| Narrow windows | **`grid-cols-2 sm:grid-cols-3 lg:grid-cols-5`** | The settings pane shrinks with the sidebar open; five cards across a tight pane would drop each to ~70px and make the thumbnails indistinguishable. |
+| Narrow windows | **`grid-cols-5` at every width** | Revised after seeing it render. The original `grid-cols-2 sm:grid-cols-3 lg:grid-cols-5` was chosen on a bad estimate — I guessed five across a narrow pane would give ~70px cards. Measured, a 1030px window gives **126px** cards (108×153 thumbnails), and the reflow to three columns instead produced oversized ~265px cards. Five across holds up: 157px at 1280, 126px at 1030, 74px at 768, with no horizontal overflow at any width. |
 | Label alignment | **Left, matching onboarding** | Consistency with the shipped picker beats the mockup's centred symmetry. |
 | Gap | **`gap-3`** (onboarding uses `gap-2`) | Deliberate: the settings card is roomier than the onboarding step. |
 
@@ -49,7 +49,7 @@ One markup block in `app/pages/settings/pdf.vue` — the `space-y-2` list
 inside the `#templates` `SectionCard` becomes:
 
 ```vue
-<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+<div class="grid grid-cols-5 gap-3">
 	<button
 		v-for="t in TEMPLATES"
 		:key="t.key"
@@ -96,7 +96,7 @@ binding, the same `canPick` gate. No unit tests.
 Verified in the running app via `bun run tauri:dev`:
 
 1. `/settings/pdf` shows five cards on one row at a normal desktop width.
-2. Narrowing the window (or opening the sidebar) reflows to 3, then 2.
+2. Narrowing the window keeps them on one row — cards shrink rather than wrap.
 3. Clicking a card selects it; the primary border and tint follow.
 4. Hovering a card surfaces its description as a tooltip.
 5. Saving persists the choice, and the picker matches onboarding's.

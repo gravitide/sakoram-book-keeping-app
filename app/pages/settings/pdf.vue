@@ -245,7 +245,7 @@
 									</UButton>
 								</div>
 							</div>
-							<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+							<div class="grid grid-cols-5 gap-3">
 								<button
 									v-for="t in TEMPLATES"
 									:key="t.key"
