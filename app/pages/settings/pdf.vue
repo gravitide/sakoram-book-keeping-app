@@ -287,7 +287,10 @@
 								>
 									<div :style="{ padding: `${mmPx(16)}px ${mmPx(18)}px 0` }">
 										<div class="flex justify-between items-end gap-2" :style="{ minHeight: `${mmPx(18)}px` }">
-											<div v-if="previewHeaderLines.length" class="text-left leading-tight min-w-0" :style="{ fontSize: `${mmPx(2.6)}px` }">
+											<!-- 3.35mm ≈ 9.5pt, the classic template's base text size, so
+												the block occupies true-to-scale space on the sheet.
+												The previous 2.6mm rendered SMALLER than the real PDF. -->
+											<div v-if="previewHeaderLines.length" class="text-left leading-tight min-w-0" :style="{ fontSize: `${mmPx(3.35)}px` }">
 												<div v-for="(l, i) in previewHeaderLines" :key="i" class="text-zinc-700 truncate">
 													{{ l }}
 												</div>
@@ -535,7 +538,7 @@
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
-	import { buildHeaderBlocks } from "~/lib/pdf-chrome";
+	import { blocksToPlainLines, buildHeaderBlocks } from "~/lib/pdf-chrome";
 	import { PDF_TEMPLATES } from "~/lib/pdf-templates";
 	import { PDF_TOKENS } from "~/lib/pdf-tokens";
 	import { sampleInvoicePayload } from "~/lib/sample-pdf";
@@ -699,9 +702,7 @@
 	// ignored — a faithful rich-text mock isn't worth the complexity when
 	// "Preview on PDF" renders the real thing.
 	const previewHeaderLines = computed(() =>
-		buildHeaderBlocks(previewSettings.value)
-			.map((b) => ("runs" in b ? b.runs.map((r) => r.text).join("") : ""))
-			.filter((s) => s.length > 0));
+		blocksToPlainLines(buildHeaderBlocks(previewSettings.value)));
 
 	const invoicePreview = usePdfPreview({
 		command: "export_invoice_pdf",

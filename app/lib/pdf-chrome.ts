@@ -35,3 +35,31 @@ export function buildHeaderBlocks(settings: CompanySettingsRow | null): LetterBl
 export function buildFooterBlocks(settings: CompanySettingsRow | null): LetterBlock[] {
 	return build(settings, settings?.pdf_footer_custom === 1, settings?.pdf_footer_text).slice(0, FOOTER_MAX_BLOCKS);
 }
+
+/**
+ * Flatten a block tree to plain-text lines for the settings page's A4 mock.
+ *
+ * A block is one line UNLESS it contains hard breaks (Shift+Enter), which
+ * arrive as runs of `{ text: "", line_break: true }` — joining run text alone
+ * silently collapses a four-line address into one. Marks are dropped: the mock
+ * conveys arrangement, and "Preview on PDF" renders the real thing.
+ */
+export function blocksToPlainLines(blocks: LetterBlock[]): string[] {
+	const lines: string[] = [];
+	for (const b of blocks) {
+		// Lists and tables carry no `runs`, and the minimal editor used for
+		// header/footer text can't produce them anyway.
+		if (!("runs" in b)) continue;
+		let line = "";
+		for (const r of b.runs) {
+			if (r.line_break) {
+				lines.push(line);
+				line = "";
+			} else {
+				line += r.text;
+			}
+		}
+		lines.push(line);
+	}
+	return lines.filter((s) => s.trim().length > 0);
+}
