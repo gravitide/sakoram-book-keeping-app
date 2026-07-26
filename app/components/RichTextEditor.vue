@@ -1,14 +1,17 @@
 <template>
 	<div class="border border-(--ui-border) rounded-md overflow-hidden bg-(--ui-bg)" :style="{ '--rte-min-height': `${minHeight}px` }">
 		<div v-if="editor && editable" class="flex items-center gap-0.5 border-b border-(--ui-border) bg-(--ui-bg-muted) p-1 flex-wrap">
-			<!-- Block type / heading -->
-			<UDropdownMenu :items="headingItems">
-				<UButton size="xs" variant="ghost" color="neutral" aria-label="Text style" trailing-icon="i-lucide-chevron-down" :ui="{ trailingIcon: 'size-3' }" class="min-w-16 justify-between">
-					{{ currentBlockLabel }}
-				</UButton>
-			</UDropdownMenu>
+			<!-- Block type / heading. Hidden in minimal mode: a page-footer
+				strip has no business containing an H1. -->
+			<template v-if="!minimal">
+				<UDropdownMenu :items="headingItems">
+					<UButton size="xs" variant="ghost" color="neutral" aria-label="Text style" trailing-icon="i-lucide-chevron-down" :ui="{ trailingIcon: 'size-3' }" class="min-w-16 justify-between">
+						{{ currentBlockLabel }}
+					</UButton>
+				</UDropdownMenu>
 
-			<div class="w-px h-4 bg-(--ui-border) mx-0.5" />
+				<div class="w-px h-4 bg-(--ui-border) mx-0.5" />
+			</template>
 
 			<template v-for="(group, gi) in toolbarGroups" :key="gi">
 				<div v-if="gi > 0" class="w-px h-4 bg-(--ui-border) mx-0.5" />
@@ -172,10 +175,14 @@
 	// want a shorter box than the full-page letter editor. `tables` opts the
 	// editor into table support (button + grid picker) — off for the compact
 	// sign-off / terms fields.
-	const props = withDefaults(defineProps<{ editable?: boolean, minHeight?: number, tables?: boolean }>(), {
+	const props = withDefaults(defineProps<{ editable?: boolean, minHeight?: number, tables?: boolean, minimal?: boolean }>(), {
 		editable: true,
 		minHeight: 240,
-		tables: false
+		tables: false,
+		// Trims the toolbar to inline marks + alignment. Used by the PDF
+		// header/footer editors: headings and lists in a page-footer strip
+		// produce genuinely bad output, so the fix is to not offer them.
+		minimal: false
 	});
 
 	const model = defineModel<string>({ default: "" });
@@ -267,16 +274,18 @@
 	const toolbarGroups = computed<ToolbarButton[][]>(() => {
 		const e = editor.value;
 		if (!e) return [];
-		return [
-			[
-				{ name: "Bold", icon: "i-lucide-bold", active: e.isActive("bold"), run: () => e.chain().focus().toggleBold().run() },
-				{ name: "Italic", icon: "i-lucide-italic", active: e.isActive("italic"), run: () => e.chain().focus().toggleItalic().run() },
-				{ name: "Underline", icon: "i-lucide-underline", active: e.isActive("underline"), run: () => e.chain().focus().toggleUnderline().run() }
-			],
-			[
-				{ name: "Bullet list", icon: "i-lucide-list", active: e.isActive("bulletList"), run: () => e.chain().focus().toggleBulletList().run() },
-				{ name: "Numbered list", icon: "i-lucide-list-ordered", active: e.isActive("orderedList"), run: () => e.chain().focus().toggleOrderedList().run() }
-			],
+		const marks = [
+			{ name: "Bold", icon: "i-lucide-bold", active: e.isActive("bold"), run: () => e.chain().focus().toggleBold().run() },
+			{ name: "Italic", icon: "i-lucide-italic", active: e.isActive("italic"), run: () => e.chain().focus().toggleItalic().run() },
+			{ name: "Underline", icon: "i-lucide-underline", active: e.isActive("underline"), run: () => e.chain().focus().toggleUnderline().run() }
+		];
+		const lists = [
+			{ name: "Bullet list", icon: "i-lucide-list", active: e.isActive("bulletList"), run: () => e.chain().focus().toggleBulletList().run() },
+			{ name: "Numbered list", icon: "i-lucide-list-ordered", active: e.isActive("orderedList"), run: () => e.chain().focus().toggleOrderedList().run() }
+		];
+		const groups = [
+			marks,
+			lists,
 			[
 				{ name: "Align left", icon: "i-lucide-align-left", active: e.isActive({ textAlign: "left" }), run: () => e.chain().focus().setTextAlign("left").run() },
 				{ name: "Align center", icon: "i-lucide-align-center", active: e.isActive({ textAlign: "center" }), run: () => e.chain().focus().setTextAlign("center").run() },
@@ -284,6 +293,8 @@
 				{ name: "Justify", icon: "i-lucide-align-justify", active: e.isActive({ textAlign: "justify" }), run: () => e.chain().focus().setTextAlign("justify").run() }
 			]
 		];
+		// Minimal mode drops the list group — see the `minimal` prop comment.
+		return props.minimal ? groups.filter((g) => g !== lists) : groups;
 	});
 
 	// --- block type / heading -----------------------------------------------
@@ -376,8 +387,15 @@
 		];
 	});
 
+	// Drop text at the cursor — used by the PDF header/footer "Insert field"
+	// menu. Note the v-model can't be used for this: the editor parses that
+	// prop only on mount, so rewriting the string would not show up.
+	const insertText = (text: string) => {
+		editor.value?.chain().focus().insertContent(text).run();
+	};
+
 	// Expose the underlying TipTap instance (parent / test harness access).
-	defineExpose({ editor });
+	defineExpose({ editor, insertText });
 </script>
 
 <style scoped>
