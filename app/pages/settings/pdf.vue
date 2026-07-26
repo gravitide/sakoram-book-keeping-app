@@ -126,6 +126,44 @@
 									</span>
 								</button>
 							</div>
+
+							<!-- Custom accent. Writes the same form field as the presets,
+								just as a literal hex — so dirty tracking, save and the
+								live preview all work unchanged. The native colour input
+								opens the OS picker (no dependency, works offline); the
+								hex field is for pasting an exact brand colour, which is
+								the more common case for an invoice accent. The input is
+								hidden inside the swatch label so the click target matches
+								the eight circles above — a bare colour input renders as an
+								OS-styled control that would look nothing like them. -->
+							<div class="mt-4 pt-4 border-t border-(--ui-border) flex items-center gap-3">
+								<label
+									class="size-9 rounded-full border-2 shrink-0 cursor-pointer transition relative overflow-hidden"
+									:class="isCustomColor ? 'border-(--ui-text) scale-110' : 'border-(--ui-border) hover:border-(--ui-text-muted)'"
+									:style="{ backgroundColor: themeColor }"
+									title="Pick a custom colour"
+								>
+									<input
+										v-model="customColorWell"
+										type="color"
+										class="absolute inset-0 opacity-0 cursor-pointer"
+									>
+								</label>
+								<div class="min-w-0">
+									<div class="text-sm font-medium" :class="isCustomColor ? 'text-(--ui-text)' : 'text-(--ui-text-muted)'">
+										Custom
+									</div>
+									<div class="text-xs text-(--ui-text-muted)">
+										Your exact brand colour
+									</div>
+								</div>
+								<UInput
+									:model-value="customHexDraft"
+									placeholder="#1d4ed8"
+									class="w-32 ml-auto"
+									@update:model-value="onHexInput(String($event))"
+								/>
+							</div>
 						</SectionCard>
 					</div>
 				</div>
@@ -501,7 +539,7 @@
 	import { PDF_TEMPLATES } from "~/lib/pdf-templates";
 	import { PDF_TOKENS } from "~/lib/pdf-tokens";
 	import { sampleInvoicePayload } from "~/lib/sample-pdf";
-	import { THEME_COLORS, themeHex } from "~/lib/theme";
+	import { isHexColor, THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -540,6 +578,31 @@
 	// Accent colour for the schematic thumbnails — tracks the live (unsaved)
 	// PDF colour selection so picking a swatch updates the previews instantly.
 	const themeColor = computed(() => themeHex(form.pdf_theme_color));
+
+	// A custom accent is stored as a literal hex in pdf_theme_color, the same
+	// column the preset names use — so the preset buttons' `=== c.value`
+	// comparison deselects on its own and nothing else needs to know.
+	const isCustomColor = computed(() => isHexColor(form.pdf_theme_color));
+
+	// The colour well always needs a concrete #rrggbb, even while a preset is
+	// selected, so it opens the OS picker on the current colour rather than black.
+	const customColorWell = computed({
+		get: () => themeColor.value,
+		set: (v: string) => {
+			form.pdf_theme_color = v.toLowerCase();
+		}
+	});
+
+	// Free text while typing; only committed once it's a valid hex, so a
+	// half-typed "#1d" never becomes the stored value.
+	const customHexDraft = ref("");
+	watch(() => form.pdf_theme_color, (v) => {
+		if (isHexColor(v)) customHexDraft.value = String(v).toLowerCase();
+	}, { immediate: true });
+	const onHexInput = (v: string) => {
+		customHexDraft.value = v;
+		if (isHexColor(v)) form.pdf_theme_color = v.trim().toLowerCase();
+	};
 
 	// ---- live paper preview --------------------------------------------
 	// A scaled A4 sheet rendered from the LIVE form values, so the logo size
