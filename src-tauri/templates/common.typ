@@ -25,17 +25,6 @@
   (chosen, "Inter", "Inter Tight", "Miriam Libre")
 }
 
-// Footer line content (business name | website | phone | address). The page
-// `footer:` in each template wraps this with its own rule / alignment.
-#let footer-content(data) = [
-  #if data.business_name != none [#data.business_name]
-  #if data.website != none [ | #data.website]
-  #if data.phone != none [ | #data.phone]
-  #if data.address_line1 != none [
-    | #data.address_line1#if data.city != none [, #data.city]
-  ]
-]
-
 // --- party block (client / vendor) -------------------------------------
 #let party-block(data) = [
   #caption(data.party_label)
@@ -241,18 +230,18 @@
 // (the editor only stores a non-left alignment). Body / notes leave it `none`
 // (natural left); the sign-off passes "right" so an un-aligned name still sits
 // against the right margin like the old plain-text sign-off did.
-#let render-blocks(blocks, default-align: none) = {
+#let render-blocks(blocks, default-align: none, spacing: 8pt) = {
   for b in blocks {
     if b.kind == "paragraph" {
-      block(width: 100%, below: 8pt, apply-align(b.at("align", default: default-align), render-runs(b.runs)))
+      block(width: 100%, below: spacing, apply-align(b.at("align", default: default-align), render-runs(b.runs)))
     } else if b.kind == "heading" {
       let lvl = b.at("level", default: 2)
       let hsize = if lvl == 1 { 15pt } else if lvl == 2 { 13pt } else { 11.5pt }
-      block(width: 100%, above: 10pt, below: 6pt, apply-align(b.at("align", default: default-align), text(weight: "bold", size: hsize, render-runs(b.runs))))
+      block(width: 100%, above: 10pt, below: spacing * 0.75, apply-align(b.at("align", default: default-align), text(weight: "bold", size: hsize, render-runs(b.runs))))
     } else if b.kind == "bullet_list" {
-      list(..b.items.map(items => render-blocks(items, default-align: default-align)))
+      list(..b.items.map(items => render-blocks(items, default-align: default-align, spacing: spacing)))
     } else if b.kind == "ordered_list" {
-      enum(..b.items.map(items => render-blocks(items, default-align: default-align)))
+      enum(..b.items.map(items => render-blocks(items, default-align: default-align, spacing: spacing)))
     } else if b.kind == "table" {
       // Rich-text table. Inlined (not a separate helper) because it needs to
       // call render-blocks for each cell's content, and Typst only lets a
@@ -292,6 +281,28 @@
       ))
     }
   }
+}
+
+// Footer line content. Custom rich text when the business has opted in
+// (company_settings.pdf_footer_custom), otherwise the built-in
+// business name | website | phone | address line. The page `footer:` in each
+// template wraps this with its own rule / alignment.
+//
+// NOTE: this MUST stay below render-blocks — Typst resolves module names in
+// definition order, and it lived above render-blocks until it needed to call
+// it. Tight `spacing` because a page footer is a strip, not body copy.
+#let footer-content(data) = {
+  let blocks = data.at("footer_blocks", default: ())
+  if blocks.len() > 0 {
+    render-blocks(blocks, default-align: "center", spacing: 2pt)
+  } else [
+    #if data.business_name != none [#data.business_name]
+    #if data.website != none [ | #data.website]
+    #if data.phone != none [ | #data.phone]
+    #if data.address_line1 != none [
+      | #data.address_line1#if data.city != none [, #data.city]
+    ]
+  ]
 }
 
 // --- notes -------------------------------------------------------------
@@ -441,6 +452,10 @@
   } else {
     box(height: logo-h)
   }
+  // Optional custom header text (company_settings.pdf_header_custom). Empty
+  // for everyone who hasn't opted in, and every branch below keeps its
+  // original markup verbatim in that case.
+  let ht = data.at("header_blocks", default: ())
 
   if key == "modern" [
     #block(width: 100%, fill: rgb(data.theme_color), inset: (x: 16pt, y: 14pt), radius: 3pt)[
@@ -453,6 +468,13 @@
           #text(weight: "bold", size: 20pt, tracking: 0.04em)[#data.title]
           #v(2pt)
           #text(size: 10.5pt)[\##data.number]
+          // Smaller than the body default: inside the band this is a
+          // secondary detail line sitting under a 20pt title, and at full
+          // size three lines crowd the number above them.
+          #if ht.len() > 0 {
+            v(5pt)
+            text(size: 8pt, render-blocks(ht, spacing: 2pt))
+          }
         ],
         if data.logo_file != none {
           header-logo(data, 12mm)
@@ -467,7 +489,9 @@
       columns: (1fr, auto),
       align: horizon,
       gutter: 16pt,
-      if data.business_name != none and data.business_name != "" {
+      if ht.len() > 0 {
+        render-blocks(ht, spacing: 2pt)
+      } else if data.business_name != none and data.business_name != "" {
         text(weight: "regular", size: 14pt, tracking: 0.06em)[#data.business_name]
       } else { [] },
       align(right)[
@@ -478,7 +502,17 @@
     )
     #v(24pt)
   ] else if key == "compact" [
-    #align(right)[#logo-or-wordmark(9mm, 13pt)]
+    #if ht.len() > 0 {
+      grid(
+        columns: (1fr, auto),
+        align: top,
+        gutter: 16pt,
+        render-blocks(ht, spacing: 1pt),
+        logo-or-wordmark(9mm, 13pt),
+      )
+    } else {
+      align(right)[#logo-or-wordmark(9mm, 13pt)]
+    }
     #v(-1.5mm)
     #line(length: 100%, stroke: 1.5pt + rgb(data.theme_color))
     #v(6pt)
@@ -490,7 +524,17 @@
     #line(length: 100%, stroke: 2pt + rgb(data.theme_color))
     #v(14pt)
   ] else [
-    #align(right)[#logo-or-wordmark(12mm, 16pt)]
+    #if ht.len() > 0 {
+      grid(
+        columns: (1fr, auto),
+        align: top,
+        gutter: 16pt,
+        render-blocks(ht, spacing: 2pt),
+        logo-or-wordmark(12mm, 16pt),
+      )
+    } else {
+      align(right)[#logo-or-wordmark(12mm, 16pt)]
+    }
     #v(2mm)
     #line(length: 100%, stroke: 2pt + rgb(data.theme_color))
     #v(8pt)

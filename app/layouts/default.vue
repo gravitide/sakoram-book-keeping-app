@@ -654,6 +654,7 @@
 						{ hash: "#font", label: "Font", icon: "i-lucide-type" },
 						{ hash: "#color", label: "Colour", icon: "i-lucide-palette" },
 						{ hash: "#header-logo", label: "Header logo", icon: "i-lucide-image" },
+						{ hash: "#header-footer", label: "Header & footer", icon: "i-lucide-panel-top" },
 						{ hash: "#templates", label: "Templates", icon: "i-lucide-layout-template" }
 					]
 				},

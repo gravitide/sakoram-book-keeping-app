@@ -6,6 +6,7 @@
 import type { LetterRow } from "~/stores/letters";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { letterBodyToBlocks } from "~/lib/letter-body";
+import { buildFooterBlocks } from "~/lib/pdf-chrome";
 import { pdfThemeHex } from "~/lib/theme";
 
 export interface LetterPdfArgs {
@@ -34,5 +35,6 @@ export const buildLetterPdfPayload = ({ row, settings }: LetterPdfArgs) => ({
 	address_line1: settings?.address_line1 ?? null,
 	city: settings?.city ?? null,
 	logo_scale: settings?.pdf_logo_scale ?? 100,
+	footer_blocks: buildFooterBlocks(settings),
 	logo_path: settings?.pdf_header_logo_path ?? null
 });

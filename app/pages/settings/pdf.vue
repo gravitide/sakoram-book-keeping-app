@@ -3,7 +3,29 @@
 		<!-- select-none on the page root: static labels and copy aren't
 			selectable; form fields stay selectable via the input rule
 			in main.css. -->
-		<header class="mb-6 max-w-5xl mx-auto">
+		<!-- Floating Preview. Page-level because header logo, header/footer text
+			and templates all want it, and all render through the same sample
+			invoice — one control beats a button on every card.
+			`h-0` keeps the wrapper out of the layout (the button overflows it) and
+			pointer-events are re-enabled only on the button, so it never blocks
+			the page beneath. Solid + shadow, with no surrounding panel: the
+			button is its own surface, and a wrapper card behind it just reads as
+			an unexplained dark box.
+			`items-start` is load-bearing — a flex container defaults to
+			align-items: stretch, so with h-0 the button would be stretched to
+			zero height and collapse into a squashed pill. -->
+		<div class="sticky top-3 z-20 h-0 max-w-5xl mx-auto flex items-start justify-end pointer-events-none">
+			<UButton
+				icon="i-lucide-eye"
+				class="pointer-events-auto shadow-lg"
+				:loading="invoicePreview.state.rendering"
+				@click="invoicePreview.open()"
+			>
+				Preview on PDF
+			</UButton>
+		</div>
+
+		<header class="mb-6 max-w-5xl mx-auto pr-44">
 			<h1 class="text-2xl font-semibold">
 				PDF
 			</h1>
@@ -191,16 +213,6 @@
 											Re-crop
 										</UButton>
 										<UButton
-											icon="i-lucide-eye"
-											size="xs"
-											variant="soft"
-											color="neutral"
-											:loading="invoicePreview.state.rendering"
-											@click="invoicePreview.open()"
-										>
-											Preview on PDF
-										</UButton>
-										<UButton
 											icon="i-lucide-trash-2"
 											size="xs"
 											variant="ghost"
@@ -210,9 +222,6 @@
 											Remove
 										</UButton>
 									</template>
-									<span v-if="pdfLogoFileName" class="text-xs text-(--ui-text-muted) truncate">
-										{{ pdfLogoFileName }}
-									</span>
 								</div>
 
 								<div>
@@ -239,18 +248,24 @@
 									:style="{ width: `${PAPER_W_PX}px`, height: `${mmPx(105)}px` }"
 								>
 									<div :style="{ padding: `${mmPx(16)}px ${mmPx(18)}px 0` }">
-										<div class="flex justify-end items-end" :style="{ height: `${mmPx(18)}px` }">
+										<div class="flex justify-between items-end gap-2" :style="{ minHeight: `${mmPx(18)}px` }">
+											<div v-if="previewHeaderLines.length" class="text-left leading-tight min-w-0" :style="{ fontSize: `${mmPx(2.6)}px` }">
+												<div v-for="(l, i) in previewHeaderLines" :key="i" class="text-zinc-700 truncate">
+													{{ l }}
+												</div>
+											</div>
+											<div v-else />
 											<img
 												v-if="store.pdfHeaderLogoSrc"
 												:src="store.pdfHeaderLogoSrc"
 												alt=""
 												:style="previewLogoStyle"
-												class="object-contain"
+												class="object-contain shrink-0"
 												@load="onPreviewLogoLoad"
 											>
 											<span
 												v-else
-												class="font-bold text-zinc-800 leading-none"
+												class="font-bold text-zinc-800 leading-none shrink-0"
 												:style="{ fontSize: `${mmPx(5)}px` }"
 											>
 												{{ store.settings?.business_name || "Your business" }}
@@ -290,6 +305,60 @@
 					</SectionCard>
 				</div>
 
+				<div id="header-footer" class="scroll-mt-6">
+					<SectionCard
+						icon="i-lucide-panel-top"
+						title="Header &amp; footer text"
+						subtitle="Print your own details instead of the built-in header block and footer line. Use fields like {business_name} so the text follows Business details instead of going stale."
+					>
+						<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+							<div>
+								<div class="flex items-center justify-between gap-2 mb-2">
+									<div class="text-sm font-medium">
+										Header text
+									</div>
+									<div class="flex items-center gap-2">
+										<UDropdownMenu :items="tokenItems('header')">
+											<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-braces" :disabled="!headerCustom">
+												Insert field
+											</UButton>
+										</UDropdownMenu>
+										<USwitch v-model="headerCustom" />
+									</div>
+								</div>
+								<div :class="headerCustom ? '' : 'opacity-50 pointer-events-none'">
+									<RichTextEditor ref="headerEditor" v-model="headerTextModel" minimal :min-height="120" />
+								</div>
+								<p class="text-xs text-(--ui-text-muted) mt-2">
+									Prints opposite the logo. Skipped on the Letterhead template, which leaves the top of the page for your pre-printed stationery.
+								</p>
+							</div>
+
+							<div>
+								<div class="flex items-center justify-between gap-2 mb-2">
+									<div class="text-sm font-medium">
+										Footer text
+									</div>
+									<div class="flex items-center gap-2">
+										<UDropdownMenu :items="tokenItems('footer')">
+											<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-braces" :disabled="!footerCustom">
+												Insert field
+											</UButton>
+										</UDropdownMenu>
+										<USwitch v-model="footerCustom" />
+									</div>
+								</div>
+								<div :class="footerCustom ? '' : 'opacity-50 pointer-events-none'">
+									<RichTextEditor ref="footerEditor" v-model="footerTextModel" minimal :min-height="120" />
+								</div>
+								<p class="text-xs text-(--ui-text-muted) mt-2">
+									Replaces the business name · website · phone line at the bottom of every page. Limited to 3 paragraphs so it can't crowd the page.
+								</p>
+							</div>
+						</div>
+					</SectionCard>
+				</div>
+
 				<div id="templates" class="scroll-mt-6">
 					<SectionCard
 						icon="i-lucide-layout-template"
@@ -304,39 +373,8 @@
 						/>
 
 						<div>
-							<div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
-								<div class="text-sm font-medium">
-									PDF template
-								</div>
-								<div class="flex items-center gap-2">
-									<UButton
-										size="xs"
-										variant="soft"
-										icon="i-lucide-eye"
-										:loading="invoicePreview.state.rendering"
-										@click="invoicePreview.open()"
-									>
-										Invoice
-									</UButton>
-									<UButton
-										size="xs"
-										variant="soft"
-										icon="i-lucide-eye"
-										:loading="quotePreview.state.rendering"
-										@click="quotePreview.open()"
-									>
-										Quote
-									</UButton>
-									<UButton
-										size="xs"
-										variant="soft"
-										icon="i-lucide-eye"
-										:loading="payslipPreview.state.rendering"
-										@click="payslipPreview.open()"
-									>
-										Payslip
-									</UButton>
-								</div>
+							<div class="text-sm font-medium mb-2">
+								PDF template
 							</div>
 							<div class="grid grid-cols-5 gap-3">
 								<button
@@ -441,26 +479,6 @@
 			@save="invoicePreview.onSave"
 			@cancel="invoicePreview.onCancel"
 		/>
-		<PdfPreviewModal
-			v-model:open="quotePreview.state.open"
-			:asset-url="quotePreview.state.assetUrl"
-			:temp-path="quotePreview.state.tempPath"
-			:suggested-file-name="quotePreview.state.suggestedFileName"
-			:saving="quotePreview.state.saving"
-			title="Quote template preview"
-			@save="quotePreview.onSave"
-			@cancel="quotePreview.onCancel"
-		/>
-		<PdfPreviewModal
-			v-model:open="payslipPreview.state.open"
-			:asset-url="payslipPreview.state.assetUrl"
-			:temp-path="payslipPreview.state.tempPath"
-			:suggested-file-name="payslipPreview.state.suggestedFileName"
-			:saving="payslipPreview.state.saving"
-			title="Payslip template preview"
-			@save="payslipPreview.onSave"
-			@cancel="payslipPreview.onCancel"
-		/>
 		<ImageCropModal
 			v-model:open="cropOpen"
 			:image-blob="cropBlob"
@@ -479,8 +497,10 @@
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
+	import { buildHeaderBlocks } from "~/lib/pdf-chrome";
 	import { PDF_TEMPLATES } from "~/lib/pdf-templates";
-	import { sampleInvoicePayload, samplePayslipPayload, sampleQuotePayload } from "~/lib/sample-pdf";
+	import { PDF_TOKENS } from "~/lib/pdf-tokens";
+	import { sampleInvoicePayload } from "~/lib/sample-pdf";
 	import { THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
@@ -495,14 +515,18 @@
 	// Only the PDF-flavoured fields live on this page. Logo paths are kept on
 	// the form so dirty-tracking can spot a removal/upload that would otherwise
 	// only mutate the store. (Document protection moved to /settings/security.)
-	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_theme_color" | "pdf_template" | "pdf_logo_scale">;
+	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_theme_color" | "pdf_template" | "pdf_logo_scale" | "pdf_header_custom" | "pdf_header_text" | "pdf_footer_custom" | "pdf_footer_text">;
 
 	const form = reactive<PdfForm>({
 		pdf_header_logo_path: null,
 		pdf_font: "Akt",
 		pdf_theme_color: "green",
 		pdf_template: "classic",
-		pdf_logo_scale: 100
+		pdf_logo_scale: 100,
+		pdf_header_custom: 0,
+		pdf_header_text: null,
+		pdf_footer_custom: 0,
+		pdf_footer_text: null
 	});
 
 	// PDF templates are a Plus feature. Basic users see the pickers but can
@@ -566,27 +590,61 @@
 			...store.settings,
 			pdf_font: form.pdf_font,
 			pdf_theme_color: form.pdf_theme_color,
-			pdf_logo_scale: form.pdf_logo_scale
+			pdf_logo_scale: form.pdf_logo_scale,
+			pdf_header_custom: form.pdf_header_custom,
+			pdf_header_text: form.pdf_header_text,
+			pdf_footer_custom: form.pdf_footer_custom,
+			pdf_footer_text: form.pdf_footer_text
 		}
 		: null));
+
+	// USwitch wants booleans; the columns are 0/1 like every other flag here.
+	const headerCustom = computed({
+		get: () => form.pdf_header_custom === 1,
+		set: (v: boolean) => {
+			form.pdf_header_custom = v ? 1 : 0;
+		}
+	});
+	const footerCustom = computed({
+		get: () => form.pdf_footer_custom === 1,
+		set: (v: boolean) => {
+			form.pdf_footer_custom = v ? 1 : 0;
+		}
+	});
+	// RichTextEditor's v-model is a plain string; the columns are nullable.
+	const headerTextModel = computed({
+		get: () => form.pdf_header_text ?? "",
+		set: (v: string) => {
+			form.pdf_header_text = v || null;
+		}
+	});
+	const footerTextModel = computed({
+		get: () => form.pdf_footer_text ?? "",
+		set: (v: string) => {
+			form.pdf_footer_text = v || null;
+		}
+	});
+
+	const headerEditor = ref<{ insertText: (t: string) => void } | null>(null);
+	const footerEditor = ref<{ insertText: (t: string) => void } | null>(null);
+	const tokenItems = (target: "header" | "footer") => [PDF_TOKENS.map((t) => ({
+		label: t.label,
+		onSelect: () => (target === "header" ? headerEditor : footerEditor).value?.insertText(t.token)
+	}))];
+
+	// Plain-text projection of the custom header for the paper mock. Marks are
+	// ignored — a faithful rich-text mock isn't worth the complexity when
+	// "Preview on PDF" renders the real thing.
+	const previewHeaderLines = computed(() =>
+		buildHeaderBlocks(previewSettings.value)
+			.map((b) => ("runs" in b ? b.runs.map((r) => r.text).join("") : ""))
+			.filter((s) => s.length > 0));
 
 	const invoicePreview = usePdfPreview({
 		command: "export_invoice_pdf",
 		buildPayload: () => sampleInvoicePayload(previewSettings.value, currency.value, form.pdf_template),
 		fileName: () => "sample-invoice.pdf",
 		title: "Invoice template preview"
-	});
-	const quotePreview = usePdfPreview({
-		command: "export_quote_pdf",
-		buildPayload: () => sampleQuotePayload(previewSettings.value, currency.value, form.pdf_template),
-		fileName: () => "sample-quote.pdf",
-		title: "Quote template preview"
-	});
-	const payslipPreview = usePdfPreview({
-		command: "export_payslip_pdf",
-		buildPayload: () => samplePayslipPayload(previewSettings.value, currency.value, form.pdf_template),
-		fileName: () => "sample-payslip.pdf",
-		title: "Payslip template preview"
 	});
 
 	// Same curated list the Appearance page used. The Typst template falls
@@ -637,6 +695,10 @@
 		form.pdf_theme_color = s.pdf_theme_color ?? s.theme_color ?? "green";
 		form.pdf_template = s.pdf_template || "classic";
 		form.pdf_logo_scale = s.pdf_logo_scale ?? 100;
+		form.pdf_header_custom = s.pdf_header_custom ?? 0;
+		form.pdf_header_text = s.pdf_header_text ?? null;
+		form.pdf_footer_custom = s.pdf_footer_custom ?? 0;
+		form.pdf_footer_text = s.pdf_footer_text ?? null;
 	};
 
 	await store.ensureLoaded();
@@ -656,7 +718,11 @@
 				pdf_font: form.pdf_font.trim() || "Akt",
 				pdf_theme_color: form.pdf_theme_color,
 				pdf_template: form.pdf_template,
-				pdf_logo_scale: form.pdf_logo_scale
+				pdf_logo_scale: form.pdf_logo_scale,
+				pdf_header_custom: form.pdf_header_custom,
+				pdf_header_text: form.pdf_header_text,
+				pdf_footer_custom: form.pdf_footer_custom,
+				pdf_footer_text: form.pdf_footer_text
 			});
 			refreshBaseline();
 			toast.add({ title: "PDF settings saved", color: "success", icon: "i-lucide-check" });
@@ -689,12 +755,6 @@
 	const pdfLogoInput = useTemplateRef<HTMLInputElement>("pdfLogoInput");
 	const pdfLogoDragOver = ref(false);
 	const pickPdfLogo = () => pdfLogoInput.value?.click();
-
-	const pdfLogoFileName = computed(() => {
-		const p = store.settings?.pdf_header_logo_path;
-		if (!p) return null;
-		return p.split(/[\\/]/).pop() ?? p;
-	});
 
 	// ---- crop flow (migration 0051) ------------------------------------
 	// Raster uploads keep the untouched original (pdf-header-original.<ext>)

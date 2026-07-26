@@ -106,6 +106,7 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(49, "payslip signatures", include_str!("../migrations/0049_payslip_signatures.sql")),
 	(50, "unified pdf template", include_str!("../migrations/0050_unified_pdf_template.sql")),
 	(51, "pdf logo controls", include_str!("../migrations/0051_pdf_logo_controls.sql")),
+	(52, "pdf header footer text", include_str!("../migrations/0052_pdf_header_footer_text.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
