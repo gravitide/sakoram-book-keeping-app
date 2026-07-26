@@ -3,30 +3,32 @@
 		<!-- select-none on the page root: static labels and copy aren't
 			selectable; form fields stay selectable via the input rule
 			in main.css. -->
-		<!-- Preview sits in the page header rather than on each card: header
-			logo, header/footer text and templates all want it, and they all
-			render through the same sample invoice. Deliberately NOT floating —
-			a sticky band's full-bleed edge never lines up with the padded
-			content column, and a bare floating pill reads as stray chrome. -->
-		<header class="mb-6 max-w-5xl mx-auto flex items-start justify-between gap-4">
-			<div>
-				<h1 class="text-2xl font-semibold">
-					PDF
-				</h1>
-				<p class="text-sm text-(--ui-text-muted)">
-					Font, colour, header logo, and templates for your generated PDFs.
-				</p>
-			</div>
+		<!-- Floating Preview. Page-level because header logo, header/footer text
+			and templates all want it, and all render through the same sample
+			invoice — one control beats a button on every card.
+			`h-0` keeps the wrapper out of the layout (the button overflows it) and
+			pointer-events are re-enabled only on the button, so it never blocks
+			the page beneath. Solid + shadow, with no surrounding panel: the
+			button is its own surface, and a wrapper card behind it just reads as
+			an unexplained dark box. -->
+		<div class="sticky top-3 z-20 h-0 max-w-5xl mx-auto flex justify-end pointer-events-none">
 			<UButton
 				icon="i-lucide-eye"
-				variant="soft"
-				size="md"
-				class="shrink-0"
+				class="pointer-events-auto shadow-lg"
 				:loading="invoicePreview.state.rendering"
 				@click="invoicePreview.open()"
 			>
 				Preview on PDF
 			</UButton>
+		</div>
+
+		<header class="mb-6 max-w-5xl mx-auto pr-44">
+			<h1 class="text-2xl font-semibold">
+				PDF
+			</h1>
+			<p class="text-sm text-(--ui-text-muted)">
+				Font, colour, header logo, and templates for your generated PDFs.
+			</p>
 		</header>
 
 		<UForm
