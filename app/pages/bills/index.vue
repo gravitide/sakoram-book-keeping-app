@@ -437,6 +437,7 @@
 	import { themeHex } from "~/lib/theme";
 	import { useBillCategoriesStore } from "~/stores/bill_categories";
 	import { useBillsStore } from "~/stores/bills";
+	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVendorsStore } from "~/stores/vendors";
 
@@ -448,6 +449,7 @@
 	const vendorsStore = useVendorsStore();
 	const categoriesStore = useBillCategoriesStore();
 	const settingsStore = useSettingsStore();
+	const license = useLicenseStore();
 	const currency = useActiveCurrency();
 
 	// Each row carries the derived `_paid` / `_balance` / `_status` from the
@@ -686,7 +688,8 @@
 				lines: currentLines.value,
 				settings: settingsStore.settings,
 				currency: currency.value,
-				paidCents: currentBill.value._paid
+				paidCents: currentBill.value._paid,
+				entitledToTemplates: license.hasFeature("pdf_templates")
 			});
 		},
 		fileName: () => `${currentBill.value?.number ?? "bill"}.pdf`,
@@ -820,7 +823,8 @@
 					lines: lineRows,
 					settings: settingsStore.settings,
 					currency: currency.value,
-					paidCents: row._paid
+					paidCents: row._paid,
+					entitledToTemplates: license.hasFeature("pdf_templates")
 				});
 
 				const outputPath = await join(folder, `${safeName(row.number)}.pdf`);

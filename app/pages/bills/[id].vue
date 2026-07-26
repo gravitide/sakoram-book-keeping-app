@@ -550,6 +550,7 @@
 	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
 	import { buildCategorySnapshot, useBillCategoriesStore } from "~/stores/bill_categories";
 	import { useBillsStore } from "~/stores/bills";
+	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVendorsStore } from "~/stores/vendors";
 	import { useVouchersStore } from "~/stores/vouchers";
@@ -562,6 +563,7 @@
 
 	const store = useBillsStore();
 	const settingsStore = useSettingsStore();
+	const license = useLicenseStore();
 	const categoriesStore = useBillCategoriesStore();
 	const vendorsStore = useVendorsStore();
 	const vouchersStore = useVouchersStore();
@@ -976,7 +978,8 @@
 			lines: lineRows,
 			settings: settingsStore.settings,
 			currency: currency.value,
-			paidCents: store.paidCentsFor(bill.value!.id)
+			paidCents: store.paidCentsFor(bill.value!.id),
+			entitledToTemplates: license.hasFeature("pdf_templates")
 		});
 
 	const linesForPreview = ref<BillLineRow[]>([]);
