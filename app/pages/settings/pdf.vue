@@ -31,55 +31,29 @@
 							subtitle="Used when rendering quotes, invoices, bills, and vouchers. Pick a bundled font for guaranteed availability — Typst falls back to Inter if it can't resolve your choice."
 						>
 							<UFormField label="Font family" name="pdf_font">
-								<UInput v-model="form.pdf_font" placeholder="e.g. Inter" />
+								<USelectMenu
+									v-model="form.pdf_font"
+									:items="fontOptions"
+									value-key="value"
+									label-key="label"
+									icon="i-lucide-type"
+									:search-input="{ placeholder: 'Search fonts…' }"
+								>
+									<template #item-label="{ item }">
+										<span :style="{ fontFamily: `'${item.value}', ${item.mono ? 'monospace' : 'sans-serif'}` }">
+											{{ item.label }}
+										</span>
+									</template>
+								</USelectMenu>
 							</UFormField>
-
-							<div>
-								<div class="text-xs text-(--ui-text-muted) mb-2">
-									Bundled fonts:
-								</div>
-								<div class="flex flex-wrap gap-2 mb-3">
-									<UButton
-										v-for="suggestion in bundledFonts"
-										:key="suggestion"
-										size="xs"
-										variant="soft"
-										color="primary"
-										:style="{ fontFamily: `'${suggestion}', sans-serif` }"
-										@click="form.pdf_font = suggestion"
-									>
-										{{ suggestion }}
-									</UButton>
-								</div>
-								<div class="text-xs text-(--ui-text-muted) mb-2 flex items-center gap-1.5">
-									<UIcon name="i-lucide-code" class="size-3.5" />
-									Monospaced:
-								</div>
-								<div class="flex flex-wrap gap-2">
-									<UButton
-										v-for="suggestion in bundledMonoFonts"
-										:key="suggestion"
-										size="xs"
-										variant="soft"
-										color="primary"
-										:style="{ fontFamily: `'${suggestion}', monospace` }"
-										@click="form.pdf_font = suggestion"
-									>
-										{{ suggestion }}
-									</UButton>
-								</div>
-							</div>
 
 							<div class="p-4 border border-(--ui-border) rounded-md bg-(--ui-bg-muted)">
 								<div class="text-xs text-(--ui-text-muted) uppercase tracking-wide mb-2">
-									Preview (the PDF pulls the same TTF, so it'll look identical)
+									Preview
 								</div>
-								<div :style="{ fontFamily: pdfPreviewFontStack }" class="space-y-1">
+								<div :style="{ fontFamily: pdfPreviewFontStack }">
 									<div class="text-2xl font-semibold">
 										INVOICE INV-2026-0042
-									</div>
-									<div class="text-sm tabular-nums">
-										Total: 12,345.00 — due 2026-06-15
 									</div>
 								</div>
 							</div>
@@ -368,7 +342,7 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
-	import { BUNDLED_MONO_NAMES, BUNDLED_SANS_NAMES } from "~/lib/fonts";
+	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
 	import { PDF_TEMPLATES } from "~/lib/pdf-templates";
 	import { sampleInvoicePayload, samplePayslipPayload, sampleQuotePayload } from "~/lib/sample-pdf";
 	import { THEME_COLORS, themeHex } from "~/lib/theme";
@@ -432,8 +406,34 @@
 	// any face installed on their machine, but only the bundled faces are
 	// guaranteed to render identically across machines. Iosevka Charon Mono
 	// is the bundled monospace (good for figure-aligned numbers).
-	const bundledFonts = BUNDLED_SANS_NAMES;
-	const bundledMonoFonts = BUNDLED_MONO_NAMES;
+	// Grouped options for the font dropdown. NuxtUI 4 renders an array of
+	// arrays as separate ComboboxGroups, and `type: "label"` rows as inert
+	// group headings (they're excluded from filtering and selection).
+	//
+	// A stored pdf_font that isn't bundled — from back when this was a
+	// free-text field — is preserved as its own "(custom)" group so that
+	// opening this page never silently rewrites someone's PDF typeface.
+	// Once they pick a bundled face, the custom row disappears.
+	const fontOptions = computed(() => {
+		const groups: Array<Array<Record<string, unknown>>> = [
+			[
+				{ type: "label", label: "Bundled" },
+				...BUNDLED_FONTS.filter((f) => !f.mono).map((f) => ({ label: f.name, value: f.name, mono: false }))
+			],
+			[
+				{ type: "label", label: "Monospaced" },
+				...BUNDLED_FONTS.filter((f) => f.mono).map((f) => ({ label: f.name, value: f.name, mono: true }))
+			]
+		];
+		const current = form.pdf_font;
+		if (current && !isBundledFont(current)) {
+			groups.push([
+				{ type: "label", label: "Not bundled" },
+				{ label: `${current} (custom)`, value: current, mono: false }
+			]);
+		}
+		return groups;
+	});
 
 	const pdfPreviewFontStack = computed(() =>
 		`'${form.pdf_font || "Akt"}', 'Akt', 'Inter', serif`
