@@ -22,7 +22,7 @@
 // Header: smaller logo / wordmark, thinner accent rule.
 #align(right)[
   #if data.logo_file != none {
-    image(data.logo_file, height: 9mm)
+    header-logo(data, 9mm)
   } else if data.business_name != none and data.business_name != "" {
     box(height: 9mm)[
       #set align(right + horizon)

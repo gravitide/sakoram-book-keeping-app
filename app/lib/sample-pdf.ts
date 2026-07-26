@@ -54,6 +54,7 @@ function base(settings: CompanySettingsRow | null, currency: SampleCurrency, tem
 		phone: settings?.phone ?? "+94 11 234 5678",
 		address_line1: settings?.address_line1 ?? "42 Galle Road",
 		city: settings?.city ?? "Colombo",
+		logo_scale: settings?.pdf_logo_scale ?? 100,
 		logo_path: settings?.pdf_header_logo_path ?? null,
 		bank: {
 			bank_account_number: "0011 2233 4455",
@@ -150,6 +151,7 @@ export function samplePayslipPayload(settings: CompanySettingsRow | null, curren
 		phone: settings?.phone ?? "+94 11 234 5678",
 		address_line1: settings?.address_line1 ?? "42 Galle Road",
 		city: settings?.city ?? "Colombo",
+		logo_scale: settings?.pdf_logo_scale ?? 100,
 		logo_path: settings?.pdf_header_logo_path ?? null
 	};
 }

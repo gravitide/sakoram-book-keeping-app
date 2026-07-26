@@ -258,6 +258,7 @@ export const buildCustomerStatementPdfPayload = (
 		business_phone: input.settings?.phone ?? null,
 		website: input.settings?.website ?? null,
 		phone: input.settings?.phone ?? null,
+		logo_scale: input.settings?.pdf_logo_scale ?? 100,
 		logo_path: input.settings?.pdf_header_logo_path ?? null,
 		theme_color: pdfThemeHex(input.settings),
 		font_family: input.settings?.pdf_font ?? null,

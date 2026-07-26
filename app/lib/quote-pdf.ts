@@ -92,6 +92,7 @@ export const buildQuotePdfPayload = ({ row: q, lines, settings, currency, entitl
 		phone: settings?.phone ?? null,
 		address_line1: settings?.address_line1 ?? null,
 		city: settings?.city ?? null,
+		logo_scale: settings?.pdf_logo_scale ?? 100,
 		logo_path: settings?.pdf_header_logo_path ?? null,
 		// Bank block is opt-in per quote (migration 0046). Off → no payment
 		// details on the PDF regardless of which bank was snapshotted.

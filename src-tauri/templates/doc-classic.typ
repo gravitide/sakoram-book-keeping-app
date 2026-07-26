@@ -23,7 +23,7 @@
 // Header: logo top-right (or business-name wordmark), red rule below.
 #align(right)[
   #if data.logo_file != none {
-    image(data.logo_file, height: 12mm)
+    header-logo(data, 12mm)
   } else if data.business_name != none and data.business_name != "" {
     box(height: 12mm)[
       #set align(right + horizon)

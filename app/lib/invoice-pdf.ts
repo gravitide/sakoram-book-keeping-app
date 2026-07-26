@@ -96,6 +96,7 @@ export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, pa
 		phone: settings?.phone ?? null,
 		address_line1: settings?.address_line1 ?? null,
 		city: settings?.city ?? null,
+		logo_scale: settings?.pdf_logo_scale ?? 100,
 		logo_path: settings?.pdf_header_logo_path ?? null,
 		bank,
 		lines: lines.map((l) => ({

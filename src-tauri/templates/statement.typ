@@ -10,6 +10,8 @@
 // `logo.<ext>`. Both are read relative to the project root which Rust
 // sets to that working dir.
 
+#import "common.typ": header-logo
+
 #let data = json("data.json")
 
 #set document(title: data.title, author: data.business_name)
@@ -60,7 +62,7 @@
 // ============================================================
 #align(right)[
   #if data.logo_file != none {
-    image(data.logo_file, height: 12mm)
+    header-logo(data, 12mm)
   } else if data.business_name != none and data.business_name != "" {
     box(height: 12mm)[
       #set align(right + horizon)

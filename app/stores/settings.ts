@@ -89,6 +89,11 @@ export interface CompanySettingsRow {
 	// by (employee)"). 0/1, defaults 0. Read by app/lib/payslip-pdf.ts and
 	// rendered by src-tauri/templates/payslip.typ.
 	payslip_show_signatures: number
+	// Header-logo controls (migration 0051). Scale is integer percent
+	// (50..150) applied to each template's baseline logo height; crop is the
+	// last crop rect JSON {x,y,w,h} in source px, null for SVG / uncropped.
+	pdf_logo_scale: number
+	pdf_logo_crop: string | null
 	updated_at: string
 }
 
@@ -140,7 +145,9 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"pdf_protect_payslip",
 	"letter_preprinted_top_margin_mm",
 	"letter_preprinted_bottom_margin_mm",
-	"payslip_show_signatures"
+	"payslip_show_signatures",
+	"pdf_logo_scale",
+	"pdf_logo_crop"
 ];
 
 export const useSettingsStore = defineStore("settings", () => {

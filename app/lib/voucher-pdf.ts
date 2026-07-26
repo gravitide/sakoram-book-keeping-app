@@ -72,6 +72,7 @@ export const buildVoucherPdfPayload = ({ row: v, settings, currency, relatedLabe
 		business_name: settings?.business_name ?? null,
 		website: settings?.website ?? null,
 		phone: settings?.phone ?? null,
+		logo_scale: settings?.pdf_logo_scale ?? 100,
 		logo_path: settings?.pdf_header_logo_path ?? null
 	};
 };
