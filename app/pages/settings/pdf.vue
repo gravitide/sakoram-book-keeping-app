@@ -3,13 +3,30 @@
 		<!-- select-none on the page root: static labels and copy aren't
 			selectable; form fields stay selectable via the input rule
 			in main.css. -->
-		<header class="mb-6 max-w-5xl mx-auto">
-			<h1 class="text-2xl font-semibold">
-				PDF
-			</h1>
-			<p class="text-sm text-(--ui-text-muted)">
-				Font, colour, header logo, and templates for your generated PDFs.
-			</p>
+		<!-- Sticky so Preview stays reachable from every section: header logo,
+			header/footer text and templates all want it, and they all render
+			through the same sample document. One page-level control beats a
+			preview button on each card. -->
+		<header class="sticky top-0 z-10 -mt-4 pt-4 pb-4 mb-2 backdrop-blur-md bg-(--ui-bg)/80">
+			<div class="max-w-5xl mx-auto flex items-start justify-between gap-4">
+				<div>
+					<h1 class="text-2xl font-semibold">
+						PDF
+					</h1>
+					<p class="text-sm text-(--ui-text-muted)">
+						Font, colour, header logo, and templates for your generated PDFs.
+					</p>
+				</div>
+				<UButton
+					icon="i-lucide-eye"
+					size="md"
+					class="shrink-0 shadow-md shadow-(--ui-primary)/25"
+					:loading="invoicePreview.state.rendering"
+					@click="invoicePreview.open()"
+				>
+					Preview on PDF
+				</UButton>
+			</div>
 		</header>
 
 		<UForm
@@ -411,40 +428,21 @@
 				Only appears when textarea contents differ from the loaded
 				settings; logo upload/remove writes immediately so the user
 				doesn't have to chase a save button afterwards. -->
-			<div class="sticky bottom-0 -mx-2 mt-6">
+			<div
+				class="sticky bottom-0 -mx-2 mt-6 transition-all duration-200"
+				:class="dirty
+					? 'opacity-100 translate-y-0 pointer-events-auto'
+					: 'opacity-0 translate-y-3 pointer-events-none'"
+			>
 				<div class="rounded-xl backdrop-blur-md bg-(--ui-bg)/90 border border-(--ui-border) shadow-lg px-4 py-3 flex items-center justify-between gap-4">
-					<!-- Preview lives here rather than on each card: header logo,
-						header/footer text and templates all want it, and they all
-						render through the same sample document. One page-level
-						action bar beats four scattered buttons plus a second
-						floating layer fighting this one for the same corner. -->
-					<div class="flex items-center gap-3">
-						<UDropdownMenu :items="previewItems">
-							<UButton
-								variant="soft"
-								color="neutral"
-								icon="i-lucide-eye"
-								trailing-icon="i-lucide-chevron-up"
-								:loading="anyPreviewRendering"
-							>
-								Preview on PDF
-							</UButton>
-						</UDropdownMenu>
-						<div
-							class="flex items-center gap-2 text-sm transition-opacity duration-200"
-							:class="dirty ? 'opacity-100' : 'opacity-0'"
-						>
-							<span class="relative flex size-2">
-								<span class="absolute inline-flex h-full w-full rounded-full bg-(--ui-warning) opacity-75 animate-ping" />
-								<span class="relative inline-flex size-2 rounded-full bg-(--ui-warning)" />
-							</span>
-							<span class="text-(--ui-text)">Unsaved changes</span>
-						</div>
+					<div class="flex items-center gap-2 text-sm">
+						<span class="relative flex size-2">
+							<span class="absolute inline-flex h-full w-full rounded-full bg-(--ui-warning) opacity-75 animate-ping" />
+							<span class="relative inline-flex size-2 rounded-full bg-(--ui-warning)" />
+						</span>
+						<span class="text-(--ui-text)">Unsaved changes</span>
 					</div>
-					<div
-						class="flex items-center gap-2 transition-all duration-200"
-						:class="dirty ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'"
-					>
+					<div class="flex items-center gap-2">
 						<UButton
 							variant="ghost"
 							color="neutral"
@@ -476,26 +474,6 @@
 			@save="invoicePreview.onSave"
 			@cancel="invoicePreview.onCancel"
 		/>
-		<PdfPreviewModal
-			v-model:open="quotePreview.state.open"
-			:asset-url="quotePreview.state.assetUrl"
-			:temp-path="quotePreview.state.tempPath"
-			:suggested-file-name="quotePreview.state.suggestedFileName"
-			:saving="quotePreview.state.saving"
-			title="Quote template preview"
-			@save="quotePreview.onSave"
-			@cancel="quotePreview.onCancel"
-		/>
-		<PdfPreviewModal
-			v-model:open="payslipPreview.state.open"
-			:asset-url="payslipPreview.state.assetUrl"
-			:temp-path="payslipPreview.state.tempPath"
-			:suggested-file-name="payslipPreview.state.suggestedFileName"
-			:saving="payslipPreview.state.saving"
-			title="Payslip template preview"
-			@save="payslipPreview.onSave"
-			@cancel="payslipPreview.onCancel"
-		/>
 		<ImageCropModal
 			v-model:open="cropOpen"
 			:image-blob="cropBlob"
@@ -517,7 +495,7 @@
 	import { buildHeaderBlocks } from "~/lib/pdf-chrome";
 	import { PDF_TEMPLATES } from "~/lib/pdf-templates";
 	import { PDF_TOKENS } from "~/lib/pdf-tokens";
-	import { sampleInvoicePayload, samplePayslipPayload, sampleQuotePayload } from "~/lib/sample-pdf";
+	import { sampleInvoicePayload } from "~/lib/sample-pdf";
 	import { THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
@@ -663,29 +641,6 @@
 		fileName: () => "sample-invoice.pdf",
 		title: "Invoice template preview"
 	});
-	const quotePreview = usePdfPreview({
-		command: "export_quote_pdf",
-		buildPayload: () => sampleQuotePayload(previewSettings.value, currency.value, form.pdf_template),
-		fileName: () => "sample-quote.pdf",
-		title: "Quote template preview"
-	});
-	const payslipPreview = usePdfPreview({
-		command: "export_payslip_pdf",
-		buildPayload: () => samplePayslipPayload(previewSettings.value, currency.value, form.pdf_template),
-		fileName: () => "sample-payslip.pdf",
-		title: "Payslip template preview"
-	});
-
-	// Single preview entry point for the whole page (sticky action bar) —
-	// header logo, header/footer text and templates all want it, and they all
-	// render through the same sample document.
-	const previewItems = computed(() => [[
-		{ label: "Invoice", icon: "i-lucide-file-text", onSelect: () => invoicePreview.open() },
-		{ label: "Quote", icon: "i-lucide-file-check", onSelect: () => quotePreview.open() },
-		{ label: "Payslip", icon: "i-lucide-receipt", onSelect: () => payslipPreview.open() }
-	]]);
-	const anyPreviewRendering = computed(() =>
-		invoicePreview.state.rendering || quotePreview.state.rendering || payslipPreview.state.rendering);
 
 	// Same curated list the Appearance page used. The Typst template falls
 	// through these for any missing glyph; free-text input lets the user pick
