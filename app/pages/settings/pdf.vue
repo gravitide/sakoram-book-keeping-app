@@ -119,8 +119,8 @@
 								class="group relative h-28 w-full rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition cursor-pointer"
 								:class="[
 									pdfLogoDragOver
-										? 'border-(--ui-primary) bg-(--ui-primary)/5 scale-[1.01]'
-										: 'border-(--ui-border-accented) bg-(--ui-bg-muted) hover:border-(--ui-primary)/60'
+										? 'border-(--ui-primary) bg-white scale-[1.01]'
+										: 'border-(--ui-border-accented) bg-white hover:border-(--ui-primary)/60'
 								]"
 								role="button"
 								tabindex="0"
@@ -146,7 +146,10 @@
 									alt="PDF header logo"
 									class="max-w-full max-h-full object-contain p-3"
 								>
-								<div v-else class="flex flex-col items-center gap-1 text-(--ui-text-muted)">
+								<!-- Fixed zinc hint: the tile is white in both themes (it
+									previews against the PDF's actual background), so the
+									theme-reactive muted token would vanish in dark mode. -->
+								<div v-else class="flex flex-col items-center gap-1 text-zinc-400">
 									<UIcon name="i-lucide-image-up" class="size-7" />
 									<div class="text-[10px] uppercase tracking-wider">
 										Drop wide logo
@@ -164,17 +167,7 @@
 							</div>
 							<div class="flex flex-wrap items-center gap-2">
 								<UButton
-									v-if="store.settings?.pdf_header_logo_path"
-									icon="i-lucide-trash-2"
-									size="xs"
-									variant="ghost"
-									color="neutral"
-									@click="removePdfLogo"
-								>
-									Remove
-								</UButton>
-								<UButton
-									v-else
+									v-if="!store.settings?.pdf_header_logo_path"
 									icon="i-lucide-upload"
 									size="xs"
 									variant="soft"
@@ -182,9 +175,53 @@
 								>
 									Upload header
 								</UButton>
+								<template v-else>
+									<UButton icon="i-lucide-upload" size="xs" variant="soft" @click="pickPdfLogo">
+										Replace
+									</UButton>
+									<UButton
+										v-if="!isSvgLogo"
+										icon="i-lucide-crop"
+										size="xs"
+										variant="soft"
+										color="neutral"
+										@click="openRecrop"
+									>
+										Re-crop
+									</UButton>
+									<UButton
+										icon="i-lucide-eye"
+										size="xs"
+										variant="soft"
+										color="neutral"
+										:loading="invoicePreview.state.rendering"
+										@click="invoicePreview.open()"
+									>
+										Preview on PDF
+									</UButton>
+									<UButton
+										icon="i-lucide-trash-2"
+										size="xs"
+										variant="ghost"
+										color="neutral"
+										@click="removePdfLogo"
+									>
+										Remove
+									</UButton>
+								</template>
 								<span v-if="pdfLogoFileName" class="text-xs text-(--ui-text-muted) truncate">
 									{{ pdfLogoFileName }}
 								</span>
+							</div>
+
+							<div class="max-w-md">
+								<div class="flex items-baseline justify-between mb-1.5">
+									<span class="text-sm font-medium">Logo size</span>
+									<span class="text-xs text-(--ui-text-muted) tabular-nums">
+										{{ form.pdf_logo_scale }}% — classic prints ≈ {{ (12 * form.pdf_logo_scale / 100).toFixed(1) }}mm tall
+									</span>
+								</div>
+								<USlider v-model="form.pdf_logo_scale" :min="50" :max="150" :step="5" />
 							</div>
 						</div>
 					</SectionCard>
@@ -361,10 +398,19 @@
 			@save="payslipPreview.onSave"
 			@cancel="payslipPreview.onCancel"
 		/>
+		<ImageCropModal
+			v-model:open="cropOpen"
+			:image-blob="cropBlob"
+			:initial-rect="cropInitial"
+			:source-note="cropSourceNote"
+			@cropped="onCropped"
+			@cancel="onCropCancel"
+		/>
 	</div>
 </template>
 
 <script setup lang="ts">
+	import type { CropRect } from "~/lib/crop-rect";
 	import type { SettingsUpdate } from "~/stores/settings";
 	import { invoke } from "@tauri-apps/api/core";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
@@ -386,13 +432,14 @@
 	// Only the PDF-flavoured fields live on this page. Logo paths are kept on
 	// the form so dirty-tracking can spot a removal/upload that would otherwise
 	// only mutate the store. (Document protection moved to /settings/security.)
-	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_theme_color" | "pdf_template">;
+	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_theme_color" | "pdf_template" | "pdf_logo_scale">;
 
 	const form = reactive<PdfForm>({
 		pdf_header_logo_path: null,
 		pdf_font: "Akt",
 		pdf_theme_color: "green",
-		pdf_template: "classic"
+		pdf_template: "classic",
+		pdf_logo_scale: 100
 	});
 
 	// PDF templates are a Plus feature. Basic users see the pickers but can
@@ -475,6 +522,7 @@
 		// split (0039 seeds it, but a defensive fallback keeps a null safe).
 		form.pdf_theme_color = s.pdf_theme_color ?? s.theme_color ?? "green";
 		form.pdf_template = s.pdf_template || "classic";
+		form.pdf_logo_scale = s.pdf_logo_scale ?? 100;
 	};
 
 	await store.ensureLoaded();
@@ -493,7 +541,8 @@
 			await store.save({
 				pdf_font: form.pdf_font.trim() || "Akt",
 				pdf_theme_color: form.pdf_theme_color,
-				pdf_template: form.pdf_template
+				pdf_template: form.pdf_template,
+				pdf_logo_scale: form.pdf_logo_scale
 			});
 			refreshBaseline();
 			toast.add({ title: "PDF settings saved", color: "success", icon: "i-lucide-check" });
@@ -533,6 +582,52 @@
 		return p.split(/[\\/]/).pop() ?? p;
 	});
 
+	// ---- crop flow (migration 0051) ------------------------------------
+	// Raster uploads keep the untouched original (pdf-header-original.<ext>)
+	// and open the crop modal; the crop writes the pdf-header.<ext>
+	// derivative the PDFs render. SVG bypasses cropping entirely — it would
+	// rasterise a vector exactly where sharpness matters most (print).
+	const cropOpen = ref(false);
+	const cropBlob = ref<Blob | null>(null);
+	const cropInitial = ref<CropRect | null>(null);
+	const cropSourceNote = ref<string | undefined>(undefined);
+	// Extension of the source being cropped; the derivative is always PNG.
+	const cropExt = ref("png");
+	// True while the open crop modal belongs to a just-uploaded file (as
+	// opposed to a Re-crop of an existing logo).
+	const freshUpload = ref(false);
+
+	const isSvgLogo = computed(() =>
+		(store.settings?.pdf_header_logo_path ?? "").toLowerCase().endsWith(".svg"));
+
+	const parseCropRect = (json: string | null): CropRect | null => {
+		if (!json) return null;
+		try {
+			const r = JSON.parse(json) as CropRect;
+			return Number.isFinite(r.x) && Number.isFinite(r.y) && r.w > 0 && r.h > 0 ? r : null;
+		} catch {
+			return null;
+		}
+	};
+
+	// Save the derivative the PDFs render. The wide letterhead lives at the
+	// business-folder root as pdf-header.<ext>, written by the Rust
+	// `save_business_asset` command (std::fs, unscoped) so it works on any
+	// drive the folder lives on.
+	const saveDerivative = async (bytes: number[], ext: string, cropJson: string | null) => {
+		const tenantId = tenants.activeTenantId;
+		if (!tenantId) return;
+		const target = await invoke<string>("save_business_asset", {
+			id: tenantId,
+			kind: "pdf-header",
+			ext,
+			bytes
+		});
+		await store.save({ pdf_header_logo_path: target, pdf_logo_crop: cropJson });
+		form.pdf_header_logo_path = target;
+		refreshBaseline();
+	};
+
 	const uploadPdfLogo = async (file: File) => {
 		const tenantId = tenants.activeTenantId;
 		if (!tenantId) {
@@ -543,22 +638,93 @@
 		try {
 			const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
 			const ext = (file.name.split(".").pop() ?? "png").toLowerCase();
-			// The wide letterhead lives at the business-folder root as
-			// pdf-header.<ext>. Written by the Rust `save_business_asset` command
-			// (std::fs, unscoped) so it works on any drive the folder lives on.
-			const target = await invoke<string>("save_business_asset", {
+
+			if (ext === "svg") {
+				// Vector: save straight through — cropping would rasterise it.
+				await saveDerivative(bytes, ext, null);
+				toast.add({ title: "PDF header updated", color: "success", icon: "i-lucide-check" });
+				return;
+			}
+
+			// Raster: keep the untouched original, then offer the crop.
+			await invoke<string>("save_business_asset", {
 				id: tenantId,
-				kind: "pdf-header",
+				kind: "pdf-header-original",
 				ext,
 				bytes
 			});
-			await store.save({ pdf_header_logo_path: target });
-			form.pdf_header_logo_path = target;
-			refreshBaseline();
-			toast.add({ title: "PDF header updated", color: "success", icon: "i-lucide-check" });
+			cropExt.value = ext;
+			cropBlob.value = new Blob([new Uint8Array(bytes)], { type: file.type || "image/png" });
+			cropInitial.value = null;
+			cropSourceNote.value = undefined;
+			freshUpload.value = true;
+			cropOpen.value = true;
 		} catch (err) {
 			toast.add({
 				title: "PDF header upload failed",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	const onCropped = async (rect: CropRect, blob: Blob) => {
+		try {
+			const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
+			await saveDerivative(bytes, "png", JSON.stringify(rect));
+			toast.add({ title: "PDF header updated", color: "success", icon: "i-lucide-check" });
+		} catch (err) {
+			toast.add({
+				title: "Crop failed",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	const onCropCancel = async () => {
+		// Only a FRESH upload needs the fallback save — the file must not be
+		// lost just because the user skipped cropping. Cancelling a re-crop
+		// leaves the existing derivative alone.
+		if (!cropBlob.value || !freshUpload.value) return;
+		try {
+			const bytes = Array.from(new Uint8Array(await cropBlob.value.arrayBuffer()));
+			await saveDerivative(bytes, cropExt.value, null);
+			toast.add({ title: "PDF header saved (uncropped)", color: "info", icon: "i-lucide-check" });
+		} catch (err) {
+			toast.add({
+				title: "PDF header upload failed",
+				description: err instanceof Error ? err.message : String(err),
+				color: "error",
+				icon: "i-lucide-circle-alert"
+			});
+		}
+	};
+
+	const openRecrop = async () => {
+		const tenantId = tenants.activeTenantId;
+		if (!tenantId) return;
+		freshUpload.value = false;
+		try {
+			let ext = "png";
+			let bytes: number[] = [];
+			try {
+				[ext, bytes] = await invoke<[string, number[]]>("read_business_asset", { id: tenantId, kind: "pdf-header-original" });
+				cropSourceNote.value = undefined;
+			} catch {
+				// Original missing (pre-feature upload): crop the derivative itself.
+				[ext, bytes] = await invoke<[string, number[]]>("read_business_asset", { id: tenantId, kind: "pdf-header" });
+				cropSourceNote.value = "Original file not found — cropping the current header image instead.";
+			}
+			cropExt.value = ext;
+			cropBlob.value = new Blob([new Uint8Array(bytes)], { type: `image/${ext === "jpg" ? "jpeg" : ext}` });
+			cropInitial.value = cropSourceNote.value ? null : parseCropRect(store.settings?.pdf_logo_crop ?? null);
+			cropOpen.value = true;
+		} catch (err) {
+			toast.add({
+				title: "Couldn't open crop",
 				description: err instanceof Error ? err.message : String(err),
 				color: "error",
 				icon: "i-lucide-circle-alert"
@@ -589,7 +755,7 @@
 	};
 
 	const removePdfLogo = async () => {
-		await store.save({ pdf_header_logo_path: null });
+		await store.save({ pdf_header_logo_path: null, pdf_logo_crop: null });
 		form.pdf_header_logo_path = null;
 		refreshBaseline();
 		toast.add({ title: "PDF header removed", color: "info", icon: "i-lucide-image-off" });
