@@ -124,10 +124,20 @@ export function resolvePrimary(value: string | null | undefined): PrimaryPlan {
  *
  * A named preset goes through `appConfig.ui.colors.primary`, which is what
  * NuxtUI is designed for. A hex instead writes the synthesised ramp as inline
- * styles on <html> — inline beats NuxtUI's `:root` block, and `--ui-primary`
- * re-derives from it automatically, so light and dark both work with no
- * extra branch. Switching back to a preset must clear the overrides or they
- * would keep winning.
+ * styles on <html>, and `--ui-primary` re-derives from it automatically, so
+ * light and dark both work with no extra branch. Switching back to a preset
+ * must clear the overrides or they would keep winning.
+ *
+ * The ramp is written as `!important`. Inline declarations already outrank any
+ * selector, but a plain one still loses to an `!important` in NuxtUI's own
+ * `:root` block — which it doesn't use today, but which a future release could
+ * add, silently killing every custom colour. Inline + important is the top of
+ * the author cascade, so that can't happen.
+ *
+ * The remaining exposure is NuxtUI *renaming* these variables: our writes would
+ * become no-ops nobody reads and the accent would quietly stay on the last
+ * preset. `!important` can't help there, so `assertRampApplied` makes it loud
+ * in development instead of silent.
  */
 export function applyPrimaryColor(
 	appConfig: { ui: { colors: { primary: string } } },
@@ -136,9 +146,34 @@ export function applyPrimaryColor(
 	const root = document.documentElement;
 	const plan = resolvePrimary(value);
 	if (plan.kind === "custom") {
-		for (const shade of SHADES) root.style.setProperty(`--ui-color-primary-${shade}`, plan.ramp[shade]!);
+		for (const shade of SHADES) {
+			root.style.setProperty(`--ui-color-primary-${shade}`, plan.ramp[shade]!, "important");
+		}
+		assertRampApplied(root, plan.ramp);
 		return;
 	}
 	for (const shade of SHADES) root.style.removeProperty(`--ui-color-primary-${shade}`);
 	if (plan.kind === "named") appConfig.ui.colors.primary = plan.name;
+}
+
+/**
+ * Dev-only contract check: after writing the ramp, `--ui-primary` should
+ * resolve to one of the values we just wrote (shade 500 in light, 400 in dark).
+ * If it doesn't, NuxtUI has stopped deriving its accent from
+ * `--ui-color-primary-*` and custom colours are silently dead.
+ *
+ * Warn rather than fall back to a preset: if this fires we don't know what the
+ * right colour is, and silently replacing the user's choice is worse than
+ * leaving the degraded-but-sane accent in place.
+ */
+function assertRampApplied(root: HTMLElement, ramp: Record<number, string>): void {
+	if (!import.meta.dev) return;
+	const applied = getComputedStyle(root).getPropertyValue("--ui-primary").trim();
+	if (applied && Object.values(ramp).includes(applied)) return;
+	console.warn(
+		"[color-ramp] Custom accent did not take effect: --ui-primary resolved to "
+		+ `"${applied}", which is not part of the ramp just written. NuxtUI has `
+		+ "probably changed how it derives the primary colour from "
+		+ "--ui-color-primary-*. See app/lib/color-ramp.ts."
+	);
 }

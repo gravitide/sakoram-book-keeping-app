@@ -873,6 +873,23 @@ shared family name and selects the right one for each weight request.
 | Amarna | Regular / Bold | OFL. Decorative-leaning sans. |
 | Geomini | Regular / Medium / Bold | OFL. Geometric sans (fontbob, added to Google Fonts 2026-05). **Its variable default is ExtraLight (wght 200), not 400** — the JOBS entry pins each weight explicitly, so don't "simplify" it to rely on axis defaults. |
 
+**Licensing.** Every bundled family is **SIL OFL 1.1**, which requires the
+copyright notice and licence to accompany the fonts in *all* copies —
+redistribution triggers it, not sale, so shipping them in a free app does
+not exempt us. Two artefacts satisfy that and must stay in sync with the
+font set:
+
+- `src-tauri/fonts/OFL.txt` — all ten copyright blocks + the full licence
+  body. Bundled automatically by the `fonts/*` resources glob.
+- `app/lib/font-licences.ts` — the same attribution, structured, rendered
+  under **About → Fonts & licences**. Values are transcribed from each
+  TTF's own name table (IDs 0 / 9 / 11), which is authoritative for the
+  exact cut we ship.
+
+`font-licences.test.ts` fails if `FONT_LICENCES` and `BUNDLED_FONTS` drift
+in either direction — bundling a font without attribution is a compliance
+failure *and* a silent one, so it has to break the build.
+
 The statics are generated from upstream variable files via
 `scripts/instance-fonts.py` (run with `uv run scripts/instance-fonts.py`
 — the script's PEP 723 header resolves fontTools into an ephemeral env,
@@ -1024,10 +1041,22 @@ across every page:
     taking only the input's hue and chroma and forcing Tailwind's
     lightness curve, so a near-white or near-black pick still lands at a
     readable 500 lightness — and writes them as **inline styles on
-    `<html>`**, which outrank NuxtUI's `:root` block. `--ui-primary`
-    re-derives automatically, so light and dark both work with no extra
-    branch. Switching back to a preset must clear those inline
-    properties or they keep winning.
+    `<html>`, with `!important`**. Inline already outranks any selector,
+    but a plain declaration still loses to an `!important` in NuxtUI's
+    own `:root` block; NuxtUI doesn't use one today, but a future release
+    could, which would silently kill every custom colour. Inline +
+    important is the top of the author cascade, so it can't.
+    `--ui-primary` re-derives automatically, so light and dark both work
+    with no extra branch. Switching back to a preset must clear those
+    inline properties or they keep winning (`removeProperty` clears them
+    regardless of priority).
+  - The residual risk is NuxtUI **renaming** these variables: our writes
+    would become no-ops nobody reads and the accent would quietly stay on
+    the last preset. `!important` can't help, so `assertRampApplied()`
+    reads `--ui-primary` back after applying and `console.warn`s when it
+    isn't one of the values just written — dev-only (`import.meta.dev`),
+    and deliberately does NOT auto-revert, because if it fires we don't
+    know what the right colour is.
 
   Note `bg-primary` compiles to `--color-primary`, which tracks shade
   **500** in both modes, while `--ui-primary` tracks 400 in dark. Both
