@@ -37,6 +37,7 @@
 									value-key="value"
 									label-key="label"
 									icon="i-lucide-type"
+									class="w-full"
 									:search-input="{ placeholder: 'Search fonts…' }"
 								>
 									<template #item-label="{ item }">
@@ -51,9 +52,18 @@
 								<div class="text-xs text-(--ui-text-muted) uppercase tracking-wide mb-2">
 									Preview
 								</div>
-								<div :style="{ fontFamily: pdfPreviewFontStack }">
+								<!-- Heading, body prose, and a figures row — the three things a
+									document font has to get right. Figures use tabular-nums
+									because money columns have to align in the PDF. -->
+								<div :style="{ fontFamily: pdfPreviewFontStack }" class="space-y-1.5">
 									<div class="text-2xl font-semibold">
 										INVOICE INV-2026-0042
+									</div>
+									<div class="text-sm">
+										Payment is due within 30 days of the invoice date.
+									</div>
+									<div class="text-sm tabular-nums">
+										Subtotal 10,500.00 · VAT 1,845.00 · Total 12,345.00
 									</div>
 								</div>
 							</div>
