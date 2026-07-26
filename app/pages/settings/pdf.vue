@@ -245,30 +245,26 @@
 									</UButton>
 								</div>
 							</div>
-							<div class="space-y-2">
+							<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
 								<button
 									v-for="t in TEMPLATES"
 									:key="t.key"
 									type="button"
 									:disabled="!canPick(t.key)"
-									class="w-full text-left p-3 rounded-md border transition flex items-center gap-3"
+									:title="t.description"
+									class="p-2 rounded-md border text-left transition"
 									:class="[
 										form.pdf_template === t.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)',
 										canPick(t.key) ? 'cursor-pointer hover:border-(--ui-primary)/50' : 'opacity-50 cursor-not-allowed'
 									]"
 									@click="form.pdf_template = t.key"
 								>
-									<div class="w-11 shrink-0 rounded-sm overflow-hidden ring-1 ring-(--ui-border)">
+									<div class="rounded-sm overflow-hidden ring-1 ring-(--ui-border) mb-1.5">
 										<PdfTemplateThumb :template-key="t.key" :color="themeColor" />
 									</div>
-									<div class="min-w-0">
-										<div class="text-sm font-medium flex items-center gap-1.5">
-											{{ t.label }}
-											<UIcon v-if="!canPick(t.key)" name="i-lucide-lock" class="size-3 text-(--ui-text-muted)" />
-										</div>
-										<div class="text-xs text-(--ui-text-muted) mt-0.5">
-											{{ t.description }}
-										</div>
+									<div class="text-xs font-medium flex items-center gap-1">
+										{{ t.label }}
+										<UIcon v-if="!canPick(t.key)" name="i-lucide-lock" class="size-3 text-(--ui-text-muted)" />
 									</div>
 								</button>
 							</div>
