@@ -133,20 +133,28 @@
 							<span class="text-xs text-(--ui-text-muted)">Editable until issued</span>
 						</div>
 					</template>
-					<!-- Two-across until xl, not md. These fields live in the
-						lg:col-span-2 column, so a viewport breakpoint overstates the
-						room actually available: measured at a 1026px viewport the
-						column is 484px, which left three-across at 135px per field —
-						too tight for `31 / 01 / 2026` plus its calendar button.
-						sm:2 / xl:3 gives 210px at lg and 191px at xl. -->
-					<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-						<UFormField label="Period start">
-							<DateField v-model="form.period_start" :disabled="locked" />
-						</UFormField>
-						<UFormField label="Period end">
-							<DateField v-model="form.period_end" :disabled="locked" />
-						</UFormField>
-						<UFormField label="Pay date">
+					<!-- Grouped, not evenly distributed: period start + end are ONE
+						concept (a range), so they sit tight together at gap-4 and wrap
+						as a unit. Pay date is independent — a wider gap-x-8 separates
+						it, and it drops to its own row when the column can't take all
+						three. It usually can't: inside the card the lg:col-span-2
+						column measures 436px against the 543px three-across needs, so
+						pay date wraps at lg and rejoins the row at 2xl.
+
+						Sized to content (w-fit) rather than to a share of the row, so
+						the fields don't stretch into the even three-way split this
+						replaces. Safe because tauri.conf pins minWidth to 1024, so the
+						column never drops near the ~165px a field actually needs. -->
+					<div class="flex flex-wrap items-start gap-x-8 gap-y-4">
+						<div class="flex flex-wrap items-start gap-4">
+							<UFormField label="Period start" class="w-fit shrink-0">
+								<DateField v-model="form.period_start" :disabled="locked" />
+							</UFormField>
+							<UFormField label="Period end" class="w-fit shrink-0">
+								<DateField v-model="form.period_end" :disabled="locked" />
+							</UFormField>
+						</div>
+						<UFormField label="Pay date" class="w-fit shrink-0">
 							<DateField v-model="form.pay_date" :disabled="locked" />
 						</UFormField>
 					</div>
