@@ -40,8 +40,10 @@ export interface CompanySettingsRow {
 	// Per-document-type client-facing PDF template keys (classic | modern |
 	// minimal | compact | letterhead). See app/lib/pdf-templates.ts. A Plus
 	// feature — rendering forces 'classic' when not entitled.
-	pdf_template_invoice: string
-	pdf_template_quote: string
+	// One selectable layout for every doc-family PDF (quote / invoice / bill /
+	// payslip). One of the keys in app/lib/pdf-templates.ts; unknown values
+	// fall back to "classic" in both the JS resolver and the Rust registry.
+	pdf_template: string
 	theme_color: string
 	// PDF accent colour — split from the UI theme_color (migration 0039) so a
 	// business can run a different colour on its generated PDFs than in the
@@ -116,8 +118,7 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"currency_symbol_override",
 	"ui_font",
 	"pdf_font",
-	"pdf_template_invoice",
-	"pdf_template_quote",
+	"pdf_template",
 	"theme_color",
 	"pdf_theme_color",
 	"payroll_period_start_day",

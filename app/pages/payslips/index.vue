@@ -598,7 +598,8 @@
 				settings: settingsStore.settings,
 				currency: currency.value,
 				paidCents: currentPayslip.value._paid,
-				balanceCents: currentPayslip.value._balance
+				balanceCents: currentPayslip.value._balance,
+				entitledToTemplates: license.hasFeature("pdf_templates")
 			});
 		},
 		fileName: () => `${currentPayslip.value?.number ?? "payslip"}.pdf`,
@@ -800,7 +801,8 @@
 					settings: settingsStore.settings,
 					currency: currency.value,
 					paidCents: row._paid,
-					balanceCents: row._balance
+					balanceCents: row._balance,
+					entitledToTemplates: license.hasFeature("pdf_templates")
 				});
 
 				const outputPath = await join(folder, `${safeName(row.number)}.pdf`);

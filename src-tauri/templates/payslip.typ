@@ -1,75 +1,36 @@
 // Payslip template — single-page A4 with header, employee block, two
 // stacked tables (earnings, deductions), big NET PAY card, optional bank
-// details and notes, and a two-column sign-off.
+// details and notes, and an optional two-column sign-off.
 //
-// Driven by data.json fields produced in app/pages/payslips/[id].vue's
-// buildPdfPayload(). Mirrors the look-and-feel of document.typ /
-// voucher.typ (logo + red rule + Inter family).
+// Driven by data.json fields produced by app/lib/payslip-pdf.ts. Page setup
+// and the header come from common.typ so the payslip honours the user's
+// selected PDF template (migration 0050) exactly as quotes/invoices do.
+
+#import "common.typ": *
 
 #let data = json("data.json")
+#let cfg = template-config(data)
 
 #set document(title: data.number, author: data.business_name)
-#set page(
-  paper: "a4",
-  margin: (x: 18mm, top: 16mm, bottom: 18mm),
-  footer: [
-    #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))
-    #v(4pt)
-    #align(center, text(size: 8pt, fill: rgb("#6b7280"))[
-      #if data.business_name != none [#data.business_name]
-      #if data.website != none [ | #data.website]
-      #if data.phone != none [ | #data.phone]
-      #if data.address_line1 != none [
-        | #data.address_line1#if data.city != none [, #data.city]
-      ]
-    ])
-  ],
-)
-
-#let chosen-font = if "font_family" in data and data.font_family != none { data.font_family } else { "Akt" }
-#set text(font: (chosen-font, "Inter", "Inter Tight", "Miriam Libre"), size: 9.5pt, lang: "en", number-width: "tabular")
-#set par(leading: 0.55em, spacing: 0.65em)
+#set page(paper: "a4", margin: cfg.margin, footer: cfg.footer)
+#set text(font: resolve-font(data), size: cfg.text-size, lang: "en", number-width: "tabular")
+#set par(leading: cfg.leading, spacing: cfg.spacing)
 
 // ============================================================
-// Header: logo or business-name wordmark + theme rule
+// Header + title (per the selected template)
 // ============================================================
-#align(right)[
-  #if data.logo_file != none {
-    image(data.logo_file, height: 12mm)
-  } else if data.business_name != none and data.business_name != "" {
-    box(height: 12mm)[
-      #set align(right + horizon)
-      #text(weight: "bold", size: 16pt, tracking: 0.02em)[#data.business_name]
-    ]
-  } else {
-    box(height: 12mm)
-  }
-]
-#v(-2mm)
-#line(length: 100%, stroke: 2pt + rgb(data.theme_color))
-
-// ============================================================
-// Title
-// ============================================================
-#v(8pt)
-#align(center, text(weight: "bold", size: 14pt, tracking: 0.04em)[
-  PAY SLIP
-])
-#v(14pt)
+#doc-header(data)
 
 // ============================================================
 // Meta block: employee (left) + payslip details (right)
 // ============================================================
-
-#let label(t) = text(weight: "bold", size: 8.5pt, tracking: 0.04em)[#upper(t)]
-#let faint(t) = text(fill: rgb("#6b7280"), size: 8.5pt)[#t]
 
 #grid(
   columns: (1fr, auto),
   gutter: 24pt,
   // ----- left: employee block
   [
-    #label("Employee")
+    #lbl("Employee")
     #v(2pt)
     #text(weight: "semibold")[#data.employee.full_name]
     #if data.employee.designation != none [
@@ -93,17 +54,17 @@
       columns: 1,
       row-gutter: 12pt,
       [
-        #label("Payslip #")
+        #lbl("Payslip #")
         \
         #data.number
       ],
       [
-        #label("Pay period")
+        #lbl("Pay period")
         \
         #data.period_display
       ],
       [
-        #label("Pay date")
+        #lbl("Pay date")
         \
         #data.pay_date
       ],
@@ -228,7 +189,7 @@
 #if data.statutory_enabled == true and (data.epf_employer_display != none or data.etf_display != none) [
   #v(14pt)
   #block(breakable: false)[
-    #label("Employer contributions (not deducted)")
+    #lbl("Employer contributions (not deducted)")
     #v(4pt)
     #grid(
       columns: (auto, auto),
@@ -249,7 +210,7 @@
 #if data.employee.bank_account_number != none and data.employee.bank_account_number != "" [
   #v(14pt)
   #block(breakable: false)[
-    #label("Pay to")
+    #lbl("Pay to")
     #v(4pt)
     #if data.employee.bank_account_name != none [
       Account name: #text(weight: "semibold")[#data.employee.bank_account_name] \
@@ -269,7 +230,7 @@
 #if data.notes != none and data.notes != "" [
   #v(14pt)
   #block(breakable: false)[
-    #label("Notes")
+    #lbl("Notes")
     \
     #for (i, ln) in data.notes.split("\n").enumerate() [
       #if i > 0 [#linebreak()]

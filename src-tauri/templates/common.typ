@@ -354,3 +354,127 @@
     ]
   }
 }
+
+// --- template config ----------------------------------------------------
+// Page-level settings per template key. Typst `set` rules inside a function
+// are scoped to that function's content, so a header function alone can't
+// carry margins / base size / footer style — the caller applies these with
+// its own `set` rules. Values transcribed verbatim from each doc-*.typ.
+#let template-config(data) = {
+  let key = data.at("template", default: "classic")
+  let ruled-footer(gap, size) = [
+    #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))
+    #v(gap)
+    #align(center, text(size: size, fill: rgb("#6b7280"))[#footer-content(data)])
+  ]
+  if key == "minimal" {
+    (
+      margin: (x: 22mm, top: 22mm, bottom: 22mm),
+      text-size: 9pt,
+      leading: 0.62em,
+      spacing: 0.72em,
+      footer: align(center, text(size: 8pt, fill: rgb("#9ca3af"))[#footer-content(data)]),
+    )
+  } else if key == "compact" {
+    (
+      margin: (x: 14mm, top: 12mm, bottom: 12mm),
+      text-size: 8.5pt,
+      leading: 0.5em,
+      spacing: 0.5em,
+      footer: ruled-footer(3pt, 7.5pt),
+    )
+  } else if key == "letterhead" {
+    // top: 45mm reserves the blank band for pre-printed stationery.
+    (
+      margin: (x: 18mm, top: 45mm, bottom: 18mm),
+      text-size: 9.5pt,
+      leading: 0.55em,
+      spacing: 0.65em,
+      footer: ruled-footer(4pt, 8pt),
+    )
+  } else {
+    // classic + modern share the same page setup.
+    (
+      margin: (x: 18mm, top: 16mm, bottom: 18mm),
+      text-size: 9.5pt,
+      leading: 0.55em,
+      spacing: 0.65em,
+      footer: ruled-footer(4pt, 8pt),
+    )
+  }
+}
+
+// --- shared document header --------------------------------------------
+// The five selectable header treatments. Needs data.title and data.number.
+// NOTE: doc-*.typ still carry their own inline copies — this function is
+// consumed by payslip.typ only, so the client-facing render paths stay
+// untouched. Unifying them is a follow-up cleanup.
+#let doc-header(data) = {
+  let key = data.at("template", default: "classic")
+  let logo-or-wordmark(logo-h, name-size) = if data.logo_file != none {
+    image(data.logo_file, height: logo-h)
+  } else if data.business_name != none and data.business_name != "" {
+    box(height: logo-h)[
+      #set align(right + horizon)
+      #text(weight: "bold", size: name-size, tracking: 0.02em)[#data.business_name]
+    ]
+  } else {
+    box(height: logo-h)
+  }
+
+  if key == "modern" [
+    #block(width: 100%, fill: rgb(data.theme_color), inset: (x: 16pt, y: 14pt), radius: 3pt)[
+      #set text(fill: white)
+      #grid(
+        columns: (1fr, auto),
+        align: horizon,
+        gutter: 16pt,
+        [
+          #text(weight: "bold", size: 20pt, tracking: 0.04em)[#data.title]
+          #v(2pt)
+          #text(size: 10.5pt)[\##data.number]
+        ],
+        if data.logo_file != none {
+          image(data.logo_file, height: 12mm)
+        } else if data.business_name != none and data.business_name != "" {
+          text(weight: "bold", size: 15pt, tracking: 0.02em)[#data.business_name]
+        } else { [] },
+      )
+    ]
+    #v(16pt)
+  ] else if key == "minimal" [
+    #grid(
+      columns: (1fr, auto),
+      align: horizon,
+      gutter: 16pt,
+      if data.business_name != none and data.business_name != "" {
+        text(weight: "regular", size: 14pt, tracking: 0.06em)[#data.business_name]
+      } else { [] },
+      align(right)[
+        #text(size: 9pt, tracking: 0.2em, fill: rgb("#6b7280"))[#upper(data.title)]
+        #v(2pt)
+        #text(weight: "semibold", size: 13pt)[\##data.number]
+      ],
+    )
+    #v(24pt)
+  ] else if key == "compact" [
+    #align(right)[#logo-or-wordmark(9mm, 13pt)]
+    #v(-1.5mm)
+    #line(length: 100%, stroke: 1.5pt + rgb(data.theme_color))
+    #v(6pt)
+    #align(center, text(weight: "bold", size: 12pt, tracking: 0.04em)[#data.title])
+    #v(10pt)
+  ] else if key == "letterhead" [
+    #align(center, text(weight: "bold", size: 14pt, tracking: 0.04em)[#data.title])
+    #v(6pt)
+    #line(length: 100%, stroke: 2pt + rgb(data.theme_color))
+    #v(14pt)
+  ] else [
+    #align(right)[#logo-or-wordmark(12mm, 16pt)]
+    #v(2mm)
+    #line(length: 100%, stroke: 2pt + rgb(data.theme_color))
+    #v(8pt)
+    #align(center, text(weight: "bold", size: 14pt, tracking: 0.04em)[#data.title])
+    #v(14pt)
+  ]
+}

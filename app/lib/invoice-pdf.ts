@@ -59,7 +59,7 @@ export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, pa
 		kind: "invoice",
 		number: inv.number,
 		title,
-		template: resolveTemplateKey(settings?.pdf_template_invoice, entitledToTemplates),
+		template: resolveTemplateKey(settings?.pdf_template, entitledToTemplates),
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,

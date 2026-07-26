@@ -312,7 +312,8 @@ pub async fn export_bill_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "doc-classic.typ", DOC_CLASSIC, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
+	let (name, src) = document_template(data.get("template").and_then(|v| v.as_str()));
+	render_pdf(&app, name, src, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
 }
 
 #[tauri::command]
@@ -322,7 +323,7 @@ pub async fn export_payslip_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "payslip.typ", PAYSLIP_TEMPLATE, data, PathBuf::from(output_path), protect_password, &[]).await
+	render_pdf(&app, "payslip.typ", PAYSLIP_TEMPLATE, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
 }
 
 #[tauri::command]

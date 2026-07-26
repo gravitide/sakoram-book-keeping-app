@@ -533,7 +533,7 @@
 		// Step 5 (Documents) — one template choice applies to both invoice
 		// and quote PDFs; accent colour is the dedicated pdf_theme_color
 		// (falls back to the UI theme colour for a sensible default).
-		pdf_template: settingsStore.settings?.pdf_template_invoice || "classic",
+		pdf_template: settingsStore.settings?.pdf_template || "classic",
 		pdf_theme_color: settingsStore.settings?.pdf_theme_color ?? settingsStore.settings?.theme_color ?? "green",
 		// Bank fields on this form aren't part of company_settings any
 		// more (migration 0023 split them into a managed business_banks
@@ -605,8 +605,7 @@
 			// Documents — one template applies to both invoice + quote PDFs;
 			// accent colour drives the header rule + highlights.
 			await settingsStore.save({
-				pdf_template_invoice: form.pdf_template,
-				pdf_template_quote: form.pdf_template,
+				pdf_template: form.pdf_template,
 				pdf_theme_color: form.pdf_theme_color
 			});
 		} else {
