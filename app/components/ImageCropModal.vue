@@ -91,7 +91,11 @@
 		});
 		img.value = el;
 		const stageW = stageEl.value?.clientWidth ?? 640;
-		const scale = Math.min(stageW / el.naturalWidth, stageH / el.naturalHeight, 1);
+		// Inset the image from the stage edges so a full-image crop rect never
+		// touches the border — the corner handles extend 6px OUTSIDE the rect
+		// and the stage is overflow-hidden, so a flush fit would clip them.
+		const pad = 16;
+		const scale = Math.min((stageW - pad * 2) / el.naturalWidth, (stageH - pad * 2) / el.naturalHeight, 1);
 		view.value = {
 			scale,
 			ox: (stageW - el.naturalWidth * scale) / 2,
