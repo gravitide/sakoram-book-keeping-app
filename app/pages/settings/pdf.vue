@@ -368,6 +368,7 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
+	import { BUNDLED_MONO_NAMES, BUNDLED_SANS_NAMES } from "~/lib/fonts";
 	import { PDF_TEMPLATES } from "~/lib/pdf-templates";
 	import { sampleInvoicePayload, samplePayslipPayload, sampleQuotePayload } from "~/lib/sample-pdf";
 	import { THEME_COLORS, themeHex } from "~/lib/theme";
@@ -431,10 +432,8 @@
 	// any face installed on their machine, but only the bundled faces are
 	// guaranteed to render identically across machines. Iosevka Charon Mono
 	// is the bundled monospace (good for figure-aligned numbers).
-	const bundledFonts = ["Akt", "Inter", "Inter Tight", "Stack Sans Text", "Miriam Libre", "Amarna"];
-	// Bundled monospaced faces, listed under their own sub-heading. Good for
-	// figure-aligned numbers; more will be added over time.
-	const bundledMonoFonts = ["Iosevka Charon Mono", "Martian Mono", "Google Sans Code"];
+	const bundledFonts = BUNDLED_SANS_NAMES;
+	const bundledMonoFonts = BUNDLED_MONO_NAMES;
 
 	const pdfPreviewFontStack = computed(() =>
 		`'${form.pdf_font || "Akt"}', 'Akt', 'Inter', serif`
