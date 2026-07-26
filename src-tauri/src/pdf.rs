@@ -333,7 +333,7 @@ pub async fn export_voucher_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "voucher.typ", VOUCHER_TEMPLATE, data, PathBuf::from(output_path), protect_password, &[]).await
+	render_pdf(&app, "voucher.typ", VOUCHER_TEMPLATE, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
 }
 
 // Reports (P&L, VAT, future Tier 1 reports) all render through one
@@ -347,7 +347,7 @@ pub async fn export_report_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "report.typ", REPORT_TEMPLATE, data, PathBuf::from(output_path), protect_password, &[]).await
+	render_pdf(&app, "report.typ", REPORT_TEMPLATE, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
 }
 
 // Customer statements — per-client snapshot of outstanding invoices.
@@ -362,7 +362,7 @@ pub async fn export_statement_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	render_pdf(&app, "statement.typ", STATEMENT_TEMPLATE, data, PathBuf::from(output_path), protect_password, &[]).await
+	render_pdf(&app, "statement.typ", STATEMENT_TEMPLATE, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
 }
 
 // Letters — free-form correspondence on the business letterhead. Standalone
