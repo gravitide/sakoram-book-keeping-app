@@ -2,8 +2,8 @@
 	<div class="space-y-6">
 		<!-- Earnings -->
 		<section>
-			<header class="flex items-center justify-between mb-3">
-				<div>
+			<header class="flex items-start justify-between gap-3 mb-3">
+				<div class="min-w-0">
 					<h3 class="font-semibold text-(--ui-success)">
 						<UIcon name="i-lucide-arrow-down-to-line" class="size-4 align-text-bottom mr-1" />
 						Earnings
@@ -17,6 +17,7 @@
 					variant="soft"
 					color="neutral"
 					icon="i-lucide-plus"
+					class="shrink-0 whitespace-nowrap"
 					:disabled="disabled"
 					@click="addLine('earning')"
 				>
@@ -69,8 +70,8 @@
 
 		<!-- Deductions -->
 		<section>
-			<header class="flex items-center justify-between mb-3">
-				<div>
+			<header class="flex items-start justify-between gap-3 mb-3">
+				<div class="min-w-0">
 					<h3 class="font-semibold text-(--ui-error)">
 						<UIcon name="i-lucide-arrow-up-from-line" class="size-4 align-text-bottom mr-1" />
 						Deductions
@@ -84,6 +85,7 @@
 					variant="soft"
 					color="neutral"
 					icon="i-lucide-plus"
+					class="shrink-0 whitespace-nowrap"
 					:disabled="disabled"
 					@click="addLine('deduction')"
 				>
