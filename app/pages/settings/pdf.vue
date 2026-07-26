@@ -17,10 +17,10 @@
 			class="max-w-5xl mx-auto"
 			@submit="onSubmit"
 		>
-			<!-- Layout: Font + Header logo sit side by side on top (both are
-				compact), then Footer notes and Document protection each span
-				the full width below — those have wider content (textareas, a
-				password field + a row of toggles) that reads better wide.
+			<!-- Layout: Font + Colour sit side by side on top — both are compact
+				and both are "how the type and accent look". Header logo then runs
+				full width below, because it needs the room for cropping and sizing
+				controls. Templates and Document protection follow, also full width.
 				items-start keeps the top row from stretching to equal height. -->
 			<div class="space-y-6">
 				<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
@@ -70,113 +70,113 @@
 						</SectionCard>
 					</div>
 
-					<div id="header-logo" class="scroll-mt-6">
+					<div id="color" class="scroll-mt-6">
 						<SectionCard
-							icon="i-lucide-image"
-							title="Header logo"
-							subtitle="Letterhead-style PNG, JPG, or SVG. Different from the square Company logo, which is only used in the sidebar."
+							icon="i-lucide-palette"
+							title="Colour"
+							subtitle="The accent used for the header rule and highlights on your generated PDFs. Independent of the app's theme colour — set it here to print, say, red invoices from a green app."
 						>
-							<div class="flex flex-col gap-3">
-								<div
-									class="group relative h-28 w-full rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition cursor-pointer"
-									:class="[
-										pdfLogoDragOver
-											? 'border-(--ui-primary) bg-(--ui-primary)/5 scale-[1.01]'
-											: 'border-(--ui-border-accented) bg-(--ui-bg-muted) hover:border-(--ui-primary)/60'
-									]"
-									role="button"
-									tabindex="0"
-									aria-label="Upload PDF header logo"
-									@click="pickPdfLogo"
-									@keydown.enter.prevent="pickPdfLogo"
-									@keydown.space.prevent="pickPdfLogo"
-									@dragover.prevent="pdfLogoDragOver = true"
-									@dragenter.prevent="pdfLogoDragOver = true"
-									@dragleave.prevent="pdfLogoDragOver = false"
-									@drop.prevent="onPdfLogoDrop"
+							<div class="grid grid-cols-4 gap-3">
+								<button
+									v-for="c in colors"
+									:key="c.value"
+									type="button"
+									class="group flex flex-col items-center gap-1.5"
+									:title="c.label"
+									@click="form.pdf_theme_color = c.value"
 								>
-									<input
-										ref="pdfLogoInput"
-										type="file"
-										accept="image/png,image/jpeg,image/webp,image/svg+xml"
-										class="hidden"
-										@change="onPdfLogoFileChange"
-									>
-									<img
-										v-if="store.pdfHeaderLogoSrc"
-										:src="store.pdfHeaderLogoSrc"
-										alt="PDF header logo"
-										class="max-w-full max-h-full object-contain p-3"
-									>
-									<div v-else class="flex flex-col items-center gap-1 text-(--ui-text-muted)">
-										<UIcon name="i-lucide-image-up" class="size-7" />
-										<div class="text-[10px] uppercase tracking-wider">
-											Drop wide logo
-										</div>
-									</div>
-									<div
-										v-if="store.pdfHeaderLogoSrc"
-										class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100"
-									>
-										<UIcon name="i-lucide-upload" class="size-5 text-white" />
-										<span class="text-[10px] uppercase tracking-wider text-white">
-											Replace
-										</span>
-									</div>
-								</div>
-								<div class="flex flex-wrap items-center gap-2">
-									<UButton
-										v-if="store.settings?.pdf_header_logo_path"
-										icon="i-lucide-trash-2"
-										size="xs"
-										variant="ghost"
-										color="neutral"
-										@click="removePdfLogo"
-									>
-										Remove
-									</UButton>
-									<UButton
-										v-else
-										icon="i-lucide-upload"
-										size="xs"
-										variant="soft"
-										@click="pickPdfLogo"
-									>
-										Upload header
-									</UButton>
-									<span v-if="pdfLogoFileName" class="text-xs text-(--ui-text-muted) truncate">
-										{{ pdfLogoFileName }}
+									<span
+										class="size-10 rounded-full border-2 transition"
+										:class="form.pdf_theme_color === c.value ? 'border-(--ui-text) scale-110' : 'border-(--ui-border) group-hover:border-(--ui-text-muted)'"
+										:style="{ backgroundColor: c.hex }"
+									/>
+									<span class="text-xs" :class="form.pdf_theme_color === c.value ? 'text-(--ui-text) font-medium' : 'text-(--ui-text-muted)'">
+										{{ c.label }}
 									</span>
-								</div>
+								</button>
 							</div>
 						</SectionCard>
 					</div>
 				</div>
 
-				<div id="color" class="scroll-mt-6">
+				<div id="header-logo" class="scroll-mt-6">
 					<SectionCard
-						icon="i-lucide-palette"
-						title="Colour"
-						subtitle="The accent used for the header rule and highlights on your generated PDFs. Independent of the app's theme colour — set it here to print, say, red invoices from a green app."
+						icon="i-lucide-image"
+						title="Header logo"
+						subtitle="Letterhead-style PNG, JPG, or SVG. Different from the square Company logo, which is only used in the sidebar."
 					>
-						<div class="grid grid-cols-4 sm:grid-cols-8 gap-3">
-							<button
-								v-for="c in colors"
-								:key="c.value"
-								type="button"
-								class="group flex flex-col items-center gap-1.5"
-								:title="c.label"
-								@click="form.pdf_theme_color = c.value"
+						<div class="flex flex-col gap-3">
+							<div
+								class="group relative h-28 w-full rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition cursor-pointer"
+								:class="[
+									pdfLogoDragOver
+										? 'border-(--ui-primary) bg-(--ui-primary)/5 scale-[1.01]'
+										: 'border-(--ui-border-accented) bg-(--ui-bg-muted) hover:border-(--ui-primary)/60'
+								]"
+								role="button"
+								tabindex="0"
+								aria-label="Upload PDF header logo"
+								@click="pickPdfLogo"
+								@keydown.enter.prevent="pickPdfLogo"
+								@keydown.space.prevent="pickPdfLogo"
+								@dragover.prevent="pdfLogoDragOver = true"
+								@dragenter.prevent="pdfLogoDragOver = true"
+								@dragleave.prevent="pdfLogoDragOver = false"
+								@drop.prevent="onPdfLogoDrop"
 							>
-								<span
-									class="size-10 rounded-full border-2 transition"
-									:class="form.pdf_theme_color === c.value ? 'border-(--ui-text) scale-110' : 'border-(--ui-border) group-hover:border-(--ui-text-muted)'"
-									:style="{ backgroundColor: c.hex }"
-								/>
-								<span class="text-xs" :class="form.pdf_theme_color === c.value ? 'text-(--ui-text) font-medium' : 'text-(--ui-text-muted)'">
-									{{ c.label }}
+								<input
+									ref="pdfLogoInput"
+									type="file"
+									accept="image/png,image/jpeg,image/webp,image/svg+xml"
+									class="hidden"
+									@change="onPdfLogoFileChange"
+								>
+								<img
+									v-if="store.pdfHeaderLogoSrc"
+									:src="store.pdfHeaderLogoSrc"
+									alt="PDF header logo"
+									class="max-w-full max-h-full object-contain p-3"
+								>
+								<div v-else class="flex flex-col items-center gap-1 text-(--ui-text-muted)">
+									<UIcon name="i-lucide-image-up" class="size-7" />
+									<div class="text-[10px] uppercase tracking-wider">
+										Drop wide logo
+									</div>
+								</div>
+								<div
+									v-if="store.pdfHeaderLogoSrc"
+									class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100"
+								>
+									<UIcon name="i-lucide-upload" class="size-5 text-white" />
+									<span class="text-[10px] uppercase tracking-wider text-white">
+										Replace
+									</span>
+								</div>
+							</div>
+							<div class="flex flex-wrap items-center gap-2">
+								<UButton
+									v-if="store.settings?.pdf_header_logo_path"
+									icon="i-lucide-trash-2"
+									size="xs"
+									variant="ghost"
+									color="neutral"
+									@click="removePdfLogo"
+								>
+									Remove
+								</UButton>
+								<UButton
+									v-else
+									icon="i-lucide-upload"
+									size="xs"
+									variant="soft"
+									@click="pickPdfLogo"
+								>
+									Upload header
+								</UButton>
+								<span v-if="pdfLogoFileName" class="text-xs text-(--ui-text-muted) truncate">
+									{{ pdfLogoFileName }}
 								</span>
-							</button>
+							</div>
 						</div>
 					</SectionCard>
 				</div>
