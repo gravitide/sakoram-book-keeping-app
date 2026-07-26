@@ -259,21 +259,26 @@
 				<!-- Not a SectionCard: this is a signpost to the Security page, not a
 					setting you change here. A compact row keeps it from reading as
 					another block of PDF configuration. -->
-				<div class="flex items-center gap-3 rounded-md border border-(--ui-border) bg-(--ui-bg-muted) px-4 py-3">
-					<UIcon name="i-lucide-shield-check" class="size-5 text-(--ui-text-muted) shrink-0" />
-					<div class="text-sm min-w-0 flex-1">
-						<span class="font-medium">Document protection</span>
-						<span class="text-(--ui-text-muted)"> — password-protect generated PDFs against editing and copying.</span>
+				<div class="flex items-start gap-3 rounded-md border border-(--ui-border) bg-(--ui-bg-muted) px-4 py-3">
+					<UIcon name="i-lucide-shield-check" class="size-5 text-(--ui-text-muted) shrink-0 mt-0.5" />
+					<!-- Button sits inside the text column, below the copy, so it stays
+						next to what it refers to. On a full-width row a right-floated
+						button ends up marooned an inch away from its own label. -->
+					<div class="text-sm min-w-0">
+						<div>
+							<span class="font-medium">Document protection</span>
+							<span class="text-(--ui-text-muted)"> — password-protect generated PDFs against editing and copying.</span>
+						</div>
+						<UButton
+							to="/settings/security#pdf-protection"
+							variant="soft"
+							trailing-icon="i-lucide-arrow-right"
+							size="xs"
+							class="mt-2.5"
+						>
+							Open
+						</UButton>
 					</div>
-					<UButton
-						to="/settings/security#pdf-protection"
-						variant="soft"
-						trailing-icon="i-lucide-arrow-right"
-						size="xs"
-						class="shrink-0"
-					>
-						Open
-					</UButton>
 				</div>
 			</div>
 
