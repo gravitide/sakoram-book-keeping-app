@@ -65,6 +65,10 @@ JOBS: list[tuple[str, str, str, list[tuple[int, str]]]] = [
     ("Amarna.ttf",        "Amarna",          "Amarna",        [(400, "Regular"), (700, "Bold")]),
     ("StackSansText.ttf", "Stack Sans Text", "StackSansText", [(400, "Regular"), (700, "Bold")]),
     ("MiriamLibre.ttf",   "Miriam Libre",    "MiriamLibre",   [(400, "Regular"), (700, "Bold")]),
+    # Geomini's variable default is ExtraLight (wght 200), not Regular — the
+    # explicit pin below is what keeps the "Regular" static at 400 instead of
+    # inheriting a hairline default.
+    ("Geomini.ttf",       "Geomini",         "Geomini",       [(400, "Regular"), (500, "Medium"), (700, "Bold")]),
     # Monospaced families (offered for figure-aligned numbers). Martian Mono
     # carries a `wdth` axis too; instance_one() pins every non-wght axis to
     # its default so the result is a true static (bold renders in Typst).
