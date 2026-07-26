@@ -16,22 +16,8 @@
 #set text(font: resolve-font(data), size: 9pt, lang: "en", number-width: "tabular")
 #set par(leading: 0.62em, spacing: 0.72em)
 
-// Header: business name (light, left) + title/number (right). No logo, no rule.
-#grid(
-  columns: (1fr, auto),
-  align: horizon,
-  gutter: 16pt,
-  if data.business_name != none and data.business_name != "" {
-    text(weight: "regular", size: 14pt, tracking: 0.06em)[#data.business_name]
-  } else { [] },
-  align(right)[
-    #text(size: 9pt, tracking: 0.2em, fill: rgb("#6b7280"))[#upper(data.title)]
-    #v(2pt)
-    #text(weight: "semibold", size: 13pt)[\##data.number]
-  ],
-)
-
-#v(24pt)
+// Header + title — see doc-header in common.typ.
+#doc-header(data)
 
 // Party block (left) + meta rows (right)
 #grid(
