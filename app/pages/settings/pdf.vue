@@ -161,7 +161,6 @@
 									:model-value="customHexDraft"
 									placeholder="#1d4ed8"
 									class="w-32 ml-auto"
-									:ui="{ base: 'font-mono' }"
 									@update:model-value="onHexInput(String($event))"
 								/>
 							</div>
