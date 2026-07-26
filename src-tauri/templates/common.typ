@@ -479,17 +479,21 @@
     // segmented accent rule. No document title or number here — meta-block
     // below already prints primary_label + number, so repeating them was
     // pure duplication.
-    #align(left)[
-      #if data.logo_file != none {
+    // Logo and letterhead text sit side by side, vertically centred on each
+    // other: the logo is a fixed 12mm mark and the text is usually taller,
+    // so centring reads better than top-aligning. `auto` on the logo column
+    // means the text starts right after it whatever the logo's aspect.
+    #grid(
+      columns: (auto, 1fr),
+      align: horizon,
+      gutter: 12pt,
+      if data.logo_file != none {
         header-logo(data, 12mm)
       } else if data.business_name != none and data.business_name != "" {
         text(weight: "bold", size: 16pt, tracking: 0.02em)[#data.business_name]
-      } else { [] }
-    ]
-    #if ht.len() > 0 {
-      v(10pt)
-      render-blocks(ht, spacing: 3pt)
-    }
+      } else { [] },
+      if ht.len() > 0 { render-blocks(ht, spacing: 3pt) } else { [] },
+    )
     #v(10pt)
     #tapered-rule(rgb(data.theme_color), thickness: 3pt)
     #v(16pt)
