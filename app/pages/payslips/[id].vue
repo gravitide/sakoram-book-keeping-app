@@ -133,14 +133,28 @@
 							<span class="text-xs text-(--ui-text-muted)">Editable until issued</span>
 						</div>
 					</template>
-					<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-						<UFormField label="Period start">
-							<DateField v-model="form.period_start" :disabled="locked" />
-						</UFormField>
-						<UFormField label="Period end">
-							<DateField v-model="form.period_end" :disabled="locked" />
-						</UFormField>
-						<UFormField label="Pay date">
+					<!-- Grouped, not evenly distributed: period start + end are ONE
+						concept (a range), so they sit tight together at gap-4 and wrap
+						as a unit. Pay date is independent — a wider gap-x-8 separates
+						it, and it drops to its own row when the column can't take all
+						three. It usually can't: inside the card the lg:col-span-2
+						column measures 436px against the 543px three-across needs, so
+						pay date wraps at lg and rejoins the row at 2xl.
+
+						Sized to content (w-fit) rather than to a share of the row, so
+						the fields don't stretch into the even three-way split this
+						replaces. Safe because tauri.conf pins minWidth to 1024, so the
+						column never drops near the ~165px a field actually needs. -->
+					<div class="flex flex-wrap items-start gap-x-8 gap-y-4">
+						<div class="flex flex-wrap items-start gap-4">
+							<UFormField label="Period start" class="w-fit shrink-0">
+								<DateField v-model="form.period_start" :disabled="locked" />
+							</UFormField>
+							<UFormField label="Period end" class="w-fit shrink-0">
+								<DateField v-model="form.period_end" :disabled="locked" />
+							</UFormField>
+						</div>
+						<UFormField label="Pay date" class="w-fit shrink-0">
 							<DateField v-model="form.pay_date" :disabled="locked" />
 						</UFormField>
 					</div>
@@ -148,16 +162,21 @@
 
 				<UCard>
 					<template #header>
-						<div class="flex items-center justify-between">
+						<!-- Wraps rather than compressing: title + two switches + the
+							lock hint don't fit one line in the lg column, and without
+							flex-wrap the title was breaking mid-phrase while the
+							controls crushed together. shrink-0 keeps each switch label
+							on one line once they do wrap. -->
+						<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
 							<h2 class="font-semibold">
 								Earnings & deductions
 							</h2>
-							<div class="flex items-center gap-3">
-								<label v-if="!locked" class="flex items-center gap-2 text-xs text-(--ui-text-muted)">
+							<div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+								<label v-if="!locked" class="flex items-center gap-2 text-xs text-(--ui-text-muted) shrink-0">
 									Apply EPF / ETF
 									<USwitch v-model="statutoryEnabled" />
 								</label>
-								<label v-if="!locked" class="flex items-center gap-2 text-xs text-(--ui-text-muted)">
+								<label v-if="!locked" class="flex items-center gap-2 text-xs text-(--ui-text-muted) shrink-0">
 									Apply PAYE
 									<USwitch v-model="payeEnabled" />
 								</label>
