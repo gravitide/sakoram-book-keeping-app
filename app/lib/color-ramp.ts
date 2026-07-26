@@ -17,14 +17,32 @@ export const SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950] as 
 
 /** Tailwind v4's lightness curve, averaged across its palettes. */
 const LIGHTNESS: Record<number, number> = {
-	50: 0.971, 100: 0.936, 200: 0.885, 300: 0.808, 400: 0.704, 500: 0.637,
-	600: 0.577, 700: 0.505, 800: 0.444, 900: 0.396, 950: 0.258
+	50: 0.971,
+	100: 0.936,
+	200: 0.885,
+	300: 0.808,
+	400: 0.704,
+	500: 0.637,
+	600: 0.577,
+	700: 0.505,
+	800: 0.444,
+	900: 0.396,
+	950: 0.258
 };
 
 /** Chroma at each shade, relative to shade 500. */
 const CHROMA_SCALE: Record<number, number> = {
-	50: 0.055, 100: 0.131, 200: 0.262, 300: 0.481, 400: 0.806, 500: 1,
-	600: 1.034, 700: 0.899, 800: 0.810, 900: 0.743, 950: 0.388
+	50: 0.055,
+	100: 0.131,
+	200: 0.262,
+	300: 0.481,
+	400: 0.806,
+	500: 1,
+	600: 1.034,
+	700: 0.899,
+	800: 0.810,
+	900: 0.743,
+	950: 0.388
 };
 
 /** Beyond this the colour leaves sRGB and the browser clips it anyway. */
@@ -38,7 +56,7 @@ function parseHex(hex: string): [number, number, number] | null {
 	let h = hex.trim().toLowerCase().replace(/^#/, "");
 	if (h.length === 3) h = h.split("").map((ch) => ch + ch).join("");
 	if (!/^[0-9a-f]{6}$/.test(h)) return null;
-	return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255) as [number, number, number];
+	return [0, 2, 4].map((i) => Number.parseInt(h.slice(i, i + 2), 16) / 255) as [number, number, number];
 }
 
 /** sRGB → OKLCH. Returns chroma and hue only; lightness is discarded. */

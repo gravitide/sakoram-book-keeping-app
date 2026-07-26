@@ -309,7 +309,7 @@
 	// compile time, no runtime fetch). Wide PNG, rendered in the About modal.
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import { useHelpWindow } from "~/composables/useHelpWindow";
-	import { isValidThemeColor } from "~/lib/theme";
+	import { applyPrimaryColor } from "~/lib/color-ramp";
 	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -455,14 +455,12 @@
 		}
 	}, { immediate: true });
 
-	// Apply theme color whenever settings load or change. NuxtUI is
-	// reactive on appConfig.ui.colors.primary — flipping it updates every
-	// component that uses the primary color.
+	// Apply theme color whenever settings load or change. A named preset flips
+	// NuxtUI's palette (it's reactive on appConfig.ui.colors.primary); a custom
+	// hex injects a generated ramp onto <html>. applyPrimaryColor handles both.
 	watch(
 		() => settings.settings?.theme_color,
-		(name) => {
-			if (isValidThemeColor(name)) appConfig.ui.colors.primary = name;
-		},
+		(value) => applyPrimaryColor(appConfig, value),
 		{ immediate: true }
 	);
 

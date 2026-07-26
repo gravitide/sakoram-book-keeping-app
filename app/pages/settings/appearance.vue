@@ -28,66 +28,31 @@
 								UI font
 							</div>
 							<div class="text-xs text-(--ui-text-muted) mt-1">
-								Used in the app interface. The fonts listed below ship with
-								the app and always render; anything else falls through to
-								what's installed on your system.
+								Used across the app interface. Bundled fonts ship with Sakoram
+								and always render; system fonts only work if they're installed
+								on this machine. You can also type any other font name.
 							</div>
 						</template>
 
 						<UFormField label="Font family">
-							<UInput v-model="uiFont" placeholder="e.g. Inter" />
+							<USelectMenu
+								v-model="uiFont"
+								:items="fontOptions"
+								value-key="value"
+								label-key="label"
+								icon="i-lucide-type"
+								class="w-full"
+								create-item
+								:search-input="{ placeholder: 'Search or type a font name…' }"
+								@create="uiFont = String($event)"
+							>
+								<template #item-label="{ item }">
+									<span :style="{ fontFamily: `'${item.value}', ${item.mono ? 'monospace' : 'sans-serif'}` }">
+										{{ item.label }}
+									</span>
+								</template>
+							</USelectMenu>
 						</UFormField>
-
-						<div class="mt-4">
-							<div class="text-xs text-(--ui-text-muted) mb-2">
-								Bundled fonts (always available):
-							</div>
-							<div class="flex flex-wrap gap-2 mb-3">
-								<UButton
-									v-for="suggestion in bundledFonts"
-									:key="suggestion"
-									size="xs"
-									variant="soft"
-									color="primary"
-									:style="{ fontFamily: `'${suggestion}', sans-serif` }"
-									@click="uiFont = suggestion"
-								>
-									{{ suggestion }}
-								</UButton>
-							</div>
-							<div class="text-xs text-(--ui-text-muted) mb-2 flex items-center gap-1.5">
-								<UIcon name="i-lucide-code" class="size-3.5" />
-								Monospaced:
-							</div>
-							<div class="flex flex-wrap gap-2 mb-3">
-								<UButton
-									v-for="suggestion in bundledMonoFonts"
-									:key="suggestion"
-									size="xs"
-									variant="soft"
-									color="primary"
-									:style="{ fontFamily: `'${suggestion}', monospace` }"
-									@click="uiFont = suggestion"
-								>
-									{{ suggestion }}
-								</UButton>
-							</div>
-							<div class="text-xs text-(--ui-text-muted) mb-2">
-								System fonts (only if installed):
-							</div>
-							<div class="flex flex-wrap gap-2">
-								<UButton
-									v-for="suggestion in systemFonts"
-									:key="suggestion"
-									size="xs"
-									variant="soft"
-									color="neutral"
-									@click="uiFont = suggestion"
-								>
-									{{ suggestion }}
-								</UButton>
-							</div>
-						</div>
 
 						<div class="mt-6 p-4 border border-(--ui-border) rounded-md bg-(--ui-bg-muted)">
 							<div class="text-xs text-(--ui-text-muted) uppercase tracking-wide mb-2">
@@ -137,6 +102,41 @@
 										{{ c.label }}
 									</span>
 								</button>
+							</div>
+
+							<!-- Custom accent. The native colour input opens the OS picker
+								(no dependency, works offline); the hex field is for pasting
+								an exact brand colour, which is the more common case. The
+								input hides inside the swatch label so the click target
+								matches the eight circles above — a bare colour input renders
+								as an OS-styled control that would look nothing like them. -->
+							<div class="mt-4 pt-4 border-t border-(--ui-border) flex items-center gap-3">
+								<label
+									class="size-9 rounded-full border-2 shrink-0 cursor-pointer transition relative overflow-hidden"
+									:class="isCustomColor ? 'border-(--ui-text) scale-110' : 'border-(--ui-border) hover:border-(--ui-text-muted)'"
+									:style="{ backgroundColor: currentHex }"
+									title="Pick a custom colour"
+								>
+									<input
+										v-model="customColorWell"
+										type="color"
+										class="absolute inset-0 opacity-0 cursor-pointer"
+									>
+								</label>
+								<div class="min-w-0">
+									<div class="text-sm font-medium" :class="isCustomColor ? 'text-(--ui-text)' : 'text-(--ui-text-muted)'">
+										Custom
+									</div>
+									<div class="text-xs text-(--ui-text-muted)">
+										Your exact brand colour
+									</div>
+								</div>
+								<UInput
+									:model-value="customHexDraft"
+									placeholder="#1d4ed8"
+									class="w-32 ml-auto"
+									@update:model-value="onHexInput(String($event))"
+								/>
 							</div>
 						</UCard>
 					</div>
@@ -261,10 +261,10 @@
 // is visible immediately app-wide. Persisted to company_settings so it
 // sticks across launches.
 
-	import type { ThemeColor } from "~/lib/theme";
 	import { useUiState, ZOOM_LEVELS } from "~/composables/useUiState";
-	import { BUNDLED_MONO_NAMES, BUNDLED_SANS_NAMES } from "~/lib/fonts";
-	import { isValidThemeColor, THEME_COLORS } from "~/lib/theme";
+	import { applyPrimaryColor } from "~/lib/color-ramp";
+	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
+	import { isHexColor, isValidThemeColor, THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 
 	definePageMeta({ title: "Appearance" });
@@ -309,8 +309,6 @@
 	// Bundled faces (sans + monospaced) come from the shared registry in
 	// app/lib/fonts.ts — the single source of truth, also used by the PDF
 	// settings page. Adding a font is a one-line edit there.
-	const bundledFonts = BUNDLED_SANS_NAMES;
-	const bundledMonoFonts = BUNDLED_MONO_NAMES;
 	const systemFonts = [
 		"system-ui",
 		"Georgia",
@@ -319,12 +317,15 @@
 	];
 
 	const uiFont = ref<string>(store.settings?.ui_font ?? "Akt");
-	const themeColor = ref<ThemeColor>(
-		isValidThemeColor(store.settings?.theme_color) ? store.settings!.theme_color : "red"
+	// A plain string, not the ThemeColor union: the field holds either one of
+	// the eight preset names or a literal custom hex.
+	const storedColor = store.settings?.theme_color;
+	const themeColor = ref<string>(
+		isValidThemeColor(storedColor) || isHexColor(storedColor) ? String(storedColor) : "red"
 	);
 
 	const initialUiFont = ref<string>(uiFont.value);
-	const initialColor = ref<ThemeColor>(themeColor.value);
+	const initialColor = ref<string>(themeColor.value);
 
 	const dirty = computed(() =>
 		uiFont.value.trim() !== initialUiFont.value
@@ -334,6 +335,34 @@
 	// Live preview: change the CSS variable + appConfig as the user picks,
 	// so they don't have to save to see the effect. We snap back to the
 	// last-saved values if they cancel.
+	// Four groups. Unlike the PDF picker this list is OPEN (create-item): it
+	// replaces a free-text field, and any font installed on the machine renders
+	// in the webview even though Typst can't see it.
+	const fontOptions = computed(() => {
+		const groups: Array<Array<Record<string, unknown>>> = [
+			[
+				{ type: "label", label: "Bundled" },
+				...BUNDLED_FONTS.filter((f) => !f.mono).map((f) => ({ label: f.name, value: f.name, mono: false }))
+			],
+			[
+				{ type: "label", label: "Monospaced" },
+				...BUNDLED_FONTS.filter((f) => f.mono).map((f) => ({ label: f.name, value: f.name, mono: true }))
+			],
+			[
+				{ type: "label", label: "System fonts (only if installed)" },
+				...systemFonts.map((name) => ({ label: name, value: name, mono: false }))
+			]
+		];
+		const current = uiFont.value;
+		if (current && !isBundledFont(current) && !systemFonts.includes(current)) {
+			groups.push([
+				{ type: "label", label: "Not listed" },
+				{ label: `${current} (custom)`, value: current, mono: false }
+			]);
+		}
+		return groups;
+	});
+
 	const previewFontStack = computed(() =>
 		`'${uiFont.value || "Akt"}', 'Akt', 'Inter', system-ui, sans-serif`
 	);
@@ -345,8 +374,32 @@
 	// the layout watcher firing with the unchanged DB value.
 	watch([uiFont, themeColor], () => {
 		document.documentElement.style.setProperty("--font-sans", previewFontStack.value);
-		appConfig.ui.colors.primary = themeColor.value;
+		applyPrimaryColor(appConfig, themeColor.value);
 	}, { immediate: true });
+
+	// Custom accent. Writes the same `themeColor` field the presets do, just as
+	// a literal hex, so dirty tracking, save and the live preview all work
+	// unchanged.
+	const isCustomColor = computed(() => isHexColor(themeColor.value));
+	const currentHex = computed(() => themeHex(themeColor.value));
+	// The native colour well always holds a literal hex; writing to it is what
+	// makes the selection custom.
+	const customColorWell = computed({
+		get: () => currentHex.value,
+		set: (v: string) => {
+			themeColor.value = v.toLowerCase();
+		}
+	});
+	// The text field keeps its own draft so a half-typed hex doesn't blow away
+	// the applied colour on every keystroke.
+	const customHexDraft = ref("");
+	watch(themeColor, (v) => {
+		if (isHexColor(v)) customHexDraft.value = v.toLowerCase();
+	}, { immediate: true });
+	const onHexInput = (v: string) => {
+		customHexDraft.value = v;
+		if (isHexColor(v)) themeColor.value = v.trim().toLowerCase();
+	};
 
 	const saving = ref(false);
 
