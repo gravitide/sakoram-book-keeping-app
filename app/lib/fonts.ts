@@ -27,6 +27,7 @@ export const BUNDLED_FONTS: BundledFont[] = [
 	{ name: "Stack Sans Text", mono: false },
 	{ name: "Miriam Libre", mono: false },
 	{ name: "Amarna", mono: false },
+	{ name: "Geomini", mono: false },
 	{ name: "Iosevka Charon Mono", mono: true },
 	{ name: "Martian Mono", mono: true },
 	{ name: "Google Sans Code", mono: true }

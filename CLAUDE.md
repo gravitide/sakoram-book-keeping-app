@@ -853,7 +853,7 @@ a font in CSS that isn't installed locally silently falls back to
 system-ui — defeats the point of having a chosen font. Same hazard
 for Typst's font-path lookup.
 
-Six families ship in two places. Each family is **multiple static-weight
+Ten families ship in two places. Each family is **multiple static-weight
 TTFs** (Regular + Bold, plus Medium for the sans-serif body fonts) rather
 than a single variable file: Typst 0.14 only renders the default weight
 from a variable TTF unless it has STAT-named instances at every weight
@@ -870,6 +870,7 @@ shared family name and selects the right one for each weight request.
 | Stack Sans Text | Regular / Bold | OFL. Extra bundled choice. |
 | Miriam Libre | Regular / Bold | OFL. |
 | Amarna | Regular / Bold | OFL. Decorative-leaning sans. |
+| Geomini | Regular / Medium / Bold | OFL. Geometric sans (fontbob, added to Google Fonts 2026-05). **Its variable default is ExtraLight (wght 200), not 400** — the JOBS entry pins each weight explicitly, so don't "simplify" it to rely on axis defaults. |
 
 The statics are generated from upstream variable files via
 `scripts/instance-fonts.py` (run with `uv run scripts/instance-fonts.py`

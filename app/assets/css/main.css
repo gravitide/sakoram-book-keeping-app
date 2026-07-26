@@ -107,6 +107,28 @@
 }
 
 @font-face {
+	font-family: "Geomini";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url("@/assets/fonts/Geomini-Regular.ttf") format("truetype");
+}
+@font-face {
+	font-family: "Geomini";
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+	src: url("@/assets/fonts/Geomini-Medium.ttf") format("truetype");
+}
+@font-face {
+	font-family: "Geomini";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url("@/assets/fonts/Geomini-Bold.ttf") format("truetype");
+}
+
+@font-face {
 	font-family: "Akt";
 	font-style: normal;
 	font-weight: 400;

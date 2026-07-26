@@ -11,14 +11,15 @@ describe("bundled font registry", () => {
 		expect(new Set(names).size).toBe(names.length);
 	});
 
-	it("splits into the six sans and three monospaced faces that ship in src-tauri/fonts", () => {
+	it("splits into the seven sans and three monospaced faces that ship in src-tauri/fonts", () => {
 		expect(BUNDLED_SANS_NAMES).toEqual([
 			"Akt",
 			"Inter",
 			"Inter Tight",
 			"Stack Sans Text",
 			"Miriam Libre",
-			"Amarna"
+			"Amarna",
+			"Geomini"
 		]);
 		expect(BUNDLED_MONO_NAMES).toEqual([
 			"Iosevka Charon Mono",
