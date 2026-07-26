@@ -66,10 +66,35 @@ bump `SCHEMA_VERSION` 49 → 50 in `src-tauri/src/data_io.rs`. No `TABLES`
 change — `company_settings` is already exported and columns are
 discovered via `PRAGMA table_info`.
 
-### 2. Typst — `doc-header(data)` in `common.typ`
+### 2. Typst — `common.typ` gains a template config + header
 
-One function, five branches on `data.at("template", default: "classic")`,
-each reproducing the corresponding `doc-*.typ` header **verbatim**:
+The five templates differ in **page setup** as well as header art. Typst
+`set` rules inside a function are scoped to that function's content, so a
+header function alone cannot carry margins, base text size, or footer
+style. `common.typ` therefore gains two pieces:
+
+**`template-config(data)`** — reads the template key off `data`, and
+returns a dictionary (`margin`, `text-size`, `leading`, `spacing`,
+`footer`) that the caller applies with its own `set` rules. It takes the
+whole `data` rather than just the key so it can compose
+`footer-content(data)` into the ready-to-use `footer` value. Values
+transcribed verbatim from each `doc-*.typ`:
+
+| key | margin | text size | par leading / spacing | footer |
+|---|---|---|---|---|
+| `classic` | x:18mm, top:16mm, bottom:18mm | 9.5pt | 0.55em / 0.65em | rule + 4pt gap, 8pt `#6b7280` |
+| `modern` | x:18mm, top:16mm, bottom:18mm | 9.5pt | 0.55em / 0.65em | same as classic |
+| `minimal` | x:22mm, top:22mm, bottom:22mm | 9pt | 0.62em / 0.72em | no rule, 8pt `#9ca3af` |
+| `compact` | x:14mm, top:12mm, bottom:12mm | 8.5pt | 0.5em / 0.5em | rule + 3pt gap, 7.5pt `#6b7280` |
+| `letterhead` | x:18mm, **top:45mm**, bottom:18mm | 9.5pt | 0.55em / 0.65em | same as classic |
+
+`letterhead`'s `top: 45mm` is the load-bearing one: it reserves the blank
+band for pre-printed stationery. A payslip that ignored it would print
+over the user's letterhead — the exact defect this change exists to fix.
+
+**`doc-header(data)`** — five branches on
+`data.at("template", default: "classic")`, each reproducing the
+corresponding `doc-*.typ` header **verbatim**:
 
 - `classic` — logo top-right (12mm) or business-name wordmark, 2pt theme
   rule, centred title.
@@ -95,15 +120,19 @@ The function needs `data.title` and `data.number`.
 - Replace the inline `chosen-font` with `resolve-font(data)` and the
   inline page-footer content with `footer-content(data)`. Both were
   verified behaviourally identical to `common.typ`'s versions.
-- Body density: Typst `set` rules inside a function are scoped to that
-  function's content, so `doc-header` cannot carry `compact`'s tighter
-  leading. `payslip.typ` sets it explicitly from the template key:
+- Apply the page setup from `template-config`, replacing the hardcoded
+  `#set page` / `#set text` / `#set par` at the top of the file:
 
 ```typst
-#let tpl = data.at("template", default: "classic")
-#set par(leading: if tpl == "compact" { 0.5em } else { 0.55em },
-         spacing: if tpl == "compact" { 0.5em } else { 0.65em })
+#let cfg = template-config(data)
+
+#set page(paper: "a4", margin: cfg.margin, footer: cfg.footer)
+#set text(font: resolve-font(data), size: cfg.text-size, lang: "en", number-width: "tabular")
+#set par(leading: cfg.leading, spacing: cfg.spacing)
 ```
+
+`cfg.footer` is prebuilt content, so `template-config` takes `data` as
+well as the key in order to compose `footer-content(data)` into it.
 
 `payslip.typ` must now be rendered with `common.typ` written alongside it
 — see the Rust change below.
@@ -190,8 +219,10 @@ technique used to verify migration 0049):
    header matches the corresponding `doc-*.typ` header, and that the body
    (earnings / deductions / net pay / employer contributions / pay-to /
    notes) is unchanged from today's output.
-2. `letterhead` renders **no logo** on the payslip.
-3. `compact` visibly tightens payslip body density.
+2. `letterhead` renders **no logo** on the payslip **and** reserves the
+   45mm top margin.
+3. `compact` visibly tightens payslip body density and narrows the margins;
+   `minimal` widens them to 22mm and drops the footer rule.
 4. Render an invoice and a quote before and after the change with the same
    template key and confirm the output is unchanged — the `doc-*.typ`
    files are untouched, so any diff means the payload repoint broke.
