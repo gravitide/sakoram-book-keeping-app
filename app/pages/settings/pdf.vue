@@ -74,23 +74,32 @@
 						<SectionCard
 							icon="i-lucide-palette"
 							title="Colour"
-							subtitle="The accent used for the header rule and highlights on your generated PDFs. Independent of the app's theme colour — set it here to print, say, red invoices from a green app."
+							subtitle="The accent used for the header rule and highlights on your generated PDFs. Independent of the app's theme colour."
 						>
-							<div class="grid grid-cols-4 gap-3">
+							<!-- One row of eight, matching the Theme colour picker on
+								/settings/appearance. This column is half-width, so the
+								swatch is a notch smaller and the label truncates: at the
+								narrow end of `lg` the cells drop to ~40px, and "Emerald"
+								at text-xs would otherwise spill into its neighbour. The
+								full name stays available via the button's title tooltip. -->
+							<div class="grid grid-cols-8 gap-1.5">
 								<button
 									v-for="c in colors"
 									:key="c.value"
 									type="button"
-									class="group flex flex-col items-center gap-1.5"
+									class="group flex flex-col items-center gap-1.5 min-w-0"
 									:title="c.label"
 									@click="form.pdf_theme_color = c.value"
 								>
 									<span
-										class="size-10 rounded-full border-2 transition"
+										class="size-9 rounded-full border-2 transition shrink-0"
 										:class="form.pdf_theme_color === c.value ? 'border-(--ui-text) scale-110' : 'border-(--ui-border) group-hover:border-(--ui-text-muted)'"
 										:style="{ backgroundColor: c.hex }"
 									/>
-									<span class="text-xs" :class="form.pdf_theme_color === c.value ? 'text-(--ui-text) font-medium' : 'text-(--ui-text-muted)'">
+									<span
+										class="text-[10px] w-full text-center truncate"
+										:class="form.pdf_theme_color === c.value ? 'text-(--ui-text) font-medium' : 'text-(--ui-text-muted)'"
+									>
 										{{ c.label }}
 									</span>
 								</button>
