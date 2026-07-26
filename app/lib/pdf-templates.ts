@@ -12,7 +12,7 @@ export interface PdfTemplateMeta {
 
 export const PDF_TEMPLATES: PdfTemplateMeta[] = [
 	{ key: "classic", label: "Classic", description: "Logo top-right, accent rule, centred title. The default." },
-	{ key: "modern", label: "Modern", description: "Full-width header band in your theme colour, logo + title reversed in white." },
+	{ key: "modern", label: "Modern", description: "Left-aligned letterhead: logo beside your header text, over a tapered accent rule." },
 	{ key: "minimal", label: "Minimal", description: "No rules or fills, generous whitespace, light type. Clean in black & white." },
 	{ key: "compact", label: "Compact", description: "Tighter margins and smaller type so long itemised documents fit on fewer pages." },
 	{ key: "letterhead", label: "Letterhead", description: "Leaves the top blank for pre-printed stationery; no logo block." }
