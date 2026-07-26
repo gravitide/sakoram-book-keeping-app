@@ -263,6 +263,7 @@
 
 	import type { ThemeColor } from "~/lib/theme";
 	import { useUiState, ZOOM_LEVELS } from "~/composables/useUiState";
+	import { BUNDLED_MONO_NAMES, BUNDLED_SANS_NAMES } from "~/lib/fonts";
 	import { isValidThemeColor, THEME_COLORS } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 
@@ -305,21 +306,11 @@
 	// when present on the user's machine; the cascade falls back to the
 	// bundled Akt (the current default — see migration 0024) and then
 	// Inter as a secondary fallback if not.
-	const bundledFonts = [
-		"Akt",
-		"Inter",
-		"Inter Tight",
-		"Stack Sans Text",
-		"Miriam Libre",
-		"Amarna"
-	];
-	// Bundled monospaced faces — listed under their own sub-heading. Good
-	// for figure-aligned numbers; more will be added over time.
-	const bundledMonoFonts = [
-		"Iosevka Charon Mono",
-		"Martian Mono",
-		"Google Sans Code"
-	];
+	// Bundled faces (sans + monospaced) come from the shared registry in
+	// app/lib/fonts.ts — the single source of truth, also used by the PDF
+	// settings page. Adding a font is a one-line edit there.
+	const bundledFonts = BUNDLED_SANS_NAMES;
+	const bundledMonoFonts = BUNDLED_MONO_NAMES;
 	const systemFonts = [
 		"system-ui",
 		"Georgia",

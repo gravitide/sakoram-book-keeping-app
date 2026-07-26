@@ -8,7 +8,7 @@
 				PDF
 			</h1>
 			<p class="text-sm text-(--ui-text-muted)">
-				Font, colour, header logo, and templates for your generated PDFs. Footer notes moved to Quotes &amp; invoices.
+				Font, colour, header logo, and templates for your generated PDFs.
 			</p>
 		</header>
 
@@ -17,10 +17,10 @@
 			class="max-w-5xl mx-auto"
 			@submit="onSubmit"
 		>
-			<!-- Layout: Font + Header logo sit side by side on top (both are
-				compact), then Footer notes and Document protection each span
-				the full width below — those have wider content (textareas, a
-				password field + a row of toggles) that reads better wide.
+			<!-- Layout: Font + Colour sit side by side on top — both are compact
+				and both are "how the type and accent look". Header logo then runs
+				full width below, because it needs the room for cropping and sizing
+				controls. Templates and Document protection follow, also full width.
 				items-start keeps the top row from stretching to equal height. -->
 			<div class="space-y-6">
 				<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
@@ -28,171 +28,164 @@
 						<SectionCard
 							icon="i-lucide-type"
 							title="Font"
-							subtitle="Used when rendering quotes, invoices, bills, and vouchers. Pick a bundled font for guaranteed availability — Typst falls back to Inter if it can't resolve your choice."
+							subtitle="Used for every PDF this app generates. All fonts here are bundled with the app, so your documents look identical on any machine."
 						>
 							<UFormField label="Font family" name="pdf_font">
-								<UInput v-model="form.pdf_font" placeholder="e.g. Inter" />
+								<USelectMenu
+									v-model="form.pdf_font"
+									:items="fontOptions"
+									value-key="value"
+									label-key="label"
+									icon="i-lucide-type"
+									class="w-full"
+									:search-input="{ placeholder: 'Search fonts…' }"
+								>
+									<template #item-label="{ item }">
+										<span :style="{ fontFamily: `'${item.value}', ${item.mono ? 'monospace' : 'sans-serif'}` }">
+											{{ item.label }}
+										</span>
+									</template>
+								</USelectMenu>
 							</UFormField>
-
-							<div>
-								<div class="text-xs text-(--ui-text-muted) mb-2">
-									Bundled fonts:
-								</div>
-								<div class="flex flex-wrap gap-2 mb-3">
-									<UButton
-										v-for="suggestion in bundledFonts"
-										:key="suggestion"
-										size="xs"
-										variant="soft"
-										color="primary"
-										:style="{ fontFamily: `'${suggestion}', sans-serif` }"
-										@click="form.pdf_font = suggestion"
-									>
-										{{ suggestion }}
-									</UButton>
-								</div>
-								<div class="text-xs text-(--ui-text-muted) mb-2 flex items-center gap-1.5">
-									<UIcon name="i-lucide-code" class="size-3.5" />
-									Monospaced:
-								</div>
-								<div class="flex flex-wrap gap-2">
-									<UButton
-										v-for="suggestion in bundledMonoFonts"
-										:key="suggestion"
-										size="xs"
-										variant="soft"
-										color="primary"
-										:style="{ fontFamily: `'${suggestion}', monospace` }"
-										@click="form.pdf_font = suggestion"
-									>
-										{{ suggestion }}
-									</UButton>
-								</div>
-							</div>
 
 							<div class="p-4 border border-(--ui-border) rounded-md bg-(--ui-bg-muted)">
 								<div class="text-xs text-(--ui-text-muted) uppercase tracking-wide mb-2">
-									Preview (the PDF pulls the same TTF, so it'll look identical)
+									Preview
 								</div>
-								<div :style="{ fontFamily: pdfPreviewFontStack }" class="space-y-1">
+								<!-- Heading, body prose, and a figures row — the three things a
+									document font has to get right. Figures use tabular-nums
+									because money columns have to align in the PDF. -->
+								<div :style="{ fontFamily: pdfPreviewFontStack }" class="space-y-1.5">
 									<div class="text-2xl font-semibold">
 										INVOICE INV-2026-0042
 									</div>
+									<div class="text-sm">
+										Payment is due within 30 days of the invoice date.
+									</div>
 									<div class="text-sm tabular-nums">
-										Total: 12,345.00 — due 2026-06-15
+										Subtotal 10,500.00 · VAT 1,845.00 · Total 12,345.00
 									</div>
 								</div>
 							</div>
 						</SectionCard>
 					</div>
 
-					<div id="header-logo" class="scroll-mt-6">
+					<div id="color" class="scroll-mt-6">
 						<SectionCard
-							icon="i-lucide-image"
-							title="Header logo"
-							subtitle="Letterhead-style PNG, JPG, or SVG. Different from the square Company logo, which is only used in the sidebar."
+							icon="i-lucide-palette"
+							title="Colour"
+							subtitle="The accent used for the header rule and highlights on your generated PDFs. Independent of the app's theme colour."
 						>
-							<div class="flex flex-col gap-3">
-								<div
-									class="group relative h-28 w-full rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition cursor-pointer"
-									:class="[
-										pdfLogoDragOver
-											? 'border-(--ui-primary) bg-(--ui-primary)/5 scale-[1.01]'
-											: 'border-(--ui-border-accented) bg-(--ui-bg-muted) hover:border-(--ui-primary)/60'
-									]"
-									role="button"
-									tabindex="0"
-									aria-label="Upload PDF header logo"
-									@click="pickPdfLogo"
-									@keydown.enter.prevent="pickPdfLogo"
-									@keydown.space.prevent="pickPdfLogo"
-									@dragover.prevent="pdfLogoDragOver = true"
-									@dragenter.prevent="pdfLogoDragOver = true"
-									@dragleave.prevent="pdfLogoDragOver = false"
-									@drop.prevent="onPdfLogoDrop"
+							<!-- One row of eight, matching the Theme colour picker on
+								/settings/appearance. This column is half-width, so the
+								swatch is a notch smaller and the label truncates: at the
+								narrow end of `lg` the cells drop to ~40px, and "Emerald"
+								at text-xs would otherwise spill into its neighbour. The
+								full name stays available via the button's title tooltip. -->
+							<div class="grid grid-cols-8 gap-1.5">
+								<button
+									v-for="c in colors"
+									:key="c.value"
+									type="button"
+									class="group flex flex-col items-center gap-1.5 min-w-0"
+									:title="c.label"
+									@click="form.pdf_theme_color = c.value"
 								>
-									<input
-										ref="pdfLogoInput"
-										type="file"
-										accept="image/png,image/jpeg,image/webp,image/svg+xml"
-										class="hidden"
-										@change="onPdfLogoFileChange"
+									<span
+										class="size-9 rounded-full border-2 transition shrink-0"
+										:class="form.pdf_theme_color === c.value ? 'border-(--ui-text) scale-110' : 'border-(--ui-border) group-hover:border-(--ui-text-muted)'"
+										:style="{ backgroundColor: c.hex }"
+									/>
+									<span
+										class="text-[10px] w-full text-center truncate"
+										:class="form.pdf_theme_color === c.value ? 'text-(--ui-text) font-medium' : 'text-(--ui-text-muted)'"
 									>
-									<img
-										v-if="store.pdfHeaderLogoSrc"
-										:src="store.pdfHeaderLogoSrc"
-										alt="PDF header logo"
-										class="max-w-full max-h-full object-contain p-3"
-									>
-									<div v-else class="flex flex-col items-center gap-1 text-(--ui-text-muted)">
-										<UIcon name="i-lucide-image-up" class="size-7" />
-										<div class="text-[10px] uppercase tracking-wider">
-											Drop wide logo
-										</div>
-									</div>
-									<div
-										v-if="store.pdfHeaderLogoSrc"
-										class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100"
-									>
-										<UIcon name="i-lucide-upload" class="size-5 text-white" />
-										<span class="text-[10px] uppercase tracking-wider text-white">
-											Replace
-										</span>
-									</div>
-								</div>
-								<div class="flex flex-wrap items-center gap-2">
-									<UButton
-										v-if="store.settings?.pdf_header_logo_path"
-										icon="i-lucide-trash-2"
-										size="xs"
-										variant="ghost"
-										color="neutral"
-										@click="removePdfLogo"
-									>
-										Remove
-									</UButton>
-									<UButton
-										v-else
-										icon="i-lucide-upload"
-										size="xs"
-										variant="soft"
-										@click="pickPdfLogo"
-									>
-										Upload header
-									</UButton>
-									<span v-if="pdfLogoFileName" class="text-xs text-(--ui-text-muted) truncate">
-										{{ pdfLogoFileName }}
+										{{ c.label }}
 									</span>
-								</div>
+								</button>
 							</div>
 						</SectionCard>
 					</div>
 				</div>
 
-				<div id="color" class="scroll-mt-6">
+				<div id="header-logo" class="scroll-mt-6">
 					<SectionCard
-						icon="i-lucide-palette"
-						title="Colour"
-						subtitle="The accent used for the header rule and highlights on your generated PDFs. Independent of the app's theme colour — set it here to print, say, red invoices from a green app."
+						icon="i-lucide-image"
+						title="Header logo"
+						subtitle="Letterhead-style PNG, JPG, or SVG. Different from the square Company logo, which is only used in the sidebar."
 					>
-						<div class="grid grid-cols-4 sm:grid-cols-8 gap-3">
-							<button
-								v-for="c in colors"
-								:key="c.value"
-								type="button"
-								class="group flex flex-col items-center gap-1.5"
-								:title="c.label"
-								@click="form.pdf_theme_color = c.value"
+						<div class="flex flex-col gap-3">
+							<div
+								class="group relative h-28 w-full rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition cursor-pointer"
+								:class="[
+									pdfLogoDragOver
+										? 'border-(--ui-primary) bg-(--ui-primary)/5 scale-[1.01]'
+										: 'border-(--ui-border-accented) bg-(--ui-bg-muted) hover:border-(--ui-primary)/60'
+								]"
+								role="button"
+								tabindex="0"
+								aria-label="Upload PDF header logo"
+								@click="pickPdfLogo"
+								@keydown.enter.prevent="pickPdfLogo"
+								@keydown.space.prevent="pickPdfLogo"
+								@dragover.prevent="pdfLogoDragOver = true"
+								@dragenter.prevent="pdfLogoDragOver = true"
+								@dragleave.prevent="pdfLogoDragOver = false"
+								@drop.prevent="onPdfLogoDrop"
 							>
-								<span
-									class="size-10 rounded-full border-2 transition"
-									:class="form.pdf_theme_color === c.value ? 'border-(--ui-text) scale-110' : 'border-(--ui-border) group-hover:border-(--ui-text-muted)'"
-									:style="{ backgroundColor: c.hex }"
-								/>
-								<span class="text-xs" :class="form.pdf_theme_color === c.value ? 'text-(--ui-text) font-medium' : 'text-(--ui-text-muted)'">
-									{{ c.label }}
+								<input
+									ref="pdfLogoInput"
+									type="file"
+									accept="image/png,image/jpeg,image/webp,image/svg+xml"
+									class="hidden"
+									@change="onPdfLogoFileChange"
+								>
+								<img
+									v-if="store.pdfHeaderLogoSrc"
+									:src="store.pdfHeaderLogoSrc"
+									alt="PDF header logo"
+									class="max-w-full max-h-full object-contain p-3"
+								>
+								<div v-else class="flex flex-col items-center gap-1 text-(--ui-text-muted)">
+									<UIcon name="i-lucide-image-up" class="size-7" />
+									<div class="text-[10px] uppercase tracking-wider">
+										Drop wide logo
+									</div>
+								</div>
+								<div
+									v-if="store.pdfHeaderLogoSrc"
+									class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100"
+								>
+									<UIcon name="i-lucide-upload" class="size-5 text-white" />
+									<span class="text-[10px] uppercase tracking-wider text-white">
+										Replace
+									</span>
+								</div>
+							</div>
+							<div class="flex flex-wrap items-center gap-2">
+								<UButton
+									v-if="store.settings?.pdf_header_logo_path"
+									icon="i-lucide-trash-2"
+									size="xs"
+									variant="ghost"
+									color="neutral"
+									@click="removePdfLogo"
+								>
+									Remove
+								</UButton>
+								<UButton
+									v-else
+									icon="i-lucide-upload"
+									size="xs"
+									variant="soft"
+									@click="pickPdfLogo"
+								>
+									Upload header
+								</UButton>
+								<span v-if="pdfLogoFileName" class="text-xs text-(--ui-text-muted) truncate">
+									{{ pdfLogoFileName }}
 								</span>
-							</button>
+							</div>
 						</div>
 					</SectionCard>
 				</div>
@@ -272,21 +265,29 @@
 					</SectionCard>
 				</div>
 
-				<div class="scroll-mt-6">
-					<SectionCard
-						icon="i-lucide-shield-check"
-						title="Document protection"
-						subtitle="Password-protect generated PDFs against editing and copying."
-					>
+				<!-- Not a SectionCard: this is a signpost to the Security page, not a
+					setting you change here. A compact row keeps it from reading as
+					another block of PDF configuration. -->
+				<div class="flex items-start gap-3 rounded-md border border-(--ui-border) bg-(--ui-bg-muted) px-4 py-3">
+					<UIcon name="i-lucide-shield-check" class="size-5 text-(--ui-text-muted) shrink-0 mt-0.5" />
+					<!-- Button sits inside the text column, below the copy, so it stays
+						next to what it refers to. On a full-width row a right-floated
+						button ends up marooned an inch away from its own label. -->
+					<div class="text-sm min-w-0">
+						<div>
+							<span class="font-medium">Document protection</span>
+							<span class="text-(--ui-text-muted)"> — password-protect generated PDFs against editing and copying.</span>
+						</div>
 						<UButton
 							to="/settings/security#pdf-protection"
-							variant="outline"
+							variant="soft"
 							trailing-icon="i-lucide-arrow-right"
-							size="sm"
+							size="xs"
+							class="mt-2.5"
 						>
-							Go to PDF protection
+							Open
 						</UButton>
-					</SectionCard>
+					</div>
 				</div>
 			</div>
 
@@ -368,6 +369,7 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
+	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
 	import { PDF_TEMPLATES } from "~/lib/pdf-templates";
 	import { sampleInvoicePayload, samplePayslipPayload, sampleQuotePayload } from "~/lib/sample-pdf";
 	import { THEME_COLORS, themeHex } from "~/lib/theme";
@@ -431,10 +433,34 @@
 	// any face installed on their machine, but only the bundled faces are
 	// guaranteed to render identically across machines. Iosevka Charon Mono
 	// is the bundled monospace (good for figure-aligned numbers).
-	const bundledFonts = ["Akt", "Inter", "Inter Tight", "Stack Sans Text", "Miriam Libre", "Amarna"];
-	// Bundled monospaced faces, listed under their own sub-heading. Good for
-	// figure-aligned numbers; more will be added over time.
-	const bundledMonoFonts = ["Iosevka Charon Mono", "Martian Mono", "Google Sans Code"];
+	// Grouped options for the font dropdown. NuxtUI 4 renders an array of
+	// arrays as separate ComboboxGroups, and `type: "label"` rows as inert
+	// group headings (they're excluded from filtering and selection).
+	//
+	// A stored pdf_font that isn't bundled — from back when this was a
+	// free-text field — is preserved as its own "(custom)" group so that
+	// opening this page never silently rewrites someone's PDF typeface.
+	// Once they pick a bundled face, the custom row disappears.
+	const fontOptions = computed(() => {
+		const groups: Array<Array<Record<string, unknown>>> = [
+			[
+				{ type: "label", label: "Bundled" },
+				...BUNDLED_FONTS.filter((f) => !f.mono).map((f) => ({ label: f.name, value: f.name, mono: false }))
+			],
+			[
+				{ type: "label", label: "Monospaced" },
+				...BUNDLED_FONTS.filter((f) => f.mono).map((f) => ({ label: f.name, value: f.name, mono: true }))
+			]
+		];
+		const current = form.pdf_font;
+		if (current && !isBundledFont(current)) {
+			groups.push([
+				{ type: "label", label: "Not bundled" },
+				{ label: `${current} (custom)`, value: current, mono: false }
+			]);
+		}
+		return groups;
+	});
 
 	const pdfPreviewFontStack = computed(() =>
 		`'${form.pdf_font || "Akt"}', 'Akt', 'Inter', serif`
