@@ -8,7 +8,7 @@
 				PDF
 			</h1>
 			<p class="text-sm text-(--ui-text-muted)">
-				Font, colour, header logo, and templates for your generated PDFs. Footer notes moved to Quotes &amp; invoices.
+				Font, colour, header logo, and templates for your generated PDFs.
 			</p>
 		</header>
 
@@ -28,7 +28,7 @@
 						<SectionCard
 							icon="i-lucide-type"
 							title="Font"
-							subtitle="Used when rendering quotes, invoices, bills, and vouchers. Pick a bundled font for guaranteed availability — Typst falls back to Inter if it can't resolve your choice."
+							subtitle="Used for every PDF this app generates. All fonts here are bundled with the app, so your documents look identical on any machine."
 						>
 							<UFormField label="Font family" name="pdf_font">
 								<USelectMenu
@@ -246,21 +246,24 @@
 					</SectionCard>
 				</div>
 
-				<div class="scroll-mt-6">
-					<SectionCard
-						icon="i-lucide-shield-check"
-						title="Document protection"
-						subtitle="Password-protect generated PDFs against editing and copying."
+				<!-- Not a SectionCard: this is a signpost to the Security page, not a
+					setting you change here. A compact row keeps it from reading as
+					another block of PDF configuration. -->
+				<div class="flex items-center gap-3 rounded-md border border-(--ui-border) bg-(--ui-bg-muted) px-4 py-3">
+					<UIcon name="i-lucide-shield-check" class="size-5 text-(--ui-text-muted) shrink-0" />
+					<div class="text-sm min-w-0 flex-1">
+						<span class="font-medium">Document protection</span>
+						<span class="text-(--ui-text-muted)"> — password-protect generated PDFs against editing and copying.</span>
+					</div>
+					<UButton
+						to="/settings/security#pdf-protection"
+						variant="soft"
+						trailing-icon="i-lucide-arrow-right"
+						size="xs"
+						class="shrink-0"
 					>
-						<UButton
-							to="/settings/security#pdf-protection"
-							variant="outline"
-							trailing-icon="i-lucide-arrow-right"
-							size="sm"
-						>
-							Go to PDF protection
-						</UButton>
-					</SectionCard>
+						Open
+					</UButton>
 				</div>
 			</div>
 

@@ -652,9 +652,9 @@
 					icon: "i-lucide-file-text",
 					sections: [
 						{ hash: "#font", label: "Font", icon: "i-lucide-type" },
+						{ hash: "#header-logo", label: "Header logo", icon: "i-lucide-image" },
 						{ hash: "#color", label: "Colour", icon: "i-lucide-palette" },
-						{ hash: "#templates", label: "Templates", icon: "i-lucide-layout-template" },
-						{ hash: "#header-logo", label: "Header logo", icon: "i-lucide-image" }
+						{ hash: "#templates", label: "Templates", icon: "i-lucide-layout-template" }
 					]
 				},
 				{
