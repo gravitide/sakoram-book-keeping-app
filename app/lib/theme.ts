@@ -31,7 +31,20 @@ export const THEME_COLORS: ReadonlyArray<{ value: ThemeColor, label: string, hex
 	{ value: "violet", label: "Violet", hex: "#8b5cf6" }
 ] as const;
 
+/**
+ * True for `#rgb` / `#rrggbb`, case-insensitive, surrounding space tolerated.
+ * Exported because the settings page needs the same rule to decide whether
+ * the custom-colour row is the active selection.
+ */
+export const isHexColor = (v: string | null | undefined): boolean =>
+	typeof v === "string" && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(v.trim());
+
 export const themeHex = (name: string | null | undefined): string => {
+	// A custom PDF accent is stored as a literal hex in the same column that
+	// otherwise holds a preset name — pass it straight through. Without this
+	// the lookup below misses and EVERY generated PDF silently renders the
+	// red fallback.
+	if (isHexColor(name)) return name!.trim().toLowerCase();
 	const found = THEME_COLORS.find((c) => c.value === name);
 	return found?.hex ?? "#ef4444";
 };
