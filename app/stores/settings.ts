@@ -94,6 +94,13 @@ export interface CompanySettingsRow {
 	// last crop rect JSON {x,y,w,h} in source px, null for SVG / uncropped.
 	pdf_logo_scale: number
 	pdf_logo_crop: string | null
+	// Customizable page chrome (migration 0052). The *_custom flags are the
+	// opt-in; the *_text columns hold TipTap JSON that may contain {token}
+	// fields resolved at render time. Flags default 0 = hardcoded chrome.
+	pdf_header_custom: number
+	pdf_header_text: string | null
+	pdf_footer_custom: number
+	pdf_footer_text: string | null
 	updated_at: string
 }
 
@@ -147,7 +154,11 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"letter_preprinted_bottom_margin_mm",
 	"payslip_show_signatures",
 	"pdf_logo_scale",
-	"pdf_logo_crop"
+	"pdf_logo_crop",
+	"pdf_header_custom",
+	"pdf_header_text",
+	"pdf_footer_custom",
+	"pdf_footer_text"
 ];
 
 export const useSettingsStore = defineStore("settings", () => {
