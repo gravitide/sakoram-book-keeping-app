@@ -752,11 +752,18 @@
 		pdf.open();
 	};
 
+	// Navigating away does NOT tear this page down — app.vue renders
+	// <NuxtPage keepalive>, so the component is cached and every ref survives.
+	// Anything left set here comes back the next time the page activates, which
+	// is why the confirm modal has to be closed and `busy` cleared explicitly
+	// rather than relying on unmount. Leaving them set reopened the dialog with
+	// a spinning Delete button on the next payslip the user viewed.
 	const onDelete = async () => {
 		if (!row.value) return;
 		busy.value = true;
 		try {
 			await store.remove(row.value.id);
+			confirmDelete.value = false;
 			toast.add({ title: "Payslip deleted", color: "info", icon: "i-lucide-trash-2" });
 			await router.replace("/payslips");
 		} catch (err) {
@@ -766,6 +773,7 @@
 				color: "error",
 				icon: "i-lucide-circle-alert"
 			});
+		} finally {
 			busy.value = false;
 		}
 	};

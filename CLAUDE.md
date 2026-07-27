@@ -2284,6 +2284,17 @@ the next "feels native" win.
 - **Don't `await` Pinia state assignments inside the store's setup** —
   the store hasn't returned yet, so dependent stores see undefined.
   Use `onMounted` or method calls.
+- **Navigating away does NOT reset page state — `app.vue` renders
+  `<NuxtPage keepalive>`.** The component is cached, not unmounted, so every
+  `ref` survives and comes back the next time the page activates. Any handler
+  that ends in `router.replace(...)` must explicitly clear what it set;
+  relying on unmount is a bug. This shipped twice: the payslip and credit-note
+  delete handlers left `confirmDelete = true` and `busy = true` on the success
+  path, so the confirm dialog reopened — Delete button spinning — on the next
+  document the user viewed. The other five detail pages were unaffected only
+  because they close the dialog before awaiting. Reset in a `finally`, and
+  remember this applies to any long-lived flag (modals, loading, wizard step),
+  not just delete.
 - **Don't add `BEGIN`/`COMMIT` from JS.** See "Connection pool caveat".
 - **Don't change `com.sakoram.billing` bundle identifier** — orphans
   user data.
