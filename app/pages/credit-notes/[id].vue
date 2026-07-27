@@ -627,11 +627,17 @@
 	const askDelete = () => {
 		confirmDelete.value = true;
 	};
+	// Navigating away does NOT tear this page down — app.vue renders
+	// <NuxtPage keepalive>, so the component is cached and every ref survives.
+	// The confirm modal has to be closed and `busy` cleared explicitly rather
+	// than relying on unmount, or both come back the next time the page
+	// activates: dialog open, Delete button spinning.
 	const doDelete = async () => {
 		if (!creditNote.value) return;
 		busy.value = true;
 		try {
 			await creditNotesStore.remove(creditNote.value.id);
+			confirmDelete.value = false;
 			toast.add({ title: "Credit note deleted", color: "info", icon: "i-lucide-trash-2" });
 			await router.replace("/credit-notes");
 		} catch (err) {
@@ -641,6 +647,7 @@
 				color: "error",
 				icon: "i-lucide-circle-alert"
 			});
+		} finally {
 			busy.value = false;
 		}
 	};
