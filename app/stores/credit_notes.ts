@@ -9,10 +9,22 @@
 //   issued    — given to the client; immutable except for notes
 //   cancelled — terminal user-set state; sticky
 //
-// Unlike invoices there is no derived enrichment here — what's
-// persisted is what the UI shows. The interaction between a credit
-// note and its source invoice (reducing the invoice's outstanding
-// balance) lives in the invoices store, not here.
+// A credit note's own status is exactly what's persisted — there's no
+// derived state on the credit note itself.
+//
+// It does affect other documents, though. `creditedCentsFor` and
+// `unappliedCreditFor` below are the aggregates the rest of the app reads:
+//   - the invoices store nets `creditedCentsFor` out of an invoice's balance,
+//     and `deriveInvoiceStatus` in app/lib/derived-status.ts takes it as an
+//     input alongside receipt vouchers
+//   - aged receivables and customer statements subtract `unappliedCreditFor`
+//     as a client-level line, since a credit with no source invoice can't be
+//     attributed to any single document
+//   - the VAT and P&L reports subtract issued credit notes' tax / subtotal
+//
+// The SQL equivalents live in `creditJoinOn()` in app/lib/derived-status.ts
+// and in dashboard-data.ts. All of them count `issued` only — keep them in
+// step; a mismatch shows up as two surfaces disagreeing about one balance.
 
 import type { InvoiceLineRow, InvoiceRow } from "~/stores/invoices";
 import type { ClientSnapshot, PricingMode } from "~/stores/quotes";
@@ -35,9 +47,11 @@ export interface CreditNoteRow {
 	/// snapshot is written so the list page can render the client
 	/// name + sort + search without a JSON parse per row.
 	client_name: string
-	/// Optional FK to the invoice this credit settles. When set, the
-	/// invoice's derived balance subtracts this credit note's total
-	/// (alongside the receipt vouchers).
+	/// Optional FK to the invoice this credit settles. When set AND the
+	/// credit note is issued, the invoice's derived balance subtracts this
+	/// total alongside the receipt vouchers — see `creditedCentsFor`. When
+	/// null, the credit is unapplied and reduces the client's overall
+	/// receivable instead — see `unappliedCreditFor`.
 	source_invoice_id: number | null
 	issue_date: string
 	status: CreditNoteStatus
@@ -162,6 +176,31 @@ export const useCreditNotesStore = defineStore("credit_notes", () => {
 		}
 		return sum;
 	});
+
+	/// Σ issued credit notes settled against this invoice, in cents. Drafts
+	/// aren't real yet; cancelled are void. Mirrors `creditJoinOn()` in
+	/// app/lib/derived-status.ts — keep the two in step.
+	const creditedCentsFor = (invoiceId: number): number =>
+		creditNotes.value
+			.filter((c) => c.status === "issued" && c.source_invoice_id === invoiceId)
+			.reduce((sum, c) => sum + c.total_cents, 0);
+
+	/// Σ issued credit notes for this client that aren't tied to any invoice.
+	/// These reduce what the client owes overall but can't be attributed to a
+	/// specific document, so receivables and statements show them as a
+	/// separate unapplied-credit line rather than folding them into a bucket.
+	const unappliedCreditFor = (clientId: number): number =>
+		creditNotes.value
+			.filter((c) => c.status === "issued" && c.client_id === clientId && c.source_invoice_id === null)
+			.reduce((sum, c) => sum + c.total_cents, 0);
+
+	/// Every issued credit note settled against this invoice, newest first.
+	/// Powers the linked-credit-notes section on the invoice detail page.
+	const linkedCreditNotes = (invoiceId: number): CreditNoteRow[] =>
+		creditNotes.value
+			.filter((c) => c.source_invoice_id === invoiceId)
+			.slice()
+			.sort((a, b) => b.issue_date.localeCompare(a.issue_date) || b.id - a.id);
 
 	// Packaged filter snapshot for the server-paginated list page (drives the
 	// page's buildWhere + the useServerTable refetch dependency).
@@ -462,6 +501,9 @@ export const useCreditNotesStore = defineStore("credit_notes", () => {
 		fetchHeaderStats,
 		filtered,
 		totalIssuedCents,
+		creditedCentsFor,
+		unappliedCreditFor,
+		linkedCreditNotes,
 		loaded,
 		load,
 		ensureLoaded,
