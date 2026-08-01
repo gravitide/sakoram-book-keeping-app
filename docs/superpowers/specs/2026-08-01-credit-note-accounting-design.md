@@ -82,10 +82,11 @@ tests.
 - `app/lib/payroll-cycle.test.ts` — `resolvePayrollCycle` / `nextPayrollCycle`
   clamping, especially day 31 in February and in 30-day months, and leap years.
 - `app/lib/numbering.test.ts` — `formatDocumentNumber` across all seven
-  `DocumentType` values. `numbering.ts` imports `~/lib/db`, so this needs
-  `vi.mock("~/lib/db")`. **Confirm the mock resolves before committing to
-  this file**; if it does not, restrict the test to whatever is reachable and
-  note the limitation rather than reshaping `numbering.ts` for testability.
+  `DocumentType` values, plus `computeFiscalYear` (also pure, and currently
+  untested). `numbering.ts` imports `./db` at module level, but this was
+  **verified to import cleanly under vitest's node environment — no `vi.mock`
+  is required**. The Tauri dependency only fails when a DB function is
+  actually called, and these tests call only pure functions.
 
 ### PR 2 — employer contributions in P&L
 
@@ -144,6 +145,12 @@ precedence, per the rule stated in that file's header comment.
 - `app/lib/statement-pdf.ts` + `src-tauri/templates/statement.typ` — invoice
   rows use credit-reduced balances; an unapplied-credit line sits above the
   total.
+- `app/lib/dashboard-data.ts` — the dashboard receivables tile runs a **third
+  independent copy** of the invoice-balance SQL (hand-rolled, joins only the
+  voucher receipts subquery), separate from both `derived-status.ts`'s builder
+  and the store's TS path. Its header comment claims it mirrors the store's
+  computeds, so it goes stale the moment the store nets credits. It needs the
+  same credit-notes join, and the comment needs to name all three sites.
 
 **UI**
 
