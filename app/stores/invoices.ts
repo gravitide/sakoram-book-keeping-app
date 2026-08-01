@@ -8,8 +8,9 @@
 //   sent      — issued; payments may now arrive
 //   cancelled — terminal user-set state; sticky, never auto-overridden
 //
-// Every other state the UI presents — partial / paid / overdue — is
-// **derived** from the linked receipt vouchers and the due_date. There
+// Every other state the UI presents — partial / paid / credited /
+// overdue — is **derived** from the linked receipt vouchers, the issued
+// credit notes settled against the invoice, and the due_date. There
 // is no `paid_cents` column any more (migration 0014). Receipts are
 // recorded by creating a voucher with `voucher_type='receipt'` and
 // `related_invoice_id` set; the bills refactor in 0013 introduced the
@@ -28,6 +29,7 @@ import { deriveInvoiceStatus, invoiceDerivedFrom } from "~/lib/derived-status";
 import { computeLineTotals, sumCents } from "~/lib/money";
 import { allocateDocumentNumber, allocateSpecificDocumentNumber, reserveDocumentNumber } from "~/lib/numbering";
 import { useBusinessBanksStore } from "~/stores/business_banks";
+import { useCreditNotesStore } from "~/stores/credit_notes";
 import { purgeDocumentAttachments } from "~/stores/document_attachments";
 import { useSettingsStore } from "~/stores/settings";
 import { useVouchersStore } from "~/stores/vouchers";
@@ -36,8 +38,11 @@ import { useVouchersStore } from "~/stores/vouchers";
 // directly. The richer enum below is the derived view the UI consumes.
 export type InvoicePersistedStatus = "draft" | "sent" | "cancelled";
 
-// Derived status — what list pages, badges, and filters see.
-export type InvoiceStatus = "draft" | "sent" | "partial" | "paid" | "overdue" | "cancelled";
+// Derived status — what list pages, badges, and filters see. Re-exported
+// from app/lib/derived-status.ts rather than redeclared: this file used to
+// keep its own copy of the union, and the two silently drifted the moment
+// `credited` was added there. One definition, one place to update.
+export type { InvoiceStatus } from "~/lib/derived-status";
 
 export interface InvoiceRow {
 	id: number
@@ -233,18 +238,34 @@ export const useInvoicesStore = defineStore("invoices", () => {
 	const paidCentsFor = (invoiceId: number): number =>
 		linkedPayments(invoiceId).reduce((sum, v) => sum + v.amount_cents, 0);
 
-	const balanceCentsFor = (inv: InvoiceRow): number =>
-		Math.max(0, inv.total_cents - paidCentsFor(inv.id));
+	/// Total ISSUED credit notes settled against this invoice, in cents.
+	/// Read the same lazy way as vouchers above; safe before the credit
+	/// notes store has loaded (empty array sums to 0).
+	const creditedCentsFor = (invoiceId: number): number =>
+		useCreditNotesStore().creditedCentsFor(invoiceId);
 
-	/// User-visible status from persisted status + receipt sum +
-	/// due date. Order of precedence:
+	const balanceCentsFor = (inv: InvoiceRow): number =>
+		Math.max(0, inv.total_cents - paidCentsFor(inv.id) - creditedCentsFor(inv.id));
+
+	/// User-visible status from persisted status + receipt sum + issued
+	/// credit sum + due date. Order of precedence:
 	///   draft / cancelled — sticky (whatever the user set)
-	///   paid              — receipts cover the full total
+	///   paid              — receipts alone cover the full total
+	///   credited          — receipts + credit notes cover it, but cash
+	///                       alone didn't; the invoice closed with help
+	///                       from a credit note rather than being collected
 	///   overdue           — sent + balance > 0 + due_date < today
-	///   partial           — sent + 0 < paid < total
-	///   sent              — sent + nothing paid (still pending)
+	///   partial           — sent + some receipts or credit, short of total
+	///   sent              — sent + nothing paid or credited (still pending)
 	const derivedStatus = (inv: InvoiceRow, now: string = todayISO()): InvoiceStatus =>
-		deriveInvoiceStatus(inv.status, paidCentsFor(inv.id), inv.total_cents, inv.due_date, now);
+		deriveInvoiceStatus(
+			inv.status,
+			paidCentsFor(inv.id),
+			creditedCentsFor(inv.id),
+			inv.total_cents,
+			inv.due_date,
+			now
+		);
 
 	const filtered = computed(() => {
 		const today = todayISO();
@@ -269,6 +290,10 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		});
 	});
 
+	// Note `credited` is deliberately absent from the status list below: an
+	// invoice closed out by a credit note is settled, so it must not count
+	// as receivable. Its balanceCentsFor is 0 anyway, but excluding it by
+	// status keeps the intent explicit rather than relying on the arithmetic.
 	const outstandingTotal = computed(() => {
 		const today = todayISO();
 		let sum = 0;
@@ -813,6 +838,7 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		// page, dashboard, PDF builder) shares the same derivation.
 		linkedPayments,
 		paidCentsFor,
+		creditedCentsFor,
 		balanceCentsFor,
 		derivedStatus
 	};
