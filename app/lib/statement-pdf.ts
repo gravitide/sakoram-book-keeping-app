@@ -72,7 +72,14 @@ interface StatementPdfPayload {
 
 	// Headline totals
 	invoice_count: number
+	/// Closing balance the client owes — invoice balances less any
+	/// unapplied credit. This is the figure to pay.
 	total_balance: string
+	/// Sum of invoice balances BEFORE unapplied credit is deducted, and
+	/// the credit itself. Both null when there is no unapplied credit, so
+	/// the template renders exactly as it did before this existed.
+	gross_balance: string | null
+	unapplied_credit: string | null
 
 	// Tiles + table
 	aging_buckets: StatementBucketTile[]
@@ -92,6 +99,15 @@ export interface CustomerStatementPdfInput {
 	client: ClientRow
 	openInvoices: InvoiceRow[]
 	paidCentsFor: (invoiceId: number) => number
+	/// Issued credit notes settled against a given invoice. Injected the
+	/// same way as `paidCentsFor` so this module stays store-free and
+	/// unit-testable. Both reduce an invoice's balance identically —
+	/// omitting this would print pre-credit balances on the statement.
+	creditedCentsFor: (invoiceId: number) => number
+	/// Issued credit notes for this client with NO source invoice. These
+	/// can't be attributed to a row, so they appear as a single deduction
+	/// line above the closing total rather than inside the table.
+	unappliedCreditCents: number
 	asOfDate?: Date
 	bank?: BusinessBankRow | null
 }
@@ -153,12 +169,18 @@ export const buildCustomerStatementPdfPayload = (
 
 	const rows: StatementRow[] = ordered.map((inv) => {
 		const paid = input.paidCentsFor(inv.id);
-		const balance = Math.max(0, inv.total_cents - paid);
+		// Credit notes reduce the balance exactly as receipts do. Rolled
+		// into `paid` for the row's Paid column: from the client's point of
+		// view the invoice has been settled to that extent, and splitting
+		// it into a fourth column would crowd an already 7-column table.
+		const credited = input.creditedCentsFor(inv.id);
+		const settled = paid + credited;
+		const balance = Math.max(0, inv.total_cents - settled);
 		const daysPast = daysBetween(inv.due_date, asOfIso);
 
 		totalBalance += balance;
 		totalGross += inv.total_cents;
-		totalPaid += paid;
+		totalPaid += settled;
 
 		let bucketKey: keyof typeof buckets;
 		if (daysPast <= 0) bucketKey = "current";
@@ -195,7 +217,10 @@ export const buildCustomerStatementPdfPayload = (
 			issue_date: inv.issue_date,
 			due_date: inv.due_date,
 			total: fmtBare(inv.total_cents),
-			paid: paid > 0 ? fmtBare(paid) : "—",
+			// `settled`, not `paid` — the row must satisfy
+			// total − paid = balance or the client reads it as an error.
+			// Credits are a settlement from their point of view.
+			paid: settled > 0 ? fmtBare(settled) : "—",
 			balance: fmtBare(balance),
 			status,
 			tone
@@ -205,6 +230,13 @@ export const buildCustomerStatementPdfPayload = (
 	// Compose the aging summary tiles in the same left-to-right order
 	// the aged-receivables page uses. Tone matches the on-screen badge:
 	// Current → success, 1-60 → warning creep, 61+ → error.
+	// Unapplied credit is capped at the invoice-balance total so a statement
+	// can never show a negative amount due — "we owe you" is not something
+	// this document is designed to express, and a negative closing figure
+	// would read as an error to the client.
+	const unapplied = Math.min(Math.max(0, input.unappliedCreditCents), totalBalance);
+	const closingBalance = totalBalance - unapplied;
+
 	const aging_buckets: StatementBucketTile[] = [
 		{ label: "Current", count: buckets.current.count, amount: fmtBare(buckets.current.amount), tone: "success" },
 		{ label: "1–30", count: buckets.b1to30.count, amount: fmtBare(buckets.b1to30.amount), tone: "warning" },
@@ -275,13 +307,18 @@ export const buildCustomerStatementPdfPayload = (
 		client_email: input.client.email ?? null,
 
 		invoice_count: rows.length,
-		total_balance: fmt(totalBalance),
+		total_balance: fmt(closingBalance),
+		gross_balance: unapplied === 0 ? null : fmt(totalBalance),
+		unapplied_credit: unapplied === 0 ? null : fmt(unapplied),
 
 		aging_buckets,
 		rows,
 		totals_row: {
 			total: fmtBare(totalGross),
 			paid: fmtBare(totalPaid),
+			// The table's own Balance column stays the sum of its rows —
+			// unapplied credit is deducted below it, not inside it, because
+			// it belongs to no invoice row.
 			balance: fmt(totalBalance)
 		},
 

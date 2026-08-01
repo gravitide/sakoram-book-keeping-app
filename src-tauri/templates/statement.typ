@@ -228,6 +228,33 @@
   table.cell(fill: theme.lighten(85%))[],
 )
 
+// Unapplied credit notes — credits issued to this client that aren't
+// tied to any invoice above. Deducted below the table rather than
+// inside it, because they belong to no row. Both fields are null
+// unless such a credit exists, so this whole block is skipped on the
+// ordinary statement and the layout is byte-identical to before.
+#if data.unapplied_credit != none [
+  #v(8pt)
+  #align(right)[
+    #block(width: 60%)[
+      #grid(
+        columns: (1fr, auto),
+        row-gutter: 4pt,
+        // Without this the label butts straight into the amount —
+        // "Amount dueRs 8,500.00".
+        column-gutter: 12pt,
+        [#text(size: 9pt)[Invoice balances]],
+        [#text(size: 9pt)[#data.gross_balance]],
+        [#text(size: 9pt)[Unapplied credit notes]],
+        [#text(size: 9pt, fill: error-color)[− #data.unapplied_credit]],
+        grid.cell(colspan: 2)[#line(length: 100%, stroke: 0.5pt + line-color)],
+        [#text(weight: "bold", size: 10pt)[Amount due]],
+        [#text(weight: "bold", size: 11pt, fill: error-color)[#data.total_balance]],
+      )
+    ]
+  ]
+]
+
 #v(14pt)
 
 // ============================================================
