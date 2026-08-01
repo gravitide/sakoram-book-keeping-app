@@ -456,6 +456,11 @@ export interface AgedReceivablesPdfInput {
 	totals: {
 		totalCurrent: number
 		totalOverdue: number
+		/** Sum of the aging buckets, before unapplied credits. */
+		grossOutstanding: number
+		/** Client-level credits with no source invoice, capped per client. */
+		totalUnapplied: number
+		/** grossOutstanding − totalUnapplied. */
 		totalOutstanding: number
 		invoiceCount: number
 		overdueCount: number
@@ -516,14 +521,22 @@ export const buildAgedReceivablesPdfPayload = (
 		...businessHeader(input.settings),
 		currency_code: input.currency.code,
 		title: "Aged receivables",
-		subtitle: `Snapshot as of ${asOfReadable}. Outstanding invoice balances bucketed by days past due.`,
+		// When unapplied credits exist the per-client bucket columns no
+		// longer sum to that client's Total — the credit is deducted at
+		// client level because it has no due date to age by. Say so, rather
+		// than leaving the reader to find the discrepancy themselves.
+		subtitle: input.totals.totalUnapplied === 0
+			? `Snapshot as of ${asOfReadable}. Outstanding invoice balances bucketed by days past due.`
+			: `Snapshot as of ${asOfReadable}. Outstanding invoice balances bucketed by days past due, less ${fmt(input.totals.totalUnapplied)} of unapplied credit notes deducted at client level (not aged).`,
 		period_label: `As of ${asOfISO}`,
 		generated_at: asOfISO,
 		summary: [
 			{
 				label: "Total outstanding",
 				value: fmt(input.totals.totalOutstanding),
-				sub: `${input.totals.invoiceCount} open invoice${input.totals.invoiceCount === 1 ? "" : "s"} · ${input.totals.clientCount} client${input.totals.clientCount === 1 ? "" : "s"}`,
+				sub: input.totals.totalUnapplied === 0
+					? `${input.totals.invoiceCount} open invoice${input.totals.invoiceCount === 1 ? "" : "s"} · ${input.totals.clientCount} client${input.totals.clientCount === 1 ? "" : "s"}`
+					: `${fmt(input.totals.grossOutstanding)} less ${fmt(input.totals.totalUnapplied)} unapplied credit`,
 				tone: "neutral"
 			},
 			{
