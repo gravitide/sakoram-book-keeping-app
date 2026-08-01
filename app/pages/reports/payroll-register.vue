@@ -152,7 +152,12 @@
 							{{ formatLKR(totals.earnings) }}
 						</div>
 						<div class="mt-1 text-xs text-(--ui-text-muted)">
-							{{ totals.payslipCount }} payslip{{ totals.payslipCount === 1 ? "" : "s" }} · {{ totals.employeeCount }} employee{{ totals.employeeCount === 1 ? "" : "s" }}
+							<template v-if="totals.employerContrib === 0">
+								{{ totals.payslipCount }} payslip{{ totals.payslipCount === 1 ? "" : "s" }} · {{ totals.employeeCount }} employee{{ totals.employeeCount === 1 ? "" : "s" }}
+							</template>
+							<template v-else>
+								Employer cost {{ formatLKR(totals.earnings + totals.employerContrib) }} incl. EPF + ETF
+							</template>
 						</div>
 					</UCard>
 
@@ -261,6 +266,13 @@
 							</div>
 						</template>
 					</Column>
+					<Column field="employerContrib" header="Employer EPF + ETF" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap text-(--ui-text-muted)">
+								{{ formatLKR(data.employerContrib) }}
+							</div>
+						</template>
+					</Column>
 					<Column field="deductions" header="Deductions" sortable :style="{ textAlign: 'right' }">
 						<template #body="{ data }">
 							<div class="text-right tabular-nums whitespace-nowrap" :class="data.deductions === 0 ? 'text-(--ui-text-muted)' : 'text-(--ui-error)'">
@@ -343,6 +355,13 @@
 							<template #body="{ data }">
 								<div class="text-right tabular-nums whitespace-nowrap">
 									{{ formatLKR(data.earnings_cents) }}
+								</div>
+							</template>
+						</Column>
+						<Column header="Employer EPF + ETF" :style="{ textAlign: 'right' }">
+							<template #body="{ data }">
+								<div class="text-right tabular-nums whitespace-nowrap text-(--ui-text-muted)">
+									{{ formatLKR(data.epf_employer_cents + data.etf_cents) }}
 								</div>
 							</template>
 						</Column>
@@ -560,6 +579,11 @@
 		name: string
 		payslipCount: number
 		earnings: number
+		/**
+		 * Employer EPF (12%) + ETF (3%) — cost to the business, never
+		 *  deducted from the employee, so it sits outside earnings/net.
+		 */
+		employerContrib: number
 		deductions: number
 		net: number
 		paid: number
@@ -576,6 +600,7 @@
 					name: p.employee_name || "(no employee)",
 					payslipCount: 0,
 					earnings: 0,
+					employerContrib: 0,
 					deductions: 0,
 					net: 0,
 					paid: 0
@@ -584,6 +609,7 @@
 			}
 			row.payslipCount++;
 			row.earnings += p.earnings_cents;
+			row.employerContrib += p.epf_employer_cents + p.etf_cents;
 			row.deductions += p.deductions_cents;
 			row.net += p.net_cents;
 			row.paid += payslipsStore.paidCentsFor(p.id);
@@ -593,17 +619,20 @@
 
 	const totals = computed(() => {
 		let earnings = 0;
+		let employerContrib = 0;
 		let deductions = 0;
 		let net = 0;
 		let paid = 0;
 		for (const r of employeeRows.value) {
 			earnings += r.earnings;
+			employerContrib += r.employerContrib;
 			deductions += r.deductions;
 			net += r.net;
 			paid += r.paid;
 		}
 		return {
 			earnings,
+			employerContrib,
 			deductions,
 			net,
 			paid,

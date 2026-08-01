@@ -123,6 +123,11 @@ export interface PnlPdfInput {
 	totals: {
 		income: number
 		bills: number
+		/** Gross earnings only, before employer contributions. */
+		payrollGross: number
+		/** Employer EPF (12%) + ETF (3%), summed across the payslips in range. */
+		employerContrib: number
+		/** Total employer cost: payrollGross + employerContrib. */
 		payroll: number
 		expenses: number
 		net: number
@@ -196,7 +201,7 @@ export const buildPnlPdfPayload = (input: PnlPdfInput): ReportPdfPayload => {
 				},
 				{
 					label: "Payroll",
-					sublabel: "Issued payslips, gross earnings (before deductions)",
+					sublabel: "Issued payslips, gross earnings plus employer EPF and ETF",
 					amount: `− ${fmt(input.totals.payroll)}`,
 					percent: pct(input.totals.payroll, input.totals.income),
 					tone: "error"
@@ -233,12 +238,13 @@ export const buildPnlPdfPayload = (input: PnlPdfInput): ReportPdfPayload => {
 			},
 			{
 				title: `Payslips (${input.filtered.payslips.length})`,
-				columns: ["Number", "Period end", "Employee", "Earnings"],
+				columns: ["Number", "Period end", "Employee", "Earnings", "Employer EPF + ETF"],
 				rows: input.filtered.payslips.map((r) => [
 					r.number,
 					r.period_end,
 					r.employee_name || "—",
-					fmt(r.earnings_cents)
+					fmt(r.earnings_cents),
+					fmt(r.epf_employer_cents + r.etf_cents)
 				])
 			}
 		]
@@ -1013,6 +1019,8 @@ export interface PayrollRegisterPdfInput {
 	dateTo: string
 	totals: {
 		earnings: number
+		/** Employer EPF (12%) + ETF (3%) — business cost on top of gross. */
+		employerContrib: number
 		deductions: number
 		net: number
 		paid: number
@@ -1024,6 +1032,7 @@ export interface PayrollRegisterPdfInput {
 		name: string
 		payslipCount: number
 		earnings: number
+		employerContrib: number
 		deductions: number
 		net: number
 		paid: number
@@ -1047,14 +1056,16 @@ export const buildPayrollRegisterPdfPayload = (
 		...businessHeader(input.settings),
 		currency_code: input.currency.code,
 		title: "Payroll register",
-		subtitle: "Issued payslips whose period falls in this range. Gross earnings, deductions and net pay per employee.",
+		subtitle: "Issued payslips whose period falls in this range. Gross earnings, deductions and net pay per employee. Employer EPF and ETF are shown separately — they are a cost to the business, never deducted from the employee.",
 		period_label: formatPeriodLabel(input.dateFrom, input.dateTo),
 		generated_at: todayISO(),
 		summary: [
 			{
 				label: "Gross earnings",
 				value: fmt(input.totals.earnings),
-				sub: `${input.totals.payslipCount} payslip${input.totals.payslipCount === 1 ? "" : "s"} · ${input.totals.employeeCount} employee${input.totals.employeeCount === 1 ? "" : "s"}`,
+				sub: input.totals.employerContrib === 0
+					? `${input.totals.payslipCount} payslip${input.totals.payslipCount === 1 ? "" : "s"} · ${input.totals.employeeCount} employee${input.totals.employeeCount === 1 ? "" : "s"}`
+					: `Employer cost ${fmt(input.totals.earnings + input.totals.employerContrib)} incl. EPF + ETF`,
 				tone: "neutral"
 			},
 			{
@@ -1082,7 +1093,9 @@ export const buildPayrollRegisterPdfPayload = (
 				title: "By employee",
 				rows: input.employeeRows.map((r) => ({
 					label: r.name,
-					sublabel: `${r.payslipCount} payslip${r.payslipCount === 1 ? "" : "s"} · net ${fmt(r.net)}`,
+					sublabel: r.employerContrib === 0
+						? `${r.payslipCount} payslip${r.payslipCount === 1 ? "" : "s"} · net ${fmt(r.net)}`
+						: `${r.payslipCount} payslip${r.payslipCount === 1 ? "" : "s"} · net ${fmt(r.net)} · employer ${fmt(r.employerContrib)}`,
 					amount: fmt(r.earnings),
 					percent: pct(r.earnings, input.totals.earnings),
 					tone: "neutral"
