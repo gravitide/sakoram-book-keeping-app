@@ -545,6 +545,13 @@
 							</div>
 						</template>
 					</Column>
+					<Column header="Employer EPF + ETF" :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap">
+								{{ formatLKR(data.epf_employer_cents + data.etf_cents) }}
+							</div>
+						</template>
+					</Column>
 				</ResizableDataTable>
 			</UCard>
 		</template>
@@ -752,11 +759,23 @@
 	const totals = computed(() => {
 		const income = filtered.value.invoices.reduce((s, r) => s + r.subtotal_cents, 0);
 		const bills = filtered.value.bills.reduce((s, r) => s + r.subtotal_cents, 0);
-		const payroll = filtered.value.payslips.reduce((s, r) => s + r.earnings_cents, 0);
+		// Payroll expense is the employer's TOTAL cost, not the gross on the
+		// payslip: employer EPF (12%) and ETF (3%) are real expenses that
+		// never appear in earnings_cents. app/lib/payslip-pdf.ts has always
+		// printed this figure on the payslip itself — the reports were the
+		// ones disagreeing.
+		const payrollGross = filtered.value.payslips.reduce((s, r) => s + r.earnings_cents, 0);
+		const employerContrib = filtered.value.payslips.reduce(
+			(s, r) => s + r.epf_employer_cents + r.etf_cents,
+			0
+		);
+		const payroll = payrollGross + employerContrib;
 		const expenses = bills + payroll;
 		return {
 			income,
 			bills,
+			payrollGross,
+			employerContrib,
 			payroll,
 			expenses,
 			net: income - expenses,
