@@ -491,6 +491,67 @@
 				</table>
 			</UCard>
 
+			<!-- Credit notes settled against this invoice. Rendered only
+				when some exist — an empty card would be noise on the vast
+				majority of invoices, unlike Payments which doubles as a
+				call to action. Only `issued` notes reduce the balance;
+				each row's status badge carries that distinction. -->
+			<UCard v-if="creditNotes.length > 0">
+				<template #header>
+					<div class="app-chrome">
+						<div class="app-chrome font-medium">
+							Credit notes
+						</div>
+						<div class="text-xs text-(--ui-text-muted) mt-0.5">
+							{{ creditNotes.length }} credit note{{ creditNotes.length === 1 ? "" : "s" }} against this invoice · {{ formatLKR(creditedCents) }} credited
+						</div>
+					</div>
+				</template>
+
+				<table class="w-full text-sm">
+					<thead class="text-left text-xs uppercase tracking-wide text-(--ui-text-muted) border-b border-(--ui-border)">
+						<tr>
+							<th class="py-2 pl-3 pr-2 font-medium">
+								Number
+							</th>
+							<th class="py-2 px-2 font-medium">
+								Date
+							</th>
+							<th class="py-2 px-2 font-medium">
+								Status
+							</th>
+							<th class="py-2 pl-2 pr-3 font-medium text-right">
+								Amount
+							</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr
+							v-for="cn in creditNotes"
+							:key="cn.id"
+							class="border-b border-(--ui-border)/40 last:border-0 hover:bg-(--ui-bg-muted)/60 cursor-pointer"
+							@click="router.push(`/credit-notes/${cn.id}`)"
+						>
+							<td class="py-2 pl-3 pr-2 font-medium tabular-nums whitespace-nowrap">
+								{{ cn.number }}
+							</td>
+							<td class="py-2 px-2 text-(--ui-text-muted) tabular-nums whitespace-nowrap">
+								{{ cn.issue_date }}
+							</td>
+							<td class="py-2 px-2">
+								<StatusBadge :status="cn.status" />
+							</td>
+							<td
+								class="py-2 pl-2 pr-3 text-right tabular-nums whitespace-nowrap"
+								:class="cn.status === 'issued' ? 'text-(--ui-error) font-medium' : 'text-(--ui-text-muted)'"
+							>
+								{{ cn.status === "issued" ? `− ${formatLKR(cn.total_cents)}` : formatLKR(cn.total_cents) }}
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</UCard>
+
 			<!-- Attachments — scans / photos of the invoice. Local file
 				picker + phone-upload flow, shared with the other document
 				detail pages via AttachmentsCard. -->
@@ -625,6 +686,7 @@
 	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useClientsStore } from "~/stores/clients";
+	import { useCreditNotesStore } from "~/stores/credit_notes";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { useLicenseStore } from "~/stores/license";
 	import { useQuotesStore } from "~/stores/quotes";
@@ -644,6 +706,7 @@
 	const invoicesStore = useInvoicesStore();
 	const quotesStore = useQuotesStore();
 	const vouchersStore = useVouchersStore();
+	const creditNotesStore = useCreditNotesStore();
 	const currency = useActiveCurrency();
 
 	const invoiceId = Number(route.params.id);
@@ -767,6 +830,17 @@
 		invoice.value ? invoicesStore.linkedPayments(invoice.value.id) : []
 	);
 
+	// Credit notes settled against this invoice, most-recent first. Shows
+	// every status (a draft credit note against this invoice is worth
+	// seeing) but only `issued` ones reduce the balance — the row badge
+	// carries that distinction.
+	const creditNotes = computed(() =>
+		invoice.value ? creditNotesStore.linkedCreditNotes(invoice.value.id) : []
+	);
+	const creditedCents = computed(() =>
+		invoice.value ? invoicesStore.creditedCentsFor(invoice.value.id) : 0
+	);
+
 	const methodLabel = (m: string | null): string => {
 		if (!m) return "—";
 		return ({
@@ -798,7 +872,11 @@
 		settingsStore.ensureLoaded(),
 		banksStore.ensureLoaded(),
 		clientsStore.ensureLoaded(),
-		vouchersStore.ensureLoaded()
+		vouchersStore.ensureLoaded(),
+		// Credit notes feed the derived balance the same way vouchers do,
+		// so a deep-link straight here would otherwise show a balance that
+		// ignores every credit until something else loaded the store.
+		creditNotesStore.ensureLoaded()
 	]);
 
 	const hydrate = async () => {
