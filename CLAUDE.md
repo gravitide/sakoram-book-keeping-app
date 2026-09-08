@@ -470,7 +470,7 @@ sakoram_app/
 │     ├─ bills.ts                     ← vendor_id FK + vendor_snapshot + category_snapshot. Payments via vouchers.related_bill_id.
 │     ├─ payslips.ts                  ← payslips + payslip_lines, status FSM, derivedStatus/paidCentsFor sum vouchers.related_payslip_id.
 │     ├─ vouchers.ts                  ← receipts/payments; carries related_invoice_id, related_bill_id, related_payslip_id, business_bank_id, reconciled_at
-│     ├─ credit_notes.ts              ← negative-invoice document for refunds / returns; mirrors invoice shape with optional source_invoice_id link. Status FSM draft → issued → cancelled.
+│     ├─ credit_notes.ts              ← negative-invoice document for refunds / returns; mirrors invoice shape with optional source_invoice_id link. Status FSM draft → issued → cancelled. Exposes `creditedCentsFor(invoiceId)` / `unappliedCreditFor(clientId)` / `linkedCreditNotes(invoiceId)` — the aggregates invoices, reports, statements and the dashboard read (issued-only).
 │     ├─ recurring_invoices.ts        ← invoice TEMPLATES that materialise as draft invoices on a user-initiated cadence. generateOne(id) clones lines with recomputed totals and advances next_issue_date.
 │     ├─ recurring_bills.ts           ← vendor-side mirror of recurring_invoices; generated bills land in status `unpaid` (not draft — bills have no draft state).
 │     ├─ bank_statements.ts           ← imported bank statement rows + imports table. linkMatch / unlinkMatch run as two sequential auto-commits per the connection-pool caveat. suggestMatchesFor wraps the pure matcher in app/lib/reconcile-match.ts.
@@ -595,6 +595,11 @@ bun run dev                              # nuxt dev (no Tauri shell)
 # Quality gates
 bun run lint                             # eslint --fix
 bun run test                             # vitest run
+bun run verify:sql                       # applies all migrations to an in-memory
+                                         # SQLite DB and runs the REAL shipped
+                                         # query strings (see scripts/verify-derived-sql.ts).
+                                         # Guards the derived-balance copies — vitest
+                                         # can't, it only sees query strings.
 
 # Production build
 bun run tauri:build                      # outputs MSI + NSIS installers under
@@ -1177,6 +1182,42 @@ See `src-tauri/migrations/` for the source of truth. High-level:
   an invoice with recorded receipts is refused at the store level
   (`setStatus("cancelled")` throws); delete the receipt vouchers
   first.
+- `credit_notes` + `credit_note_lines` — negative-invoice document for
+  refunds / returns (migration 0029). Mirrors the invoice shape:
+  `client_id` FK + `client_snapshot` + denormalised `client_name`,
+  `project_title`, `vat_rate_basis_points`, subtotal / tax / total cents.
+  `source_invoice_id` (nullable FK, ON DELETE SET NULL) links the credit
+  to the invoice it settles. Status FSM `draft | issued | cancelled` —
+  **only `issued` counts anywhere**. A linked issued credit note reduces
+  that invoice's derived balance alongside receipt vouchers; an unlinked
+  one reduces the client's total as an "unapplied credit". Reversals of
+  output VAT / P&L income land in the period of the CREDIT NOTE's own
+  `issue_date`, not the original invoice's. No PDF template yet.
+- `business_banks` — managed list of the business's own bank accounts
+  (label + bank fields + `color` swatch + `is_default` + archived,
+  migrations 0023 / 0048). Replaced the single bank block that used to
+  live on `company_settings`. Quotes / invoices snapshot from here into
+  `bank_details_snapshot` at save time, and carry an informational
+  `business_bank_id` FK; vouchers carry one too for per-bank
+  reconciliation scoping. `setDefault` is a single atomic CASE-WHEN
+  UPDATE. Rendered with `BankColorDot.vue` wherever a bank is named.
+- `letters` — free-form rich-text correspondence on the business
+  letterhead (migration 0040). No lines, no party snapshot, no money,
+  and **always editable** (the issued-documents-are-immutable rule does
+  not apply). `number` is a NON-UNIQUE, editable, clearable reference —
+  letters are deliberately not gapless-numbered. `body_json` and
+  `signature_json` hold TipTap ProseMirror documents; `pre_printed`
+  (0/1) swaps app-rendered letterhead for reserved blank top/bottom
+  space sized by `company_settings.letter_preprinted_{top,bottom}_margin_mm`.
+- `letter_categories` — name-only managed lookup (migration 0041) behind
+  the letter Category picker. The letter stores `category` as plain
+  text, so archiving or deleting a category never rewrites past letters.
+- `letter_signatures` — reusable rich-text sign-offs (name + `body_json`
+  + `is_default`, migration 0045). Applying one COPIES its `body_json`
+  into the letter's own `signature_json` — no FK, so letters stay
+  self-contained. At most one `is_default` (atomic CASE-WHEN, same shape
+  as `business_banks`). Shared by letters AND the quote / invoice
+  "Prepared by" field via `SignaturePicker.vue`.
 - `bills` + `bill_lines` — vendor bills. `vendor_id` FK → `vendors`
   with a `vendor_snapshot` JSON copy frozen at creation time;
   `category_id` FK → `bill_categories` with a `category_snapshot` JSON
@@ -1374,8 +1415,22 @@ quotes:    draft → sent → accepted → converted (terminal)
 invoices:  persisted: draft ↔ sent ↔ cancelled (the only user transitions)
            derived:   draft           → draft
                       sent + payments → partial | paid
+                      sent + credits  → partial | credited
                       sent + due < today + balance > 0 → overdue
                       cancelled is sticky
+           Derived precedence (deriveInvoiceStatus in app/lib/derived-status.ts):
+                      paid       — receipts ALONE cover the total
+                      credited   — receipts + issued credit notes cover it,
+                                   but cash alone didn't. A mixed 40-cash /
+                                   60-credit settlement lands here: the point
+                                   of the state is surfacing that the invoice
+                                   was not collected in full.
+                      overdue    — balance > 0 and due_date < today
+                      partial    — some receipts OR credit, short of total
+                      sent       — nothing paid or credited
+           Only `issued` credit notes count (drafts aren't real, cancelled
+           are void), and only when their source_invoice_id names this
+           invoice. `credited` is DERIVED — never persisted on the row.
            ("Record payment" creates a receipt voucher with
             related_invoice_id; partial/paid/overdue states fall
             out of that.) Cancel AND revert-to-draft are refused once
@@ -1640,7 +1695,7 @@ persisted to localStorage).
 
 ### Done
 
-- ✅ DB schema + migrations 0001..0035 (`SCHEMA_VERSION` 35)
+- ✅ DB schema + migrations 0001..0053 (`SCHEMA_VERSION` 53)
 - ✅ Clients / Vendors / Employees CRUD (hero + SectionCard layout)
 - ✅ Quotes (full lifecycle, PDF, convert-to-invoice; default VAT seeded
   from settings on draft creation)
@@ -1648,6 +1703,16 @@ persisted to localStorage).
   derived from voucher sums + due date)
 - ✅ Bills (vendor FK + snapshot + category FK + snapshot; payments via
   payment vouchers, status derived)
+- ✅ **Credit notes wired into the books** (v0.159.0) — issued credit
+  notes reduce the linked invoice's derived balance (new `credited`
+  status), and are deducted from output VAT + P&L income by their own
+  issue_date. Unlinked ones come off the client total as an unapplied
+  credit in aged receivables + the statement PDF. Also reaches the
+  dashboard receivables tile and the clients-list outstanding column.
+  `bun run verify:sql` guards the four places balance is computed.
+- ✅ **Employer EPF + ETF counted as payroll expense** (v0.158.5) in
+  both the P&L and the payroll register — previously gross-only, which
+  overstated profit by up to ~15% of EPF-liable payroll.
 - ✅ **VAT entry mode on bundle totals** — every bundle-mode doc (quote /
   invoice / bill / credit-note / recurring invoice / recurring bill) has a
   "Charge VAT" toggle + a "Before VAT / VAT-inclusive" switch on the totals
@@ -2186,10 +2251,15 @@ already in the DB; nothing aggregates it for a date range. Build a
 
 **Tier 2 — meaningful workflow features still missing:**
 
-- **Credit notes / refunds** — no way to issue a negative document
-  today. When you over-invoice or accept a return, you can't settle
-  it cleanly against the original invoice. Add a `credit_note`
-  document type that references an invoice and offsets its balance.
+- ✅ **Credit notes / refunds** — shipped. `credit_notes` +
+  `credit_note_lines` (migration 0029) mirror the invoice shape with an
+  optional `source_invoice_id`. Since v0.159.0 they actually move the
+  books: a linked issued credit note reduces that invoice's derived
+  balance (and can flip it to the `credited` status), and issued credit
+  notes are deducted from output VAT and P&L income by their OWN
+  issue_date. Unlinked ones come off the client total as an "unapplied
+  credit" in aged receivables + the statement PDF. Credit-note PDF
+  rendering is still outstanding.
 - ✅ **Customer statements** — shipped. Printable point-in-time PDF of
   every outstanding invoice for one client, with five aging-bucket
   tiles + per-invoice rows (issue / due / total / paid / balance /
@@ -2277,6 +2347,40 @@ monthly-table PAYE/APIT shipped (migration 0036, app/lib/statutory.ts
 + lump-sum tables. After that, the **Cmd/Ctrl+K command palette** is
 the next "feels native" win.
 
+**Status (2026-09-08)** — an audit of the books found three correctness
+bugs, all now fixed:
+
+- **Credit notes were inert.** The feature shipped end-to-end in the UI
+  and moved no figure anywhere — the only SQL reading `credit_notes` was
+  in its own store, for its own list-page count. Issuing a credit note
+  for a returned sale still declared the original output VAT. Worse, the
+  store's comments *claimed* the offset existed and deferred it to the
+  invoices store, where no such code lived. Wired into invoice balance /
+  derived status / output VAT / P&L income / aged receivables / statement
+  PDF / dashboard tile / clients-list outstanding in v0.159.0.
+- **P&L understated payroll** by employer EPF (12%) + ETF (3%) —
+  `earnings_cents` (gross) only. Profit was overstated by up to ~15% of
+  EPF-liable payroll. The correct figure already existed in
+  `app/lib/payslip-pdf.ts`, which prints total employer cost on every
+  payslip; only the reports disagreed. Fixed in v0.158.5.
+- **Test coverage was inverted.** 290 tests, all pure functions, but the
+  three most invariant-critical modules had none — `money.ts` (Golden
+  Rule #1), `numbering.ts` (Golden Rule #6), `payroll-cycle.ts` — while
+  `license.rs` (dead code) did. Backfilled in v0.158.4; suite is now 337.
+
+Two behaviours were pinned as-is rather than changed, both documented in
+`money.test.ts`: `toCents("-0.005")` returns `-0` (harmless — `-0 === 0`,
+and `formatMoney`'s sign test is false for it), and `formatMoney(-5)`
+renders `"$ -0.05"` with the sign after the symbol.
+
+**Still open from that audit** (deliberately not acted on): no balance
+sheet is possible without double-entry (out of scope — see "Explicitly
+out of scope" above, reconfirmed 2026-09-08);
+inter-bank transfers and owner capital / drawings have nowhere to go and
+currently distort cash flow + P&L; `bill_categories` is flat, so a laptop
+and an electricity bill both land in P&L as expense; and the dead
+licensing surface is still compiled with three registered Tauri commands.
+
 ---
 
 ## Known landmines
@@ -2295,6 +2399,22 @@ the next "feels native" win.
   because they close the dialog before awaiting. Reset in a `finally`, and
   remember this applies to any long-lived flag (modals, loading, wizard step),
   not just delete.
+- **Invoice balance is computed in FOUR places and they must move together.**
+  `total − receipts − issued credit notes`, floored at zero, lives in:
+  1. `deriveInvoiceStatus` / `balanceCentsFor` — the pure TS path
+  2. `invoiceDerivedFrom()` in `app/lib/derived-status.ts` — the mirrored SQL
+     for server-paginated lists (its header comment states the mirror rule)
+  3. `getInvoiceKpis()` in `app/lib/dashboard-data.ts` — a hand-rolled query
+     that aggregates server-side in one round trip
+  4. `buildCustomerStatementPdfPayload` in `app/lib/statement-pdf.ts` — takes
+     `paidCentsFor` / `creditedCentsFor` injected and does its own arithmetic
+  Copies 3 and 4 do NOT route through `balanceCentsFor`, and both were missed
+  when credit notes were first wired in — the audit caught them, not the type
+  checker. The symptom of drift is two surfaces disagreeing about one invoice.
+  **`bun run verify:sql` is the guard**: it runs the real query strings
+  (including the dashboard SQL, read out of the source file so it can't drift
+  from what's asserted) against a real SQLite DB built from the migrations.
+  Run it after touching any of the four.
 - **Don't add `BEGIN`/`COMMIT` from JS.** See "Connection pool caveat".
 - **Don't change `com.sakoram.billing` bundle identifier** — orphans
   user data.
