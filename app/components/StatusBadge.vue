@@ -32,9 +32,16 @@
 		rejected: "error",
 		expired: "warning",
 		converted: "success",
-		// invoices add: partial, paid, overdue, cancelled
+		// invoices add: partial, paid, credited, overdue, cancelled
 		partial: "warning",
 		paid: "success",
+		// "credited" = closed out by a credit note rather than collected.
+		// Neutral, not success: no money arrived, so it must not read as a
+		// win. It shares the tone with "cancelled" deliberately — both mean
+		// "off the books, nothing owed". `info` was the other candidate but
+		// it belongs to "sent" (awaiting payment), which is the opposite
+		// meaning, so sharing there would be actively misleading.
+		credited: "neutral",
 		overdue: "error",
 		cancelled: "neutral",
 		// bills add: unpaid

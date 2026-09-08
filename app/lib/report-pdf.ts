@@ -9,6 +9,7 @@
 import type { LetterBlock } from "~/lib/letter-body";
 import type { CurrencyMeta } from "~/lib/money";
 import type { BillRow } from "~/stores/bills";
+import type { CreditNoteRow } from "~/stores/credit_notes";
 import type { InvoiceRow } from "~/stores/invoices";
 import type { PayslipRow } from "~/stores/payslips";
 import type { CompanySettingsRow } from "~/stores/settings";
@@ -121,6 +122,11 @@ export interface PnlPdfInput {
 	dateFrom: string
 	dateTo: string
 	totals: {
+		/** Invoiced subtotal before credit notes are deducted. */
+		grossIncome: number
+		/** Issued credit notes' subtotal, deducted from grossIncome. */
+		creditNotes: number
+		/** Net of credit notes: grossIncome − creditNotes. */
 		income: number
 		bills: number
 		/** Gross earnings only, before employer contributions. */
@@ -139,6 +145,7 @@ export interface PnlPdfInput {
 		invoices: InvoiceRow[]
 		bills: BillRow[]
 		payslips: PayslipRow[]
+		creditNotes: CreditNoteRow[]
 	}
 }
 
@@ -149,9 +156,14 @@ export const buildPnlPdfPayload = (input: PnlPdfInput): ReportPdfPayload => {
 		const v = (part / whole) * 100;
 		return `${v.toFixed(v < 10 ? 1 : 0)}%`;
 	};
+	// Mirrors marginLabel on the page. Income can now go negative when
+	// credit notes in the period exceed what was invoiced; a margin against
+	// a negative base flips sign and would read as a healthy profit.
 	const margin = input.totals.income === 0
 		? "No income in this period"
-		: `${input.totals.net >= 0 ? "+" : "−"}${Math.abs((input.totals.net / input.totals.income) * 100).toFixed(1)}% margin`;
+		: input.totals.income < 0
+			? "Credit notes exceed invoiced income"
+			: `${input.totals.net >= 0 ? "+" : "−"}${Math.abs((input.totals.net / input.totals.income) * 100).toFixed(1)}% margin`;
 	const netTone: "success" | "error" = input.totals.net >= 0 ? "success" : "error";
 	const netSign = input.totals.net >= 0 ? "+" : "−";
 
@@ -188,10 +200,24 @@ export const buildPnlPdfPayload = (input: PnlPdfInput): ReportPdfPayload => {
 				{
 					label: "Income",
 					sublabel: "Issued invoices, subtotal excluding VAT",
-					amount: fmt(input.totals.income),
-					percent: "100%",
+					amount: fmt(input.totals.grossIncome),
+					// Percentages are shares of NET income. With no credit
+					// notes grossIncome === income, so this stays "100%" and
+					// the row renders exactly as it did before.
+					percent: pct(input.totals.grossIncome, input.totals.income),
 					tone: "success"
 				},
+				// Only shown when there's something to deduct — a permanent
+				// "− Rs 0.00" row would be noise on the vast majority of P&Ls.
+				...(input.totals.creditNotes === 0
+					? []
+					: [{
+						label: "Credit notes",
+						sublabel: "Issued credit notes, subtotal excluding VAT",
+						amount: `− ${fmt(input.totals.creditNotes)}`,
+						percent: pct(input.totals.creditNotes, input.totals.income),
+						tone: "error" as const
+					}]),
 				{
 					label: "Bills (purchases)",
 					sublabel: "Open bills, subtotal excluding VAT",
@@ -226,6 +252,18 @@ export const buildPnlPdfPayload = (input: PnlPdfInput): ReportPdfPayload => {
 					fmt(r.subtotal_cents)
 				])
 			},
+			...(input.filtered.creditNotes.length === 0
+				? []
+				: [{
+					title: `Credit notes (${input.filtered.creditNotes.length})`,
+					columns: ["Number", "Date", "Client", "Subtotal"],
+					rows: input.filtered.creditNotes.map((r) => [
+						r.number,
+						r.issue_date,
+						r.client_name || "—",
+						`− ${fmt(r.subtotal_cents)}`
+					])
+				}]),
 			{
 				title: `Bills (${input.filtered.bills.length})`,
 				columns: ["Number", "Date", "Vendor", "Subtotal"],
@@ -259,15 +297,22 @@ export interface VatPdfInput {
 	dateFrom: string
 	dateTo: string
 	totals: {
+		/** Output VAT on issued invoices, before credit notes. */
+		grossOutputVat: number
+		/** VAT on issued credit notes, reversing previously declared output. */
+		creditVat: number
+		/** Net of credit notes: grossOutputVat − creditVat. Can go negative. */
 		outputVat: number
 		inputVat: number
 		netVat: number
 		invoiceCount: number
 		billCount: number
+		creditNoteCount: number
 	}
 	filtered: {
 		invoices: InvoiceRow[]
 		bills: BillRow[]
+		creditNotes: CreditNoteRow[]
 	}
 }
 
@@ -331,10 +376,21 @@ export const buildVatPdfPayload = (input: VatPdfInput): ReportPdfPayload => {
 				{
 					label: "Output VAT",
 					sublabel: "Collected from clients on issued invoices",
-					amount: fmt(input.totals.outputVat),
+					amount: fmt(input.totals.grossOutputVat),
 					percent: "100%",
 					tone: "success"
 				},
+				// Only when there's something to reverse — a standing
+				// "− Rs 0.00" row would be noise on most VAT returns.
+				...(input.totals.creditVat === 0
+					? []
+					: [{
+						label: "Credit notes",
+						sublabel: "Reverses output VAT on issued credit notes",
+						amount: `− ${fmt(input.totals.creditVat)}`,
+						percent: pct(input.totals.creditVat, input.totals.grossOutputVat),
+						tone: "error" as const
+					}]),
 				{
 					label: "Input VAT",
 					sublabel: "Paid to vendors on open bills — recoverable",
@@ -363,6 +419,19 @@ export const buildVatPdfPayload = (input: VatPdfInput): ReportPdfPayload => {
 					fmt(r.tax_cents)
 				])
 			},
+			...(input.filtered.creditNotes.length === 0
+				? []
+				: [{
+					title: `Credit notes (${input.filtered.creditNotes.length})`,
+					columns: ["Number", "Date", "Client", "Subtotal", "VAT"],
+					rows: input.filtered.creditNotes.map((r) => [
+						r.number,
+						r.issue_date,
+						r.client_name || "—",
+						`− ${fmt(r.subtotal_cents)}`,
+						`− ${fmt(r.tax_cents)}`
+					])
+				}]),
 			{
 				title: `Bills (${input.filtered.bills.length})`,
 				columns: ["Number", "Date", "Vendor", "Subtotal", "VAT"],
@@ -387,6 +456,11 @@ export interface AgedReceivablesPdfInput {
 	totals: {
 		totalCurrent: number
 		totalOverdue: number
+		/** Sum of the aging buckets, before unapplied credits. */
+		grossOutstanding: number
+		/** Client-level credits with no source invoice, capped per client. */
+		totalUnapplied: number
+		/** grossOutstanding − totalUnapplied. */
 		totalOutstanding: number
 		invoiceCount: number
 		overdueCount: number
@@ -447,14 +521,22 @@ export const buildAgedReceivablesPdfPayload = (
 		...businessHeader(input.settings),
 		currency_code: input.currency.code,
 		title: "Aged receivables",
-		subtitle: `Snapshot as of ${asOfReadable}. Outstanding invoice balances bucketed by days past due.`,
+		// When unapplied credits exist the per-client bucket columns no
+		// longer sum to that client's Total — the credit is deducted at
+		// client level because it has no due date to age by. Say so, rather
+		// than leaving the reader to find the discrepancy themselves.
+		subtitle: input.totals.totalUnapplied === 0
+			? `Snapshot as of ${asOfReadable}. Outstanding invoice balances bucketed by days past due.`
+			: `Snapshot as of ${asOfReadable}. Outstanding invoice balances bucketed by days past due, less ${fmt(input.totals.totalUnapplied)} of unapplied credit notes deducted at client level (not aged).`,
 		period_label: `As of ${asOfISO}`,
 		generated_at: asOfISO,
 		summary: [
 			{
 				label: "Total outstanding",
 				value: fmt(input.totals.totalOutstanding),
-				sub: `${input.totals.invoiceCount} open invoice${input.totals.invoiceCount === 1 ? "" : "s"} · ${input.totals.clientCount} client${input.totals.clientCount === 1 ? "" : "s"}`,
+				sub: input.totals.totalUnapplied === 0
+					? `${input.totals.invoiceCount} open invoice${input.totals.invoiceCount === 1 ? "" : "s"} · ${input.totals.clientCount} client${input.totals.clientCount === 1 ? "" : "s"}`
+					: `${fmt(input.totals.grossOutstanding)} less ${fmt(input.totals.totalUnapplied)} unapplied credit`,
 				tone: "neutral"
 			},
 			{

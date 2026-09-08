@@ -197,7 +197,12 @@
 						{{ formatLKR(totals.income) }}
 					</div>
 					<div class="mt-1 text-xs text-(--ui-text-muted)">
-						{{ totals.invoiceCount }} invoice{{ totals.invoiceCount === 1 ? "" : "s" }} issued
+						<template v-if="totals.creditNotes === 0">
+							{{ totals.invoiceCount }} invoice{{ totals.invoiceCount === 1 ? "" : "s" }} issued
+						</template>
+						<template v-else>
+							{{ formatLKR(totals.grossIncome) }} less {{ formatLKR(totals.creditNotes) }} credited
+						</template>
 					</div>
 				</UCard>
 
@@ -469,6 +474,48 @@
 					</Column>
 				</ResizableDataTable>
 
+				<!-- Credit notes reverse recognised income, so amounts render
+				with a leading minus in error tone — they subtract from the
+				invoices tab above rather than adding to it. -->
+				<ResizableDataTable
+					v-else-if="activeTab === 'credit_notes'"
+					:rows="filtered.creditNotes"
+					state-key="reports-pnl-credit-notes"
+					default-sort-field="issue_date"
+					:default-sort-order="-1"
+					:default-page-size="50"
+					@row-click="(row) => router.push(`/credit-notes/${row.id}`)"
+				>
+					<Column field="number" header="Number" sortable>
+						<template #body="{ data }">
+							<div class="font-medium tabular-nums whitespace-nowrap">
+								{{ data.number }}
+							</div>
+						</template>
+					</Column>
+					<Column field="issue_date" header="Date" sortable>
+						<template #body="{ data }">
+							<div class="text-(--ui-text-muted) tabular-nums whitespace-nowrap">
+								{{ data.issue_date }}
+							</div>
+						</template>
+					</Column>
+					<Column field="client_name" header="Client" sortable>
+						<template #body="{ data }">
+							<div class="truncate min-w-[140px] max-w-[260px]">
+								{{ data.client_name || "—" }}
+							</div>
+						</template>
+					</Column>
+					<Column field="subtotal_cents" header="Subtotal" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap text-(--ui-error)">
+								− {{ formatLKR(data.subtotal_cents) }}
+							</div>
+						</template>
+					</Column>
+				</ResizableDataTable>
+
 				<ResizableDataTable
 					v-else-if="activeTab === 'bills'"
 					:rows="filtered.bills"
@@ -593,6 +640,7 @@
 	import { formatLKR } from "~/lib/money";
 	import { buildPnlPdfPayload } from "~/lib/report-pdf";
 	import { useBillsStore } from "~/stores/bills";
+	import { useCreditNotesStore } from "~/stores/credit_notes";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
@@ -602,6 +650,7 @@
 	const router = useRouter();
 	const invoicesStore = useInvoicesStore();
 	const billsStore = useBillsStore();
+	const creditNotesStore = useCreditNotesStore();
 	const payslipsStore = usePayslipsStore();
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
@@ -617,6 +666,7 @@
 			settingsStore.ensureLoaded(),
 			invoicesStore.ensureLoaded(),
 			billsStore.ensureLoaded(),
+			creditNotesStore.ensureLoaded(),
 			payslipsStore.ensureLoaded()
 		]);
 	}));
@@ -753,11 +803,22 @@
 		const payslips = payslipsStore.payslips
 			.filter((row) => row.status === "issued" && inRange(row.period_end))
 			.sort((a, b) => a.period_end.localeCompare(b.period_end));
-		return { invoices, bills, payslips };
+		// Credit notes reverse recognised income. Issued only, dated by the
+		// credit note's own issue_date — the period you issued the credit is
+		// the period the revenue reversal belongs to.
+		const creditNotes = creditNotesStore.creditNotes
+			.filter((row) => row.status === "issued" && inRange(row.issue_date))
+			.sort((a, b) => a.issue_date.localeCompare(b.issue_date));
+		return { invoices, bills, payslips, creditNotes };
 	});
 
 	const totals = computed(() => {
-		const income = filtered.value.invoices.reduce((s, r) => s + r.subtotal_cents, 0);
+		// Income is net of credit notes: a credit reverses revenue already
+		// recognised. subtotal_cents on both sides — VAT is a pass-through,
+		// not revenue, matching how invoice income is counted here.
+		const grossIncome = filtered.value.invoices.reduce((s, r) => s + r.subtotal_cents, 0);
+		const creditNotes = filtered.value.creditNotes.reduce((s, r) => s + r.subtotal_cents, 0);
+		const income = grossIncome - creditNotes;
 		const bills = filtered.value.bills.reduce((s, r) => s + r.subtotal_cents, 0);
 		// Payroll expense is the employer's TOTAL cost, not the gross on the
 		// payslip: employer EPF (12%) and ETF (3%) are real expenses that
@@ -772,6 +833,8 @@
 		const payroll = payrollGross + employerContrib;
 		const expenses = bills + payroll;
 		return {
+			grossIncome,
+			creditNotes,
 			income,
 			bills,
 			payrollGross,
@@ -788,8 +851,13 @@
 	// Margin sub-label on the Net tile. Hidden when there's no income
 	// — "Loss of Rs X · −∞% margin" is not useful. Two decimal places
 	// to feel precise without being noisy.
+	// `<= 0` rather than `=== 0`: credit notes can push income negative
+	// (more credited than invoiced in the period). A margin against a
+	// negative base flips sign and reads as a healthy profit — worse than
+	// showing nothing — so both cases fall through to plain copy.
 	const marginLabel = computed(() => {
 		if (totals.value.income === 0) return "No income in this period";
+		if (totals.value.income < 0) return "Credit notes exceed invoiced income";
 		const m = (totals.value.net / totals.value.income) * 100;
 		return `${m >= 0 ? "+" : "−"}${Math.abs(m).toFixed(1)}% margin`;
 	});
@@ -820,10 +888,11 @@
 	// Drill-down tabs. Single full-width table per tab gives every
 	// column real breathing room — at the previous 3-up layout each
 	// table got ~340px even at xl and the cells wrapped awkwardly.
-	type TabKey = "invoices" | "bills" | "payslips";
+	type TabKey = "invoices" | "credit_notes" | "bills" | "payslips";
 	interface TabDef { key: TabKey, label: string, icon: string }
 	const TABS: TabDef[] = [
 		{ key: "invoices", label: "Invoices", icon: "i-lucide-receipt" },
+		{ key: "credit_notes", label: "Credit notes", icon: "i-lucide-receipt-text" },
 		{ key: "bills", label: "Bills", icon: "i-lucide-file-input" },
 		{ key: "payslips", label: "Payslips", icon: "i-lucide-file-spreadsheet" }
 	];
@@ -831,12 +900,17 @@
 
 	const tabCounts = computed<Record<TabKey, number>>(() => ({
 		invoices: filtered.value.invoices.length,
+		credit_notes: filtered.value.creditNotes.length,
 		bills: filtered.value.bills.length,
 		payslips: filtered.value.payslips.length
 	}));
 
+	// Invoices tab shows GROSS income (what was invoiced); the credit-notes
+	// tab shows what was deducted from it. Showing net income on the
+	// invoices tab would not reconcile against the rows listed under it.
 	const activeTabTotal = computed(() => {
-		if (activeTab.value === "invoices") return totals.value.income;
+		if (activeTab.value === "invoices") return totals.value.grossIncome;
+		if (activeTab.value === "credit_notes") return totals.value.creditNotes;
 		if (activeTab.value === "bills") return totals.value.bills;
 		return totals.value.payroll;
 	});
@@ -848,6 +922,7 @@
 	);
 	const activeTabEmpty = computed(() => {
 		if (activeTab.value === "invoices") return "No invoices issued in this period.";
+		if (activeTab.value === "credit_notes") return "No credit notes issued in this period.";
 		if (activeTab.value === "bills") return "No bills in this period.";
 		return "No payslips in this period.";
 	});

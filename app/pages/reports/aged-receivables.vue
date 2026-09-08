@@ -113,7 +113,12 @@
 							{{ formatLKR(totals.totalOutstanding) }}
 						</div>
 						<div class="mt-1 text-xs text-(--ui-text-muted)">
-							{{ totals.invoiceCount }} open invoice{{ totals.invoiceCount === 1 ? "" : "s" }} · {{ totals.clientCount }} client{{ totals.clientCount === 1 ? "" : "s" }}
+							<template v-if="totals.totalUnapplied === 0">
+								{{ totals.invoiceCount }} open invoice{{ totals.invoiceCount === 1 ? "" : "s" }} · {{ totals.clientCount }} client{{ totals.clientCount === 1 ? "" : "s" }}
+							</template>
+							<template v-else>
+								{{ formatLKR(totals.grossOutstanding) }} less {{ formatLKR(totals.totalUnapplied) }} unapplied credit
+							</template>
 						</div>
 					</UCard>
 
@@ -316,6 +321,17 @@
 							</div>
 						</template>
 					</Column>
+					<!-- Unapplied credit sits outside the aging buckets on
+					purpose: a credit note with no source invoice has no due
+					date, so it can't be aged. Blank when zero to keep the
+					column quiet on the common case. -->
+					<Column field="unappliedCredit" header="Unapplied credit" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap" :class="data.unappliedCredit === 0 ? 'text-(--ui-text-muted)' : 'text-(--ui-error)'">
+								{{ data.unappliedCredit === 0 ? "—" : `− ${formatLKR(data.unappliedCredit)}` }}
+							</div>
+						</template>
+					</Column>
 					<Column field="total" header="Total" sortable :style="{ textAlign: 'right' }">
 						<template #body="{ data }">
 							<div class="text-right tabular-nums whitespace-nowrap font-semibold">
@@ -364,6 +380,7 @@
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { formatLKR } from "~/lib/money";
 	import { buildAgedReceivablesPdfPayload } from "~/lib/report-pdf";
+	import { useCreditNotesStore } from "~/stores/credit_notes";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
@@ -376,6 +393,7 @@
 
 	const router = useRouter();
 	const invoicesStore = useInvoicesStore();
+	const creditNotesStore = useCreditNotesStore();
 	const vouchersStore = useVouchersStore();
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
@@ -391,7 +409,11 @@
 			invoicesStore.ensureLoaded(),
 			// Vouchers carry the receipts that derive each invoice's
 			// balance — without them every invoice looks fully owed.
-			vouchersStore.ensureLoaded()
+			vouchersStore.ensureLoaded(),
+			// Credit notes do the same job on the other side: linked ones
+			// reduce an invoice's balance via balanceCentsFor, unlinked ones
+			// come off the client total as an unapplied credit.
+			creditNotesStore.ensureLoaded()
 		]);
 	}));
 
@@ -498,6 +520,12 @@
 		b31to60: number
 		b61to90: number
 		b90plus: number
+		/// Sum of the aging buckets — what the invoices alone say is owed.
+		gross: number
+		/// Issued credit notes for this client with no source invoice,
+		/// capped at `gross` so a client can never show a negative
+		/// receivable (and so Σ row.total reconciles with the KPI tile).
+		unappliedCredit: number
 		total: number
 		// Allow indexed access by bucket key for the accumulator below
 		// — keeps the inner loop typed instead of casting.
@@ -519,13 +547,28 @@
 					b31to60: 0,
 					b61to90: 0,
 					b90plus: 0,
+					gross: 0,
+					unappliedCredit: 0,
 					total: 0
 				};
 				byClient.set(cid, row);
 			}
 			row.invoiceCount++;
-			row.total += oi.balance;
+			row.gross += oi.balance;
 			row[oi.bucket] += oi.balance;
+		}
+		// Second pass: apply client-level credits that aren't tied to any
+		// invoice. They have no due date, so they belong to no aging bucket —
+		// the buckets stay purely invoice-derived and the credit is deducted
+		// from the client total only. Capping at `gross` keeps the receivable
+		// at or above zero; a client owed more than they owe isn't a
+		// receivable, and letting it go negative would make the column sums
+		// stop matching the KPI tile.
+		for (const row of byClient.values()) {
+			if (row.clientId === null) continue;
+			const credit = creditNotesStore.unappliedCreditFor(row.clientId);
+			row.unappliedCredit = Math.min(credit, row.gross);
+			row.total = row.gross - row.unappliedCredit;
 		}
 		return Array.from(byClient.values()).sort((a, b) => b.total - a.total);
 	});
@@ -535,12 +578,18 @@
 		const bs = bucketStats.value;
 		const totalCurrent = bs.current.amount;
 		const totalOverdue = bs.b1to30.amount + bs.b31to60.amount + bs.b61to90.amount + bs.b90plus.amount;
-		const totalOutstanding = totalCurrent + totalOverdue;
+		const grossOutstanding = totalCurrent + totalOverdue;
+		// Σ of the per-client capped credits, so this always reconciles:
+		// Σ clientRows.total === grossOutstanding − totalUnapplied.
+		const totalUnapplied = clientRows.value.reduce((s, r) => s + r.unappliedCredit, 0);
+		const totalOutstanding = grossOutstanding - totalUnapplied;
 		const overdueCount = bs.b1to30.count + bs.b31to60.count + bs.b61to90.count + bs.b90plus.count;
 		const clientCount = clientRows.value.length;
 		return {
 			totalCurrent,
 			totalOverdue,
+			grossOutstanding,
+			totalUnapplied,
 			totalOutstanding,
 			invoiceCount: openInvoices.value.length,
 			overdueCount,

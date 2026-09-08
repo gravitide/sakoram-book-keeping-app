@@ -17,11 +17,18 @@
 
 import { selectOne } from "./db";
 
-/// Outstanding invoices (status = 'sent', balance > 0). Mirrors the
-/// store's `outstandingTotal` + `overdueCount` computeds — "overdue"
-/// is derived from due_date < today AND balance > 0 (drafts /
-/// cancelled never count). Balance is total minus the sum of linked
-/// receipt vouchers.
+/// Outstanding invoices (status = 'sent', balance > 0). "overdue" is
+/// derived from due_date < today AND balance > 0 (drafts / cancelled never
+/// count). Balance is total minus linked receipt vouchers minus issued
+/// credit notes settled against the invoice.
+///
+/// NOTE: invoice balance is computed in THREE places and they must move
+/// together — the pure `deriveInvoiceStatus` in app/lib/derived-status.ts,
+/// its mirrored SQL in `invoiceDerivedFrom()` there, and this hand-rolled
+/// query. This one exists because the dashboard aggregates server-side in a
+/// single round trip rather than loading rows. If the three drift, the
+/// symptom is the dashboard tile disagreeing with /invoices and
+/// /reports/aged-receivables over the same books.
 export interface InvoiceKpis {
 	outstanding_cents: number
 	open_count: number
@@ -41,7 +48,7 @@ export async function getInvoiceKpis(): Promise<InvoiceKpis> {
 		FROM (
 			SELECT
 				i.due_date,
-				i.total_cents - COALESCE(p.paid, 0) AS balance
+				i.total_cents - COALESCE(p.paid, 0) - COALESCE(cn.credited, 0) AS balance
 			FROM invoices i
 			LEFT JOIN (
 				SELECT related_invoice_id, SUM(amount_cents) AS paid
@@ -49,6 +56,12 @@ export async function getInvoiceKpis(): Promise<InvoiceKpis> {
 				WHERE voucher_type = 'receipt' AND related_invoice_id IS NOT NULL
 				GROUP BY related_invoice_id
 			) p ON p.related_invoice_id = i.id
+			LEFT JOIN (
+				SELECT source_invoice_id, SUM(total_cents) AS credited
+				FROM credit_notes
+				WHERE status = 'issued' AND source_invoice_id IS NOT NULL
+				GROUP BY source_invoice_id
+			) cn ON cn.source_invoice_id = i.id
 			WHERE i.status = 'sent'
 		)
 	`);

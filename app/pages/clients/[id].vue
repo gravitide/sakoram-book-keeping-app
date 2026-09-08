@@ -371,6 +371,7 @@
 	import { buildCustomerStatementPdfPayload, customerStatementFileName } from "~/lib/statement-pdf";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useClientsStore } from "~/stores/clients";
+	import { useCreditNotesStore } from "~/stores/credit_notes";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { useQuotesStore } from "~/stores/quotes";
 	import { useSettingsStore } from "~/stores/settings";
@@ -385,6 +386,7 @@
 	// lands pre-filtered. Mirrors the row actions on the clients list.
 	const quotesStore = useQuotesStore();
 	const invoicesStore = useInvoicesStore();
+	const creditNotesStore = useCreditNotesStore();
 	// Customer-statement PDF generation reads from settings + banks +
 	// invoices + the active currency formatter. Loaded on demand by the
 	// `openStatement` handler so the page itself doesn't pay the cost
@@ -648,6 +650,10 @@
 				},
 				openInvoices: openInvoicesForClient.value,
 				paidCentsFor: (id: number) => invoicesStore.paidCentsFor(id),
+				creditedCentsFor: (id: number) => invoicesStore.creditedCentsFor(id),
+				unappliedCreditCents: clientId === null
+					? 0
+					: creditNotesStore.unappliedCreditFor(clientId),
 				bank: banksStore.defaultBank ?? null
 			});
 		},
@@ -664,6 +670,10 @@
 		await Promise.all([
 			settingsStore.ensureLoaded(),
 			invoicesStore.ensureLoaded(),
+			// Statement balances net credit notes, so the store must be
+			// warm before the payload is built — otherwise the PDF would
+			// print pre-credit figures on a cold landing.
+			creditNotesStore.ensureLoaded(),
 			banksStore.ensureLoaded()
 		]);
 		if (openInvoicesForClient.value.length === 0) {

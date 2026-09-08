@@ -451,6 +451,7 @@
 		"sent",
 		"partial",
 		"paid",
+		"credited",
 		"overdue",
 		"cancelled"
 	];
@@ -459,6 +460,7 @@
 		sent: "Sent",
 		partial: "Partial",
 		paid: "Paid",
+		credited: "Credited",
 		overdue: "Overdue",
 		cancelled: "Cancelled"
 	};
@@ -467,6 +469,9 @@
 		sent: "bg-(--ui-info)/15 border-(--ui-info)/40 text-(--ui-info)",
 		partial: "bg-(--ui-warning)/15 border-(--ui-warning)/40 text-(--ui-warning)",
 		paid: "bg-(--ui-success)/15 border-(--ui-success)/40 text-(--ui-success)",
+		// Matches StatusBadge's neutral tone for `credited` — closed out by
+		// a credit note, not collected.
+		credited: "bg-(--ui-bg-muted) border-(--ui-text-muted)/40 text-(--ui-text-muted)",
 		overdue: "bg-(--ui-error)/15 border-(--ui-error)/40 text-(--ui-error)",
 		cancelled: "bg-(--ui-bg-muted) border-(--ui-text-muted)/40 text-(--ui-text-muted)"
 	};

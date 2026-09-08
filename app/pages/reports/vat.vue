@@ -161,7 +161,12 @@
 						{{ formatLKR(totals.outputVat) }}
 					</div>
 					<div class="mt-1 text-xs text-(--ui-text-muted)">
-						{{ totals.invoiceCount }} invoice{{ totals.invoiceCount === 1 ? "" : "s" }} issued
+						<template v-if="totals.creditVat === 0">
+							{{ totals.invoiceCount }} invoice{{ totals.invoiceCount === 1 ? "" : "s" }} issued
+						</template>
+						<template v-else>
+							{{ formatLKR(totals.grossOutputVat) }} less {{ formatLKR(totals.creditVat) }} credited
+						</template>
 					</div>
 				</UCard>
 
@@ -383,6 +388,55 @@
 					</Column>
 				</ResizableDataTable>
 
+				<!-- Credit notes reverse output VAT already declared. Amounts
+				render with a leading minus in error tone so the deduction
+				reads at a glance rather than looking like more output. -->
+				<ResizableDataTable
+					v-else-if="activeTab === 'credit_notes'"
+					:rows="filtered.creditNotes"
+					state-key="reports-vat-credit-notes"
+					default-sort-field="issue_date"
+					:default-sort-order="-1"
+					:default-page-size="50"
+					@row-click="(row) => router.push(`/credit-notes/${row.id}`)"
+				>
+					<Column field="number" header="Number" sortable>
+						<template #body="{ data }">
+							<div class="font-medium tabular-nums whitespace-nowrap">
+								{{ data.number }}
+							</div>
+						</template>
+					</Column>
+					<Column field="issue_date" header="Date" sortable>
+						<template #body="{ data }">
+							<div class="text-(--ui-text-muted) tabular-nums whitespace-nowrap">
+								{{ data.issue_date }}
+							</div>
+						</template>
+					</Column>
+					<Column field="client_name" header="Client" sortable>
+						<template #body="{ data }">
+							<div class="truncate min-w-[140px] max-w-[260px]">
+								{{ data.client_name || "—" }}
+							</div>
+						</template>
+					</Column>
+					<Column field="subtotal_cents" header="Subtotal" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap text-(--ui-text-muted)">
+								− {{ formatLKR(data.subtotal_cents) }}
+							</div>
+						</template>
+					</Column>
+					<Column field="tax_cents" header="VAT" sortable :style="{ textAlign: 'right' }">
+						<template #body="{ data }">
+							<div class="text-right tabular-nums whitespace-nowrap font-medium text-(--ui-error)">
+								− {{ formatLKR(data.tax_cents) }}
+							</div>
+						</template>
+					</Column>
+				</ResizableDataTable>
+
 				<ResizableDataTable
 					v-else
 					:rows="filtered.bills"
@@ -464,6 +518,7 @@
 	import { formatLKR } from "~/lib/money";
 	import { buildVatPdfPayload } from "~/lib/report-pdf";
 	import { useBillsStore } from "~/stores/bills";
+	import { useCreditNotesStore } from "~/stores/credit_notes";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { useSettingsStore } from "~/stores/settings";
 
@@ -473,6 +528,7 @@
 	const currency = useActiveCurrency();
 	const invoicesStore = useInvoicesStore();
 	const billsStore = useBillsStore();
+	const creditNotesStore = useCreditNotesStore();
 	const settingsStore = useSettingsStore();
 
 	// Loading state owned by `usePageLoading` — see the composable for
@@ -482,7 +538,8 @@
 		await Promise.all([
 			settingsStore.ensureLoaded(),
 			invoicesStore.ensureLoaded(),
-			billsStore.ensureLoaded()
+			billsStore.ensureLoaded(),
+			creditNotesStore.ensureLoaded()
 		]);
 	}));
 
@@ -595,18 +652,31 @@
 		const bills = billsStore.bills
 			.filter((row) => row.status !== "cancelled" && inRange(row.issue_date))
 			.sort((a, b) => a.issue_date.localeCompare(b.issue_date));
-		return { invoices, bills };
+		// Credit notes reverse output VAT already declared. Only issued
+		// ones count (drafts aren't real, cancelled are void), and they land
+		// in the period of the CREDIT NOTE's own issue date — not the
+		// original invoice's. That's the standard treatment: you adjust the
+		// return for the period in which you issued the credit.
+		const creditNotes = creditNotesStore.creditNotes
+			.filter((row) => row.status === "issued" && inRange(row.issue_date))
+			.sort((a, b) => a.issue_date.localeCompare(b.issue_date));
+		return { invoices, bills, creditNotes };
 	});
 
 	const totals = computed(() => {
-		const outputVat = filtered.value.invoices.reduce((s, r) => s + r.tax_cents, 0);
+		const grossOutputVat = filtered.value.invoices.reduce((s, r) => s + r.tax_cents, 0);
+		const creditVat = filtered.value.creditNotes.reduce((s, r) => s + r.tax_cents, 0);
+		const outputVat = grossOutputVat - creditVat;
 		const inputVat = filtered.value.bills.reduce((s, r) => s + r.tax_cents, 0);
 		return {
+			grossOutputVat,
+			creditVat,
 			outputVat,
 			inputVat,
 			netVat: outputVat - inputVat,
 			invoiceCount: filtered.value.invoices.length,
-			billCount: filtered.value.bills.length
+			billCount: filtered.value.bills.length,
+			creditNoteCount: filtered.value.creditNotes.length
 		};
 	});
 
@@ -620,7 +690,11 @@
 		}
 		if (totals.value.netVat === 0) return "Output VAT exactly offset by Input VAT";
 		if (totals.value.netVat < 0) return "Carries forward as Input-VAT credit";
-		if (totals.value.outputVat === 0) return "All credit, no output to offset";
+		// Credit notes can drive output VAT to zero or below, which would make
+		// the percentage below meaningless (or divide by zero). Both cases mean
+		// the same thing to the reader: there's nothing left to express a share
+		// of. `<= 0` rather than `=== 0` because net output can now go negative.
+		if (totals.value.outputVat <= 0) return "All credit, no output to offset";
 		const share = (totals.value.netVat / totals.value.outputVat) * 100;
 		return `${share.toFixed(1)}% of output VAT`;
 	});
@@ -644,24 +718,30 @@
 		return `${v.toFixed(v < 10 ? 1 : 0)}%`;
 	}
 
-	// Drill-down tabs — same pattern as the P&L drill-down. Only two
-	// tabs here (Invoices / Bills) since payslips don't carry VAT.
-	type TabKey = "invoices" | "bills";
+	// Drill-down tabs — same pattern as the P&L drill-down. Payslips don't
+	// carry VAT so they have no tab; credit notes do, and reverse output VAT.
+	type TabKey = "invoices" | "credit_notes" | "bills";
 	interface TabDef { key: TabKey, label: string, icon: string }
 	const TABS: TabDef[] = [
 		{ key: "invoices", label: "Invoices", icon: "i-lucide-receipt" },
+		{ key: "credit_notes", label: "Credit notes", icon: "i-lucide-receipt-text" },
 		{ key: "bills", label: "Bills", icon: "i-lucide-file-input" }
 	];
 	const activeTab = ref<TabKey>("invoices");
 
 	const tabCounts = computed<Record<TabKey, number>>(() => ({
 		invoices: filtered.value.invoices.length,
+		credit_notes: filtered.value.creditNotes.length,
 		bills: filtered.value.bills.length
 	}));
 
-	const activeTabTotal = computed(() =>
-		activeTab.value === "invoices" ? totals.value.outputVat : totals.value.inputVat
-	);
+	// The credit-notes tab shows what was DEDUCTED, so it reports the gross
+	// credit VAT rather than the net output figure the invoices tab shows.
+	const activeTabTotal = computed(() => {
+		if (activeTab.value === "invoices") return totals.value.grossOutputVat;
+		if (activeTab.value === "credit_notes") return totals.value.creditVat;
+		return totals.value.inputVat;
+	});
 
 	const activeTabIcon = computed(() =>
 		TABS.find((t) => t.key === activeTab.value)?.icon ?? "i-lucide-file"
