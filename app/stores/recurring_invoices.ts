@@ -21,17 +21,22 @@
 // those are recomputed at generation time so a VAT rate change on
 // the template flows into the next generated invoice cleanly.
 
+import type { RecurringFrequency } from "~/lib/recurring-schedule";
 import type { ClientSnapshot, PricingMode } from "~/stores/quotes";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { bundleTaxCents, computeLineTotals } from "~/lib/money";
 import { allocateDocumentNumber } from "~/lib/numbering";
+import { advanceDate, anchorDayOf } from "~/lib/recurring-schedule";
 import { useBusinessBanksStore } from "~/stores/business_banks";
 import { useInvoicesStore } from "~/stores/invoices";
 import { useSettingsStore } from "~/stores/settings";
 
-export type RecurringFrequency = "weekly" | "monthly" | "quarterly" | "yearly";
+// Owned by the pure lib (unit-tested there); re-exported so existing
+// importers of this store keep resolving them from here.
+export type { RecurringFrequency } from "~/lib/recurring-schedule";
+export { advanceDate } from "~/lib/recurring-schedule";
 
 export interface RecurringInvoiceRow {
 	id: number
@@ -98,31 +103,6 @@ const addDays = (iso: string, days: number): string => {
 	if (!y || !m || !d) return iso;
 	const dt = new Date(y, m - 1, d);
 	dt.setDate(dt.getDate() + days);
-	const yy = dt.getFullYear();
-	const mm = String(dt.getMonth() + 1).padStart(2, "0");
-	const dd = String(dt.getDate()).padStart(2, "0");
-	return `${yy}-${mm}-${dd}`;
-};
-
-// Advance an ISO date by ONE step of the given frequency. Month-end
-// overflow handled by clamping to the last day of the target month
-// (Jan 31 + 1 month → Feb 28/29). JS's Date constructor doesn't
-// auto-clamp — `new Date(2024, 1, 31)` rolls forward to Mar 2 — so
-// we set the day to 1 first, advance the month, then clamp the day
-// to the new month's length.
-export const advanceDate = (iso: string, frequency: RecurringFrequency): string => {
-	const [y, m, d] = iso.split("-").map(Number);
-	if (!y || !m || !d) return iso;
-	if (frequency === "weekly") return addDays(iso, 7);
-
-	const stepMonths = frequency === "monthly" ? 1 : frequency === "quarterly" ? 3 : 12;
-	// Build a date at day 1 so the month addition doesn't roll forward.
-	const dt = new Date(y, m - 1, 1);
-	dt.setMonth(dt.getMonth() + stepMonths);
-	// Last day of the target month — Date(year, month+1, 0) gives it.
-	const lastDay = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate();
-	const targetDay = Math.min(d, lastDay);
-	dt.setDate(targetDay);
 	const yy = dt.getFullYear();
 	const mm = String(dt.getMonth() + 1).padStart(2, "0");
 	const dd = String(dt.getDate()).padStart(2, "0");
@@ -575,7 +555,9 @@ export const useRecurringInvoicesStore = defineStore("recurring_invoices", () =>
 
 		// Advance the template — bump next_issue_date by one frequency
 		// step, increment the counter, stamp last_generated_at.
-		const nextIssue = advanceDate(template.next_issue_date, template.frequency);
+		// Anchored to the start date's day so one short month can't
+		// permanently decay the schedule (31st → 28th forever).
+		const nextIssue = advanceDate(template.next_issue_date, template.frequency, anchorDayOf(template.start_date));
 		await execute(
 			`UPDATE recurring_invoices
 			 SET next_issue_date = ?,

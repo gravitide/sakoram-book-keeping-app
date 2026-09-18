@@ -33,11 +33,11 @@ import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { bundleTaxCents, computeLineTotals } from "~/lib/money";
 import { allocateDocumentNumber } from "~/lib/numbering";
-import { useBillCategoriesStore } from "~/stores/bill_categories";
-import { useBillsStore } from "~/stores/bills";
 // RecurringFrequency + advanceDate are owned by the recurring_invoices store
 // (single source of truth) — importing them here avoids duplicate auto-imports.
-import { advanceDate } from "~/stores/recurring_invoices";
+import { advanceDate, anchorDayOf } from "~/lib/recurring-schedule";
+import { useBillCategoriesStore } from "~/stores/bill_categories";
+import { useBillsStore } from "~/stores/bills";
 import { useSettingsStore } from "~/stores/settings";
 
 export interface RecurringBillRow {
@@ -575,7 +575,8 @@ export const useRecurringBillsStore = defineStore("recurring_bills", () => {
 
 		// Advance the template — bump next_issue_date by one frequency
 		// step, increment the counter, stamp last_generated_at.
-		const nextIssue = advanceDate(template.next_issue_date, template.frequency);
+		// Anchored to the start date's day — see advanceDate.
+		const nextIssue = advanceDate(template.next_issue_date, template.frequency, anchorDayOf(template.start_date));
 		await execute(
 			`UPDATE recurring_bills
 			 SET next_issue_date = ?,

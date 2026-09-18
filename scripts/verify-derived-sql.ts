@@ -143,5 +143,25 @@ console.log("\n-- calendar invoice events (SQL read from source) --");
 check("paid_cents", cal.paid_cents, 1000000);
 check("credited_cents (issued + linked only)", cal.credited_cents, 400000);
 
+// --- 9. letter counter advance (numbering.advanceDocumentCounter) -------
+// The stuck state: a letter hand-numbered AHEAD to LET-0010 with the counter
+// at 9. The old path refused to bump onto an in-use number, so LET-0010 was
+// suggested forever. The statement must move the counter onto 10 regardless,
+// and must never move it backwards.
+const numSrc = readFileSync(join(REPO, "app/lib/numbering.ts"), "utf8");
+const bumpSql = numSrc.match(/export const advanceDocumentCounter = [\s\S]*?await execute\(\s*`([\s\S]*?)`,/);
+if (!bumpSql) {
+	console.error("✗ could not locate the advanceDocumentCounter SQL in app/lib/numbering.ts");
+	process.exit(1);
+}
+db.exec(`INSERT INTO letters (number, letter_date, subject, body_json) VALUES ('LET-0010', '2026-04-01', 'ahead', '')`);
+db.exec(`INSERT INTO document_counters (document_type, last_number) VALUES ('letter', 9)`);
+const lastLetter = () => (db.query(`SELECT last_number FROM document_counters WHERE document_type = 'letter'`).get() as Record<string, unknown>).last_number;
+db.query(bumpSql[1]!).run("letter", 10);
+console.log("\n-- letter counter advance (SQL read from source) --");
+check("advances onto a reference already in use", lastLetter(), 10);
+db.query(bumpSql[1]!).run("letter", 4);
+check("never moves backwards", lastLetter(), 10);
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

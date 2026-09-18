@@ -182,6 +182,48 @@ export const allocateSpecificDocumentNumber = async (
 	};
 };
 
+// Move a type's counter up to `sequence` WITHOUT a uniqueness check. One
+// atomic statement; never moves the counter backwards.
+//
+// For LETTERS only. Letter references are deliberately non-unique and
+// hand-editable, so "is this number free?" is the wrong question there — and
+// asking it caused a stuck state: renumber a letter ahead to LET-0010, and once
+// the counter reached 9 every New-letter suggested LET-0010, the uniqueness
+// pre-check in allocateSpecificDocumentNumber threw, the throw was swallowed,
+// the counter stayed at 9, and LET-0010 was suggested again — forever.
+// Every other document type must keep using allocateSpecificDocumentNumber.
+export const advanceDocumentCounter = async (
+	type: DocumentType,
+	sequence: number
+): Promise<void> => {
+	if (!Number.isInteger(sequence) || sequence < 1) {
+		throw new Error(`advanceDocumentCounter: bad sequence ${sequence}`);
+	}
+	await execute(
+		`INSERT INTO document_counters (document_type, last_number)
+		 VALUES (?, ?)
+		 ON CONFLICT(document_type)
+		 DO UPDATE SET last_number = MAX(document_counters.last_number, excluded.last_number)`,
+		[type, sequence]
+	);
+};
+
+// Next reference no existing document uses, with the counter moved up to it.
+// Skips past hand-numbered-ahead references instead of stalling on them.
+// LETTERS only (see advanceDocumentCounter) — not atomic, which is fine for a
+// non-unique reference but would NOT be for a gapless document number.
+export const allocateNextFreeReference = async (
+	type: DocumentType,
+	maxSkips = 200
+): Promise<AllocationResult> => {
+	for (let i = 0; i <= maxSkips; i++) {
+		const peek = await peekNextSequence(type);
+		await advanceDocumentCounter(type, peek.sequence);
+		if (await isDocumentNumberAvailable(type, peek.sequence)) return peek;
+	}
+	throw new Error(`allocateNextFreeReference: no free ${type} reference within ${maxSkips} tries`);
+};
+
 // Validate + reserve a number for an EXISTING document — i.e. renumbering a
 // draft from its detail page. Uniqueness excludes the document itself (so
 // keeping the same number is a no-op, not a clash); bumps the counter so future
