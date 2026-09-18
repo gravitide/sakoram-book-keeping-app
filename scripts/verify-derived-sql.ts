@@ -129,5 +129,19 @@ console.log("\n-- invoice lifecycle guard (SQL read from source) --");
 check("receipts", links.receipts, 1);
 check("issued linked credit notes only", links.credit_notes, 1);
 
+// --- 8. calendar due-date query (useCalendarEvents.fetchInvoiceEvents) --
+// A fifth balance site that used to subtract receipts only. Same fixture:
+// receipt 1,000,000; issued linked credit 400,000; draft + unlinked ignored.
+const calSrc = readFileSync(join(REPO, "app/composables/useCalendarEvents.ts"), "utf8");
+const calSql = calSrc.match(/select<InvoiceEventRow>\(\s*`([\s\S]*?)`,/);
+if (!calSql) {
+	console.error("✗ could not locate the invoice events SQL in app/composables/useCalendarEvents.ts");
+	process.exit(1);
+}
+const cal = db.query(calSql[1]!).get("2026-01-01", "2026-12-31") as Record<string, unknown>;
+console.log("\n-- calendar invoice events (SQL read from source) --");
+check("paid_cents", cal.paid_cents, 1000000);
+check("credited_cents (issued + linked only)", cal.credited_cents, 400000);
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

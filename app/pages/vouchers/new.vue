@@ -56,6 +56,11 @@
 							<div class="font-medium">
 								{{ formatLKR(linkedDocAlreadyPaidCents) }}
 							</div>
+							<!-- Issued credit notes settle an invoice too; without
+								this line Remaining looks like it doesn't add up. -->
+							<div v-if="linkedDocCreditedCents > 0" class="text-(--ui-text-muted)">
+								+ {{ formatLKR(linkedDocCreditedCents) }} credited
+							</div>
 						</div>
 						<div>
 							<div class="text-(--ui-text-muted)">
@@ -233,6 +238,7 @@
 	import { formatLKR } from "~/lib/money";
 	import { useBillsStore } from "~/stores/bills";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
+	import { useCreditNotesStore } from "~/stores/credit_notes";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { usePayslipsStore } from "~/stores/payslips";
 	import { useVouchersStore } from "~/stores/vouchers";
@@ -257,7 +263,9 @@
 	// Vouchers store has to be loaded too so the bills store's
 	// derivedStatus / paidCentsFor below see existing payment vouchers
 	// when we compute the suggested-amount default.
-	await Promise.all([store.load(), invoicesStore.load(), billsStore.load(), payslipsStore.load(), banksStore.ensureLoaded()]);
+	// Credit notes too: invoicesStore.balanceCentsFor / creditedCentsFor read
+	// that store lazily and sum an EMPTY array (→ 0) until it has loaded.
+	await Promise.all([store.load(), invoicesStore.load(), billsStore.load(), payslipsStore.load(), banksStore.ensureLoaded(), useCreditNotesStore().load()]);
 
 	// "Record payment" on a bill or invoice detail page navigates here
 	// with ?bill=N or ?invoice=N — we pre-fill the appropriate fields
@@ -559,8 +567,17 @@
 		return 0;
 	});
 
+	// Issued credit notes against a linked INVOICE. Bills and payslips have
+	// no credit-note equivalent. Same rule as invoices.balanceCentsFor — the
+	// prefilled amount already used it, but Remaining + the overpayment
+	// warning below subtracted receipts only, so a part-credited invoice
+	// showed an amount and a "Remaining" that disagreed.
+	const linkedDocCreditedCents = computed(() =>
+		linkedInvoice.value ? invoicesStore.creditedCentsFor(linkedInvoice.value.id) : 0
+	);
+
 	const linkedDocRemainingCents = computed(() =>
-		Math.max(0, linkedDocTotalCents.value - linkedDocAlreadyPaidCents.value)
+		Math.max(0, linkedDocTotalCents.value - linkedDocAlreadyPaidCents.value - linkedDocCreditedCents.value)
 	);
 
 	// Per-kind copy for the context block + overpayment warning. Keeps
@@ -602,7 +619,7 @@
 	// payments are all legitimate). Zero when no document is linked.
 	const overpaymentCents = computed(() => {
 		if (!linkedDocKind.value) return 0;
-		const sumWithThis = linkedDocAlreadyPaidCents.value + amountCents.value;
+		const sumWithThis = linkedDocAlreadyPaidCents.value + linkedDocCreditedCents.value + amountCents.value;
 		return Math.max(0, sumWithThis - linkedDocTotalCents.value);
 	});
 	const overpaying = computed(() => overpaymentCents.value > 0);

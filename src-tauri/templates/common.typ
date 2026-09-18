@@ -178,22 +178,42 @@
   ]
 }
 
-// --- paid / balance-due block (only when paid > 0) ---------------------
-#let paid-block(data) = if data.paid_cents != none and data.paid_cents > 0 [
-  #v(8pt)
-  #align(right)[
-    #grid(
-      columns: (auto, auto),
-      column-gutter: 16pt,
-      row-gutter: 4pt,
-      align: (right, right),
-      text(fill: rgb("#6b7280"))[Paid:],
-      text(fill: rgb("#16a34a"))[#data.currency_symbol #data.paid_display],
-      text(weight: "semibold")[Balance due:],
-      text(weight: "bold", size: 11pt, fill: rgb("#dc2626"))[#data.currency_symbol #data.balance_display],
-    )
+// --- paid / credited / balance-due block -------------------------------
+// Shown once anything has been paid OR credited. `credited_*` only exists on
+// invoice payloads (issued credit notes settled against the invoice), so it
+// is read with a default — quote / bill payloads don't carry the key. A
+// paid-only invoice renders exactly the two rows it always did.
+#let paid-block(data) = {
+  let paid = data.at("paid_cents", default: none)
+  let credited = data.at("credited_cents", default: none)
+  let has-paid = paid != none and paid > 0
+  let has-credit = credited != none and credited > 0
+  if has-paid or has-credit [
+    #v(8pt)
+    #align(right)[
+      #grid(
+        columns: (auto, auto),
+        column-gutter: 16pt,
+        row-gutter: 4pt,
+        align: (right, right),
+        ..if has-paid {
+          (
+            text(fill: rgb("#6b7280"))[Paid:],
+            text(fill: rgb("#16a34a"))[#data.currency_symbol #data.paid_display],
+          )
+        } else { () },
+        ..if has-credit {
+          (
+            text(fill: rgb("#6b7280"))[Credited:],
+            text(fill: rgb("#16a34a"))[#data.currency_symbol #data.credited_display],
+          )
+        } else { () },
+        text(weight: "semibold")[Balance due:],
+        text(weight: "bold", size: 11pt, fill: rgb("#dc2626"))[#data.currency_symbol #data.balance_display],
+      )
+    ]
   ]
-]
+}
 
 // --- rich-text rendering ----------------------------------------------
 // Shared with letter.typ (which imports render-blocks from here). The block

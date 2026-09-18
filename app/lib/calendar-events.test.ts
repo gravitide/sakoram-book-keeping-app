@@ -26,7 +26,8 @@ describe("buildInvoiceEvent", () => {
 		due_date: "2026-06-20",
 		client_name: "Acme",
 		total_cents: 10000,
-		paid_cents: 4000
+		paid_cents: 4000,
+		credited_cents: 0
 	};
 
 	it("builds an event for a partially-paid invoice", () => {
@@ -46,6 +47,17 @@ describe("buildInvoiceEvent", () => {
 
 	it("drops a fully-paid invoice", () => {
 		expect(buildInvoiceEvent({ ...row, paid_cents: 10000 }, "2026-06-16")).toBeNull();
+	});
+
+	// Issued credit notes settle an invoice just like receipts do. The
+	// calendar used to subtract receipts only, so a credited invoice kept
+	// showing on its due date and flipped to overdue-red once it passed.
+	it("drops an invoice settled entirely by an issued credit note", () => {
+		expect(buildInvoiceEvent({ ...row, paid_cents: 0, credited_cents: 10000 }, "2026-06-16")).toBeNull();
+	});
+
+	it("subtracts credit from the balance alongside receipts", () => {
+		expect(buildInvoiceEvent({ ...row, credited_cents: 2500 }, "2026-06-16")?.balanceCents).toBe(3500);
 	});
 
 	it("flags overdue when due_date is before today and a balance remains", () => {

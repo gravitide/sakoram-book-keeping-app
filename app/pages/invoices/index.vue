@@ -330,7 +330,7 @@
 	// Each row carries the derived `_paid` / `_balance` / `_status` from the
 	// SQL subquery, so the page needs neither all invoices NOR all vouchers in
 	// memory — the gate + PDF read those fields straight off the row.
-	type InvoiceRowVM = InvoiceRow & { _paid: number, _balance: number, _status: InvoiceStatus };
+	type InvoiceRowVM = InvoiceRow & { _paid: number, _credited: number, _balance: number, _status: InvoiceStatus };
 
 	const table = useServerTable<InvoiceRowVM>({
 		query: () => ({
@@ -547,6 +547,7 @@
 				settings: settingsStore.settings,
 				currency: currency.value,
 				paidCents: currentInvoice.value._paid,
+				creditedCents: currentInvoice.value._credited,
 				entitledToTemplates: license.hasFeature("pdf_templates")
 			});
 		},
@@ -651,9 +652,9 @@
 				onSelect: () => recordPayment(i)
 			});
 		}
-		// Revert to draft: sent with no payments yet, or cancelled —
+		// Revert to draft: sent with no payments or issued credit notes yet, or cancelled —
 		// mirrors the detail page's transition buttons.
-		if ((i.status === "sent" && i._paid === 0) || i.status === "cancelled") {
+		if ((i.status === "sent" && i._paid === 0 && i._credited === 0) || i.status === "cancelled") {
 			lifecycle.push({
 				label: "Revert to draft",
 				icon: "i-lucide-rotate-ccw",

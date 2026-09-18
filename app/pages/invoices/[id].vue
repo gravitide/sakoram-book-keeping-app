@@ -1247,6 +1247,7 @@
 			settings: settingsStore.settings,
 			currency: currency.value,
 			paidCents: invoicesStore.paidCentsFor(invoice.value!.id),
+			creditedCents: invoicesStore.creditedCentsFor(invoice.value!.id),
 			entitledToTemplates: license.hasFeature("pdf_templates")
 		});
 
