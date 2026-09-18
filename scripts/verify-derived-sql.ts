@@ -23,7 +23,7 @@ import { dirname, join } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { Database } from "bun:sqlite";
-import { clientDerivedFrom, invoiceDerivedFrom } from "../app/lib/derived-status.ts";
+import { billDerivedFrom, clientDerivedFrom, invoiceDerivedFrom } from "../app/lib/derived-status.ts";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const MIGRATIONS = join(REPO, "src-tauri/migrations");
@@ -162,6 +162,22 @@ console.log("\n-- letter counter advance (SQL read from source) --");
 check("advances onto a reference already in use", lastLetter(), 10);
 db.query(bumpSql[1]!).run("letter", 4);
 check("never moves backwards", lastLetter(), 10);
+
+// --- 10. bill balance floors at zero (billDerivedFrom) -----------------
+// Overpaying a bill is only a WARNING on /vouchers/new, so it is reachable.
+// invoiceDerivedFrom floored its balance; the bill + payslip mirrors did not,
+// and the /bills row showed a negative balance ("Rs -50.00").
+db.exec(`INSERT INTO vendors (id, name) VALUES (1, 'Vendor A')`);
+db.exec(`
+	INSERT INTO bills (id, number, vendor_id, vendor_snapshot, vendor_name, issue_date, due_date, status, total_cents, subtotal_cents, tax_cents)
+	VALUES (1, 'BIL-0001', 1, '{"name":"Vendor A"}', 'Vendor A', '2026-01-01', '2026-12-31', 'open', 1000000, 1000000, 0)
+`);
+db.exec(`INSERT INTO vouchers (id, number, voucher_type, voucher_date, party_name, amount_cents, related_bill_id) VALUES (2, 'VCH-0002', 'payment', '2026-03-01', 'Vendor A', 1005000, 1)`);
+const bill = db.query(`SELECT _paid, _balance, _status FROM ${billDerivedFrom(TODAY)} WHERE id = 1`).get() as Record<string, unknown>;
+console.log("\n-- overpaid bill --");
+check("_paid", bill._paid, 1005000);
+check("_balance floors at 0 (was -5000)", bill._balance, 0);
+check("_status", bill._status, "paid");
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

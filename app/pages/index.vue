@@ -836,7 +836,10 @@
 		quotesStore.search = "";
 		quotesStore.clientFilter = "all";
 		quotesStore.clearDateFilters();
-		quotesStore.statusFilters = ["draft", "sent"];
+		// Must match the tile's own definition of "open" in getQuoteKpis
+		// (sent + accepted). It used to prefilter draft + sent, so the tile
+		// said "3 open" and the click landed on a different set of rows.
+		quotesStore.statusFilters = ["sent", "accepted"];
 	};
 
 	// --- Counts that don't already exist on the stores ---
