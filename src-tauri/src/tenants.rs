@@ -205,6 +205,33 @@ fn read_marker(folder: &Path) -> Result<Marker, String> {
 	serde_json::from_slice(&raw).map_err(|e| format!("Corrupt business.json: {e}"))
 }
 
+/// Record the encrypted flag in `business.json`. The marker is what Open and
+/// a fresh machine rebuild the registry from, so it must agree with the
+/// registry — otherwise a re-opened encrypted business is treated as plain
+/// and `ensure_tenant_db` migrates a MISSING file into an empty plaintext db.
+fn set_marker_encrypted(folder: &Path, encrypted: bool) -> Result<(), String> {
+	let mut m = read_marker(folder)?;
+	m.encrypted = encrypted;
+	write_marker(folder, &m)
+}
+
+/// A folder is encrypted if its marker says so OR a vault blob is present.
+/// The blob is the ground truth — markers written before the flag was
+/// persisted (or hand-edited) say `false` for businesses that are encrypted.
+fn folder_is_encrypted(folder: &Path, marker: &Marker) -> bool {
+	marker.encrypted || folder.join("business.db.enc").exists()
+}
+
+/// Refuse to run migrations against a locked vault: a missing `business.db`
+/// beside a `business.db.enc` means the plaintext hasn't been materialised,
+/// and migrating would create an EMPTY db next to the real data.
+fn guard_locked_vault(db: &Path, enc: &Path) -> Result<(), String> {
+	if !db.exists() && enc.exists() {
+		return Err("Business is encrypted and locked — unlock it first.".into());
+	}
+	Ok(())
+}
+
 /// Detect the identity-logo filename (relative to `<folder>/logos/`) for a
 /// business folder, so `open_tenant` can rebuild the registry's `logo_file`.
 fn detect_logo_file(folder: &Path) -> Option<String> {
@@ -482,6 +509,20 @@ pub async fn list_tenants(app: AppHandle) -> Result<TenantRegistry, String> {
 			write_registry(&app, &reg)?;
 		}
 	}
+	// Self-heal a stale `encrypted: false` (registry written before the flag
+	// was persisted to the marker, or hand-edited): a vault blob on disk is
+	// proof of encryption, and the JS side gates `ensure_tenant_db` on this
+	// flag — a wrong `false` would migrate a missing db into an empty one.
+	let mut healed = false;
+	for t in reg.tenants.iter_mut() {
+		if !t.encrypted && Path::new(&t.path).join("business.db.enc").exists() {
+			t.encrypted = true;
+			healed = true;
+		}
+	}
+	if healed {
+		write_registry(&app, &reg)?;
+	}
 	// Allow every known business folder for asset:// reads so their logos
 	// render on the welcome screen + sidebar regardless of drive.
 	for t in &reg.tenants {
@@ -561,12 +602,19 @@ pub async fn open_tenant(app: AppHandle, path: String) -> Result<Tenant, String>
 		run_migrations(&db).await?;
 	}
 
+	// The blob is ground truth for `encrypted`; heal a marker that predates
+	// the flag being persisted so the next Open doesn't have to re-infer.
+	let encrypted = folder_is_encrypted(&folder, &marker);
+	if encrypted != marker.encrypted {
+		let _ = set_marker_encrypted(&folder, encrypted);
+	}
+
 	let tenant = Tenant {
 		id: marker.id.clone(),
 		name: marker.name.clone(),
 		path: folder.to_string_lossy().to_string(),
 		logo_file: detect_logo_file(&folder),
-		encrypted: marker.encrypted,
+		encrypted,
 	};
 
 	let mut reg = read_registry(&app)?;
@@ -680,6 +728,10 @@ pub async fn clear_active_tenant(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn ensure_tenant_db(app: AppHandle, id: String) -> Result<String, String> {
 	let path = tenant_db_path_public(&app, &id)?;
+	// Never migrate a locked vault — that would create an EMPTY plaintext db
+	// beside the real (encrypted) data. The JS side gates on the registry's
+	// `encrypted` flag; this is the backstop for when that flag is wrong.
+	guard_locked_vault(&path, &tenant_enc_path(&app, &id)?)?;
 	run_migrations(&path).await?;
 	// Business DBs live at arbitrary user-chosen paths, so we hand plugin-sql
 	// an absolute sqlite URL rather than an app-data-relative one.
@@ -907,12 +959,15 @@ pub fn set_tenant_logo_internal(
 	write_registry(app, &reg)
 }
 
-/// Flip a tenant's `encrypted` flag in the registry.
+/// Flip a tenant's `encrypted` flag in BOTH the registry and the folder's
+/// `business.json`. The marker travels with the folder; the registry doesn't.
 pub fn set_tenant_encrypted(app: &AppHandle, id: &str, encrypted: bool) -> Result<(), String> {
 	let mut reg = read_registry(app)?;
 	let tenant = reg.tenants.iter_mut().find(|t| t.id == id).ok_or("Tenant not found")?;
 	tenant.encrypted = encrypted;
-	write_registry(app, &reg)
+	let folder = PathBuf::from(&tenant.path);
+	write_registry(app, &reg)?;
+	set_marker_encrypted(&folder, encrypted)
 }
 
 /// Whether a tenant is marked encrypted.
@@ -924,6 +979,67 @@ pub fn is_tenant_encrypted(app: &AppHandle, id: &str) -> Result<bool, String> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	fn temp_folder(tag: &str) -> PathBuf {
+		let dir = std::env::temp_dir().join(format!("tenants-{tag}-{}", std::process::id()));
+		let _ = std::fs::remove_dir_all(&dir);
+		std::fs::create_dir_all(&dir).unwrap();
+		dir
+	}
+
+	fn plain_marker() -> Marker {
+		Marker {
+			id: "acme".into(),
+			name: "Acme".into(),
+			schema_version: SCHEMA_VERSION,
+			created_at: now_iso(),
+			encrypted: false,
+		}
+	}
+
+	#[test]
+	fn set_marker_encrypted_persists_the_flag() {
+		let dir = temp_folder("marker-flag");
+		write_marker(&dir, &plain_marker()).unwrap();
+
+		set_marker_encrypted(&dir, true).unwrap();
+		assert!(read_marker(&dir).unwrap().encrypted, "business.json must record encryption");
+
+		set_marker_encrypted(&dir, false).unwrap();
+		assert!(!read_marker(&dir).unwrap().encrypted);
+		std::fs::remove_dir_all(&dir).ok();
+	}
+
+	#[test]
+	fn vault_files_mark_a_folder_encrypted_even_if_marker_says_otherwise() {
+		let dir = temp_folder("infer");
+		let marker = plain_marker(); // encrypted: false (stale / pre-fix marker)
+		assert!(!folder_is_encrypted(&dir, &marker));
+
+		std::fs::write(dir.join("business.db.enc"), b"blob").unwrap();
+		assert!(folder_is_encrypted(&dir, &marker), "a vault blob is proof of encryption");
+		std::fs::remove_dir_all(&dir).ok();
+	}
+
+	#[test]
+	fn migrating_a_locked_vault_is_refused() {
+		let dir = temp_folder("guard");
+		let db = dir.join("business.db");
+		let enc = dir.join("business.db.enc");
+
+		// Neither file: a brand-new business — migrations may create it.
+		assert!(guard_locked_vault(&db, &enc).is_ok());
+
+		// Blob only: encrypted-and-locked — migrating would create an EMPTY
+		// plaintext db beside the real data (the empty-DB hazard).
+		std::fs::write(&enc, b"blob").unwrap();
+		assert!(guard_locked_vault(&db, &enc).is_err());
+
+		// Both: unlocked working copy present — fine.
+		std::fs::write(&db, b"db").unwrap();
+		assert!(guard_locked_vault(&db, &enc).is_ok());
+		std::fs::remove_dir_all(&dir).ok();
+	}
 
 	#[test]
 	fn tenant_encrypted_defaults_false_when_field_absent() {

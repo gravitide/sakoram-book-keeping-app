@@ -33,7 +33,17 @@ pub fn run() {
 					.icon(_app.default_window_icon().unwrap().clone())
 					.on_menu_event(|app, event| match event.id.as_ref() {
 						"quit" => {
-							app.exit(0);
+							// Close the main window rather than exiting outright so the
+							// JS lock-on-close plugin runs first: it closes the sqlite
+							// pool BEFORE sealing an encrypted business. `app.exit` would
+							// jump straight to the Rust ExitRequested backstop, which
+							// can't remove the plaintext db while the pool holds it open.
+							match app.get_webview_window("main") {
+								Some(main) => {
+									let _ = main.close();
+								}
+								None => app.exit(0),
+							}
 						}
 						other => {
 							println!("menu item {} not handled", other);
@@ -48,6 +58,17 @@ pub fn run() {
 		// restores it on the next launch. Default StateFlags cover size,
 		// position and maximized — which is what we want for the main window
 		// (and the help window gets the same treatment for free).
+		// The main window owns the app's lifetime. Once it is gone (X button,
+		// tray Quit — both go through the JS lock-on-close seal first), exit
+		// even if the help window is still open; a docs window with no app
+		// behind it is useless, and tray Quit must actually quit.
+		.on_window_event(|window, event| {
+			if window.label() == "main" {
+				if let tauri::WindowEvent::Destroyed = event {
+					window.app_handle().exit(0);
+				}
+			}
+		})
 		.plugin(tauri_plugin_window_state::Builder::default().build())
 		.plugin(tauri_plugin_sql::Builder::default().build())
 		.plugin(tauri_plugin_dialog::init())

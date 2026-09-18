@@ -69,28 +69,56 @@ pub fn enable_encryption_at(
 /// original blocks are unrecoverable (wear-levelling). The threat model
 /// (spec §8.3) is a copied file while the app is closed/locked — at which point
 /// only `{enc}` exists — not forensic disk recovery, which is out of scope.
+///
+/// Ordering matters: the file is RENAMED aside before any byte is overwritten.
+/// On Windows a file another process (tauri-plugin-sql's pool) still holds
+/// open can be written to but not renamed or deleted, so a failed rename
+/// tells us the db is in use and we bail out with the plaintext untouched.
+/// Zero-filling first and deleting second (the old order) left a same-length
+/// file of NULs behind when the delete failed — which `unlock_at` then treated
+/// as the newest copy of the database.
 fn secure_remove(path: &std::path::Path) -> Result<(), VaultFsError> {
     use std::io::{Seek, SeekFrom, Write};
-    if let Ok(meta) = std::fs::metadata(path) {
-        if let Ok(mut f) = std::fs::OpenOptions::new().write(true).open(path) {
-            let len = meta.len();
-            let zeros = vec![0u8; 65536];
-            let mut remaining = len;
-            f.seek(SeekFrom::Start(0)).ok();
-            while remaining > 0 {
-                let n = remaining.min(zeros.len() as u64) as usize;
-                if f.write_all(&zeros[..n]).is_err() {
-                    break;
-                }
-                remaining -= n as u64;
+    let len = match std::fs::metadata(path) {
+        Ok(m) => m.len(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(VaultFsError::Io(e)),
+    };
+    let mut wipe = path.as_os_str().to_owned();
+    wipe.push(".wipe");
+    let wipe = std::path::PathBuf::from(wipe);
+    std::fs::rename(path, &wipe)?;
+
+    if let Ok(mut f) = std::fs::OpenOptions::new().write(true).open(&wipe) {
+        let zeros = vec![0u8; 65536];
+        let mut remaining = len;
+        f.seek(SeekFrom::Start(0)).ok();
+        while remaining > 0 {
+            let n = remaining.min(zeros.len() as u64) as usize;
+            if f.write_all(&zeros[..n]).is_err() {
+                break;
             }
-            f.flush().ok();
+            remaining -= n as u64;
         }
+        f.flush().ok();
     }
-    match std::fs::remove_file(path) {
+    match std::fs::remove_file(&wipe) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(VaultFsError::Io(e)),
+    }
+}
+
+/// Does the file start with the SQLite magic header? A crash-leftover working
+/// db is only "newest truth" if it is actually a database; a zero-filled or
+/// truncated file is debris from a failed lock and must not shadow the blob.
+fn looks_like_sqlite(path: &std::path::Path) -> bool {
+    use std::io::Read;
+    const MAGIC: &[u8; 16] = b"SQLite format 3\0";
+    let mut head = [0u8; 16];
+    match std::fs::File::open(path).and_then(|mut f| f.read_exact(&mut head)) {
+        Ok(()) => &head == MAGIC,
+        Err(_) => false,
     }
 }
 
@@ -107,7 +135,11 @@ pub fn unlock_at(p: &VaultPaths, secret: &Secret, aad: &[u8]) -> Result<Zeroizin
         Secret::Recovery(rk) => vault::unlock_with_recovery(&meta, rk, aad)?,
     };
     // Only materialise the plaintext from the blob if there isn't already a
-    // (possibly crash-leftover) working db.
+    // (possibly crash-leftover) working db — and only trust that leftover if
+    // it is a real SQLite file. Anything else is debris from a failed lock.
+    if p.db.exists() && !looks_like_sqlite(&p.db) {
+        std::fs::remove_file(&p.db)?;
+    }
     if !p.db.exists() {
         vault::decrypt_file(&p.enc, &p.db, &dek)?;
     }
@@ -300,6 +332,58 @@ mod tests {
         (dir, p)
     }
 
+    /// Bytes that pass the SQLite header check, padded to `len`.
+    fn sqlite_like(len: usize) -> Vec<u8> {
+        let mut v = b"SQLite format 3\0".to_vec();
+        v.resize(len, 7u8);
+        v
+    }
+
+    #[test]
+    fn unlock_ignores_zeroed_leftover_db() {
+        let (dir, p) = temp_paths("zeroed");
+        let contents = sqlite_like(4000);
+        std::fs::write(&p.db, &contents).unwrap();
+        let _ = enable_encryption_at(&p, "pw", b"acme").unwrap();
+
+        // A lock that zero-filled the working db but failed to delete it
+        // (Windows: file still open) leaves a same-length file of NULs. That
+        // is NOT a newer database — the blob must win.
+        std::fs::write(&p.db, vec![0u8; contents.len()]).unwrap();
+
+        let _dek = unlock_at(&p, &Secret::Password("pw".into()), b"acme").unwrap();
+        assert_eq!(std::fs::read(&p.db).unwrap(), contents, "zeroed leftover must be replaced from the blob");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn lock_refuses_to_wipe_an_open_db() {
+        let (dir, p) = temp_paths("open");
+        let contents = sqlite_like(4000);
+        std::fs::write(&p.db, &contents).unwrap();
+        let (_r, dek) = enable_encryption_at(&p, "pw", b"acme").unwrap();
+
+        // Simulate tauri-plugin-sql still holding the pool open. SQLite opens
+        // with FILE_SHARE_READ | FILE_SHARE_WRITE but NOT FILE_SHARE_DELETE
+        // (Rust's default File::open grants delete-sharing, so mirror SQLite
+        // explicitly): lock must fail WITHOUT touching the plaintext.
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_READ: u32 = 0x1;
+        const FILE_SHARE_WRITE: u32 = 0x2;
+        let hold = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+            .open(&p.db)
+            .unwrap();
+        assert!(lock_at(&p, &dek, b"acme").is_err(), "lock must report failure while the db is open");
+        assert_eq!(std::fs::read(&p.db).unwrap(), contents, "an open db must never be zero-filled");
+
+        drop(hold);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     #[test]
     fn enable_creates_blob_and_keeps_working_db() {
         let (dir, p) = temp_paths("enable");
@@ -354,7 +438,9 @@ mod tests {
 
         // Simulate a crash: a NEWER working db is present alongside the (now
         // stale) blob. Its contents must NOT be clobbered by the stale blob.
-        let newer = vec![2u8; 2000];
+        // (It must look like a real SQLite file — see `looks_like_sqlite`.)
+        let mut newer = sqlite_like(2000);
+        newer[100..].fill(2u8);
         std::fs::write(&p.db, &newer).unwrap();
 
         let _dek = unlock_at(&p, &Secret::Password("pw".into()), b"acme").unwrap();
