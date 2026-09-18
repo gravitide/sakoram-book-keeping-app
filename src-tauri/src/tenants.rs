@@ -279,10 +279,6 @@ fn now_iso() -> String {
 	format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, m_cal, d, h, m, s)
 }
 
-/// Create a fresh business folder under `parent_dir` named `folder_name`,
-/// de-duplicated with " (2)", " (3)"… if that name is already taken. Returns
-/// the created folder path. Race-safe within a single process (create then
-/// bump on collision).
 // ---------- Portable paths --------------------------------------------------
 //
 // A business folder is a portable "document" — but three columns store
@@ -395,6 +391,10 @@ fn safe_folder_name(name: &str) -> String {
 	s
 }
 
+/// Create a fresh business folder under `parent_dir` named `folder_name`,
+/// de-duplicated with " (2)", " (3)"… if that name is already taken. Returns
+/// the created folder path. Race-safe within a single process (create then
+/// bump on collision).
 fn create_business_folder(parent_dir: &str, folder_name: &str) -> Result<PathBuf, String> {
 	if parent_dir.trim().is_empty() {
 		return Err("A location for the business folder is required.".into());

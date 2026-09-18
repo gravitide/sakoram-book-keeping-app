@@ -288,6 +288,23 @@ Off by default; unencrypted businesses are unaffected.
   (`sqlite_like()` in the vault_fs tests), and a Windows test that simulates
   the held-open file must pass `share_mode(READ | WRITE)` — Rust's default
   `File::open` grants delete-sharing and won't reproduce it.
+- **Three columns store ABSOLUTE paths** — `document_attachments.file_path`,
+  `company_settings.pdf_header_logo_path` and `logo_path` — in a folder that is
+  supposed to be portable. `relocate_stored_paths` (tenants.rs) re-points them
+  at the current folder on every `ensure_tenant_db`, only where the file
+  actually exists at the derived location. It runs there, not in
+  `open_tenant`, because an encrypted business has no db at Open time. If you
+  add another path column, add it to that function — nothing else will.
+- **Any file op on a business folder goes through a Rust command, never the fs
+  plugin.** The plugin's scopes are `$APPDATA` / `$APPLOCALDATA` / `$HOME`;
+  business folders live on any drive. `remove()` on a `D:\` path fails, and the
+  failure was being swallowed, orphaning attachment files. See
+  `remove_document_attachment` / `clear_document_attachments`.
+- **`create_business_folder` sanitises the name itself** (`safe_folder_name`,
+  a rule-for-rule mirror of `app/lib/safe-folder-name.ts`). Import-as-new
+  passes the raw name from a backup manifest: unsanitised, `A/B` nested a
+  directory, `CON` failed with a raw OS error, and `..\..\x` escaped the
+  parent the user chose. Keep the two implementations in sync.
 - **Tray Quit closes the main window; it does not `app.exit()`.** That routes
   it through the JS lock-on-close plugin, which closes the pool first. The
   app exits when the `main` window is destroyed (`on_window_event` in
@@ -473,6 +490,8 @@ sakoram_app/
 │  │  ├─ reconcile-match.ts           ← pure scored matcher used by bank reconciliation. ±1 day = 100, ±2 = 90, ±3 = 80; +20 for shared reference token. No Pinia / Vue deps so it's trivially testable.
 │  │  ├─ document-guards.ts           ← pure lifecycle rules: `invoiceMutationBlocker` (receipts / issued credit notes pin an invoice), the credit-note FSM, and `assertEditable` (Golden Rule #5 enforced store-side). The stores do the SQL counting and hand the numbers here.
 │  │  ├─ route-query.ts               ← `queryString` / `queryInt` / `withoutQueryKeys` — typed readers for vue-router query values.
+│  │  ├─ recurring-schedule.ts        ← `advanceDate(iso, frequency, anchorDay?)` + `anchorDayOf`. The anchor (the template's start day) stops one short month permanently decaying a schedule (31st → 28th forever); a hand-typed day is still respected. Re-exported from the recurring_invoices store.
+│  │  ├─ load-once.ts                 ← `createLoadOnce(load, isLoaded)` — the shared-in-flight-promise rule behind `ensureLoaded()`. Use it; don't write `if (!loaded && !loading) await load()`, which lets a concurrent caller return with state still null.
 │  │  ├─ licensing.ts                 ← tier registry (FEATURES) + hasFeature + trial math + effectiveEntitlement (license supersedes trial)
 │  │  └─ theme.ts                     ← THEME_COLORS palette (name → hex)
 │  ├─ middleware/
@@ -1734,7 +1753,7 @@ persisted to localStorage).
   issue_date. Unlinked ones come off the client total as an unapplied
   credit in aged receivables + the statement PDF. Also reaches the
   dashboard receivables tile and the clients-list outstanding column.
-  `bun run verify:sql` guards the four places balance is computed.
+  `bun run verify:sql` guards the SQL copies of the balance (seven sites in all — see Known landmines).
 - ✅ **Employer EPF + ETF counted as payroll expense** (v0.158.5) in
   both the P&L and the payroll register — previously gross-only, which
   overstated profit by up to ~15% of EPF-liable payroll.
@@ -2479,6 +2498,32 @@ licensing surface is still compiled with three registered Tauri commands.
   the note into an UNAPPLIED client credit that nets off unrelated invoices;
   cancelling it would leave the note reversing income + VAT that was never
   recognised. Cancel or un-issue the credit note first.
+- **Every Typst template with a bespoke footer must read `footer_blocks`.** The
+  builders always send it; `voucher.typ` / `report.typ` / `statement.typ`
+  hard-coded their footer line and silently ignored the custom footer for
+  months. When touching a template, prove the DEFAULT output is unchanged:
+  build a real payload with the shipped builder, render through the sidecar
+  before and after, and compare hashes (footer off must be byte-identical,
+  footer on must differ). Also: never pass a nullable field straight to
+  `#set document(author:)` — `none` is a type error; use
+  `if x != none { x } else { () }`.
+- **PDF builders in `app/lib` use RELATIVE runtime imports** (`./money`, not
+  `~/lib/money`). The `~/` alias resolves in Nuxt but not under vitest or bun,
+  so an aliased runtime import makes the builder untestable and unusable from
+  a verification script. `import type … from "~/…"` is fine (erased).
+- **Letter references use `advanceDocumentCounter` / `allocateNextFreeReference`,
+  never `allocateSpecificDocumentNumber`.** Letters are non-unique by design, and
+  the uniqueness pre-check caused a permanent stall: a letter hand-numbered
+  ahead made every later suggestion collide, the throw was swallowed, and the
+  counter never moved. Every OTHER document type must keep the checking path.
+- **Frozen payroll figures stay frozen on screen too.** `PayslipLineEditor`
+  takes `frozenEmployer`; on an issued payslip pass the row's
+  `epf_employer_cents` / `etf_cents` rather than letting it recompute from the
+  live settings rates, or a rate change rewrites history on screen only.
+- **SQLite `date('now')` is UTC.** Compare due dates against
+  `date('now', 'localtime')` (or an inlined local ISO date, as the
+  `xDerivedFrom(today)` builders do). Plain `date('now')` made the dashboard
+  overdue counts disagree with every other surface for 5.5 hours a day.
 - **VAT-inclusive totals are not all representable.** Bundle documents store a
   NET subtotal + rate and derive tax (`bundleTaxCents`, banker's rounding — use
   it, never `Math.round`). `gross = net + round(net × rate)` skips values: at
