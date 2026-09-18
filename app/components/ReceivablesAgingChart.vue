@@ -101,8 +101,12 @@
 
 	// Days an invoice is past due. Negative = not due yet (current).
 	const daysPastDue = (inv: InvoiceRow): number => {
-		const due = new Date(inv.due_date);
-		due.setHours(0, 0, 0, 0);
+		// Parse the ISO date from its LOCAL components. `new Date("YYYY-MM-DD")`
+		// is UTC midnight, which in a UTC-negative zone is the previous local
+		// day — so this chart bucketed an invoice due today as 1-30 overdue
+		// while the aged-receivables report (local parse) said Current.
+		const [y, m, d] = inv.due_date.split("-").map(Number);
+		const due = new Date(y ?? 0, (m ?? 1) - 1, d ?? 1);
 		return Math.floor((todayMidnight.value.getTime() - due.getTime()) / MS_PER_DAY);
 	};
 

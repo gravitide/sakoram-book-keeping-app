@@ -382,13 +382,30 @@
 		];
 	});
 
-	onMounted(() => {
-		nextTick(recomputeFit);
+	// Listen for resizes only while this table is actually ON SCREEN.
+	//
+	// List pages are kept alive, so onBeforeUnmount never fires for them: the
+	// listener used to outlive every visited list. On a window resize each
+	// cached (detached) table measured `getBoundingClientRect().top === 0`,
+	// inflated its Fit row count, and — in server mode — emitted a `request`,
+	// so visiting four lists then resizing fired four background page fetches
+	// and left Fit over-estimated on return.
+	//
+	// onActivated also fires on first mount inside <KeepAlive>; adding the same
+	// function reference twice is a no-op, so both hooks can attach. onMounted
+	// stays for tables rendered outside a kept-alive page.
+	const attachResize = () => {
 		window.addEventListener("resize", recomputeFit);
-	});
-	onBeforeUnmount(() => {
+		// The window may have been resized while this page was cached.
+		nextTick(recomputeFit);
+	};
+	const detachResize = () => {
 		window.removeEventListener("resize", recomputeFit);
-	});
+	};
+	onMounted(attachResize);
+	onActivated(attachResize);
+	onDeactivated(detachResize);
+	onBeforeUnmount(detachResize);
 
 	// When the user switches to "Fit" from a fixed number, recompute
 	// straight away so the table doesn't stay at the old size for a beat.

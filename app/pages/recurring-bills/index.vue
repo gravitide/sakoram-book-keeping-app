@@ -413,12 +413,10 @@
 		generateOpen.value = true;
 	};
 
-	const route = useRoute();
-	onMounted(() => {
-		if (route.query.new === "1") {
-			newOpen.value = true;
-			void router.replace({ query: { ...route.query, new: undefined } });
-		}
+	// useQueryTrigger, not onMounted: this page is kept alive, so onMounted
+	// runs once per session and the shortcut would only ever work once.
+	useQueryTrigger(() => {
+		newOpen.value = true;
 	});
 
 	// Row-action handlers. Function declarations so they hoist above

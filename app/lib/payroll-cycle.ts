@@ -127,6 +127,42 @@ export const nextPayrollCycle = (
 };
 
 /**
+ * The cycle for a period that STARTS on `periodStartISO`, shaped by the
+ * business's cycle template. Used when the user moves period_start on the
+ * New-payslip form: the old behaviour snapped period_end to the calendar
+ * month of the start date, which collapsed a cross-month template (26th →
+ * 25th) into a five-day stub ending on the 31st.
+ *
+ * The chosen start is always kept verbatim. The end comes from the template:
+ * the start's own month for a same-month template, the FOLLOWING month for a
+ * straddling one (start day > end day). Falls back to the start month's last
+ * day if the template's end would land before the start, and clamps the pay
+ * date into [start, end] — the payslip date invariant.
+ */
+export const cycleForPeriodStart = (
+	periodStartISO: string,
+	cfg: PayrollCycleConfig
+): ResolvedCycle => {
+	const [yStr, mStr] = periodStartISO.split("-");
+	const y = Number(yStr);
+	const m = Number(mStr);
+	const straddles = cfg.payroll_period_start_day > cfg.payroll_period_end_day;
+	const target = straddles
+		? (m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 })
+		: { y, m };
+	const template = resolvePayrollCycle(target.y, target.m, cfg);
+
+	const periodEnd = template.periodEnd >= periodStartISO
+		? template.periodEnd
+		: isoFromYMD(y, m, daysInMonth(y, m));
+	const payDate = template.payDate < periodStartISO
+		? periodStartISO
+		: template.payDate > periodEnd ? periodEnd : template.payDate;
+
+	return { periodStart: periodStartISO, periodEnd, payDate };
+};
+
+/**
  * Convenience: format a target year+month as "May 2026" for UI.
  */
 export const formatMonthLabel = (year: number, month1to12: number): string => {

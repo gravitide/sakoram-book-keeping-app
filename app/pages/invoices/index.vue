@@ -312,6 +312,7 @@
 	import { buildInvoicePdfPayload } from "~/lib/invoice-pdf";
 	import { andClauses, eqClause, inClause, likeClause, makeSortResolver, rangeClause } from "~/lib/list-query";
 	import { formatLKR } from "~/lib/money";
+	import { queryString } from "~/lib/route-query";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { useLicenseStore } from "~/stores/license";
@@ -330,7 +331,7 @@
 	// Each row carries the derived `_paid` / `_balance` / `_status` from the
 	// SQL subquery, so the page needs neither all invoices NOR all vouchers in
 	// memory — the gate + PDF read those fields straight off the row.
-	type InvoiceRowVM = InvoiceRow & { _paid: number, _balance: number, _status: InvoiceStatus };
+	type InvoiceRowVM = InvoiceRow & { _paid: number, _credited: number, _balance: number, _status: InvoiceStatus };
 
 	const table = useServerTable<InvoiceRowVM>({
 		query: () => ({
@@ -365,6 +366,19 @@
 	const refreshStats = async () => {
 		headerStats.value = await store.fetchHeaderStats();
 	};
+
+	// Kept-alive page: useServerTable refetches the ROWS on re-activation, but
+	// these header figures were loaded in onMounted only — so after recording
+	// a payment and coming back, the row said paid while the header total
+	// didn't move. Skip the first activation (onMounted covers it).
+	let headerActivatedOnce = false;
+	onActivated(() => {
+		if (!headerActivatedOnce) {
+			headerActivatedOnce = true;
+			return;
+		}
+		void refreshStats();
+	});
 
 	const { isLoading, runLoad } = usePageLoading();
 	onMounted(() => runLoad(async () => {
@@ -409,15 +423,12 @@
 	// menu or calendar Create-on-this-day). Clear the query params once
 	// consumed so back/forward doesn't re-trigger and a manual "New"
 	// click later doesn't accidentally inherit the date.
-	const route = useRoute();
-	onMounted(() => {
-		if (route.query.new === "1") {
-			const issued = typeof route.query.issued === "string" ? route.query.issued : null;
-			newInvoiceIssueDate.value = issued;
-			newInvoiceOpen.value = true;
-			void router.replace({ query: { ...route.query, new: undefined, issued: undefined } });
-		}
-	});
+	// useQueryTrigger, not onMounted: this page is kept alive, so onMounted
+	// runs once per session and the shortcut would only ever work once.
+	useQueryTrigger((query) => {
+		newInvoiceIssueDate.value = queryString(query.issued);
+		newInvoiceOpen.value = true;
+	}, { consume: ["issued"] });
 	const open = (i: InvoiceRow) => router.push(`/invoices/${i.id}`);
 
 	// "All clients" sentinel + every loaded client. Includes archived
@@ -547,6 +558,7 @@
 				settings: settingsStore.settings,
 				currency: currency.value,
 				paidCents: currentInvoice.value._paid,
+				creditedCents: currentInvoice.value._credited,
 				entitledToTemplates: license.hasFeature("pdf_templates")
 			});
 		},
@@ -651,9 +663,9 @@
 				onSelect: () => recordPayment(i)
 			});
 		}
-		// Revert to draft: sent with no payments yet, or cancelled —
+		// Revert to draft: sent with no payments or issued credit notes yet, or cancelled —
 		// mirrors the detail page's transition buttons.
-		if ((i.status === "sent" && i._paid === 0) || i.status === "cancelled") {
+		if ((i.status === "sent" && i._paid === 0 && i._credited === 0) || i.status === "cancelled") {
 			lifecycle.push({
 				label: "Revert to draft",
 				icon: "i-lucide-rotate-ccw",

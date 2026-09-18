@@ -402,7 +402,10 @@
 	const recentRuns = computed<RunSummary[]>(() => {
 		const buckets = new Map<string, { employees: number, net: number, paid: number }>();
 		for (const p of payslipsStore.payslips) {
-			if (p.status === "cancelled") continue;
+			// A payroll RUN is what was actually issued. Drafts used to be
+			// counted too, inflating the month's employee count + net total
+			// with payslips that may never be paid.
+			if (p.status !== "issued") continue;
 			const key = p.period_start.slice(0, 7);
 			const slot = buckets.get(key) ?? { employees: 0, net: 0, paid: 0 };
 			slot.employees += 1;

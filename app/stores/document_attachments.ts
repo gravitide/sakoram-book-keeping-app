@@ -11,7 +11,6 @@
 // holds attachments for one document at a time.
 
 import { invoke } from "@tauri-apps/api/core";
-import { remove as removeFile } from "@tauri-apps/plugin-fs";
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { execute, select } from "~/lib/db";
@@ -122,7 +121,16 @@ export const useDocumentAttachmentsStore = defineStore("document_attachments", (
 	const remove = async (id: number): Promise<void> => {
 		const row = attachments.value.find((a) => a.id === id);
 		if (row) {
-			await removeFile(row.file_path).catch(() => { /* already gone */ });
+			// Rust command, not the fs plugin's remove(): business folders live
+			// on any drive, but the plugin scope only covers $APPDATA / $HOME —
+			// for a business on D: the unlink failed, the error was swallowed,
+			// the row went, and the file stayed on disk forever. The command
+			// resolves the path itself from (type, id, basename).
+			await invoke("remove_document_attachment", {
+				documentType: row.document_type,
+				documentId: String(row.document_id),
+				fileName: row.file_path
+			}).catch(() => { /* best-effort — never block removing the row */ });
 		}
 		await execute("DELETE FROM document_attachments WHERE id = ?", [id]);
 		if (row) await load(row.document_type, row.document_id);

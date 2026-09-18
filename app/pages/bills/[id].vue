@@ -288,7 +288,7 @@
 							class="w-full"
 						/>
 					</UFormField>
-					<UFormField v-else label="Grand total (incl. VAT)" help="We split out the subtotal and VAT below.">
+					<UFormField v-else label="Grand total (incl. VAT)" :help="inclusiveNote ?? 'We split out the subtotal and VAT below.'">
 						<MoneyInput
 							v-model="grandTotalCents"
 							:disabled="!editable"
@@ -547,7 +547,7 @@
 	import type { PricingMode } from "~/stores/quotes";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { buildBillPdfPayload } from "~/lib/bill-pdf";
-	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
+	import { bundleTaxCents, computeLineTotals, formatLKR, splitInclusiveTotal, sumCents } from "~/lib/money";
 	import { buildCategorySnapshot, useBillCategoriesStore } from "~/stores/bill_categories";
 	import { useBillsStore } from "~/stores/bills";
 	import { useLicenseStore } from "~/stores/license";
@@ -612,15 +612,27 @@
 	// 'exclusive' = type the net subtotal (default); 'inclusive' = type the
 	// gross grand total and split out the net + VAT from the rate.
 	const vatMode = ref<"exclusive" | "inclusive">("exclusive");
+	// Tax is derived from the net subtotal, so some gross amounts (≈15% at
+	// 18%, Rs 100.00 among them) can't be produced by ANY net — see
+	// splitInclusiveTotal. When the user types one, say so instead of just
+	// rewriting the field to a different number on blur.
+	const inclusiveNote = ref<string | null>(null);
+	// The note describes ONE entered amount at ONE rate — drop it when either moves.
+	watch([vatMode, vatRatePct], () => {
+		inclusiveNote.value = null;
+	});
 	const grandTotalCents = computed<number>({
 		get: () => {
 			const bp = Math.round(vatRatePct.value * 100);
-			return bundleSubtotalCents.value + Math.round((bundleSubtotalCents.value * bp) / 10000);
+			return bundleSubtotalCents.value + bundleTaxCents(bundleSubtotalCents.value, bp);
 		},
 		set: (total) => {
 			const bp = Math.round(vatRatePct.value * 100);
-			const tax = Math.round((total * bp) / (10000 + bp));
-			bundleSubtotalCents.value = Math.max(0, total - tax);
+			const split = splitInclusiveTotal(total, bp);
+			bundleSubtotalCents.value = split.subtotal_cents;
+			inclusiveNote.value = split.exact
+				? null
+				: `${formatLKR(total)} can't be reached exactly at this VAT rate — the nearest total is ${formatLKR(split.total_cents)}.`;
 		}
 	});
 
@@ -729,6 +741,16 @@
 
 	await hydrate();
 
+	// Kept-alive page: setup (and the hydrate above) runs once, so re-hydrate
+	// on every re-activation — see useRehydrateOnActivate for what goes stale.
+	useRehydrateOnActivate({
+		isDirty: () => dirty.value,
+		exists: async () => (await store.get(billId)) != null,
+		rehydrate: hydrate,
+		noun: "bill",
+		listRoute: "/bills"
+	});
+
 	// Mark dirty when any directly v-model'd form field changes. Registered
 	// after the initial hydrate; hydrating-flag guards re-hydrate paths.
 	watch(
@@ -764,7 +786,7 @@
 			};
 		}
 		const sub = bundleSubtotalCents.value;
-		const tax = Math.round((sub * Math.round(vatRatePct.value * 100)) / 10000);
+		const tax = bundleTaxCents(sub, Math.round(vatRatePct.value * 100));
 		return { subtotal: sub, tax, total: sub + tax };
 	});
 
@@ -841,7 +863,7 @@
 				: bundleSubtotalCents.value;
 			const tax = pricingMode.value === "itemized"
 				? totalsFromLines.tax_cents
-				: Math.round((subtotal * bp) / 10000);
+				: bundleTaxCents(subtotal, bp);
 			const total = pricingMode.value === "itemized"
 				? totalsFromLines.total_cents
 				: subtotal + tax;

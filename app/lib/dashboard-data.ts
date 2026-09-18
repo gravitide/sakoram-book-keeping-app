@@ -29,6 +29,12 @@ import { selectOne } from "./db";
 /// single round trip rather than loading rows. If the three drift, the
 /// symptom is the dashboard tile disagreeing with /invoices and
 /// /reports/aged-receivables over the same books.
+///
+/// "Overdue" here (and in getBillKpis) compares against
+/// date('now', 'localtime') — NOT plain date('now'), which is UTC. Every other
+/// surface derives "today" from the local clock, so in Sri Lanka (UTC+5:30)
+/// the tile disagreed with the overdue list on this same dashboard for the
+/// first 5.5 hours of every day.
 export interface InvoiceKpis {
 	outstanding_cents: number
 	open_count: number
@@ -44,7 +50,7 @@ export async function getInvoiceKpis(): Promise<InvoiceKpis> {
 		SELECT
 			COALESCE(SUM(CASE WHEN balance > 0 THEN balance ELSE 0 END), 0) AS outstanding_cents,
 			COALESCE(SUM(CASE WHEN balance > 0 THEN 1 ELSE 0 END), 0) AS open_count,
-			COALESCE(SUM(CASE WHEN balance > 0 AND due_date < date('now') THEN 1 ELSE 0 END), 0) AS overdue_count
+			COALESCE(SUM(CASE WHEN balance > 0 AND due_date < date('now', 'localtime') THEN 1 ELSE 0 END), 0) AS overdue_count
 		FROM (
 			SELECT
 				i.due_date,
@@ -83,7 +89,7 @@ export async function getBillKpis(): Promise<BillKpis> {
 		SELECT
 			COALESCE(SUM(CASE WHEN balance > 0 THEN balance ELSE 0 END), 0) AS outstanding_cents,
 			COALESCE(SUM(CASE WHEN balance > 0 THEN 1 ELSE 0 END), 0) AS open_count,
-			COALESCE(SUM(CASE WHEN balance > 0 AND due_date < date('now') THEN 1 ELSE 0 END), 0) AS overdue_count
+			COALESCE(SUM(CASE WHEN balance > 0 AND due_date < date('now', 'localtime') THEN 1 ELSE 0 END), 0) AS overdue_count
 		FROM (
 			SELECT
 				b.due_date,

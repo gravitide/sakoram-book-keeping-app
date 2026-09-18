@@ -168,12 +168,13 @@
 
 	// Picker offers every derived state except cancelled — cancelled
 	// invoices are filtered out entirely, so there's no chip for them.
-	const STATUSES: InvoiceStatus[] = ["draft", "sent", "partial", "paid", "overdue"];
+	const STATUSES: InvoiceStatus[] = ["draft", "sent", "partial", "paid", "credited", "overdue"];
 	const STATUS_LABEL: Record<InvoiceStatus, string> = {
 		draft: "Draft",
 		sent: "Sent",
 		partial: "Partial",
 		paid: "Paid",
+		credited: "Credited",
 		overdue: "Overdue",
 		cancelled: "Cancelled"
 	};
@@ -182,6 +183,8 @@
 		sent: "bg-(--ui-info)/15 border-(--ui-info)/40 text-(--ui-info)",
 		partial: "bg-(--ui-warning)/15 border-(--ui-warning)/40 text-(--ui-warning)",
 		paid: "bg-(--ui-success)/15 border-(--ui-success)/40 text-(--ui-success)",
+		// Matches StatusBadge's neutral tone for `credited` (invoices list too).
+		credited: "bg-(--ui-bg-muted) border-(--ui-text-muted)/40 text-(--ui-text-muted)",
 		overdue: "bg-(--ui-error)/15 border-(--ui-error)/40 text-(--ui-error)",
 		cancelled: "bg-(--ui-bg-muted) border-(--ui-text-muted)/40 text-(--ui-text-muted)"
 	};

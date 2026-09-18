@@ -111,10 +111,10 @@
 // in via the `preselectEmployeeId` prop.
 
 	import type { EmployeeRow } from "~/stores/employees";
-	import { nextPayrollCycle } from "~/lib/payroll-cycle";
+	import { cycleForPeriodStart, nextPayrollCycle } from "~/lib/payroll-cycle";
 	import { useEmployeesStore } from "~/stores/employees";
 	import { useLicenseStore } from "~/stores/license";
-	import { monthBounds, usePayslipsStore } from "~/stores/payslips";
+	import { usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
 
 	const props = defineProps<{
@@ -150,16 +150,23 @@
 
 	// Initialise dates from the active tenant's payroll cycle so the
 	// common case (next cycle, default settings) needs zero clicks.
-	const seedDates = () => {
-		const cycleConfig = {
-			payroll_period_start_day: settingsStore.settings?.payroll_period_start_day ?? 1,
-			payroll_period_end_day: settingsStore.settings?.payroll_period_end_day ?? 31,
-			payroll_pay_day: settingsStore.settings?.payroll_pay_day ?? 31
-		};
-		const initialCycle = nextPayrollCycle(todayISO(), cycleConfig).cycle;
+	const cycleConfig = () => ({
+		payroll_period_start_day: settingsStore.settings?.payroll_period_start_day ?? 1,
+		payroll_period_end_day: settingsStore.settings?.payroll_period_end_day ?? 31,
+		payroll_pay_day: settingsStore.settings?.payroll_pay_day ?? 31
+	});
+	// True while seedDates() is writing the three dates. The period_start
+	// watcher below is for USER edits; without this guard it also fired on
+	// the seed itself and overwrote the end + pay date it had just been given.
+	let seeding = false;
+	const seedDates = async () => {
+		const initialCycle = nextPayrollCycle(todayISO(), cycleConfig()).cycle;
+		seeding = true;
 		periodStart.value = initialCycle.periodStart;
 		periodEnd.value = initialCycle.periodEnd;
 		payDate.value = initialCycle.payDate;
+		await nextTick(); // watchers flush before this resolves
+		seeding = false;
 	};
 
 	// On open: lazy-load the data, then seed fields. If the caller passed
@@ -177,7 +184,7 @@
 				employeeId.value = pre;
 				picked.value = employeesStore.employees.find((e) => e.id === pre) ?? null;
 			}
-			seedDates();
+			await seedDates();
 		} else {
 			employeeId.value = null;
 			picked.value = null;
@@ -189,14 +196,14 @@
 		}
 	});
 
-	// Snap period_end to the last day of the new month when period_start
-	// moves; pull pay_date back into range when either bound shifts.
+	// When the USER moves period_start, re-derive the end + pay date from the
+	// business's cycle template (cycleForPeriodStart) — NOT the calendar month
+	// of the start date, which collapsed a 26th→25th cycle into 26→31.
 	watch(periodStart, (next, prev) => {
-		if (!next || next === prev) return;
-		const bounds = monthBounds(next);
-		periodEnd.value = bounds.end;
-		if (!payDate.value || payDate.value < bounds.start) payDate.value = bounds.end;
-		else if (payDate.value > bounds.end) payDate.value = bounds.end;
+		if (seeding || !next || next === prev) return;
+		const cycle = cycleForPeriodStart(next, cycleConfig());
+		periodEnd.value = cycle.periodEnd;
+		payDate.value = cycle.payDate;
 	});
 	watch(periodEnd, (next) => {
 		if (!next) return;

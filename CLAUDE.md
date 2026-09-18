@@ -268,9 +268,47 @@ Off by default; unencrypted businesses are unaffected.
   the plaintext on enable.
 - **Titlebar lock / lock-on-close gate to the `main` window only** — the help
   window must never drive the vault lifecycle.
-- **Creating a tenant wipes orphaned leftover DB files first**
-  (`tenants::remove_stale_db_files`) — a half-migrated leftover causes
-  "duplicate column" migration errors on re-import.
+- **The `encrypted` flag lives in THREE places that must agree**: the registry
+  (`tenants.json`), the folder marker (`business.json`), and the ground truth —
+  whether `business.db.enc` exists. `set_tenant_encrypted` writes registry +
+  marker; `open_tenant` and `list_tenants` infer from the blob and self-heal a
+  stale `false`. Until v0.159.2 the marker was only ever written `false`, so
+  Forget → Open (or moving the folder to another machine) registered an
+  encrypted business as plain and walked straight into the empty-DB hazard.
+  `ensure_tenant_db` now also refuses outright when it finds a blob with no
+  working db (`guard_locked_vault`) — the backstop for a wrong flag.
+- **`secure_remove` renames BEFORE it zero-fills.** On Windows a file the sqlx
+  pool still holds open can be written but not renamed/deleted (SQLite opens
+  without `FILE_SHARE_DELETE`). The old order (zero, then delete) left a
+  same-length file of NULs behind when the delete failed, and `unlock_at`
+  treated that leftover as "newest truth" over the good blob. Now a failed
+  rename aborts with the plaintext untouched, and `unlock_at` only trusts a
+  leftover that starts with the SQLite magic header (`looks_like_sqlite`).
+  Test fixtures for a "leftover db" must therefore be SQLite-shaped
+  (`sqlite_like()` in the vault_fs tests), and a Windows test that simulates
+  the held-open file must pass `share_mode(READ | WRITE)` — Rust's default
+  `File::open` grants delete-sharing and won't reproduce it.
+- **Three columns store ABSOLUTE paths** — `document_attachments.file_path`,
+  `company_settings.pdf_header_logo_path` and `logo_path` — in a folder that is
+  supposed to be portable. `relocate_stored_paths` (tenants.rs) re-points them
+  at the current folder on every `ensure_tenant_db`, only where the file
+  actually exists at the derived location. It runs there, not in
+  `open_tenant`, because an encrypted business has no db at Open time. If you
+  add another path column, add it to that function — nothing else will.
+- **Any file op on a business folder goes through a Rust command, never the fs
+  plugin.** The plugin's scopes are `$APPDATA` / `$APPLOCALDATA` / `$HOME`;
+  business folders live on any drive. `remove()` on a `D:\` path fails, and the
+  failure was being swallowed, orphaning attachment files. See
+  `remove_document_attachment` / `clear_document_attachments`.
+- **`create_business_folder` sanitises the name itself** (`safe_folder_name`,
+  a rule-for-rule mirror of `app/lib/safe-folder-name.ts`). Import-as-new
+  passes the raw name from a backup manifest: unsanitised, `A/B` nested a
+  directory, `CON` failed with a raw OS error, and `..\..\x` escaped the
+  parent the user chose. Keep the two implementations in sync.
+- **Tray Quit closes the main window; it does not `app.exit()`.** That routes
+  it through the JS lock-on-close plugin, which closes the pool first. The
+  app exits when the `main` window is destroyed (`on_window_event` in
+  `lib.rs`), even if the help window is open.
 
 ---
 
@@ -428,7 +466,9 @@ sakoram_app/
 │  │  ├─ useCalendarEvents.ts         ← aggregates due-date events from invoices / bills / quotes / payslips into a Map<YYYY-MM-DD, CalendarEvent[]>. Per-source emitters are easy to extend — just add another computed + push into the sources array.
 │  │  ├─ usePageLoading.ts            ← per-page loading flag with a guaranteed rAF yield around the async work so list / detail pages actually paint a skeleton before stores load. Pair with ListPageSkeleton for content-shaped placeholders.
 │  │  ├─ useCsvParser.ts              ← parseCsv(input) → { headers, rows } for bank reconciliation imports. Handles quoted fields, escaped quotes, CR/LF/CRLF, empty fields, UTF-8 BOM. Pure function, fully unit-tested.
-│  │  └─ useHelpWindow.ts             ← spawns / focuses the help WebviewWindow (single stable label `help-main` so clicking Help twice doesn't pile up windows). Emits `help:navigate` Tauri event when a slug is supplied so an existing window routes to that topic. Falls back to in-place router push outside the Tauri runtime.
+│  │  ├─ useHelpWindow.ts             ← spawns / focuses the help WebviewWindow (single stable label `help-main` so clicking Help twice doesn't pile up windows). Emits `help:navigate` Tauri event when a slug is supplied so an existing window routes to that topic. Falls back to in-place router push outside the Tauri runtime.
+│  │  ├─ useQueryTrigger.ts           ← one-shot `?new=1` route triggers that survive keep-alive (a watch on the query, not onMounted). Used by every list page's quick-create shortcut. See the keep-alive landmine.
+│  │  └─ useRehydrateOnActivate.ts    ← re-hydrates a kept-alive detail page on every re-activation: skips the first activation, preserves dirty edits, bounces to the list when the row is gone. On every document + address-book detail page.
 │  ├─ help/                           ← in-app help library. `index.ts` is the topic registry (slug, title, summary, category, icon, lazy component); one `.vue` per topic under `topics/`. See "Why help topics are Vue components" decision below.
 │  ├─ lib/
 │  │  ├─ db.ts                        ← getDb() (lazy, reads active tenant URL), select/execute
@@ -448,6 +488,10 @@ sakoram_app/
 │  │  ├─ validation.ts                ← Zod schemas for UI ↔ DB boundary; currently settings + clients only.
 │  │  ├─ date-parse.ts                ← parseStatementDate(raw, format) for bank reconciliation CSV imports. Supports YYYY-MM-DD / DD/MM/YYYY / DD-MM-YYYY / DD-MMM-YYYY with Date-roundtrip validation (Feb 31 → null). Pure function, fully unit-tested.
 │  │  ├─ reconcile-match.ts           ← pure scored matcher used by bank reconciliation. ±1 day = 100, ±2 = 90, ±3 = 80; +20 for shared reference token. No Pinia / Vue deps so it's trivially testable.
+│  │  ├─ document-guards.ts           ← pure lifecycle rules: `invoiceMutationBlocker` (receipts / issued credit notes pin an invoice), the credit-note FSM, and `assertEditable` (Golden Rule #5 enforced store-side). The stores do the SQL counting and hand the numbers here.
+│  │  ├─ route-query.ts               ← `queryString` / `queryInt` / `withoutQueryKeys` — typed readers for vue-router query values.
+│  │  ├─ recurring-schedule.ts        ← `advanceDate(iso, frequency, anchorDay?)` + `anchorDayOf`. The anchor (the template's start day) stops one short month permanently decaying a schedule (31st → 28th forever); a hand-typed day is still respected. Re-exported from the recurring_invoices store.
+│  │  ├─ load-once.ts                 ← `createLoadOnce(load, isLoaded)` — the shared-in-flight-promise rule behind `ensureLoaded()`. Use it; don't write `if (!loaded && !loading) await load()`, which lets a concurrent caller return with state still null.
 │  │  ├─ licensing.ts                 ← tier registry (FEATURES) + hasFeature + trial math + effectiveEntitlement (license supersedes trial)
 │  │  └─ theme.ts                     ← THEME_COLORS palette (name → hex)
 │  ├─ middleware/
@@ -1709,7 +1753,7 @@ persisted to localStorage).
   issue_date. Unlinked ones come off the client total as an unapplied
   credit in aged receivables + the statement PDF. Also reaches the
   dashboard receivables tile and the clients-list outstanding column.
-  `bun run verify:sql` guards the four places balance is computed.
+  `bun run verify:sql` guards the SQL copies of the balance (seven sites in all — see Known landmines).
 - ✅ **Employer EPF + ETF counted as payroll expense** (v0.158.5) in
   both the P&L and the payroll register — previously gross-only, which
   overstated profit by up to ~15% of EPF-liable payroll.
@@ -2399,7 +2443,32 @@ licensing surface is still compiled with three registered Tauri commands.
   because they close the dialog before awaiting. Reset in a `finally`, and
   remember this applies to any long-lived flag (modals, loading, wizard step),
   not just delete.
-- **Invoice balance is computed in FOUR places and they must move together.**
+- **Keep-alive has THREE more faces — know how pages are keyed.** Nuxt keys a
+  cached page on its PATH with params substituted, NOT the query. So
+  `/invoices/12` and `/invoices/13` are separate instances (reading
+  `route.params.id` once in setup is fine), while `/invoices` and
+  `/invoices?new=1` — and `/vouchers/new?invoice=1` visited twice — are the
+  SAME instance whose `setup()` / `onMounted` already ran. Use the shared tools:
+  - **`useQueryTrigger`** for one-shot `?new=1` shortcuts. Never read a
+    trigger query in `onMounted` — it fires once per session, then the
+    shortcut silently does nothing and the param sticks in the URL. It is a
+    WATCH, not `onActivated` (the query isn't reliably settled at activation —
+    see the note in `vouchers/new.vue`). Consume a param after applying it, or
+    an unchanged value never re-fires (`/payslips?employee=` does this by hand).
+  - **`useRehydrateOnActivate`** on every detail page. Without it a document
+    issued/archived/deleted elsewhere renders its stale cached copy, and Back
+    after Delete resurrects the row. It skips while dirty to preserve edits —
+    which is exactly why Golden Rule #5 is ALSO enforced in the stores
+    (`assertEditable` in `app/lib/document-guards.ts`): a stale "draft" page
+    must not be able to save over an issued document.
+  - **A `/new` route is one cached instance.** After a successful create,
+    reset the form BEFORE/after navigating away (`BLANK_FORM` on the
+    address-book pages, `applyPrefill()` on `/vouchers/new`), or the next
+    "New" reopens pre-filled with the save bar up — one click from a duplicate.
+  List pages must also refresh their header stats in `onActivated`
+  (`useServerTable` only refetches the rows), and a redirect-only page must use
+  `definePageMeta({ redirect })`, not `router.replace()` in setup.
+- **Invoice balance is computed in SEVEN places and they must move together.**
   `total − receipts − issued credit notes`, floored at zero, lives in:
   1. `deriveInvoiceStatus` / `balanceCentsFor` — the pure TS path
   2. `invoiceDerivedFrom()` in `app/lib/derived-status.ts` — the mirrored SQL
@@ -2408,13 +2477,62 @@ licensing surface is still compiled with three registered Tauri commands.
      that aggregates server-side in one round trip
   4. `buildCustomerStatementPdfPayload` in `app/lib/statement-pdf.ts` — takes
      `paidCentsFor` / `creditedCentsFor` injected and does its own arithmetic
-  Copies 3 and 4 do NOT route through `balanceCentsFor`, and both were missed
-  when credit notes were first wired in — the audit caught them, not the type
-  checker. The symptom of drift is two surfaces disagreeing about one invoice.
-  **`bun run verify:sql` is the guard**: it runs the real query strings
-  (including the dashboard SQL, read out of the source file so it can't drift
-  from what's asserted) against a real SQLite DB built from the migrations.
-  Run it after touching any of the four.
+  5. `buildInvoicePdfPayload` in `app/lib/invoice-pdf.ts` — takes `paidCents` +
+     `creditedCents`; `paid-block` in `common.typ` prints a Credited row
+  6. `fetchInvoiceEvents` in `app/composables/useCalendarEvents.ts` (SQL) +
+     `buildInvoiceEvent` in `app/lib/calendar-events.ts`
+  7. `/vouchers/new` — Remaining + the overpayment warning
+  Only 1 routes through `balanceCentsFor`. Copies 3–4 were missed when credit
+  notes were first wired in, and 5–7 were missed AGAIN by that fix — a fully
+  credited invoice went to the client as a PDF showing its whole total due.
+  The symptom of drift is two surfaces disagreeing about one invoice.
+  **`bun run verify:sql` is the guard** for the SQL copies: it runs the real
+  query strings (dashboard, calendar, and the lifecycle-guard counts, each read
+  out of its source file so it can't drift from what's asserted) against a real
+  SQLite DB built from the migrations. Run it after touching any of them.
+- **An issued credit note PINS its invoice.** Cancel, revert-to-draft, the
+  universal delete, and quote revert-conversion all go through
+  `invoices.assertMutable` (→ `invoiceMutationBlocker`), which counts receipts
+  AND issued linked credit notes via direct SQL. `credit_notes.source_invoice_id`
+  is `ON DELETE SET NULL`, so deleting the invoice would otherwise silently turn
+  the note into an UNAPPLIED client credit that nets off unrelated invoices;
+  cancelling it would leave the note reversing income + VAT that was never
+  recognised. Cancel or un-issue the credit note first.
+- **Every Typst template with a bespoke footer must read `footer_blocks`.** The
+  builders always send it; `voucher.typ` / `report.typ` / `statement.typ`
+  hard-coded their footer line and silently ignored the custom footer for
+  months. When touching a template, prove the DEFAULT output is unchanged:
+  build a real payload with the shipped builder, render through the sidecar
+  before and after, and compare hashes (footer off must be byte-identical,
+  footer on must differ). Also: never pass a nullable field straight to
+  `#set document(author:)` — `none` is a type error; use
+  `if x != none { x } else { () }`.
+- **PDF builders in `app/lib` use RELATIVE runtime imports** (`./money`, not
+  `~/lib/money`). The `~/` alias resolves in Nuxt but not under vitest or bun,
+  so an aliased runtime import makes the builder untestable and unusable from
+  a verification script. `import type … from "~/…"` is fine (erased).
+- **Letter references use `advanceDocumentCounter` / `allocateNextFreeReference`,
+  never `allocateSpecificDocumentNumber`.** Letters are non-unique by design, and
+  the uniqueness pre-check caused a permanent stall: a letter hand-numbered
+  ahead made every later suggestion collide, the throw was swallowed, and the
+  counter never moved. Every OTHER document type must keep the checking path.
+- **Frozen payroll figures stay frozen on screen too.** `PayslipLineEditor`
+  takes `frozenEmployer`; on an issued payslip pass the row's
+  `epf_employer_cents` / `etf_cents` rather than letting it recompute from the
+  live settings rates, or a rate change rewrites history on screen only.
+- **SQLite `date('now')` is UTC.** Compare due dates against
+  `date('now', 'localtime')` (or an inlined local ISO date, as the
+  `xDerivedFrom(today)` builders do). Plain `date('now')` made the dashboard
+  overdue counts disagree with every other surface for 5.5 hours a day.
+- **VAT-inclusive totals are not all representable.** Bundle documents store a
+  NET subtotal + rate and derive tax (`bundleTaxCents`, banker's rounding — use
+  it, never `Math.round`). `gross = net + round(net × rate)` skips values: at
+  18%, ~15% of cent amounts (Rs 100.00 among them) have no net that produces
+  them. `splitInclusiveTotal` already lands on the nearest one and returns
+  `exact: false`; the pages surface that as a note under the field. Do not try
+  to "fix" the one-cent drift arithmetically — brute force shows every drifting
+  total is unreachable. Exact inclusive totals need the gross (or tax)
+  persisted independently, which is a schema change.
 - **Don't add `BEGIN`/`COMMIT` from JS.** See "Connection pool caveat".
 - **Don't change `com.sakoram.billing` bundle identifier** — orphans
   user data.

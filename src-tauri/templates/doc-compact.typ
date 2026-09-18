@@ -6,7 +6,7 @@
 
 #let data = json("data.json")
 
-#set document(title: data.number, author: data.business_name)
+#set document(title: data.number, author: if data.business_name != none { data.business_name } else { () })
 #set page(
   paper: "a4",
   margin: (x: 14mm, top: 12mm, bottom: 12mm),

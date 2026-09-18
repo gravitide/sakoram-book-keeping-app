@@ -38,7 +38,9 @@ async function fetchInvoiceEvents(from: string, to: string, today: string): Prom
 	const rows = await select<InvoiceEventRow>(
 		`SELECT i.id, i.number, i.due_date, i.client_name, i.total_cents,
 		        COALESCE((SELECT SUM(v.amount_cents) FROM vouchers v
-		                  WHERE v.related_invoice_id = i.id AND v.voucher_type = 'receipt'), 0) AS paid_cents
+		                  WHERE v.related_invoice_id = i.id AND v.voucher_type = 'receipt'), 0) AS paid_cents,
+		        COALESCE((SELECT SUM(cn.total_cents) FROM credit_notes cn
+		                  WHERE cn.source_invoice_id = i.id AND cn.status = 'issued'), 0) AS credited_cents
 		 FROM invoices i
 		 WHERE i.status = 'sent' AND i.due_date BETWEEN ? AND ?`,
 		[from, to]

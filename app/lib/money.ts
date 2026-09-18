@@ -209,6 +209,49 @@ export const computeLineTotals = (
 	};
 };
 
+// --- bundle-mode (lump-sum) tax -------------------------------------------
+// A bundle document stores a net subtotal + a rate; tax is DERIVED. This is
+// the one place that derivation lives. Six detail pages and both recurring
+// stores used to hand-roll `Math.round(subtotal * bp / 10000)` — half-UP,
+// while itemized lines above use half-EVEN, so the same amount taxed
+// differently depending on the document's pricing mode.
+export const bundleTaxCents = (subtotalCents: Cents, taxRateBp: BasisPoints): Cents => {
+	if (!isInt(subtotalCents) || !isInt(taxRateBp)) {
+		throw new Error("bundleTaxCents requires integer inputs");
+	}
+	return roundHalfEven((subtotalCents * taxRateBp) / BP_DENOM);
+};
+
+export interface InclusiveSplit {
+	subtotal_cents: Cents
+	tax_cents: Cents
+	/** subtotal + tax — what will actually be stored and printed. */
+	total_cents: Cents
+	/** False when `total_cents` differs from the gross the user entered. */
+	exact: boolean
+}
+
+// Split a VAT-INCLUSIVE gross into net + tax (tax = gross × rate / (1 + rate)).
+//
+// Because tax is derived from the net, gross = net + round(net × rate) is a
+// step function that SKIPS values: at 18%, ~15% of all cent amounts (Rs 100.00
+// among them) cannot be produced by any net subtotal. Brute force confirms the
+// split below already lands on the nearest representable total every time, so
+// there is no arithmetic fix — representing those amounts exactly needs the
+// gross (or the tax) persisted independently, which is a data-model change.
+// Until then `exact: false` lets the page SAY the total moved by a cent instead
+// of silently rewriting what the user typed.
+export const splitInclusiveTotal = (grossCents: Cents, taxRateBp: BasisPoints): InclusiveSplit => {
+	if (!isInt(grossCents) || !isInt(taxRateBp)) {
+		throw new Error("splitInclusiveTotal requires integer inputs");
+	}
+	const backedOutTax = roundHalfEven((grossCents * taxRateBp) / (BP_DENOM + taxRateBp));
+	const subtotal = Math.max(0, grossCents - backedOutTax);
+	const tax = bundleTaxCents(subtotal, taxRateBp);
+	const total = subtotal + tax;
+	return { subtotal_cents: subtotal, tax_cents: tax, total_cents: total, exact: total === grossCents };
+};
+
 export const formatRate = (bp: BasisPoints): string => {
 	if (!isInt(bp)) throw new Error("formatRate requires integer basis points");
 	const whole = Math.floor(bp / 100);

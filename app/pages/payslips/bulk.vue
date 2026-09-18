@@ -255,6 +255,7 @@
 	import { formatMoney } from "~/lib/money";
 	import { formatMonthLabel, nextPayrollCycle, resolvePayrollCycle } from "~/lib/payroll-cycle";
 	import { computeStatutory } from "~/lib/statutory";
+	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useEmployeesStore } from "~/stores/employees";
 	import { monthBounds, usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
@@ -268,8 +269,10 @@
 	const employeesStore = useEmployeesStore();
 	const vouchersStore = useVouchersStore();
 	const settingsStore = useSettingsStore();
+	const banksStore = useBusinessBanksStore();
 
 	await Promise.all([
+		banksStore.ensureLoaded(),
 		store.load(),
 		employeesStore.employees.length === 0 ? employeesStore.load() : Promise.resolve(),
 		vouchersStore.vouchers.length === 0 ? vouchersStore.load() : Promise.resolve(),
@@ -586,6 +589,10 @@
 						party_name: row.employee.full_name,
 						amount_cents: netCents,
 						payment_method: paymentMethod.value,
+						// Same default /vouchers/new applies. Without it these
+						// vouchers landed with a NULL bank and were invisible to
+						// /reconcile, which scopes matching per bank account.
+						business_bank_id: paymentMethod.value === "cash" ? null : banksStore.defaultBank?.id ?? null,
 						reference: row.reference.trim() || null,
 						description: description.value.trim() || defaultDescription.value,
 						related_invoice_id: null,

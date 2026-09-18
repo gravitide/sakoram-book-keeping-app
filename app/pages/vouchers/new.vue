@@ -56,6 +56,11 @@
 							<div class="font-medium">
 								{{ formatLKR(linkedDocAlreadyPaidCents) }}
 							</div>
+							<!-- Issued credit notes settle an invoice too; without
+								this line Remaining looks like it doesn't add up. -->
+							<div v-if="linkedDocCreditedCents > 0" class="text-(--ui-text-muted)">
+								+ {{ formatLKR(linkedDocCreditedCents) }} credited
+							</div>
 						</div>
 						<div>
 							<div class="text-(--ui-text-muted)">
@@ -233,6 +238,7 @@
 	import { formatLKR } from "~/lib/money";
 	import { useBillsStore } from "~/stores/bills";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
+	import { useCreditNotesStore } from "~/stores/credit_notes";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { usePayslipsStore } from "~/stores/payslips";
 	import { useVouchersStore } from "~/stores/vouchers";
@@ -257,7 +263,9 @@
 	// Vouchers store has to be loaded too so the bills store's
 	// derivedStatus / paidCentsFor below see existing payment vouchers
 	// when we compute the suggested-amount default.
-	await Promise.all([store.load(), invoicesStore.load(), billsStore.load(), payslipsStore.load(), banksStore.ensureLoaded()]);
+	// Credit notes too: invoicesStore.balanceCentsFor / creditedCentsFor read
+	// that store lazily and sum an EMPTY array (→ 0) until it has loaded.
+	await Promise.all([store.load(), invoicesStore.load(), billsStore.load(), payslipsStore.load(), banksStore.ensureLoaded(), useCreditNotesStore().load()]);
 
 	// "Record payment" on a bill or invoice detail page navigates here
 	// with ?bill=N or ?invoice=N — we pre-fill the appropriate fields
@@ -393,19 +401,28 @@
 	// blank until the next visit. A watch fires after the route ref
 	// updates, so applyPrefill always sees the current query. A stable
 	// string key means it fires only when one of these params changes.
+	//
+	// Seeds synchronously, then — when a document is linked — reloads the
+	// stores the balance is derived from and seeds again. A document (or a
+	// voucher / credit note against it) created since this cached page last
+	// loaded isn't in the stores yet.
+	const reseed = () => {
+		applyPrefill();
+		if (prefilled.value) {
+			void Promise.all([
+				store.load(),
+				invoicesStore.load(),
+				billsStore.load(),
+				payslipsStore.load(),
+				useCreditNotesStore().load()
+			])
+				.then(applyPrefill)
+				.catch(() => { /* non-fatal — keep the sync seed */ });
+		}
+	};
 	watch(
 		() => `${route.query.invoice ?? ""}|${route.query.bill ?? ""}|${route.query.payslip ?? ""}|${route.query.date ?? ""}`,
-		() => {
-			applyPrefill();
-			// A document created since this (cached) page last loaded won't
-			// be in the stores; when we arrived with a prefill, reload the
-			// relevant stores and re-seed so it can be found + linked.
-			if (prefilledInvoiceId.value || prefilledBillId.value || prefilledPayslipId.value) {
-				void Promise.all([invoicesStore.load(), billsStore.load(), payslipsStore.load()])
-					.then(applyPrefill)
-					.catch(() => { /* non-fatal — keep the sync seed */ });
-			}
-		}
+		reseed
 	);
 
 	// Editable voucher number with live uniqueness check. The page is
@@ -423,8 +440,22 @@
 	// previous (now consumed) number with no "already in use" warning
 	// (the uniqueness watcher only fires on change). Re-seed to the
 	// fresh next number on every re-entry.
+	//
+	// Same-document re-entry: "Record payment" twice on ONE invoice arrives
+	// with an identical query, so the watch above never fires and the form
+	// would still hold the previous voucher's amount + reference. Re-seed on
+	// activation when a document is linked. (If the query DID change and
+	// isn't settled yet, this seeds from the old one and the watch then
+	// corrects it — last write wins, and it reads the settled query.)
+	// A plain /vouchers/new keeps a half-typed form across navigation.
+	let firstActivation = true;
 	onActivated(() => {
 		void docNum.refresh();
+		if (firstActivation) {
+			firstActivation = false; // setup already seeded + loaded
+			return;
+		}
+		if (prefilled.value) reseed();
 	});
 
 	// Voucher type rendered as two selectable tiles (not a dropdown) —
@@ -559,8 +590,17 @@
 		return 0;
 	});
 
+	// Issued credit notes against a linked INVOICE. Bills and payslips have
+	// no credit-note equivalent. Same rule as invoices.balanceCentsFor — the
+	// prefilled amount already used it, but Remaining + the overpayment
+	// warning below subtracted receipts only, so a part-credited invoice
+	// showed an amount and a "Remaining" that disagreed.
+	const linkedDocCreditedCents = computed(() =>
+		linkedInvoice.value ? invoicesStore.creditedCentsFor(linkedInvoice.value.id) : 0
+	);
+
 	const linkedDocRemainingCents = computed(() =>
-		Math.max(0, linkedDocTotalCents.value - linkedDocAlreadyPaidCents.value)
+		Math.max(0, linkedDocTotalCents.value - linkedDocAlreadyPaidCents.value - linkedDocCreditedCents.value)
 	);
 
 	// Per-kind copy for the context block + overpayment warning. Keeps
@@ -602,7 +642,7 @@
 	// payments are all legitimate). Zero when no document is linked.
 	const overpaymentCents = computed(() => {
 		if (!linkedDocKind.value) return 0;
-		const sumWithThis = linkedDocAlreadyPaidCents.value + amountCents.value;
+		const sumWithThis = linkedDocAlreadyPaidCents.value + linkedDocCreditedCents.value + amountCents.value;
 		return Math.max(0, sumWithThis - linkedDocTotalCents.value);
 	});
 	const overpaying = computed(() => overpaymentCents.value > 0);
@@ -674,6 +714,10 @@
 			} else {
 				await router.replace(`/vouchers/${id}`);
 			}
+			// This instance stays cached. Reset it now that we've navigated
+			// away, or the next plain "New voucher" reopens with the voucher
+			// just saved still typed in — one click from a duplicate.
+			applyPrefill();
 		} catch (err) {
 			toast.add({
 				title: "Could not create voucher",

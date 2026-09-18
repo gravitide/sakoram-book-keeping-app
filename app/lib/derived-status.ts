@@ -93,7 +93,7 @@ export function invoiceDerivedFrom(today: string): string {
 
 export function billDerivedFrom(today: string): string {
 	const paid = "COALESCE(vp.paid, 0)";
-	return `(SELECT b.*, ${paid} AS _paid, (b.total_cents - ${paid}) AS _balance, `
+	return `(SELECT b.*, ${paid} AS _paid, MAX(0, b.total_cents - ${paid}) AS _balance, `
 		+ `CASE WHEN b.status = 'cancelled' THEN 'cancelled' `
 		+ `WHEN ${paid} >= b.total_cents AND b.total_cents > 0 THEN 'paid' `
 		+ `WHEN b.due_date < '${today}' THEN 'overdue' `
@@ -125,7 +125,7 @@ export function clientDerivedFrom(): string {
 
 export function payslipDerivedFrom(_today: string): string {
 	const paid = "COALESCE(vp.paid, 0)";
-	return `(SELECT p.*, ${paid} AS _paid, (p.net_cents - ${paid}) AS _balance, `
+	return `(SELECT p.*, ${paid} AS _paid, MAX(0, p.net_cents - ${paid}) AS _balance, `
 		+ `CASE WHEN p.status = 'cancelled' THEN 'cancelled' `
 		+ `WHEN p.status = 'draft' THEN 'draft' `
 		+ `WHEN ${paid} >= p.net_cents AND p.net_cents > 0 THEN 'paid' `

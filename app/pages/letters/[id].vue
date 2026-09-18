@@ -227,6 +227,16 @@
 
 	const dirty = computed(() => JSON.stringify(form) !== snapshot.value);
 
+	// Kept-alive page: re-hydrate on every re-activation (a letter edited,
+	// duplicated-over or deleted elsewhere) — see useRehydrateOnActivate.
+	useRehydrateOnActivate({
+		isDirty: () => dirty.value,
+		exists: async () => (await store.get(currentId.value)) != null,
+		rehydrate: load,
+		noun: "letter",
+		listRoute: "/letters"
+	});
+
 	const discard = () => {
 		if (letter.value) hydrate(letter.value);
 	};

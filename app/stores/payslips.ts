@@ -18,6 +18,7 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { derivePayslipStatus, payslipDerivedFrom } from "~/lib/derived-status";
+import { assertEditable } from "~/lib/document-guards";
 import { formatRate, sumCents } from "~/lib/money";
 import { allocateDocumentNumber, allocateSpecificDocumentNumber, computeFiscalYear } from "~/lib/numbering";
 import { computePaye, computeStatutory } from "~/lib/statutory";
@@ -431,6 +432,11 @@ export const usePayslipsStore = defineStore("payslips", () => {
 	const update = async (id: number, patch: PayslipUpdate): Promise<void> => {
 		const cols = UPDATABLE.filter((c) => Object.hasOwn(patch, c));
 		if (cols.length === 0) return;
+		// Golden Rule #5, enforced here and not only by the page hiding the
+		// form — a stale kept-alive page can still hold a "draft" copy of a
+		// document that was issued elsewhere. See assertEditable.
+		const current = await get(id);
+		if (current) assertEditable("payslip", current.status, cols);
 		const setClause = cols.map((c) => `${c} = ?`).join(", ");
 		const params: unknown[] = cols.map((c) => patch[c] ?? null);
 		params.push(id);
@@ -446,6 +452,9 @@ export const usePayslipsStore = defineStore("payslips", () => {
 		payslipId: number,
 		lines: PayslipLineDraft[]
 	): Promise<{ earnings_cents: number, deductions_cents: number, net_cents: number }> => {
+		// Lines are part of the issued document — refuse on non-drafts.
+		const current = await get(payslipId);
+		if (current) assertEditable("payslip", current.status, ["lines"]);
 		await execute("DELETE FROM payslip_lines WHERE payslip_id = ?", [payslipId]);
 		for (let i = 0; i < lines.length; i++) {
 			const l = lines[i];

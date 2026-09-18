@@ -17,6 +17,7 @@ import type { QuoteListFilters } from "~/lib/quote-query";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
+import { assertEditable } from "~/lib/document-guards";
 import { computeLineTotals, sumCents } from "~/lib/money";
 import { allocateDocumentNumber, allocateSpecificDocumentNumber, reserveDocumentNumber } from "~/lib/numbering";
 import { useBusinessBanksStore } from "~/stores/business_banks";
@@ -504,6 +505,11 @@ export const useQuotesStore = defineStore("quotes", () => {
 	const update = async (id: number, patch: QuoteUpdate): Promise<void> => {
 		const cols = UPDATABLE.filter((c) => Object.hasOwn(patch, c));
 		if (cols.length === 0) return;
+		// Golden Rule #5, enforced here and not only by the page hiding the
+		// form — a stale kept-alive page can still hold a "draft" copy of a
+		// document that was issued elsewhere. See assertEditable.
+		const current = await get(id);
+		if (current) assertEditable("quote", current.status, cols);
 		const setClause = cols.map((c) => `${c} = ?`).join(", ");
 		const params: unknown[] = cols.map((c) => patch[c] ?? null);
 		// Keep client_name in lockstep with the snapshot whenever the
@@ -542,6 +548,9 @@ export const useQuotesStore = defineStore("quotes", () => {
 		quoteId: number,
 		lines: QuoteLineDraft[]
 	): Promise<{ subtotal_cents: number, tax_cents: number, total_cents: number }> => {
+		// Lines are part of the issued document — refuse on non-drafts.
+		const current = await get(quoteId);
+		if (current) assertEditable("quote", current.status, ["lines"]);
 		const computed = lines.map((l) => {
 			const totals = computeLineTotals(l.quantity_milli, l.unit_price_cents, l.tax_rate_basis_points);
 			return { ...l, ...totals };
@@ -631,16 +640,11 @@ export const useQuotesStore = defineStore("quotes", () => {
 		}
 		const invoiceId = row.converted_invoice_id;
 		if (invoiceId != null) {
-			// Direct SQL, not the vouchers store — it may not be loaded here.
-			const receipts = await selectOne<{ n: number }>(
-				`SELECT COUNT(*) AS n FROM vouchers
-				 WHERE related_invoice_id = ? AND voucher_type = 'receipt'`,
-				[invoiceId]
-			);
-			if ((receipts?.n ?? 0) > 0) {
-				throw new Error("This invoice has recorded payments. Delete the receipt vouchers first, then revert.");
-			}
-			await useInvoicesStore().remove(invoiceId);
+			// Same guard the invoice cancel path uses (direct SQL inside):
+			// refused while receipts OR an issued credit note exist.
+			const invoicesStore = useInvoicesStore();
+			await invoicesStore.assertMutable(invoiceId, "revert_conversion");
+			await invoicesStore.remove(invoiceId);
 		}
 		await execute(
 			`UPDATE quotes

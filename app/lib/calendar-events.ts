@@ -68,6 +68,8 @@ export interface InvoiceEventRow {
 	client_name: string | null
 	total_cents: number
 	paid_cents: number
+	/** Issued credit notes with source_invoice_id = this invoice. */
+	credited_cents: number
 }
 export interface BillEventRow {
 	id: number
@@ -96,7 +98,9 @@ export interface PayslipEventRow {
 // --- builders: row -> CalendarEvent (null = not shown) -------------------
 
 export function buildInvoiceEvent(row: InvoiceEventRow, today: string): CalendarEvent | null {
-	const balance = row.total_cents - row.paid_cents;
+	// Mirrors the invoice balance rule (total − receipts − issued credit
+	// notes) — one of the sites listed in CLAUDE.md that must move together.
+	const balance = row.total_cents - row.paid_cents - row.credited_cents;
 	if (balance <= 0) return null;
 	return {
 		id: `invoice:${row.id}`,

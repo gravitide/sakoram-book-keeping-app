@@ -182,6 +182,7 @@
 	import type { CreditNoteRow, CreditNoteStatus } from "~/stores/credit_notes";
 	import { andClauses, eqClause, inClause, likeClause, makeSortResolver, rangeClause } from "~/lib/list-query";
 	import { formatLKR } from "~/lib/money";
+	import { queryString } from "~/lib/route-query";
 	import { useClientsStore } from "~/stores/clients";
 	import { useCreditNotesStore } from "~/stores/credit_notes";
 	import { useLicenseStore } from "~/stores/license";
@@ -226,6 +227,19 @@
 	const refreshStats = async () => {
 		headerStats.value = await store.fetchHeaderStats();
 	};
+
+	// Kept-alive page: useServerTable refetches the ROWS on re-activation, but
+	// these header figures were loaded in onMounted only — so after recording
+	// a payment and coming back, the row said paid while the header total
+	// didn't move. Skip the first activation (onMounted covers it).
+	let headerActivatedOnce = false;
+	onActivated(() => {
+		if (!headerActivatedOnce) {
+			headerActivatedOnce = true;
+			return;
+		}
+		void refreshStats();
+	});
 
 	const { isLoading, runLoad } = usePageLoading();
 	onMounted(() => runLoad(async () => {
@@ -297,13 +311,10 @@
 		}
 	});
 
-	const route = useRoute();
-	onMounted(() => {
-		if (route.query.new === "1") {
-			const issued = typeof route.query.issued === "string" ? route.query.issued : null;
-			newIssueDate.value = issued;
-			newOpen.value = true;
-			void router.replace({ query: { ...route.query, new: undefined, issued: undefined } });
-		}
-	});
+	// useQueryTrigger, not onMounted: this page is kept alive, so onMounted
+	// runs once per session and the shortcut would only ever work once.
+	useQueryTrigger((query) => {
+		newIssueDate.value = queryString(query.issued);
+		newOpen.value = true;
+	}, { consume: ["issued"] });
 </script>

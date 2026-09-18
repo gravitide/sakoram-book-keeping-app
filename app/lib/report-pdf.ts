@@ -13,9 +13,9 @@ import type { CreditNoteRow } from "~/stores/credit_notes";
 import type { InvoiceRow } from "~/stores/invoices";
 import type { PayslipRow } from "~/stores/payslips";
 import type { CompanySettingsRow } from "~/stores/settings";
-import { formatMoney } from "~/lib/money";
-import { buildFooterBlocks } from "~/lib/pdf-chrome";
-import { pdfThemeHex } from "~/lib/theme";
+import { formatMoney } from "./money";
+import { buildFooterBlocks } from "./pdf-chrome";
+import { pdfThemeHex } from "./theme";
 
 /// Generic report payload shape consumed by `report.typ`. Optional
 /// fields mirror the template's `if "field" in data` checks.

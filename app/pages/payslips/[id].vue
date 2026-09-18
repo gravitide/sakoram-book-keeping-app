@@ -151,11 +151,16 @@
 								<DateField v-model="form.period_start" :disabled="locked" />
 							</UFormField>
 							<UFormField label="Period end" class="w-fit shrink-0">
-								<DateField v-model="form.period_end" :disabled="locked" />
+								<DateField v-model="form.period_end" :disabled="locked" :min-value="form.period_start ?? undefined" />
 							</UFormField>
 						</div>
 						<UFormField label="Pay date" class="w-fit shrink-0">
-							<DateField v-model="form.pay_date" :disabled="locked" />
+							<DateField
+								v-model="form.pay_date"
+								:disabled="locked"
+								:min-value="form.period_start ?? undefined"
+								:max-value="form.period_end ?? undefined"
+							/>
 						</UFormField>
 					</div>
 				</UCard>
@@ -195,6 +200,7 @@
 						:paye-enabled="payeEnabled"
 						:paye-config="payeConfig"
 						:paye-deduct-epf="payeDeductEpf"
+						:frozen-employer="frozenEmployer"
 					/>
 				</UCard>
 
@@ -208,7 +214,7 @@
 						<UTextarea
 							v-model="form.notes"
 							:rows="3"
-							placeholder="Optional internal note for this payslip — not printed unless you copy it onto the PDF."
+							placeholder="Optional note — this is PRINTED on the payslip the employee receives."
 							class="w-full"
 						/>
 					</UFormField>
@@ -519,8 +525,46 @@
 		baseline.value = formSnapshot.value;
 	};
 
+	// Kept-alive page: setup (and the hydrate above) runs once, so re-hydrate
+	// on every re-activation — see useRehydrateOnActivate for what goes stale.
+	// (Below `dirty` because that's a computed declared after hydrate; and it
+	// re-baselines, exactly like every other hydrate call on this page.)
+	useRehydrateOnActivate({
+		isDirty: () => dirty.value,
+		exists: async () => (await store.get(payslipId)) != null,
+		rehydrate: async () => {
+			await hydrate();
+			refreshBaseline();
+		},
+		noun: "payslip",
+		listRoute: "/payslips"
+	});
+
 	const derived = computed(() => row.value ? store.derivedStatus(row.value) : "draft");
 	const locked = computed(() => row.value?.status !== "draft");
+
+	// Once issued, the employer EPF / ETF are the figures FROZEN on the row —
+	// the same ones the PDF and the P&L read. Without this the editor recomputed
+	// them from today's settings rates, so a rate change rewrote history on
+	// screen only. Null on a draft: there the live recompute IS the truth.
+	const frozenEmployer = computed(() =>
+		locked.value && row.value
+			? { epfEmployerCents: row.value.epf_employer_cents ?? 0, etfCents: row.value.etf_cents ?? 0 }
+			: null
+	);
+
+	// Date invariant: period_start <= pay_date <= period_end, period_end >=
+	// period_start. The DateFields carry min/max, but a typed date can still
+	// land out of range, and moving period_start past the others must drag them
+	// along rather than leave an inverted period to fail on save (or collide
+	// with the UNIQUE (employee_id, period_start) as a raw SQL error).
+	watch(() => [form.period_start, form.period_end], ([start, end]) => {
+		if (locked.value || !start) return;
+		if (end && end < start) form.period_end = start;
+		const last = form.period_end ?? end;
+		if (form.pay_date && form.pay_date < start) form.pay_date = start;
+		else if (form.pay_date && last && form.pay_date > last) form.pay_date = last;
+	});
 
 	const statRates = computed(() => ({
 		epfEmployeeBp: settingsStore.settings?.epf_employee_rate_bp ?? 800,
@@ -621,10 +665,14 @@
 			refreshBaseline();
 			toast.add({ title: "Payslip saved", color: "success", icon: "i-lucide-check" });
 		} catch (err) {
+			const raw = err instanceof Error ? err.message : String(err);
+			// UNIQUE (employee_id, period_start): moving the period onto another
+			// payslip's start date. Say that, rather than dumping the SQL error.
+			const clash = /UNIQUE|constraint/i.test(raw) && /payslips|period_start|employee_id/i.test(raw);
 			toast.add({
-				title: "Save failed",
-				description: err instanceof Error ? err.message : String(err),
-				color: "error",
+				title: clash ? "This employee already has a payslip for that period" : "Save failed",
+				description: clash ? "Pick a different period start, or open the existing payslip instead." : raw,
+				color: clash ? "warning" : "error",
 				icon: "i-lucide-circle-alert"
 			});
 		} finally {

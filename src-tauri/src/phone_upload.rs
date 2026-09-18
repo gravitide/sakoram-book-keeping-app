@@ -366,6 +366,39 @@ pub fn clear_document_attachments(
 	Ok(())
 }
 
+/// `<dir>/<basename(name)>`, refusing anything that isn't a plain file name.
+/// `name` may be a bare filename or a stored absolute path (either separator);
+/// only its last segment is used, and `..` / empty segments are rejected so the
+/// result can never leave `dir`.
+fn attachment_file_in(dir: &std::path::Path, name: &str) -> Result<PathBuf, String> {
+	let base = name.rsplit(['/', '\\']).next().unwrap_or("").trim();
+	if base.is_empty() || base == "." || base == ".." {
+		return Err("Invalid attachment file name".into());
+	}
+	Ok(dir.join(base))
+}
+
+/// Delete ONE attachment file. Done in Rust (std::fs) rather than the fs
+/// plugin's `remove`: business folders live on any drive, but the plugin's
+/// scope only covers $APPDATA / $APPLOCALDATA / $HOME — so for a business on
+/// `D:\` the JS unlink failed, the error was swallowed, the row was deleted,
+/// and the image stayed on disk forever. A missing file is already-gone.
+#[tauri::command]
+pub fn remove_document_attachment(
+	app: AppHandle,
+	document_type: String,
+	document_id: String,
+	file_name: String,
+) -> Result<(), String> {
+	let dir = attachment_dir_path(&app, &document_type, &document_id)?;
+	let file = attachment_file_in(&dir, &file_name)?;
+	match std::fs::remove_file(&file) {
+		Ok(()) => Ok(()),
+		Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+		Err(e) => Err(e.to_string()),
+	}
+}
+
 /// If no sessions remain, shut the server down after a grace period.
 /// Re-checks emptiness when the grace elapses, so a session created in
 /// the meantime keeps the server alive. Resetting `running`/`port` means
@@ -650,3 +683,30 @@ const CAPTURE_PAGE: &str = r#"<!doctype html>
   });
 </script>
 </body></html>"#;
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::path::Path;
+
+	// remove_document_attachment deletes a file by name inside one document's
+	// attachment folder. The name comes from a DB row the webview hands back,
+	// so it must never be able to walk out of that folder.
+	#[test]
+	fn attachment_file_in_accepts_only_a_plain_file_name() {
+		let dir = Path::new("biz").join("attachments").join("invoice").join("7");
+		assert_eq!(attachment_file_in(&dir, "scan.png"), Ok(dir.join("scan.png")));
+		// A stored absolute path is reduced to its basename, either separator.
+		assert_eq!(attachment_file_in(&dir, r"D:\Old\Acme\attachments\invoice\7\scan.png"), Ok(dir.join("scan.png")));
+		assert_eq!(attachment_file_in(&dir, "/old/acme/scan.png"), Ok(dir.join("scan.png")));
+	}
+
+	#[test]
+	fn attachment_file_in_refuses_traversal_and_empty_names() {
+		let dir = Path::new("biz").join("attachments").join("invoice").join("7");
+		assert!(attachment_file_in(&dir, "..").is_err());
+		assert!(attachment_file_in(&dir, r"..\..\business.db\..").is_err());
+		assert!(attachment_file_in(&dir, "").is_err());
+		assert!(attachment_file_in(&dir, "a/").is_err());
+	}
+}

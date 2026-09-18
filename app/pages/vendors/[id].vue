@@ -368,6 +368,13 @@
 		notes: ""
 	});
 
+	// Pristine copy of the form, captured before any hydrate. The /new route
+	// is ONE kept-alive instance: after a successful create we navigate to
+	// the new row's page, and without resetting here the next "New" visit
+	// reopens this instance with the last submission still typed in and the
+	// save bar already up — one click away from a duplicate.
+	const BLANK_FORM = { ...form };
+
 	const isArchived = ref(false);
 	const confirmDelete = ref(false);
 	const deleting = ref(false);
@@ -417,6 +424,24 @@
 		baseline.value = formSnapshot.value;
 	};
 
+	// Kept-alive page: re-hydrate on every re-activation so a row archived
+	// (or deleted) from the list isn't shown as its stale cached copy — see
+	// useRehydrateOnActivate. Not for /new, which has no row behind it.
+	if (!isNew && vendorId !== null) {
+		useRehydrateOnActivate({
+			isDirty: () => dirty.value,
+			exists: async () => (await store.get(vendorId)) != null,
+			rehydrate: async () => {
+				const row = await store.get(vendorId);
+				if (!row) return;
+				hydrate(row);
+				refreshBaseline();
+			},
+			noun: "vendor",
+			listRoute: "/vendors"
+		});
+	}
+
 	const schema = z.object({
 		name: z.string().trim().min(1, "Name is required"),
 		email: z.union([z.literal(""), z.string().email("Invalid email")])
@@ -430,6 +455,8 @@
 			if (isNew) {
 				const id = await store.create({ ...form });
 				toast.add({ title: "Vendor created", color: "success", icon: "i-lucide-check" });
+				Object.assign(form, BLANK_FORM);
+				refreshBaseline();
 				await router.replace(`/vendors/${id}`);
 			} else if (vendorId !== null) {
 				await store.update(vendorId, { ...form });

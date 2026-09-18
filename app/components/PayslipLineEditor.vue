@@ -186,8 +186,15 @@
 		payeEnabled?: boolean
 		payeConfig?: PayeConfig
 		payeDeductEpf?: boolean
+		/**
+		 * Employer figures FROZEN on the payslip row at issue time. Pass on an
+		 * issued / cancelled payslip; when set they are shown verbatim instead
+		 * of being recomputed from `rates`.
+		 */
+		frozenEmployer?: { epfEmployerCents: number, etfCents: number } | null
 	}
 	const props = withDefaults(defineProps<Props>(), {
+		frozenEmployer: null,
 		disabled: false,
 		statutoryEnabled: false,
 		rates: () => ({ epfEmployeeBp: 800, epfEmployerBp: 1200, etfBp: 300 }),
@@ -268,11 +275,19 @@
 	};
 
 	// Employer-side figures (display only — not part of net).
-	const employer = computed(() =>
-		props.statutoryEnabled
+	//
+	// On an ISSUED payslip these must be the frozen figures, not a recompute:
+	// `rates` is the business's LIVE settings, so changing the EPF/ETF rate
+	// made every historical payslip show a different employer cost on screen
+	// than the PDF (which prints the frozen columns) — and than the P&L.
+	const employer = computed(() => {
+		if (props.frozenEmployer) {
+			return { baseCents: 0, epfEmployeeCents: 0, ...props.frozenEmployer };
+		}
+		return props.statutoryEnabled
 			? computeStatutory(liableBase(), props.rates)
-			: { baseCents: 0, epfEmployeeCents: 0, epfEmployerCents: 0, etfCents: 0 }
-	);
+			: { baseCents: 0, epfEmployeeCents: 0, epfEmployerCents: 0, etfCents: 0 };
+	});
 
 	const onChange = () => {
 		syncManagedLine();

@@ -11,6 +11,7 @@ import type { BankSnapshot } from "~/stores/quotes";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
+import { createLoadOnce } from "~/lib/load-once";
 
 export interface BusinessBankRow {
 	id: number
@@ -78,6 +79,7 @@ export const useBusinessBanksStore = defineStore("business_banks", () => {
 		() => activeBanks.value.find((b) => b.is_default === 1) ?? null
 	);
 
+	const loaded = ref(false);
 	const load = async () => {
 		loading.value = true;
 		error.value = null;
@@ -85,6 +87,7 @@ export const useBusinessBanksStore = defineStore("business_banks", () => {
 			banks.value = await select<BusinessBankRow>(
 				"SELECT * FROM business_banks ORDER BY label COLLATE NOCASE ASC"
 			);
+			loaded.value = true;
 		} catch (err) {
 			error.value = err instanceof Error ? err.message : String(err);
 			throw err;
@@ -93,9 +96,11 @@ export const useBusinessBanksStore = defineStore("business_banks", () => {
 		}
 	};
 
-	const ensureLoaded = async () => {
-		if (banks.value.length === 0 && !loading.value) await load();
-	};
+	// createLoadOnce shares the in-flight load (the old `!loading` check let a
+	// concurrent caller return with `banks` still empty → a draft saved with
+	// no bank). A `loaded` flag, not `banks.length > 0`: a business with ZERO
+	// banks is a legitimate loaded state and used to re-query on every call.
+	const ensureLoaded = createLoadOnce(load, () => loaded.value);
 
 	const get = async (id: number): Promise<BusinessBankRow | null> =>
 		selectOne<BusinessBankRow>("SELECT * FROM business_banks WHERE id = ?", [id]);

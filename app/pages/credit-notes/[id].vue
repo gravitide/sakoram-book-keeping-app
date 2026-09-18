@@ -226,7 +226,7 @@
 						<UFormField v-if="vatMode === 'exclusive'" label="Credit subtotal" help="Total exclusive of VAT.">
 							<MoneyInput v-model="bundleSubtotalCents" />
 						</UFormField>
-						<UFormField v-else label="Grand total (incl. VAT)" help="We split out the subtotal and VAT below.">
+						<UFormField v-else label="Grand total (incl. VAT)" :help="inclusiveNote ?? 'We split out the subtotal and VAT below.'">
 							<MoneyInput v-model="grandTotalCents" />
 						</UFormField>
 						<div class="ml-auto max-w-[12rem] space-y-2">
@@ -337,7 +337,8 @@
 	import type { ClientRow } from "~/stores/clients";
 	import type { CreditNoteLineRow, CreditNoteRow, CreditNoteStatus } from "~/stores/credit_notes";
 	import type { ClientSnapshot, PricingMode } from "~/stores/quotes";
-	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
+	import { CREDIT_NOTE_TRANSITIONS } from "~/lib/document-guards";
+	import { bundleTaxCents, computeLineTotals, formatLKR, splitInclusiveTotal, sumCents } from "~/lib/money";
 	import { useClientsStore } from "~/stores/clients";
 	import { useCreditNotesStore } from "~/stores/credit_notes";
 	import { useInvoicesStore } from "~/stores/invoices";
@@ -387,15 +388,27 @@
 	// 'exclusive' = type the net subtotal (default); 'inclusive' = type the
 	// gross grand total and split out the net + VAT from the rate.
 	const vatMode = ref<"exclusive" | "inclusive">("exclusive");
+	// Tax is derived from the net subtotal, so some gross amounts (≈15% at
+	// 18%, Rs 100.00 among them) can't be produced by ANY net — see
+	// splitInclusiveTotal. When the user types one, say so instead of just
+	// rewriting the field to a different number on blur.
+	const inclusiveNote = ref<string | null>(null);
+	// The note describes ONE entered amount at ONE rate — drop it when either moves.
+	watch([vatMode, vatRatePct], () => {
+		inclusiveNote.value = null;
+	});
 	const grandTotalCents = computed<number>({
 		get: () => {
 			const bp = Math.round(vatRatePct.value * 100);
-			return bundleSubtotalCents.value + Math.round((bundleSubtotalCents.value * bp) / 10000);
+			return bundleSubtotalCents.value + bundleTaxCents(bundleSubtotalCents.value, bp);
 		},
 		set: (total) => {
 			const bp = Math.round(vatRatePct.value * 100);
-			const tax = Math.round((total * bp) / (10000 + bp));
-			bundleSubtotalCents.value = Math.max(0, total - tax);
+			const split = splitInclusiveTotal(total, bp);
+			bundleSubtotalCents.value = split.subtotal_cents;
+			inclusiveNote.value = split.exact
+				? null
+				: `${formatLKR(total)} can't be reached exactly at this VAT rate — the nearest total is ${formatLKR(split.total_cents)}.`;
 		}
 	});
 	const formIssueDate = ref("");
@@ -483,12 +496,29 @@
 
 	await hydrate();
 
+	// Kept-alive page: setup (and the hydrate above) runs once, so re-hydrate
+	// on every re-activation — see useRehydrateOnActivate for what goes stale.
+	useRehydrateOnActivate({
+		isDirty: () => dirty.value,
+		exists: async () => (await creditNotesStore.get(creditNoteId)) != null,
+		rehydrate: hydrate,
+		noun: "credit note",
+		listRoute: "/credit-notes"
+	});
+
 	watch(
 		[formProjectTitle, formIssueDate, formNotes, formTitleOverride, formSourceInvoiceId, vatRatePct, bundleSubtotalCents],
 		() => {
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
 	);
+	// Notes are the ONE field that stays editable after issue (Golden Rule
+	// #5). The watcher above is draft-only, so notes typed on an issued
+	// credit note never raised the save bar and were silently lost on
+	// navigation — even though the editor was (deliberately) left enabled.
+	watch(formNotes, () => {
+		if (!editable.value && !hydrating.value) dirty.value = true;
+	});
 
 	const computedTotals = computed(() => {
 		if (pricingMode.value === "itemized") {
@@ -498,7 +528,7 @@
 			return { subtotal: sumCents(...subs), tax: sumCents(...tx), total: sumCents(...tot) };
 		}
 		const sub = bundleSubtotalCents.value;
-		const taxCents = Math.round((sub * Math.round(vatRatePct.value * 100)) / 10000);
+		const taxCents = bundleTaxCents(sub, Math.round(vatRatePct.value * 100));
 		return { subtotal: sub, tax: taxCents, total: sub + taxCents };
 	});
 
@@ -529,10 +559,18 @@
 	};
 
 	const save = async () => {
-		if (!creditNote.value || !editable.value) return;
+		if (!creditNote.value) return;
 		if (licLocked.value) return;
 		saving.value = true;
 		try {
+			if (!editable.value) {
+				// Issued / cancelled: persist notes and nothing else. The store
+				// refuses any other column on a non-draft (assertEditable).
+				await creditNotesStore.update(creditNoteId, { notes: formNotes.value || null });
+				await hydrate();
+				toast.add({ title: "Notes saved", color: "success", icon: "i-lucide-check" });
+				return;
+			}
 			const totalsFromLines = await creditNotesStore.replaceLines(creditNoteId, lines.value);
 			const bp = Math.round(vatRatePct.value * 100);
 			const subtotal = pricingMode.value === "itemized"
@@ -540,7 +578,7 @@
 				: bundleSubtotalCents.value;
 			const tax = pricingMode.value === "itemized"
 				? totalsFromLines.tax_cents
-				: Math.round((subtotal * bp) / 10000);
+				: bundleTaxCents(subtotal, bp);
 			const total = pricingMode.value === "itemized"
 				? totalsFromLines.total_cents
 				: subtotal + tax;
@@ -582,12 +620,10 @@
 		onSelect: () => void
 	}
 
+	// Single source of truth shared with the store, which enforces it.
 	const legalNextStates = computed<CreditNoteStatus[]>(() => {
 		const s = creditNote.value?.status;
-		if (s === "draft") return ["issued", "cancelled"];
-		if (s === "issued") return ["draft", "cancelled"];
-		if (s === "cancelled") return ["draft"];
-		return [];
+		return s ? CREDIT_NOTE_TRANSITIONS[s] : [];
 	});
 
 	const transitionLabel: Record<CreditNoteStatus, string> = {

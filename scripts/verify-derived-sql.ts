@@ -23,7 +23,7 @@ import { dirname, join } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { Database } from "bun:sqlite";
-import { clientDerivedFrom, invoiceDerivedFrom } from "../app/lib/derived-status.ts";
+import { billDerivedFrom, clientDerivedFrom, invoiceDerivedFrom } from "../app/lib/derived-status.ts";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const MIGRATIONS = join(REPO, "src-tauri/migrations");
@@ -112,6 +112,72 @@ const inv4 = db.query(`SELECT _paid, _status FROM ${invoiceDerivedFrom(TODAY)} W
 console.log("\n-- cash covers full total, credit also present --");
 check("_paid", inv4._paid, 1000000);
 check("_status is paid (cash wins over credited)", inv4._status, "paid");
+
+// --- 7. invoice lifecycle guard counts (invoices.assertMutable) --------
+// Read out of the store source so the asserted SQL is the shipped SQL.
+// Fixture at this point: invoice 1 has ONE receipt voucher, ONE issued
+// linked credit note (CRN-0001) and one DRAFT linked note (CRN-0003 — must
+// not count). CRN-0002 is issued but unlinked (must not count either).
+const invSrc = readFileSync(join(REPO, "app/stores/invoices.ts"), "utf8");
+const guardSql = invSrc.match(/const links = await selectOne<[^(]*\(\s*`([\s\S]*?)`,/);
+if (!guardSql) {
+	console.error("✗ could not locate the assertMutable SQL in app/stores/invoices.ts");
+	process.exit(1);
+}
+const links = db.query(guardSql[1]!).get(1, 1) as Record<string, unknown>;
+console.log("\n-- invoice lifecycle guard (SQL read from source) --");
+check("receipts", links.receipts, 1);
+check("issued linked credit notes only", links.credit_notes, 1);
+
+// --- 8. calendar due-date query (useCalendarEvents.fetchInvoiceEvents) --
+// A fifth balance site that used to subtract receipts only. Same fixture:
+// receipt 1,000,000; issued linked credit 400,000; draft + unlinked ignored.
+const calSrc = readFileSync(join(REPO, "app/composables/useCalendarEvents.ts"), "utf8");
+const calSql = calSrc.match(/select<InvoiceEventRow>\(\s*`([\s\S]*?)`,/);
+if (!calSql) {
+	console.error("✗ could not locate the invoice events SQL in app/composables/useCalendarEvents.ts");
+	process.exit(1);
+}
+const cal = db.query(calSql[1]!).get("2026-01-01", "2026-12-31") as Record<string, unknown>;
+console.log("\n-- calendar invoice events (SQL read from source) --");
+check("paid_cents", cal.paid_cents, 1000000);
+check("credited_cents (issued + linked only)", cal.credited_cents, 400000);
+
+// --- 9. letter counter advance (numbering.advanceDocumentCounter) -------
+// The stuck state: a letter hand-numbered AHEAD to LET-0010 with the counter
+// at 9. The old path refused to bump onto an in-use number, so LET-0010 was
+// suggested forever. The statement must move the counter onto 10 regardless,
+// and must never move it backwards.
+const numSrc = readFileSync(join(REPO, "app/lib/numbering.ts"), "utf8");
+const bumpSql = numSrc.match(/export const advanceDocumentCounter = [\s\S]*?await execute\(\s*`([\s\S]*?)`,/);
+if (!bumpSql) {
+	console.error("✗ could not locate the advanceDocumentCounter SQL in app/lib/numbering.ts");
+	process.exit(1);
+}
+db.exec(`INSERT INTO letters (number, letter_date, subject, body_json) VALUES ('LET-0010', '2026-04-01', 'ahead', '')`);
+db.exec(`INSERT INTO document_counters (document_type, last_number) VALUES ('letter', 9)`);
+const lastLetter = () => (db.query(`SELECT last_number FROM document_counters WHERE document_type = 'letter'`).get() as Record<string, unknown>).last_number;
+db.query(bumpSql[1]!).run("letter", 10);
+console.log("\n-- letter counter advance (SQL read from source) --");
+check("advances onto a reference already in use", lastLetter(), 10);
+db.query(bumpSql[1]!).run("letter", 4);
+check("never moves backwards", lastLetter(), 10);
+
+// --- 10. bill balance floors at zero (billDerivedFrom) -----------------
+// Overpaying a bill is only a WARNING on /vouchers/new, so it is reachable.
+// invoiceDerivedFrom floored its balance; the bill + payslip mirrors did not,
+// and the /bills row showed a negative balance ("Rs -50.00").
+db.exec(`INSERT INTO vendors (id, name) VALUES (1, 'Vendor A')`);
+db.exec(`
+	INSERT INTO bills (id, number, vendor_id, vendor_snapshot, vendor_name, issue_date, due_date, status, total_cents, subtotal_cents, tax_cents)
+	VALUES (1, 'BIL-0001', 1, '{"name":"Vendor A"}', 'Vendor A', '2026-01-01', '2026-12-31', 'open', 1000000, 1000000, 0)
+`);
+db.exec(`INSERT INTO vouchers (id, number, voucher_type, voucher_date, party_name, amount_cents, related_bill_id) VALUES (2, 'VCH-0002', 'payment', '2026-03-01', 'Vendor A', 1005000, 1)`);
+const bill = db.query(`SELECT _paid, _balance, _status FROM ${billDerivedFrom(TODAY)} WHERE id = 1`).get() as Record<string, unknown>;
+console.log("\n-- overpaid bill --");
+check("_paid", bill._paid, 1005000);
+check("_balance floors at 0 (was -5000)", bill._balance, 0);
+check("_status", bill._status, "paid");
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

@@ -8,11 +8,11 @@
 import type { InvoiceLineRow, InvoiceRow } from "~/stores/invoices";
 import type { BankSnapshot, ClientSnapshot } from "~/stores/quotes";
 import type { CompanySettingsRow } from "~/stores/settings";
-import { formatLKR, formatQty, formatRate } from "~/lib/money";
-import { buildFooterBlocks, buildHeaderBlocks } from "~/lib/pdf-chrome";
-import { resolveTemplateKey } from "~/lib/pdf-templates";
-import { richTextToBlocks } from "~/lib/rich-text";
-import { pdfThemeHex } from "~/lib/theme";
+import { formatLKR, formatQty, formatRate } from "./money";
+import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
+import { resolveTemplateKey } from "./pdf-templates";
+import { richTextToBlocks } from "./rich-text";
+import { pdfThemeHex } from "./theme";
 
 export interface InvoicePdfArgs {
 	row: InvoiceRow
@@ -21,13 +21,19 @@ export interface InvoicePdfArgs {
 	currency: { code: string, symbol: string }
 	paidCents: number
 	/**
+	 * Issued credit notes settled against this invoice (creditedCentsFor /
+	 *  the row's `_credited`). Optional so older call sites keep compiling,
+	 *  but every caller should pass it — the balance is wrong without it.
+	 */
+	creditedCents?: number
+	/**
 	 * Whether the business may use non-Classic templates (Plus feature). When
 	 *  false, the payload's `template` is forced to "classic".
 	 */
 	entitledToTemplates?: boolean
 }
 
-export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, paidCents, entitledToTemplates = false }: InvoicePdfArgs) => {
+export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, paidCents, creditedCents = 0, entitledToTemplates = false }: InvoicePdfArgs) => {
 	let client: ClientSnapshot | null = null;
 	try {
 		if (inv.client_snapshot) client = JSON.parse(inv.client_snapshot) as ClientSnapshot;
@@ -47,7 +53,12 @@ export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, pa
 	const fmt = (cents: number) => formatLKR(cents);
 	const fmtNoSym = (cents: number) => formatLKR(cents, { withSymbol: false });
 
-	const balanceCents = Math.max(0, inv.total_cents - paidCents);
+	// total − receipts − issued credit notes, floored at zero. This is one of
+	// the mirrored balance sites (see "Invoice balance is computed in…" in
+	// CLAUDE.md) — it used to subtract receipts only, so a credited invoice
+	// went out to the client showing its full total as still due.
+	const balanceCents = Math.max(0, inv.total_cents - paidCents - creditedCents);
+	const settled = paidCents > 0 || creditedCents > 0;
 
 	// Allow per-document override of the big PDF header. Empty / null
 	// falls back to the hardcoded type label; otherwise we upper-case
@@ -87,11 +98,14 @@ export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, pa
 		notes_blocks: richTextToBlocks(inv.notes),
 		prepared_by: inv.prepared_by ?? "",
 		prepared_by_blocks: richTextToBlocks(inv.prepared_by),
-		// Show paid/balance only when something has been paid; null
-		// suppresses the row entirely on a freshly-issued invoice.
+		// Show the settlement block only once something has been paid OR
+		// credited; nulls suppress it entirely on a freshly-issued invoice.
+		// Paid / Credited rows are each independent; Balance shows with either.
 		paid_cents: paidCents > 0 ? paidCents : null,
 		paid_display: paidCents > 0 ? fmtNoSym(paidCents) : null,
-		balance_display: paidCents > 0 ? fmtNoSym(balanceCents) : null,
+		credited_cents: creditedCents > 0 ? creditedCents : null,
+		credited_display: creditedCents > 0 ? fmtNoSym(creditedCents) : null,
+		balance_display: settled ? fmtNoSym(balanceCents) : null,
 		business_name: settings?.business_name ?? null,
 		website: settings?.website ?? null,
 		phone: settings?.phone ?? null,

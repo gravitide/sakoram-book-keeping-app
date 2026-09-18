@@ -9,7 +9,7 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
-import { allocateSpecificDocumentNumber, peekNextSequence } from "~/lib/numbering";
+import { advanceDocumentCounter, allocateNextFreeReference, peekNextSequence } from "~/lib/numbering";
 
 export interface LetterRow {
 	id: number
@@ -35,14 +35,19 @@ const todayISO = (): string => {
 };
 
 // Advance the LET counter iff the caller kept the auto-suggested reference.
-// Returns nothing — purely a side effect on document_counters. Never throws
-// (a taken sequence just means the counter already moved on).
+// Returns nothing — purely a side effect on document_counters. Never throws.
+//
+// advanceDocumentCounter, NOT allocateSpecificDocumentNumber: that one refuses
+// a number already in use, and letter references are non-unique by design. If
+// a letter had been hand-renumbered AHEAD to the suggested value, the refusal
+// was swallowed, the counter never moved, and the same reference was
+// suggested for every new letter from then on.
 const bumpCounterIfSuggested = async (number: string): Promise<void> => {
 	const trimmed = number.trim();
 	if (!trimmed) return;
 	const peek = await peekNextSequence("letter").catch(() => null);
 	if (peek && trimmed === peek.number) {
-		await allocateSpecificDocumentNumber("letter", peek.sequence).catch(() => { /* already taken */ });
+		await advanceDocumentCounter("letter", peek.sequence).catch(() => { /* non-fatal */ });
 	}
 };
 
@@ -183,16 +188,12 @@ export const useLettersStore = defineStore("letters", () => {
 		const row = await get(id);
 		if (!row) throw new Error("duplicate: letter not found");
 		const date = todayISO();
-		const peek = await peekNextSequence("letter").catch(() => null);
-		let number = "";
-		if (peek) {
-			try {
-				await allocateSpecificDocumentNumber("letter", peek.sequence);
-				number = peek.number;
-			} catch {
-				number = "";
-			}
-		}
+		// Next FREE reference. The old code peeked once and, on a clash with a
+		// hand-numbered letter, blanked the reference WITHOUT advancing the
+		// counter — so every later duplicate hit the same clash.
+		const number = await allocateNextFreeReference("letter")
+			.then((r) => r.number)
+			.catch(() => "");
 		const result = await execute(
 			`INSERT INTO letters (
 				number, letter_date, category, recipient_name, recipient_address,

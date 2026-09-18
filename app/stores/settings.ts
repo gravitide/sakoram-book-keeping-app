@@ -5,6 +5,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, selectOne } from "~/lib/db";
+import { createLoadOnce } from "~/lib/load-once";
 import { isBuiltinCurrency, registerCurrency, setActiveCurrency } from "~/lib/money";
 
 export interface CompanySettingsRow {
@@ -250,9 +251,9 @@ export const useSettingsStore = defineStore("settings", () => {
 		}
 	};
 
-	const ensureLoaded = async () => {
-		if (settings.value === null && !loading.value) await load();
-	};
+	// createLoadOnce, not `if (!loaded && !loading) await load()` — that form
+	// let a second concurrent caller return while settings was still null.
+	const ensureLoaded = createLoadOnce(load, () => settings.value !== null);
 
 	const save = async (patch: Partial<SettingsUpdate>) => {
 		saving.value = true;

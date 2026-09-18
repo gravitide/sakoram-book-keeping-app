@@ -249,7 +249,7 @@
 								<UFormField v-if="vatMode === 'exclusive'" label="Bundle subtotal" help="Amount before VAT.">
 									<MoneyInput v-model="bundleSubtotalCents" class="text-right" />
 								</UFormField>
-								<UFormField v-else label="Grand total (incl. VAT)" help="We split out the subtotal and VAT below.">
+								<UFormField v-else label="Grand total (incl. VAT)" :help="inclusiveNote ?? 'We split out the subtotal and VAT below.'">
 									<MoneyInput v-model="grandTotalCents" class="text-right" />
 								</UFormField>
 							</template>
@@ -445,7 +445,7 @@
 		RecurringInvoiceLineRow,
 		RecurringInvoiceRow
 	} from "~/stores/recurring_invoices";
-	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
+	import { bundleTaxCents, computeLineTotals, formatLKR, splitInclusiveTotal, sumCents } from "~/lib/money";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
@@ -505,15 +505,27 @@
 	// net + VAT from the rate. Ephemeral UI state — the stored value is always
 	// the net bundle_subtotal_cents + rate.
 	const vatMode = ref<"exclusive" | "inclusive">("exclusive");
+	// Tax is derived from the net subtotal, so some gross amounts (≈15% at
+	// 18%, Rs 100.00 among them) can't be produced by ANY net — see
+	// splitInclusiveTotal. When the user types one, say so instead of just
+	// rewriting the field to a different number on blur.
+	const inclusiveNote = ref<string | null>(null);
+	// The note describes ONE entered amount at ONE rate — drop it when either moves.
+	watch([vatMode, vatRatePct], () => {
+		inclusiveNote.value = null;
+	});
 	const grandTotalCents = computed<number>({
 		get: () => {
 			const bp = formApplyVat.value ? Math.round(vatRatePct.value * 100) : 0;
-			return bundleSubtotalCents.value + Math.round((bundleSubtotalCents.value * bp) / 10000);
+			return bundleSubtotalCents.value + bundleTaxCents(bundleSubtotalCents.value, bp);
 		},
 		set: (total) => {
 			const bp = formApplyVat.value ? Math.round(vatRatePct.value * 100) : 0;
-			const tax = Math.round((total * bp) / (10000 + bp));
-			bundleSubtotalCents.value = Math.max(0, total - tax);
+			const split = splitInclusiveTotal(total, bp);
+			bundleSubtotalCents.value = split.subtotal_cents;
+			inclusiveNote.value = split.exact
+				? null
+				: `${formatLKR(total)} can't be reached exactly at this VAT rate — the nearest total is ${formatLKR(split.total_cents)}.`;
 		}
 	});
 
@@ -529,7 +541,7 @@
 		if (formPricingMode.value === "bundle") {
 			const sub = bundleSubtotalCents.value;
 			const bp = formApplyVat.value ? Math.round(vatRatePct.value * 100) : 0;
-			const tax = Math.round((sub * bp) / 10000);
+			const tax = bundleTaxCents(sub, bp);
 			return { subtotal: sub, tax, total: sub + tax };
 		}
 		const subs = lineDrafts.value.map((l) =>
@@ -660,6 +672,16 @@
 	});
 
 	await hydrate();
+
+	// Kept-alive page: setup (and the hydrate above) runs once, so re-hydrate
+	// on every re-activation — see useRehydrateOnActivate for what goes stale.
+	useRehydrateOnActivate({
+		isDirty: () => dirty.value,
+		exists: async () => (await store.get(templateId)) != null,
+		rehydrate: hydrate,
+		noun: "recurring invoice",
+		listRoute: "/recurring-invoices"
+	});
 
 	watch(
 		[

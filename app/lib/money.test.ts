@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+	bundleTaxCents,
 	computeLineTotals,
 	formatMoney,
 	formatQty,
 	formatRate,
 	roundHalfEven,
+	splitInclusiveTotal,
 	toCents
 } from "./money";
 
@@ -138,5 +140,68 @@ describe("formatQty", () => {
 		expect(formatQty(1000)).toBe("1");
 		expect(formatQty(1500)).toBe("1.5");
 		expect(formatQty(1234)).toBe("1.234");
+	});
+});
+
+// Bundle-mode documents store a lump-sum net subtotal + a rate; tax is derived.
+// Six detail pages and both recurring stores each hand-rolled this with
+// Math.round (half-UP) while itemized lines went through computeLineTotals
+// (half-EVEN) — two rounding rules for one document type.
+describe("bundleTaxCents", () => {
+	it("is plain percentage math away from ties", () => {
+		expect(bundleTaxCents(1_000_000, 1800)).toBe(180_000);
+		expect(bundleTaxCents(8474, 1800)).toBe(1525); // 1525.32
+	});
+
+	it("uses banker's rounding on an exact half cent (Golden Rule #1)", () => {
+		// 100,025 × 18% = 18,004.5 → half-even rounds to the even 18,004.
+		// Math.round gave 18,005 — and the same amount as ONE itemized line
+		// gave 18,004, so a document's total depended on its pricing mode.
+		expect(bundleTaxCents(100_025, 1800)).toBe(18_004);
+		expect(computeLineTotals(1000, 100_025, 1800).line_tax_cents).toBe(18_004);
+	});
+
+	it("is zero at a zero rate and rejects non-integers", () => {
+		expect(bundleTaxCents(12_345, 0)).toBe(0);
+		expect(() => bundleTaxCents(1.5, 1800)).toThrow();
+	});
+});
+
+describe("splitInclusiveTotal", () => {
+	it("splits a reachable gross exactly", () => {
+		// 118,000 gross at 18% = 100,000 net + 18,000 VAT.
+		expect(splitInclusiveTotal(118_000, 1800)).toEqual({
+			subtotal_cents: 100_000,
+			tax_cents: 18_000,
+			total_cents: 118_000,
+			exact: true
+		});
+	});
+
+	it("always returns parts that add up and re-derive from the net", () => {
+		for (const gross of [1, 999, 10_000, 118_023, 5_000_001]) {
+			const s = splitInclusiveTotal(gross, 1800);
+			expect(s.subtotal_cents + s.tax_cents).toBe(s.total_cents);
+			expect(bundleTaxCents(s.subtotal_cents, 1800)).toBe(s.tax_cents);
+		}
+	});
+
+	// Tax is DERIVED from the net, so gross = net + round(net × rate) skips
+	// ~15% of values at 18% — no net produces them. Rs 100.00 is one. The
+	// split must say so (exact: false) rather than silently hand back a
+	// different total, so the page can tell the user what happened.
+	it("flags a gross that no net subtotal can produce, within one cent", () => {
+		const s = splitInclusiveTotal(10_000, 1800);
+		expect(s.exact).toBe(false);
+		expect(Math.abs(s.total_cents - 10_000)).toBe(1);
+	});
+
+	it("is the identity at a zero rate", () => {
+		expect(splitInclusiveTotal(10_000, 0)).toEqual({
+			subtotal_cents: 10_000,
+			tax_cents: 0,
+			total_cents: 10_000,
+			exact: true
+		});
 	});
 });
