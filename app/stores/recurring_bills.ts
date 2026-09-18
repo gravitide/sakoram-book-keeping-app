@@ -31,7 +31,7 @@ import type { RecurringFrequency } from "~/stores/recurring_invoices";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
-import { computeLineTotals } from "~/lib/money";
+import { bundleTaxCents, computeLineTotals } from "~/lib/money";
 import { allocateDocumentNumber } from "~/lib/numbering";
 import { useBillCategoriesStore } from "~/stores/bill_categories";
 import { useBillsStore } from "~/stores/bills";
@@ -462,7 +462,7 @@ export const useRecurringBillsStore = defineStore("recurring_bills", () => {
 		let computed: (RecurringBillLineRow & ReturnType<typeof computeLineTotals>)[];
 		if (isBundle) {
 			subtotal = template.bundle_subtotal_cents;
-			tax = Math.round((subtotal * template.vat_rate_basis_points) / 10000);
+			tax = bundleTaxCents(subtotal, template.vat_rate_basis_points);
 			total = subtotal + tax;
 			// Build a single "summary line" for the bill carrying the
 			// bundle amount. Falls back to template name for the

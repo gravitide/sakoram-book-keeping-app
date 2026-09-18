@@ -25,7 +25,7 @@ import type { ClientSnapshot, PricingMode } from "~/stores/quotes";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
-import { computeLineTotals } from "~/lib/money";
+import { bundleTaxCents, computeLineTotals } from "~/lib/money";
 import { allocateDocumentNumber } from "~/lib/numbering";
 import { useBusinessBanksStore } from "~/stores/business_banks";
 import { useInvoicesStore } from "~/stores/invoices";
@@ -467,7 +467,7 @@ export const useRecurringInvoicesStore = defineStore("recurring_invoices", () =>
 		let computed: (RecurringInvoiceLineRow & ReturnType<typeof computeLineTotals>)[];
 		if (isBundle) {
 			subtotal = template.bundle_subtotal_cents;
-			tax = Math.round((subtotal * template.vat_rate_basis_points) / 10000);
+			tax = bundleTaxCents(subtotal, template.vat_rate_basis_points);
 			total = subtotal + tax;
 			// Build a single "summary line" for the invoice carrying the
 			// bundle amount. Falls back to project title / template name
