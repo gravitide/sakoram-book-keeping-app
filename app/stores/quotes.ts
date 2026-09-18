@@ -631,16 +631,11 @@ export const useQuotesStore = defineStore("quotes", () => {
 		}
 		const invoiceId = row.converted_invoice_id;
 		if (invoiceId != null) {
-			// Direct SQL, not the vouchers store — it may not be loaded here.
-			const receipts = await selectOne<{ n: number }>(
-				`SELECT COUNT(*) AS n FROM vouchers
-				 WHERE related_invoice_id = ? AND voucher_type = 'receipt'`,
-				[invoiceId]
-			);
-			if ((receipts?.n ?? 0) > 0) {
-				throw new Error("This invoice has recorded payments. Delete the receipt vouchers first, then revert.");
-			}
-			await useInvoicesStore().remove(invoiceId);
+			// Same guard the invoice cancel path uses (direct SQL inside):
+			// refused while receipts OR an issued credit note exist.
+			const invoicesStore = useInvoicesStore();
+			await invoicesStore.assertMutable(invoiceId, "revert_conversion");
+			await invoicesStore.remove(invoiceId);
 		}
 		await execute(
 			`UPDATE quotes

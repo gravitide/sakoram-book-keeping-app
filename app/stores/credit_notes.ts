@@ -31,9 +31,9 @@ import type { ClientSnapshot, PricingMode } from "~/stores/quotes";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
+import { canTransitionCreditNote } from "~/lib/document-guards";
 import { computeLineTotals, sumCents } from "~/lib/money";
 import { allocateDocumentNumber, allocateSpecificDocumentNumber } from "~/lib/numbering";
-import { purgeDocumentAttachments } from "~/stores/document_attachments";
 import { useSettingsStore } from "~/stores/settings";
 
 export type CreditNoteStatus = "draft" | "issued" | "cancelled";
@@ -455,8 +455,14 @@ export const useCreditNotesStore = defineStore("credit_notes", () => {
 	///   draft     → cancelled    (kill before issuing)
 	///   issued    → cancelled    (void after issuing)
 	///   issued    → draft        (un-issue, e.g. correct an error)
-	///   cancelled → issued       (reopen — refund flow)
+	///   cancelled → draft        (reopen for editing)
+	/// Source of truth: CREDIT_NOTE_TRANSITIONS in ~/lib/document-guards.
 	const setStatus = async (id: number, target: CreditNoteStatus): Promise<void> => {
+		const row = await get(id);
+		if (!row) throw new Error("Credit note not found");
+		if (!canTransitionCreditNote(row.status, target)) {
+			throw new Error(`A ${row.status} credit note can't be moved to ${target}.`);
+		}
 		await execute(
 			"UPDATE credit_notes SET status = ?, updated_at = datetime('now') WHERE id = ?",
 			[target, id]
@@ -472,7 +478,6 @@ export const useCreditNotesStore = defineStore("credit_notes", () => {
 		}
 		// credit_note_lines cascade via FK ON DELETE CASCADE.
 		await execute("DELETE FROM credit_notes WHERE id = ?", [id]);
-		await purgeDocumentAttachments("credit_note", id);
 		await load();
 	};
 
@@ -480,7 +485,6 @@ export const useCreditNotesStore = defineStore("credit_notes", () => {
 		const row = await get(id);
 		if (!row) return;
 		await execute("DELETE FROM credit_notes WHERE id = ?", [id]);
-		await purgeDocumentAttachments("credit_note", id);
 		await load();
 	};
 

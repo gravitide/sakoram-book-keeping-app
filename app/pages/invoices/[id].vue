@@ -1154,10 +1154,11 @@
 			// (Delete draft button); cancelled is for voiding issued docs.
 			items.push({ label: "Send", icon: "i-lucide-send", onSelect: () => setPersistedStatus("sent") });
 		} else if (cur === "sent") {
-			// Hide Revert/Cancel once any payment has landed — the store
-			// also refuses both with a clear error, but keeping the
-			// buttons off-screen is friendlier UX.
-			if (paidCents.value === 0) {
+			// Hide Revert/Cancel once any payment OR issued credit note has
+			// landed — the store also refuses both with a clear error
+			// (assertMutable), but keeping the buttons off-screen is
+			// friendlier UX.
+			if (paidCents.value === 0 && creditedCents.value === 0) {
 				items.push({ label: "Revert to draft", icon: "i-lucide-rotate-ccw", onSelect: () => setPersistedStatus("draft") });
 				items.push({ label: "Cancel", icon: "i-lucide-ban", onSelect: () => setPersistedStatus("cancelled") });
 			}

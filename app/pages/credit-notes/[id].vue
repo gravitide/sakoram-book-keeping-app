@@ -337,6 +337,7 @@
 	import type { ClientRow } from "~/stores/clients";
 	import type { CreditNoteLineRow, CreditNoteRow, CreditNoteStatus } from "~/stores/credit_notes";
 	import type { ClientSnapshot, PricingMode } from "~/stores/quotes";
+	import { CREDIT_NOTE_TRANSITIONS } from "~/lib/document-guards";
 	import { computeLineTotals, formatLKR, sumCents } from "~/lib/money";
 	import { useClientsStore } from "~/stores/clients";
 	import { useCreditNotesStore } from "~/stores/credit_notes";
@@ -582,12 +583,10 @@
 		onSelect: () => void
 	}
 
+	// Single source of truth shared with the store, which enforces it.
 	const legalNextStates = computed<CreditNoteStatus[]>(() => {
 		const s = creditNote.value?.status;
-		if (s === "draft") return ["issued", "cancelled"];
-		if (s === "issued") return ["draft", "cancelled"];
-		if (s === "cancelled") return ["draft"];
-		return [];
+		return s ? CREDIT_NOTE_TRANSITIONS[s] : [];
 	});
 
 	const transitionLabel: Record<CreditNoteStatus, string> = {

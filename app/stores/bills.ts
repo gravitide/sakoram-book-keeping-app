@@ -488,9 +488,19 @@ export const useBillsStore = defineStore("bills", () => {
 		// vouchers — cancelling would leave money paid out against a
 		// voided bill, which is a books inconsistency. The user must
 		// delete the relevant payment vouchers first.
+		//
+		// Direct SQL, not paidCentsFor() — that helper sums the in-memory
+		// vouchers store, which reads 0 until the ledger has loaded (the
+		// detail page kicks that load off un-awaited). A guard that passes
+		// because the store is empty is no guard. Mirrors invoices/payslips.
 		if (cancelled) {
 			const row = await get(id);
-			if (row && paidCentsFor(id) >= row.total_cents && row.total_cents > 0) {
+			const paid = await selectOne<{ cents: number }>(
+				`SELECT COALESCE(SUM(amount_cents), 0) AS cents FROM vouchers
+				 WHERE related_bill_id = ? AND voucher_type = 'payment'`,
+				[id]
+			);
+			if (row && (paid?.cents ?? 0) >= row.total_cents && row.total_cents > 0) {
 				throw new Error(
 					"This bill is fully paid. Delete the payment vouchers first, then cancel."
 				);

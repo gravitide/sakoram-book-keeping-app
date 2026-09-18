@@ -113,5 +113,21 @@ console.log("\n-- cash covers full total, credit also present --");
 check("_paid", inv4._paid, 1000000);
 check("_status is paid (cash wins over credited)", inv4._status, "paid");
 
+// --- 7. invoice lifecycle guard counts (invoices.assertMutable) --------
+// Read out of the store source so the asserted SQL is the shipped SQL.
+// Fixture at this point: invoice 1 has ONE receipt voucher, ONE issued
+// linked credit note (CRN-0001) and one DRAFT linked note (CRN-0003 — must
+// not count). CRN-0002 is issued but unlinked (must not count either).
+const invSrc = readFileSync(join(REPO, "app/stores/invoices.ts"), "utf8");
+const guardSql = invSrc.match(/const links = await selectOne<[^(]*\(\s*`([\s\S]*?)`,/);
+if (!guardSql) {
+	console.error("✗ could not locate the assertMutable SQL in app/stores/invoices.ts");
+	process.exit(1);
+}
+const links = db.query(guardSql[1]!).get(1, 1) as Record<string, unknown>;
+console.log("\n-- invoice lifecycle guard (SQL read from source) --");
+check("receipts", links.receipts, 1);
+check("issued linked credit notes only", links.credit_notes, 1);
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

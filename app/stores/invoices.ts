@@ -21,11 +21,13 @@
 // from the invoice detail page — the New Voucher form prefills the
 // type, party, amount, and link, then bounces back here on save.
 
+import type { InvoiceMutation } from "~/lib/document-guards";
 import type { ClientSnapshot, PricingMode, QuoteLineRow, QuoteRow } from "~/stores/quotes";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { deriveInvoiceStatus, invoiceDerivedFrom } from "~/lib/derived-status";
+import { invoiceMutationBlocker } from "~/lib/document-guards";
 import { computeLineTotals, sumCents } from "~/lib/money";
 import { allocateDocumentNumber, allocateSpecificDocumentNumber, reserveDocumentNumber } from "~/lib/numbering";
 import { useBusinessBanksStore } from "~/stores/business_banks";
@@ -734,25 +736,33 @@ export const useInvoicesStore = defineStore("invoices", () => {
 	/// Owner-takes-responsibility: sent/cancelled → draft reopens the
 	/// document for editing. Both destructive-ish moves (cancel, revert
 	/// to draft) are refused while receipt vouchers exist — money records
-	/// are never silently orphaned; delete the vouchers first.
+	/// are never silently orphaned; delete the vouchers first. An ISSUED
+	/// credit note pins the invoice the same way (see document-guards.ts).
+
+	/// Throws when `op` must be refused for this invoice. Counts via direct
+	/// SQL, not paidCentsFor() / the credit-notes store — those sum in-memory
+	/// stores that are toothless when they haven't loaded (list pages dropped
+	/// the vouchers-store load; rows carry _paid instead). Exposed so
+	/// quotes.revertConversion can run the same check before deleting.
+	const assertMutable = async (id: number, op: InvoiceMutation): Promise<void> => {
+		const links = await selectOne<{ receipts: number, credit_notes: number }>(
+			`SELECT
+				(SELECT COUNT(*) FROM vouchers
+				 WHERE related_invoice_id = ? AND voucher_type = 'receipt') AS receipts,
+				(SELECT COUNT(*) FROM credit_notes
+				 WHERE source_invoice_id = ? AND status = 'issued') AS credit_notes`,
+			[id, id]
+		);
+		const blocker = invoiceMutationBlocker(op, {
+			receipts: links?.receipts ?? 0,
+			issuedCreditNotes: links?.credit_notes ?? 0
+		});
+		if (blocker) throw new Error(blocker);
+	};
+
 	const setStatus = async (id: number, target: InvoicePersistedStatus): Promise<void> => {
-		// Direct SQL, not paidCentsFor() — that helper sums the vouchers
-		// store, which is toothless when the store hasn't loaded (list
-		// pages dropped the vouchers-store load; rows carry _paid instead).
-		if (target === "cancelled" || target === "draft") {
-			const receipts = await selectOne<{ n: number }>(
-				`SELECT COUNT(*) AS n FROM vouchers
-				 WHERE related_invoice_id = ? AND voucher_type = 'receipt'`,
-				[id]
-			);
-			if ((receipts?.n ?? 0) > 0) {
-				throw new Error(
-					target === "cancelled"
-						? "This invoice has recorded payments. Delete the receipt vouchers first, then cancel."
-						: "This invoice has recorded payments. Delete the receipt vouchers first, then revert to draft."
-				);
-			}
-		}
+		if (target === "cancelled") await assertMutable(id, "cancel");
+		else if (target === "draft") await assertMutable(id, "revert_to_draft");
 		await execute(
 			"UPDATE invoices SET status = ?, updated_at = datetime('now') WHERE id = ?",
 			[target, id]
@@ -779,9 +789,14 @@ export const useInvoicesStore = defineStore("invoices", () => {
 	// references when foreign_keys is enabled. Linked receipt vouchers
 	// stay intact (they record real money received) — they just lose
 	// their link back to the now-deleted invoice.
+	//
+	// NOT true of credit notes: credit_notes.source_invoice_id is ON DELETE
+	// SET NULL, so deleting here would silently turn an issued credit note
+	// into an UNAPPLIED client credit. Refused — cancel the note first.
 	const remove = async (id: number): Promise<void> => {
 		const row = await get(id);
 		if (!row) return;
+		await assertMutable(id, "delete");
 		await execute(
 			"UPDATE quotes SET converted_invoice_id = NULL WHERE converted_invoice_id = ?",
 			[id]
@@ -830,6 +845,7 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		update,
 		replaceLines,
 		setStatus,
+		assertMutable,
 		deleteDraft,
 		remove,
 		buildClientSnapshot,
