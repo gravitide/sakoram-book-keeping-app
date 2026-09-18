@@ -661,6 +661,16 @@
 
 	await hydrate();
 
+	// Kept-alive page: setup (and the hydrate above) runs once, so re-hydrate
+	// on every re-activation — see useRehydrateOnActivate for what goes stale.
+	useRehydrateOnActivate({
+		isDirty: () => dirty.value,
+		exists: async () => (await store.get(templateId)) != null,
+		rehydrate: hydrate,
+		noun: "recurring invoice",
+		listRoute: "/recurring-invoices"
+	});
+
 	watch(
 		[
 			formTemplateName,

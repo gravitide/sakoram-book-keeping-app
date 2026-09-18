@@ -312,6 +312,7 @@
 	import { buildInvoicePdfPayload } from "~/lib/invoice-pdf";
 	import { andClauses, eqClause, inClause, likeClause, makeSortResolver, rangeClause } from "~/lib/list-query";
 	import { formatLKR } from "~/lib/money";
+	import { queryString } from "~/lib/route-query";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
 	import { useLicenseStore } from "~/stores/license";
@@ -366,6 +367,19 @@
 		headerStats.value = await store.fetchHeaderStats();
 	};
 
+	// Kept-alive page: useServerTable refetches the ROWS on re-activation, but
+	// these header figures were loaded in onMounted only — so after recording
+	// a payment and coming back, the row said paid while the header total
+	// didn't move. Skip the first activation (onMounted covers it).
+	let headerActivatedOnce = false;
+	onActivated(() => {
+		if (!headerActivatedOnce) {
+			headerActivatedOnce = true;
+			return;
+		}
+		void refreshStats();
+	});
+
 	const { isLoading, runLoad } = usePageLoading();
 	onMounted(() => runLoad(async () => {
 		await Promise.all([
@@ -409,15 +423,12 @@
 	// menu or calendar Create-on-this-day). Clear the query params once
 	// consumed so back/forward doesn't re-trigger and a manual "New"
 	// click later doesn't accidentally inherit the date.
-	const route = useRoute();
-	onMounted(() => {
-		if (route.query.new === "1") {
-			const issued = typeof route.query.issued === "string" ? route.query.issued : null;
-			newInvoiceIssueDate.value = issued;
-			newInvoiceOpen.value = true;
-			void router.replace({ query: { ...route.query, new: undefined, issued: undefined } });
-		}
-	});
+	// useQueryTrigger, not onMounted: this page is kept alive, so onMounted
+	// runs once per session and the shortcut would only ever work once.
+	useQueryTrigger((query) => {
+		newInvoiceIssueDate.value = queryString(query.issued);
+		newInvoiceOpen.value = true;
+	}, { consume: ["issued"] });
 	const open = (i: InvoiceRow) => router.push(`/invoices/${i.id}`);
 
 	// "All clients" sentinel + every loaded client. Includes archived

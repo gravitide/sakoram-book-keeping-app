@@ -63,3 +63,25 @@ export const CREDIT_NOTE_TRANSITIONS: Record<CreditNoteStatus, CreditNoteStatus[
 
 export const canTransitionCreditNote = (from: CreditNoteStatus, to: CreditNoteStatus): boolean =>
 	CREDIT_NOTE_TRANSITIONS[from].includes(to);
+
+// --- issued-document immutability (Golden Rule #5) -----------------------
+// Issued documents are immutable; only `notes` stays editable. Until now the
+// PAGES enforced that by hiding the form, which a stale kept-alive page
+// defeats: open a draft, edit a line, mark it Sent from the list row, come
+// back — the cached page still believes it's a draft (re-hydration is skipped
+// while dirty, to preserve edits) and Save rewrote the SENT document.
+
+/// Columns that stay editable after a document leaves `draft`.
+export const EDITABLE_WHEN_ISSUED: readonly string[] = ["notes"];
+
+/// The subset of `fields` that may NOT be written given the document's
+/// persisted status. Empty = the write is allowed.
+export const lockedFieldsIn = (status: string, fields: string[]): string[] =>
+	status === "draft" ? [] : fields.filter((f) => !EDITABLE_WHEN_ISSUED.includes(f));
+
+/// Throw the user-facing refusal when a write would touch locked fields.
+export const assertEditable = (noun: string, status: string, fields: string[]): void => {
+	if (lockedFieldsIn(status, fields).length > 0) {
+		throw new Error(`This ${noun} has been issued (${status}) — only its notes can be edited. Revert it to draft to change anything else.`);
+	}
+};

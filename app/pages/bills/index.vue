@@ -434,6 +434,7 @@
 	import { andClauses, eqClause, inClause, likeClause, makeSortResolver, rangeClause } from "~/lib/list-query";
 	import { formatLKR } from "~/lib/money";
 	import { resolveProtectPassword } from "~/lib/pdf";
+	import { queryString } from "~/lib/route-query";
 	import { themeHex } from "~/lib/theme";
 	import { useBillCategoriesStore } from "~/stores/bill_categories";
 	import { useBillsStore } from "~/stores/bills";
@@ -494,6 +495,19 @@
 		headerStats.value = await store.fetchHeaderStats();
 	};
 
+	// Kept-alive page: useServerTable refetches the ROWS on re-activation, but
+	// these header figures were loaded in onMounted only — so after recording
+	// a payment and coming back, the row said paid while the header total
+	// didn't move. Skip the first activation (onMounted covers it).
+	let headerActivatedOnce = false;
+	onActivated(() => {
+		if (!headerActivatedOnce) {
+			headerActivatedOnce = true;
+			return;
+		}
+		void refreshStats();
+	});
+
 	const { isLoading, runLoad } = usePageLoading();
 	onMounted(() => runLoad(async () => {
 		await Promise.all([
@@ -526,15 +540,12 @@
 			void refreshStats();
 		}
 	});
-	const route = useRoute();
-	onMounted(() => {
-		if (route.query.new === "1") {
-			const issued = typeof route.query.issued === "string" ? route.query.issued : null;
-			newBillIssueDate.value = issued;
-			newBillOpen.value = true;
-			void router.replace({ query: { ...route.query, new: undefined, issued: undefined } });
-		}
-	});
+	// useQueryTrigger, not onMounted: this page is kept alive, so onMounted
+	// runs once per session and the shortcut would only ever work once.
+	useQueryTrigger((query) => {
+		newBillIssueDate.value = queryString(query.issued);
+		newBillOpen.value = true;
+	}, { consume: ["issued"] });
 
 	const vendorOptions = computed<{ label: string, value: number | "all" }[]>(() => [
 		{ label: "All vendors", value: "all" },

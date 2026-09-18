@@ -729,6 +729,16 @@
 
 	await hydrate();
 
+	// Kept-alive page: setup (and the hydrate above) runs once, so re-hydrate
+	// on every re-activation — see useRehydrateOnActivate for what goes stale.
+	useRehydrateOnActivate({
+		isDirty: () => dirty.value,
+		exists: async () => (await store.get(billId)) != null,
+		rehydrate: hydrate,
+		noun: "bill",
+		listRoute: "/bills"
+	});
+
 	// Mark dirty when any directly v-model'd form field changes. Registered
 	// after the initial hydrate; hydrating-flag guards re-hydrate paths.
 	watch(

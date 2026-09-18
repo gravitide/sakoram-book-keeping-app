@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
 	canTransitionCreditNote,
 	CREDIT_NOTE_TRANSITIONS,
-	invoiceMutationBlocker
+	invoiceMutationBlocker,
+	lockedFieldsIn
 } from "./document-guards";
 
 describe("invoiceMutationBlocker", () => {
@@ -59,5 +60,25 @@ describe("credit note transitions", () => {
 		expect(canTransitionCreditNote("draft", "issued")).toBe(true);
 		expect(canTransitionCreditNote("issued", "cancelled")).toBe(true);
 		expect(canTransitionCreditNote("cancelled", "draft")).toBe(true);
+	});
+});
+
+// Golden Rule #5: issued documents are immutable; only `notes` stays
+// editable. The pages enforce it by hiding the form — but a kept-alive page
+// holding a stale "draft" copy of a document that was issued from the list
+// row would happily Save over it. The stores now refuse.
+describe("lockedFieldsIn", () => {
+	it("lets a draft change anything", () => {
+		expect(lockedFieldsIn("draft", ["issue_date", "total_cents", "notes"])).toEqual([]);
+	});
+
+	it("lets an issued document change notes only", () => {
+		expect(lockedFieldsIn("sent", ["notes"])).toEqual([]);
+		expect(lockedFieldsIn("issued", ["notes"])).toEqual([]);
+	});
+
+	it("names every other field touched on an issued document", () => {
+		expect(lockedFieldsIn("sent", ["notes", "due_date", "total_cents"])).toEqual(["due_date", "total_cents"]);
+		expect(lockedFieldsIn("cancelled", ["project_title"])).toEqual(["project_title"]);
 	});
 });

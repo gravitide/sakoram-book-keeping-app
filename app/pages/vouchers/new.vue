@@ -401,19 +401,28 @@
 	// blank until the next visit. A watch fires after the route ref
 	// updates, so applyPrefill always sees the current query. A stable
 	// string key means it fires only when one of these params changes.
+	//
+	// Seeds synchronously, then — when a document is linked — reloads the
+	// stores the balance is derived from and seeds again. A document (or a
+	// voucher / credit note against it) created since this cached page last
+	// loaded isn't in the stores yet.
+	const reseed = () => {
+		applyPrefill();
+		if (prefilled.value) {
+			void Promise.all([
+				store.load(),
+				invoicesStore.load(),
+				billsStore.load(),
+				payslipsStore.load(),
+				useCreditNotesStore().load()
+			])
+				.then(applyPrefill)
+				.catch(() => { /* non-fatal — keep the sync seed */ });
+		}
+	};
 	watch(
 		() => `${route.query.invoice ?? ""}|${route.query.bill ?? ""}|${route.query.payslip ?? ""}|${route.query.date ?? ""}`,
-		() => {
-			applyPrefill();
-			// A document created since this (cached) page last loaded won't
-			// be in the stores; when we arrived with a prefill, reload the
-			// relevant stores and re-seed so it can be found + linked.
-			if (prefilledInvoiceId.value || prefilledBillId.value || prefilledPayslipId.value) {
-				void Promise.all([invoicesStore.load(), billsStore.load(), payslipsStore.load()])
-					.then(applyPrefill)
-					.catch(() => { /* non-fatal — keep the sync seed */ });
-			}
-		}
+		reseed
 	);
 
 	// Editable voucher number with live uniqueness check. The page is
@@ -431,8 +440,22 @@
 	// previous (now consumed) number with no "already in use" warning
 	// (the uniqueness watcher only fires on change). Re-seed to the
 	// fresh next number on every re-entry.
+	//
+	// Same-document re-entry: "Record payment" twice on ONE invoice arrives
+	// with an identical query, so the watch above never fires and the form
+	// would still hold the previous voucher's amount + reference. Re-seed on
+	// activation when a document is linked. (If the query DID change and
+	// isn't settled yet, this seeds from the old one and the watch then
+	// corrects it — last write wins, and it reads the settled query.)
+	// A plain /vouchers/new keeps a half-typed form across navigation.
+	let firstActivation = true;
 	onActivated(() => {
 		void docNum.refresh();
+		if (firstActivation) {
+			firstActivation = false; // setup already seeded + loaded
+			return;
+		}
+		if (prefilled.value) reseed();
 	});
 
 	// Voucher type rendered as two selectable tiles (not a dropdown) —
@@ -691,6 +714,10 @@
 			} else {
 				await router.replace(`/vouchers/${id}`);
 			}
+			// This instance stays cached. Reset it now that we've navigated
+			// away, or the next plain "New voucher" reopens with the voucher
+			// just saved still typed in — one click from a duplicate.
+			applyPrefill();
 		} catch (err) {
 			toast.add({
 				title: "Could not create voucher",

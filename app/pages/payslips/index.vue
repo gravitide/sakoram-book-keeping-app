@@ -363,6 +363,7 @@
 	import { formatMoney } from "~/lib/money";
 	import { buildPayslipPdfPayload } from "~/lib/payslip-pdf";
 	import { resolveProtectPassword } from "~/lib/pdf";
+	import { queryInt, withoutQueryKeys } from "~/lib/route-query";
 	import { useEmployeesStore } from "~/stores/employees";
 	import { useLicenseStore } from "~/stores/license";
 	import { monthBounds, usePayslipsStore } from "~/stores/payslips";
@@ -417,6 +418,19 @@
 		availableMonths.value = await store.fetchAvailableMonths();
 	};
 
+	// Kept-alive page: useServerTable refetches the ROWS on re-activation, but
+	// these header figures were loaded in onMounted only — so after recording
+	// a payment and coming back, the row said paid while the header total
+	// didn't move. Skip the first activation (onMounted covers it).
+	let headerActivatedOnce = false;
+	onActivated(() => {
+		if (!headerActivatedOnce) {
+			headerActivatedOnce = true;
+			return;
+		}
+		void refreshStats();
+	});
+
 	// Loading state owned by `usePageLoading` — see the composable for
 	// the rAF-yield trick that ensures the skeleton actually paints.
 	const { isLoading, runLoad } = usePageLoading();
@@ -430,15 +444,28 @@
 
 	// Optional ?employee=ID query — used by the "View payslips" action on
 	// the employees list to land here pre-filtered to that employee.
-	const queryEmployeeId = (() => {
-		const raw = route.query.employee;
-		const v = Array.isArray(raw) ? raw[0] : raw;
-		const n = v ? Number(v) : Number.NaN;
-		return Number.isFinite(n) ? n : null;
-	})();
-	if (queryEmployeeId !== null) {
-		store.employeeFilter = queryEmployeeId;
-	}
+	//
+	// A WATCH, not a one-off read: this page is kept alive, so a value read
+	// once in setup stays frozen at the FIRST employee ever linked here — the
+	// URL would say ?employee=7 while the list stayed filtered to employee 3.
+	// The param is CONSUMED (stripped from the URL) once applied, so clicking
+	// "View payslips" for the same employee twice still re-applies the filter
+	// — an unchanged query value would never re-fire the watch. When ?new=1
+	// rides along, useQueryTrigger below strips both params instead.
+	const applyEmployeeQuery = () => {
+		const id = queryInt(route.query.employee);
+		if (id === null) return;
+		store.employeeFilter = id;
+		if (route.query.new !== "1") {
+			void router.replace({ query: withoutQueryKeys(route.query, ["employee"]) });
+		}
+	};
+	// Set the filter synchronously on first load so the table's first fetch
+	// is already filtered (no unfiltered flash); the URL strip waits for mount.
+	const initialEmployeeId = queryInt(route.query.employee);
+	if (initialEmployeeId !== null) store.employeeFilter = initialEmployeeId;
+	onMounted(applyEmployeeQuery);
+	watch(() => route.query.employee, applyEmployeeQuery);
 
 	// New-payslip modal state. Opened by the New button or the
 	// dashboard / employees-list shortcut routes (`?new=1`, optionally
@@ -460,12 +487,12 @@
 			void refreshStats();
 		}
 	});
-	onMounted(() => {
-		if (route.query.new === "1") {
-			openNewPayslip(queryEmployeeId);
-			void router.replace({ query: { ...route.query, new: undefined } });
-		}
-	});
+	// useQueryTrigger, not onMounted (kept-alive page — see the composable).
+	// The employee id is read from the query AT TRIGGER TIME so the preselect
+	// is the employee just clicked, not the first one of the session.
+	useQueryTrigger((query) => {
+		openNewPayslip(queryInt(query.employee));
+	}, { consume: ["employee"] });
 
 	const tableRef = ref<{ autoFit: () => void } | null>(null);
 	const autoFitColumns = () => tableRef.value?.autoFit();

@@ -519,6 +519,21 @@
 		baseline.value = formSnapshot.value;
 	};
 
+	// Kept-alive page: setup (and the hydrate above) runs once, so re-hydrate
+	// on every re-activation — see useRehydrateOnActivate for what goes stale.
+	// (Below `dirty` because that's a computed declared after hydrate; and it
+	// re-baselines, exactly like every other hydrate call on this page.)
+	useRehydrateOnActivate({
+		isDirty: () => dirty.value,
+		exists: async () => (await store.get(payslipId)) != null,
+		rehydrate: async () => {
+			await hydrate();
+			refreshBaseline();
+		},
+		noun: "payslip",
+		listRoute: "/payslips"
+	});
+
 	const derived = computed(() => row.value ? store.derivedStatus(row.value) : "draft");
 	const locked = computed(() => row.value?.status !== "draft");
 

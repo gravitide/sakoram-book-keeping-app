@@ -27,7 +27,7 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { execute, select, selectOne } from "~/lib/db";
 import { deriveInvoiceStatus, invoiceDerivedFrom } from "~/lib/derived-status";
-import { invoiceMutationBlocker } from "~/lib/document-guards";
+import { assertEditable, invoiceMutationBlocker } from "~/lib/document-guards";
 import { computeLineTotals, sumCents } from "~/lib/money";
 import { allocateDocumentNumber, allocateSpecificDocumentNumber, reserveDocumentNumber } from "~/lib/numbering";
 import { useBusinessBanksStore } from "~/stores/business_banks";
@@ -649,6 +649,11 @@ export const useInvoicesStore = defineStore("invoices", () => {
 	const update = async (id: number, patch: InvoiceUpdate): Promise<void> => {
 		const cols = UPDATABLE.filter((c) => Object.hasOwn(patch, c));
 		if (cols.length === 0) return;
+		// Golden Rule #5, enforced here and not only by the page hiding the
+		// form — a stale kept-alive page can still hold a "draft" copy of a
+		// document that was issued elsewhere. See assertEditable.
+		const current = await get(id);
+		if (current) assertEditable("invoice", current.status, cols);
 		const setClause = cols.map((c) => `${c} = ?`).join(", ");
 		const params: unknown[] = cols.map((c) => patch[c] ?? null);
 		// Keep `client_name` in lockstep with the snapshot. The patch
@@ -686,6 +691,9 @@ export const useInvoicesStore = defineStore("invoices", () => {
 		invoiceId: number,
 		lines: InvoiceLineDraft[]
 	): Promise<{ subtotal_cents: number, tax_cents: number, total_cents: number }> => {
+		// Lines are part of the issued document — refuse on non-drafts.
+		const current = await get(invoiceId);
+		if (current) assertEditable("invoice", current.status, ["lines"]);
 		const computed = lines.map((l) => ({
 			...l,
 			...computeLineTotals(l.quantity_milli, l.unit_price_cents, l.tax_rate_basis_points)

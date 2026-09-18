@@ -225,6 +225,19 @@
 	const refreshStats = async () => {
 		clientStats.value = await store.fetchClientStats();
 	};
+
+	// Kept-alive page: useServerTable refetches the ROWS on re-activation, but
+	// these header figures were loaded in onMounted only — so after recording
+	// a payment and coming back, the row said paid while the header total
+	// didn't move. Skip the first activation (onMounted covers it).
+	let headerActivatedOnce = false;
+	onActivated(() => {
+		if (!headerActivatedOnce) {
+			headerActivatedOnce = true;
+			return;
+		}
+		void refreshStats();
+	});
 	onMounted(refreshStats);
 
 	const hasFilter = computed(() => store.search.trim() !== "" || store.showArchived || store.outstandingOnly);

@@ -484,12 +484,29 @@
 
 	await hydrate();
 
+	// Kept-alive page: setup (and the hydrate above) runs once, so re-hydrate
+	// on every re-activation — see useRehydrateOnActivate for what goes stale.
+	useRehydrateOnActivate({
+		isDirty: () => dirty.value,
+		exists: async () => (await creditNotesStore.get(creditNoteId)) != null,
+		rehydrate: hydrate,
+		noun: "credit note",
+		listRoute: "/credit-notes"
+	});
+
 	watch(
 		[formProjectTitle, formIssueDate, formNotes, formTitleOverride, formSourceInvoiceId, vatRatePct, bundleSubtotalCents],
 		() => {
 			if (editable.value && !hydrating.value) dirty.value = true;
 		}
 	);
+	// Notes are the ONE field that stays editable after issue (Golden Rule
+	// #5). The watcher above is draft-only, so notes typed on an issued
+	// credit note never raised the save bar and were silently lost on
+	// navigation — even though the editor was (deliberately) left enabled.
+	watch(formNotes, () => {
+		if (!editable.value && !hydrating.value) dirty.value = true;
+	});
 
 	const computedTotals = computed(() => {
 		if (pricingMode.value === "itemized") {
@@ -530,10 +547,18 @@
 	};
 
 	const save = async () => {
-		if (!creditNote.value || !editable.value) return;
+		if (!creditNote.value) return;
 		if (licLocked.value) return;
 		saving.value = true;
 		try {
+			if (!editable.value) {
+				// Issued / cancelled: persist notes and nothing else. The store
+				// refuses any other column on a non-draft (assertEditable).
+				await creditNotesStore.update(creditNoteId, { notes: formNotes.value || null });
+				await hydrate();
+				toast.add({ title: "Notes saved", color: "success", icon: "i-lucide-check" });
+				return;
+			}
 			const totalsFromLines = await creditNotesStore.replaceLines(creditNoteId, lines.value);
 			const bp = Math.round(vatRatePct.value * 100);
 			const subtotal = pricingMode.value === "itemized"

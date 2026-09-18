@@ -340,11 +340,16 @@
 		banksStore.ensureLoaded()
 	]);
 
+	// Guards the dirty watcher below. Watch callbacks flush AFTER hydrate's
+	// synchronous `dirty = false`, so without this every hydrate that changed
+	// a field (Cancel edit, keep-alive re-hydration) left the page dirty.
+	const hydrating = ref(false);
 	const hydrate = async () => {
 		const row = await store.get(voucherId);
 		if (!row) {
 			throw createError({ statusCode: 404, statusMessage: "Voucher not found" });
 		}
+		hydrating.value = true;
 		voucher.value = row;
 		voucherDate.value = row.voucher_date;
 		partyName.value = row.party_name;
@@ -357,11 +362,29 @@
 		relatedPayslipId.value = row.related_payslip_id;
 		bankId.value = row.business_bank_id;
 		dirty.value = false;
+		await nextTick();
+		hydrating.value = false;
 	};
 
 	await hydrate();
 
+	// Kept-alive page: setup (and the hydrate above) runs once, so re-hydrate
+	// on every re-activation — see useRehydrateOnActivate for what goes stale.
+	useRehydrateOnActivate({
+		isDirty: () => dirty.value,
+		exists: async () => (await store.get(voucherId)) != null,
+		// Not dirty here, so nothing is lost: drop back to the read-only view
+		// rather than reopening in an edit mode left on from an earlier visit.
+		rehydrate: async () => {
+			await hydrate();
+			editing.value = false;
+		},
+		noun: "voucher",
+		listRoute: "/vouchers"
+	});
+
 	watch([voucherDate, partyName, amountCents, method, reference, description, relatedInvoiceId, relatedBillId, relatedPayslipId, bankId], () => {
+		if (hydrating.value) return;
 		dirty.value = true;
 	}, { deep: true });
 
