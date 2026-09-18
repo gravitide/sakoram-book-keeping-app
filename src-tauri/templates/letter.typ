@@ -20,7 +20,7 @@
 
 #set document(
   title: if data.number != none { data.number } else { "Letter" },
-  author: data.business_name,
+  author: if data.business_name != none { data.business_name } else { () },
 )
 
 #let chosen-font = if "font_family" in data and data.font_family != none { data.font_family } else { "Akt" }

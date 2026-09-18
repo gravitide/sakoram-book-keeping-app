@@ -10,11 +10,15 @@
 // `logo.<ext>`. Both are read relative to the project root which Rust
 // sets to that working dir.
 
-#import "common.typ": header-logo
+// SELECTIVE import (a wildcard would shadow this file's local label/faint).
+// render-blocks is for the opt-in custom footer (settings → PDF → Header &
+// footer): the builders always sent `footer_blocks`, but this template
+// hard-coded its footer line, so the custom text was silently ignored here.
+#import "common.typ": header-logo, render-blocks
 
 #let data = json("data.json")
 
-#set document(title: data.title, author: data.business_name)
+#set document(title: data.title, author: if data.business_name != none { data.business_name } else { () })
 // Landscape A4 — statements lean on a wide 7-column invoice table
 // (number / issued / due / total / paid / balance / status). Portrait
 // squeezed the Balance column hard enough to wrap the totals-row
@@ -31,9 +35,13 @@
     #grid(
       columns: (1fr, auto),
       align(left, text(size: 8pt, fill: rgb("#6b7280"))[
-        #if data.business_name != none [#data.business_name]
-        #if data.website != none [ | #data.website]
-        #if data.phone != none [ | #data.phone]
+        #if data.at("footer_blocks", default: ()).len() > 0 {
+          render-blocks(data.footer_blocks, default-align: "left", spacing: 2pt)
+        } else [
+          #if data.business_name != none [#data.business_name]
+          #if data.website != none [ | #data.website]
+          #if data.phone != none [ | #data.phone]
+        ]
       ]),
       align(right, text(size: 8pt, fill: rgb("#6b7280"))[
         Page #context counter(page).display() of #context counter(page).final().first()

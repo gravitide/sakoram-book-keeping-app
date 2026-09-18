@@ -208,7 +208,7 @@
 						<UTextarea
 							v-model="form.notes"
 							:rows="3"
-							placeholder="Optional internal note for this payslip — not printed unless you copy it onto the PDF."
+							placeholder="Optional note — this is PRINTED on the payslip the employee receives."
 							class="w-full"
 						/>
 					</UFormField>

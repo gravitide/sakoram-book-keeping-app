@@ -11,9 +11,9 @@
 
 import type { CompanySettingsRow } from "~/stores/settings";
 import type { VoucherMethod, VoucherRow } from "~/stores/vouchers";
-import { formatLKR } from "~/lib/money";
-import { buildFooterBlocks } from "~/lib/pdf-chrome";
-import { pdfThemeHex } from "~/lib/theme";
+import { formatLKR } from "./money";
+import { buildFooterBlocks } from "./pdf-chrome";
+import { pdfThemeHex } from "./theme";
 
 export interface VoucherPdfArgs {
 	row: VoucherRow

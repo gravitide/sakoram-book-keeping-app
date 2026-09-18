@@ -19,9 +19,9 @@ import type { BusinessBankRow } from "~/stores/business_banks";
 import type { ClientRow } from "~/stores/clients";
 import type { InvoiceRow } from "~/stores/invoices";
 import type { CompanySettingsRow } from "~/stores/settings";
-import { formatMoney } from "~/lib/money";
-import { buildFooterBlocks } from "~/lib/pdf-chrome";
-import { pdfThemeHex } from "~/lib/theme";
+import { formatMoney } from "./money";
+import { buildFooterBlocks } from "./pdf-chrome";
+import { pdfThemeHex } from "./theme";
 
 // One row in the statement's invoice table.
 interface StatementRow {
