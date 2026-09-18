@@ -111,6 +111,7 @@ pub fn run() {
 			phone_upload::cancel_phone_upload,
 			phone_upload::import_document_attachment,
 			phone_upload::clear_document_attachments,
+			phone_upload::remove_document_attachment,
 			vault_fs::tenant_lock_state,
 			vault_fs::enable_tenant_encryption,
 			vault_fs::unlock_tenant,

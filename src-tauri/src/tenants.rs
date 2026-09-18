@@ -283,14 +283,125 @@ fn now_iso() -> String {
 /// de-duplicated with " (2)", " (3)"… if that name is already taken. Returns
 /// the created folder path. Race-safe within a single process (create then
 /// bump on collision).
+// ---------- Portable paths --------------------------------------------------
+//
+// A business folder is a portable "document" — but three columns store
+// ABSOLUTE paths: `document_attachments.file_path`, and
+// `company_settings.pdf_header_logo_path` / `logo_path`. Move the folder (or
+// open it on another machine) and the letterhead vanished from PDFs, every
+// attachment 404'd, and an export made afterwards silently contained none of
+// the files. Import already rewrote these; Open never did.
+//
+// The layout inside a folder is fixed, so the right location is always
+// derivable from the basename. We re-point a row only when the file actually
+// EXISTS at the derived location — never inventing a path for a file that
+// isn't there.
+
+/// `<new_dir>/<basename(old)>`, splitting on either separator so a path
+/// written on Windows still resolves when the folder is opened on macOS.
+fn relocated_path(old: &str, new_dir: &Path) -> Option<PathBuf> {
+	let base = old.rsplit(['/', '\\']).next()?.trim();
+	if base.is_empty() {
+		return None;
+	}
+	Some(new_dir.join(base))
+}
+
+/// Re-point every stored absolute path at this folder. Cheap when nothing
+/// moved: rows that already match are skipped on a string compare.
+async fn relocate_stored_paths(db: &Path, folder: &Path) -> Result<(), String> {
+	let url = format!("sqlite:{}", db.to_string_lossy());
+	let opts = SqliteConnectOptions::from_str(&url).map_err(|e| e.to_string())?;
+	let pool = SqlitePool::connect_with(opts).await.map_err(|e| e.to_string())?;
+
+	let result = async {
+		for (column, dir) in [("pdf_header_logo_path", folder.to_path_buf()), ("logo_path", folder.join("logos"))] {
+			let row: Option<(Option<String>,)> =
+				sqlx::query_as(&format!("SELECT {column} FROM company_settings WHERE id = 1"))
+					.fetch_optional(&pool)
+					.await
+					.map_err(|e| format!("read {column}: {e}"))?;
+			let Some((Some(old),)) = row else { continue };
+			let Some(new) = relocated_path(&old, &dir) else { continue };
+			let new_str = new.to_string_lossy().to_string();
+			if new_str != old && new.exists() {
+				sqlx::query(&format!("UPDATE company_settings SET {column} = ? WHERE id = 1"))
+					.bind(&new_str)
+					.execute(&pool)
+					.await
+					.map_err(|e| format!("relocate {column}: {e}"))?;
+			}
+		}
+
+		let rows: Vec<(i64, String, i64, String)> =
+			sqlx::query_as("SELECT id, document_type, document_id, file_path FROM document_attachments")
+				.fetch_all(&pool)
+				.await
+				.map_err(|e| format!("read attachments: {e}"))?;
+		for (id, dtype, did, old) in rows {
+			let dir = folder.join("attachments").join(&dtype).join(did.to_string());
+			let Some(new) = relocated_path(&old, &dir) else { continue };
+			let new_str = new.to_string_lossy().to_string();
+			if new_str != old && new.exists() {
+				sqlx::query("UPDATE document_attachments SET file_path = ? WHERE id = ?")
+					.bind(&new_str)
+					.bind(id)
+					.execute(&pool)
+					.await
+					.map_err(|e| format!("relocate attachment {id}: {e}"))?;
+			}
+		}
+		Ok::<(), String>(())
+	}
+	.await;
+
+	pool.close().await;
+	result
+}
+
+/// A legal, single path segment for a business folder. Mirrors the JS
+/// `safeFolderName` (app/lib/safe-folder-name.ts) rule for rule, so a name the
+/// frontend already sanitised passes through unchanged.
+///
+/// It exists on the Rust side because not every caller goes through JS:
+/// import-as-new takes the business name straight from a backup's manifest.
+/// Unsanitised, `A/B Traders` nested a directory, `CON` failed with a raw OS
+/// error, and a crafted `..\..\x` escaped the parent folder the user picked.
+fn safe_folder_name(name: &str) -> String {
+	const RESERVED: &[&str] = &[
+		"con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8",
+		"com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+	];
+	// Control chars dropped; Windows-illegal path chars → hyphen.
+	let mapped: String = name
+		.chars()
+		.filter(|c| (*c as u32) >= 32)
+		.map(|c| if r#"\/:*?"<>|"#.contains(c) { '-' } else { c })
+		.collect();
+	// Collapse whitespace runs to a single space.
+	let collapsed = mapped.split_whitespace().collect::<Vec<_>>().join(" ");
+	// No trailing dots/spaces (Windows), no leading/trailing hyphens.
+	let trimmed = collapsed.trim_end_matches(['.', ' ']).trim_matches('-');
+	let capped: String = trimmed.chars().take(64).collect();
+	let mut s = capped.trim_end_matches(['.', ' ', '-']).to_string();
+
+	if RESERVED.contains(&s.to_lowercase().as_str()) {
+		s.push('_');
+	}
+	// `.` / `..` are the two segments that would still walk the tree.
+	if s.is_empty() || s.chars().all(|c| c == '.') {
+		s = "business".to_string();
+	}
+	s
+}
+
 fn create_business_folder(parent_dir: &str, folder_name: &str) -> Result<PathBuf, String> {
 	if parent_dir.trim().is_empty() {
 		return Err("A location for the business folder is required.".into());
 	}
-	let base = {
-		let f = folder_name.trim();
-		if f.is_empty() { "business".to_string() } else { f.to_string() }
-	};
+	// Sanitised HERE, not at each call site — the folder must be a direct
+	// child of `parent_dir` no matter who supplied the name.
+	let base = safe_folder_name(folder_name);
 	let parent = PathBuf::from(parent_dir);
 	let mut folder = parent.join(&base);
 	let mut n = 2;
@@ -733,6 +844,15 @@ pub async fn ensure_tenant_db(app: AppHandle, id: String) -> Result<String, Stri
 	// `encrypted` flag; this is the backstop for when that flag is wrong.
 	guard_locked_vault(&path, &tenant_enc_path(&app, &id)?)?;
 	run_migrations(&path).await?;
+	// Heal absolute paths if the folder moved. Here rather than in
+	// `open_tenant` because this also runs right after an encrypted business
+	// is unlocked — at Open time its db doesn't exist yet. Best-effort: a
+	// failure must never stop the business from opening.
+	if let Some(folder) = path.parent() {
+		if let Err(e) = relocate_stored_paths(&path, folder).await {
+			eprintln!("relocate_stored_paths: {e}");
+		}
+	}
 	// Business DBs live at arbitrary user-chosen paths, so we hand plugin-sql
 	// an absolute sqlite URL rather than an app-data-relative one.
 	Ok(format!("sqlite:{}", path.to_string_lossy()))
@@ -894,8 +1014,9 @@ pub fn get_tenant(app: &AppHandle, id: &str) -> Result<Tenant, String> {
 
 /// Create a fresh business folder + registry entry for an IMPORT "new" flow.
 /// Mirrors `create_tenant` but takes `&AppHandle` directly (data_io calls it
-/// without a command round-trip). The folder name is derived from `name` via
-/// `slugify` (import has no separate JS-sanitized folder name), then de-duped.
+/// without a command round-trip). Import has no JS-sanitised folder name, so
+/// the raw business name goes to `create_business_folder`, which sanitises it
+/// (`safe_folder_name`) and de-dupes. (`slugify` is for the tenant ID only.)
 pub async fn create_tenant_internal(
 	app: &AppHandle,
 	name: &str,
@@ -995,6 +1116,101 @@ mod tests {
 			created_at: now_iso(),
 			encrypted: false,
 		}
+	}
+
+	// Import-as-new passed the RAW business name from the backup manifest as
+	// the folder name. "A/B Traders" nested a directory, "CON" failed with a
+	// raw OS error, and a crafted `..\..\x` escaped the parent the user chose.
+	#[test]
+	fn safe_folder_name_neutralises_path_separators_and_traversal() {
+		assert_eq!(safe_folder_name("A/B Traders"), "A-B Traders");
+		assert_eq!(safe_folder_name("Acme: Ltd"), "Acme- Ltd");
+		let escaped = safe_folder_name(r"..\..\x");
+		assert!(!escaped.contains('\\') && !escaped.contains('/'), "got {escaped}");
+		assert_ne!(escaped, "..", "a bare parent-dir segment must never survive");
+	}
+
+	#[test]
+	fn safe_folder_name_handles_reserved_empty_and_trailing_dots() {
+		assert_eq!(safe_folder_name("CON"), "CON_");
+		assert_eq!(safe_folder_name("com1"), "com1_");
+		assert_eq!(safe_folder_name("   "), "business");
+		assert_eq!(safe_folder_name("///"), "business");
+		assert_eq!(safe_folder_name("Acme Ltd."), "Acme Ltd");
+		assert_eq!(safe_folder_name("Plain Name"), "Plain Name");
+	}
+
+	#[test]
+	fn create_business_folder_stays_inside_the_parent() {
+		let parent = temp_folder("folder-parent");
+		let made = create_business_folder(parent.to_str().unwrap(), r"..\..\evil/x").unwrap();
+		assert_eq!(made.parent().unwrap(), parent.as_path(), "folder must be a direct child of the chosen parent");
+		std::fs::remove_dir_all(&parent).ok();
+	}
+
+	// A business folder is meant to be portable, but three columns store
+	// ABSOLUTE paths. Move the folder and the letterhead vanished from PDFs,
+	// every attachment 404'd, and exports silently skipped the files.
+	#[test]
+	fn relocated_path_keeps_the_basename_whatever_the_old_separator() {
+		let dir = Path::new("new").join("attachments");
+		assert_eq!(relocated_path(r"D:\Biz\Acme\attachments\invoice\7\scan.png", &dir), Some(dir.join("scan.png")));
+		assert_eq!(relocated_path("/Users/x/Acme/attachments/invoice/7/scan.png", &dir), Some(dir.join("scan.png")));
+		assert_eq!(relocated_path("", &dir), None);
+		assert_eq!(relocated_path(r"D:\Biz\", &dir), None);
+	}
+
+	#[test]
+	fn relocate_stored_paths_repoints_files_that_exist_in_the_new_folder() {
+		let folder = temp_folder("relocate");
+		let db = folder.join("business.db");
+		let att_dir = folder.join("attachments").join("invoice").join("7");
+		std::fs::create_dir_all(&att_dir).unwrap();
+		std::fs::write(att_dir.join("scan.png"), b"img").unwrap();
+		std::fs::write(folder.join("pdf-header.png"), b"img").unwrap();
+
+		tauri::async_runtime::block_on(async {
+			run_migrations(&db).await.unwrap();
+			seed_fresh_tenant(&db, "Acme").await.unwrap();
+			let pool = SqlitePool::connect(&format!("sqlite:{}", db.to_string_lossy())).await.unwrap();
+			sqlx::query("UPDATE company_settings SET pdf_header_logo_path = ? WHERE id = 1")
+				.bind(r"D:\Old\Acme\pdf-header.png")
+				.execute(&pool)
+				.await
+				.unwrap();
+			for (name, id) in [("scan.png", 7), ("gone.png", 8)] {
+				sqlx::query(
+					"INSERT INTO document_attachments (document_type, document_id, file_path, filename, size_bytes, mime)
+					 VALUES ('invoice', ?, ?, ?, 3, 'image/png')",
+				)
+				.bind(id)
+				.bind(format!(r"D:\Old\Acme\attachments\invoice\{id}\{name}"))
+				.bind(name)
+				.execute(&pool)
+				.await
+				.unwrap();
+			}
+			pool.close().await;
+
+			relocate_stored_paths(&db, &folder).await.unwrap();
+
+			let pool = SqlitePool::connect(&format!("sqlite:{}", db.to_string_lossy())).await.unwrap();
+			let header: (Option<String>,) =
+				sqlx::query_as("SELECT pdf_header_logo_path FROM company_settings WHERE id = 1").fetch_one(&pool).await.unwrap();
+			assert_eq!(header.0.as_deref(), Some(folder.join("pdf-header.png").to_string_lossy().as_ref()));
+
+			let moved: (String,) =
+				sqlx::query_as("SELECT file_path FROM document_attachments WHERE document_id = 7").fetch_one(&pool).await.unwrap();
+			assert_eq!(moved.0, att_dir.join("scan.png").to_string_lossy());
+
+			// No file at the new location → leave the row alone rather than
+			// inventing a path; the old one may still be valid (folder COPIED).
+			let kept: (String,) =
+				sqlx::query_as("SELECT file_path FROM document_attachments WHERE document_id = 8").fetch_one(&pool).await.unwrap();
+			assert_eq!(kept.0, r"D:\Old\Acme\attachments\invoice\8\gone.png");
+			pool.close().await;
+		});
+		std::fs::remove_dir_all(&folder).ok();
 	}
 
 	#[test]

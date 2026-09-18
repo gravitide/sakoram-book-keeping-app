@@ -56,9 +56,13 @@ export const useHelpWindow = () => {
 		// via a Tauri event the layout listens for).
 		const existing = await WebviewWindow.getByLabel(HELP_WINDOW_LABEL);
 		if (existing) {
-			await existing.show();
-			await existing.unminimize();
-			await existing.setFocus();
+			// Surfacing is best-effort and must never block the navigate below.
+			// These three need core:window:allow-{show,unminimize,set-focus} —
+			// they were missing from capabilities/main.json, so the SECOND click
+			// on Help rejected here and the topic never changed.
+			await existing.show().catch(() => {});
+			await existing.unminimize().catch(() => {});
+			await existing.setFocus().catch(() => {});
 			if (slug) {
 				await existing.emit("help:navigate", { slug });
 			} else {
