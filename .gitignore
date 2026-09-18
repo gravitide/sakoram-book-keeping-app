@@ -33,3 +33,9 @@ src-tauri/binaries/*.exe
 *.signing.key
 license-signing.key
 *.lic
+
+# Per-tool agent hook files written by locally installed skills (e.g. the
+# impeccable design skill drops a Copilot-format .github/hooks/*.json).
+# Personal tooling, not project config — and a committed hook is a dormant
+# "run this script" instruction, so keep them out of the repo.
+.github/hooks/
