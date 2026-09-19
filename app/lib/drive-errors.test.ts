@@ -21,6 +21,11 @@ describe("describeDriveError", () => {
 		expect(d.description).toBe("Unlock this business before backing it up.");
 		expect(d.reconnect).toBe(false);
 	});
+	it("names the operation for uncoded errors, but never overrides a coded title", () => {
+		expect(describeDriveError("Drive access was not ticked.", "Couldn't connect Google Drive").title).toBe("Couldn't connect Google Drive");
+		expect(describeDriveError("DRIVE_OFFLINE: x", "Couldn't connect Google Drive").title).toBe("Can't reach Google Drive");
+	});
+
 	it("strips the DRIVE_ERROR code from the description", () => {
 		expect(describeDriveError("DRIVE_ERROR: Google Drive returned 500: boom").description).toBe("Google Drive returned 500: boom");
 	});

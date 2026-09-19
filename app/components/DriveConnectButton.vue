@@ -39,7 +39,7 @@
 		} catch (err) {
 			// Cancelled covers both the Cancel button and an attempt superseded
 			// by "Open sign-in again" — neither is an error worth a toast.
-			const info = describeDriveError(err);
+			const info = describeDriveError(err, "Couldn't connect Google Drive");
 			if (info.cancelled) return;
 			toast.add({ title: info.title, description: info.description, color: "error", icon: "i-lucide-circle-alert" });
 		}
