@@ -148,6 +148,8 @@
 			</p>
 		</div>
 
+		<DriveBackupCard />
+
 		<!-- Rename modal -->
 		<UModal v-model:open="showRename" title="Rename business">
 			<template #body>

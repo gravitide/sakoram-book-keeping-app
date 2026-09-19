@@ -359,9 +359,11 @@
 						so the main content's lower edge lines up with the
 						sidebar's floating card. Other sides stay at 16px. -->
 					<div class="p-4 pb-2 max-w-[96rem] mx-auto">
+						<BackupReminderBanner />
 						<slot />
 					</div>
 				</main>
+				<DriveBackupProgressModal />
 			</div>
 		</div>
 

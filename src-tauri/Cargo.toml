@@ -96,7 +96,10 @@ zip = { version = "2", default-features = false, features = [ "deflate" ] }
 # the OAuth token endpoint (rustls — no system OpenSSL). md-5 matches Drive's
 # native `md5Checksum` so presence + integrity are verified against Google's
 # own value. sha2 is the PKCE S256 challenge.
-reqwest = { version = "0.12", default-features = false, features = [ "rustls-tls", "json" ] }
+reqwest = { version = "0.12", default-features = false, features = [
+	"rustls-tls",
+	"json"
+] }
 md-5 = "0.10"
 sha2 = "0.10"
 
