@@ -4,13 +4,13 @@
 //! The zip's existence is the commit marker — an interrupted run leaves no zip,
 //! is not a backup, and the next run reuses the attachments already uploaded.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
 use zeroize::Zeroizing;
 
-use super::plan::{self, LocalFile, RemoteFile, UploadAction, KEEP_SNAPSHOTS};
+use super::plan::{self, RemoteFile, UploadAction, KEEP_SNAPSHOTS};
 use super::remote::RemoteStore;
 use super::snapshot::{self, Manifest, ManifestAttachment};
 
@@ -134,7 +134,8 @@ async fn run_inner<R: RemoteStore>(
 	// 4. Retention. The backup is already complete — pruning is best-effort
 	//    and a failure here must never turn a good backup into an error.
 	progress(Progress { stage: "cleanup", done: 0, total: 1 });
-	let pruned_snapshots = prune(remote, input, &stem, &local).await.unwrap_or(0);
+	let known: Vec<String> = local.iter().map(|f| f.path.clone()).collect();
+	let pruned_snapshots = prune(remote, &input.key, &input.work_dir, Some((&stem, known))).await.unwrap_or(0);
 	progress(Progress { stage: "cleanup", done: 1, total: 1 });
 
 	Ok(BackupOutcome {
@@ -156,8 +157,31 @@ fn under_attachments(files: &[RemoteFile]) -> Vec<RemoteFile> {
 		.collect()
 }
 
-async fn prune<R: RemoteStore>(remote: &R, input: &BackupInput, current_stem: &str, current_local: &[LocalFile]) -> Result<usize, String> {
-	let files = remote.list(&input.key).await.map_err(|e| e.to_string())?;
+/// Delete ONE snapshot the user picked, then trash the attachments nothing else
+/// references. The zip goes first: it is the commit marker, so from that moment
+/// the snapshot no longer counts even if we are interrupted — the orphaned
+/// sidecar is debris the next backup sweeps up. Everything lands in Drive's
+/// trash (30-day recovery), never a permanent delete.
+pub async fn delete_snapshot<R: RemoteStore>(remote: &R, key: &str, stem: &str, work_dir: &Path) -> Result<(), String> {
+	let result = async {
+		remote.trash(key, &format!("snapshots/{stem}.zip")).await.map_err(|e| e.to_string())?;
+		// A missing sidecar is fine — the snapshot is already gone.
+		let _ = remote.trash(key, &format!("snapshots/{stem}.manifest.json")).await;
+		std::fs::create_dir_all(work_dir).map_err(|e| format!("create work dir: {e}"))?;
+		// Best-effort, like after a backup: the delete itself already succeeded.
+		let _ = prune(remote, key, work_dir, None).await;
+		Ok(())
+	}
+	.await;
+	let _ = std::fs::remove_dir_all(work_dir);
+	result
+}
+
+/// Apply retention, then trash attachments no retained snapshot references.
+/// `known` is a snapshot whose attachment list the caller already holds (the
+/// one just uploaded), sparing a download. Returns how many snapshots were pruned.
+async fn prune<R: RemoteStore>(remote: &R, key: &str, work_dir: &Path, known: Option<(&str, Vec<String>)>) -> Result<usize, String> {
+	let files = remote.list(key).await.map_err(|e| e.to_string())?;
 	let entries = plan::snapshot_entries(&files);
 	let (retained, pruned) = plan::split_retained(&entries, KEEP_SNAPSHOTS);
 
@@ -165,12 +189,14 @@ async fn prune<R: RemoteStore>(remote: &R, input: &BackupInput, current_stem: &s
 	// switches attachment GC off entirely (see `plan::gc_attachments`).
 	let mut manifests: Vec<Option<Vec<String>>> = Vec::new();
 	for stem in &retained {
-		if stem == current_stem {
-			manifests.push(Some(current_local.iter().map(|f| f.path.clone()).collect()));
-			continue;
+		if let Some((known_stem, paths)) = &known {
+			if stem == known_stem {
+				manifests.push(Some(paths.clone()));
+				continue;
+			}
 		}
-		let tmp = input.work_dir.join(format!("retained-{}.json", manifests.len()));
-		let parsed = match remote.download(&input.key, &format!("snapshots/{stem}.manifest.json"), &tmp).await {
+		let tmp = work_dir.join(format!("retained-{}.json", manifests.len()));
+		let parsed = match remote.download(key, &format!("snapshots/{stem}.manifest.json"), &tmp).await {
 			Ok(()) => std::fs::read(&tmp).ok().and_then(|raw| serde_json::from_slice::<Manifest>(&raw).ok()),
 			Err(_) => None,
 		};
@@ -181,14 +207,14 @@ async fn prune<R: RemoteStore>(remote: &R, input: &BackupInput, current_stem: &s
 		for suffix in [".zip", ".manifest.json"] {
 			let path = format!("snapshots/{stem}{suffix}");
 			if files.iter().any(|f| f.path == path) {
-				let _ = remote.trash(&input.key, &path).await;
+				let _ = remote.trash(key, &path).await;
 			}
 		}
 	}
 
 	let remote_attachment_paths: Vec<String> = under_attachments(&files).into_iter().map(|f| f.path).collect();
 	for rel in plan::gc_attachments(&manifests, &remote_attachment_paths) {
-		let _ = remote.trash(&input.key, &format!("attachments/{rel}")).await;
+		let _ = remote.trash(key, &format!("attachments/{rel}")).await;
 	}
 	Ok(pruned.len())
 }
@@ -322,6 +348,42 @@ mod tests {
 			i.encrypted = true;
 			let err = run_backup(&store, &i, &quiet, &AtomicBool::new(false)).await.unwrap_err();
 			assert!(err.contains("Unlock"));
+		});
+	}
+
+	#[test]
+	fn deleting_a_snapshot_trashes_it_and_only_the_attachments_nothing_else_needs() {
+		tauri::async_runtime::block_on(async {
+			let store = MemoryStore::default();
+			let folder = make_business_folder("delete").await;
+			// Day 1 references a.jpg + b.jpg; day 2 (b.jpg deleted locally) only a.jpg.
+			run_backup(&store, &input(folder.clone(), "2026-09-01T09:00:00Z"), &quiet, &AtomicBool::new(false)).await.unwrap();
+			std::fs::remove_file(folder.join("attachments").join("bill").join("2").join("b.jpg")).unwrap();
+			run_backup(&store, &input(folder, "2026-09-02T09:00:00Z"), &quiet, &AtomicBool::new(false)).await.unwrap();
+			assert!(store.paths("k").contains(&"attachments/bill/2/b.jpg".to_string()), "day 1 still needs b.jpg");
+
+			let work = temp_dir("delete-work");
+			delete_snapshot(&store, "k", "2026-09-01 09-00-00 UTC · TEST-PC", &work).await.unwrap();
+
+			let paths = store.paths("k");
+			assert!(!paths.iter().any(|p| p.contains("2026-09-01")), "zip and sidecar are both gone");
+			assert!(!paths.contains(&"attachments/bill/2/b.jpg".to_string()), "only day 1 referenced it");
+			assert!(paths.contains(&"attachments/invoice/1/a.jpg".to_string()), "day 2 still references it");
+			assert!(paths.contains(&"snapshots/2026-09-02 09-00-00 UTC · TEST-PC.zip".to_string()));
+			assert!(!work.exists());
+		});
+	}
+
+	#[test]
+	fn deleting_an_unknown_snapshot_fails_and_touches_nothing() {
+		tauri::async_runtime::block_on(async {
+			let store = MemoryStore::default();
+			let folder = make_business_folder("delete-unknown").await;
+			run_backup(&store, &input(folder, "2026-09-01T09:00:00Z"), &quiet, &AtomicBool::new(false)).await.unwrap();
+			let before = store.paths("k");
+			let err = delete_snapshot(&store, "k", "no such snapshot", &temp_dir("delete-unknown-work")).await.unwrap_err();
+			assert!(err.starts_with("DRIVE_NOT_FOUND"));
+			assert_eq!(store.paths("k"), before);
 		});
 	}
 

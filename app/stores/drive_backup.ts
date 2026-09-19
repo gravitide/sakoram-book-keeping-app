@@ -15,6 +15,9 @@ export interface DriveStatus {
 	configured: boolean
 	connected: boolean
 	email: string | null
+	name: string | null
+	/** `data:` URL — fetched once by Rust, so rendering it needs no network. */
+	photo: string | null
 	reminder_days: number | null
 	last_backups: Record<string, string>
 }
@@ -104,6 +107,11 @@ export const useDriveBackupStore = defineStore("drive_backup", () => {
 		await invoke("drive_connect_cancel");
 	};
 
+	/** Re-read who is connected (name / email / photo) from Google. */
+	const refreshAccount = async () => {
+		status.value = await invoke<DriveStatus>("drive_refresh_account");
+	};
+
 	const disconnect = async () => {
 		status.value = await invoke<DriveStatus>("drive_disconnect");
 	};
@@ -135,6 +143,13 @@ export const useDriveBackupStore = defineStore("drive_backup", () => {
 	const listBusinesses = () => invoke<RemoteBusiness[]>("drive_list_businesses");
 	const listSnapshots = (key: string) => invoke<SnapshotInfo[]>("drive_list_snapshots", { key });
 
+	/** Backups of a REGISTERED business (Rust derives its Drive key), newest first. */
+	const listBackups = (tenantId: string) => invoke<SnapshotInfo[]>("drive_list_backups", { tenantId });
+
+	/** Trash one older backup; resolves to the refreshed list. The newest is refused. */
+	const deleteBackup = (tenantId: string, stem: string) =>
+		invoke<SnapshotInfo[]>("drive_delete_backup", { tenantId, stem });
+
 	const lastBackupFor = (tenantId: string | null | undefined): string | null =>
 		(tenantId && status.value?.last_backups[tenantId]) || null;
 
@@ -149,6 +164,7 @@ export const useDriveBackupStore = defineStore("drive_backup", () => {
 		refresh,
 		connect,
 		cancelConnect,
+		refreshAccount,
 		disconnect,
 		setReminderDays,
 		backupNow,
@@ -156,6 +172,8 @@ export const useDriveBackupStore = defineStore("drive_backup", () => {
 		cancel,
 		listBusinesses,
 		listSnapshots,
+		listBackups,
+		deleteBackup,
 		lastBackupFor
 	};
 });

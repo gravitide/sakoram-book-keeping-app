@@ -6,7 +6,8 @@ use std::path::Path;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use serde::Deserialize;
+use data_encoding::BASE64;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use super::oauth;
@@ -17,6 +18,25 @@ const API: &str = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API: &str = "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable";
 const FOLDER_MIME: &str = "application/vnd.google-apps.folder";
 const ROOT_NAME: &str = "Sakoram Backups";
+
+/// Profile photos are tiny; anything bigger is not something to inline.
+const MAX_PHOTO_BYTES: usize = 256 * 1024;
+
+/// The connected Google account, as far as Google will describe it.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct Account {
+	pub email: Option<String>,
+	pub name: Option<String>,
+	/// `data:` URL — see `GDrive::fetch_photo`.
+	pub photo: Option<String>,
+}
+
+pub fn photo_data_url(mime: &str, bytes: &[u8]) -> Option<String> {
+	if bytes.is_empty() || bytes.len() > MAX_PHOTO_BYTES {
+		return None;
+	}
+	Some(format!("data:{mime};base64,{}", BASE64.encode(bytes)))
+}
 
 pub fn map_status(status: u16, body: &str) -> RemoteError {
 	match status {
@@ -219,24 +239,62 @@ impl GDrive {
 		self.cached(&cache_key).ok_or_else(|| RemoteError::NotFound(path.to_string()))
 	}
 
-	/// The connected account, shown in Settings. Works with the `drive.file` scope.
-	pub async fn account_email(&self) -> Result<String, RemoteError> {
+	/// Who is connected — name, email and photo for the Settings card. Every field
+	/// is optional: Google OMITS `emailAddress` when the address isn't visible to
+	/// the requester, which a `drive.file`-only app hits for many accounts. The
+	/// original parser required it, so the whole lookup failed and the UI fell
+	/// back to "your Google account".
+	pub async fn account(&self) -> Result<Account, RemoteError> {
 		#[derive(Deserialize)]
 		struct About {
-			user: User,
+			#[serde(default)]
+			user: Option<User>,
 		}
 		#[derive(Deserialize)]
 		struct User {
-			#[serde(rename = "emailAddress")]
-			email: String,
+			#[serde(default, rename = "emailAddress")]
+			email: Option<String>,
+			#[serde(default, rename = "displayName")]
+			name: Option<String>,
+			#[serde(default, rename = "photoLink")]
+			photo: Option<String>,
 		}
 		let about: About = self
-			.send(self.http.get(format!("{API}/about")).query(&[("fields", "user(emailAddress)")]))
+			.send(self.http.get(format!("{API}/about")).query(&[("fields", "user(displayName,emailAddress,photoLink)")]))
 			.await?
 			.json()
 			.await
 			.map_err(|e| RemoteError::Other(e.to_string()))?;
-		Ok(about.user.email)
+		let user = about.user.ok_or_else(|| RemoteError::Other("Google did not describe the connected account.".into()))?;
+		let photo = match user.photo.as_deref() {
+			Some(link) => self.fetch_photo(link).await,
+			None => None,
+		};
+		Ok(Account {
+			email: user.email.filter(|v| !v.is_empty()),
+			name: user.name.filter(|v| !v.is_empty()),
+			photo,
+		})
+	}
+
+	/// The profile photo as a `data:` URL. Fetched ONCE, here, so the webview never
+	/// makes a network request of its own and the card still renders offline.
+	/// The link is public — the bearer token is deliberately NOT sent to it.
+	/// Best-effort: any oddity (non-image, oversized, offline) just means no photo.
+	async fn fetch_photo(&self, link: &str) -> Option<String> {
+		if !link.starts_with("https://") {
+			return None;
+		}
+		let resp = self.http.get(link).send().await.ok()?;
+		if !resp.status().is_success() {
+			return None;
+		}
+		let mime = resp.headers().get(reqwest::header::CONTENT_TYPE)?.to_str().ok()?.split(';').next()?.trim().to_string();
+		if !mime.starts_with("image/") {
+			return None;
+		}
+		let bytes = resp.bytes().await.ok()?;
+		photo_data_url(&mime, &bytes)
 	}
 }
 
@@ -349,6 +407,13 @@ mod tests {
 		assert!(matches!(map_status(403, r#"{"error":{"errors":[{"reason":"rateLimitExceeded"}]}}"#), RemoteError::Other(_)));
 		assert!(matches!(map_status(404, ""), RemoteError::NotFound(_)));
 		assert!(matches!(map_status(500, "boom"), RemoteError::Other(_)));
+	}
+
+	#[test]
+	fn photos_become_data_urls_unless_empty_or_oversized() {
+		assert_eq!(photo_data_url("image/png", b"abc").as_deref(), Some("data:image/png;base64,YWJj"));
+		assert_eq!(photo_data_url("image/png", b""), None);
+		assert_eq!(photo_data_url("image/png", &vec![0u8; MAX_PHOTO_BYTES + 1]), None);
 	}
 
 	#[test]

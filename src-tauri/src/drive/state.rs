@@ -19,6 +19,11 @@ pub struct BackupPrefs {
 	/// Connected Google account, cached so the UI can show it while offline.
 	#[serde(default)]
 	pub account_email: Option<String>,
+	#[serde(default)]
+	pub account_name: Option<String>,
+	/// Profile photo as a `data:` URL (a few KB) — no network needed to render it.
+	#[serde(default)]
+	pub account_photo: Option<String>,
 	/// tenant id → ISO UTC timestamp of the last COMPLETE backup from this machine.
 	#[serde(default)]
 	pub last_backups: HashMap<String, String>,
@@ -26,7 +31,13 @@ pub struct BackupPrefs {
 
 impl Default for BackupPrefs {
 	fn default() -> Self {
-		Self { reminder_days: default_reminder_days(), account_email: None, last_backups: HashMap::new() }
+		Self {
+			reminder_days: default_reminder_days(),
+			account_email: None,
+			account_name: None,
+			account_photo: None,
+			last_backups: HashMap::new(),
+		}
 	}
 }
 

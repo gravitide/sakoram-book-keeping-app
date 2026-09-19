@@ -45,6 +45,9 @@ pub struct DriveStatus {
 	pub configured: bool,
 	pub connected: bool,
 	pub email: Option<String>,
+	pub name: Option<String>,
+	/// `data:` URL of the profile photo, or None.
+	pub photo: Option<String>,
 	pub reminder_days: Option<u32>,
 	pub last_backups: HashMap<String, String>,
 }
@@ -78,9 +81,27 @@ fn status(app: &AppHandle) -> Result<DriveStatus, String> {
 		configured,
 		connected,
 		email: if connected { prefs.account_email } else { None },
+		name: if connected { prefs.account_name } else { None },
+		photo: if connected { prefs.account_photo } else { None },
 		reminder_days: prefs.reminder_days,
 		last_backups: prefs.last_backups,
 	})
+}
+
+/// Look the connected account up and cache it in backup.json. A failure is
+/// LOGGED, never swallowed: the first version discarded it with `.ok()` and the
+/// card showed "your Google account" with nothing to say why.
+async fn cache_account(app: &AppHandle, remote: &GDrive) -> Result<(), String> {
+	let account = remote.account().await.map_err(|e| {
+		eprintln!("[drive] account lookup failed: {e}");
+		e.to_string()
+	})?;
+	let path = prefs_path(app)?;
+	let mut prefs = state::load(&path);
+	prefs.account_email = account.email;
+	prefs.account_name = account.name;
+	prefs.account_photo = account.photo;
+	state::save(&path, &prefs)
 }
 
 fn client() -> Result<GDrive, String> {
@@ -153,11 +174,16 @@ pub async fn drive_connect_finish(app: AppHandle, drive: State<'_, DriveState>) 
 	let refresh = tokens.refresh_token.ok_or("Google did not grant offline access. Try connecting again.")?;
 	oauth::store_refresh_token(&refresh)?;
 
-	let email = GDrive::new(id, secret, refresh).account_email().await.ok();
-	let path = prefs_path(&app)?;
-	let mut prefs = state::load(&path);
-	prefs.account_email = email;
-	state::save(&path, &prefs)?;
+	// Cosmetic — being connected must not depend on it.
+	let _ = cache_account(&app, &GDrive::new(id, secret, refresh)).await;
+	status(&app)
+}
+
+/// Re-read who is connected. The card calls this when it is connected but has
+/// nothing to show — a connect made before the lookup worked, or made offline.
+#[tauri::command]
+pub async fn drive_refresh_account(app: AppHandle) -> Result<DriveStatus, String> {
+	cache_account(&app, &client()?).await.inspect_err(|e| note_error(e))?;
 	status(&app)
 }
 
@@ -170,6 +196,8 @@ pub async fn drive_disconnect(app: AppHandle) -> Result<DriveStatus, String> {
 	let path = prefs_path(&app)?;
 	let mut prefs = state::load(&path);
 	prefs.account_email = None;
+	prefs.account_name = None;
+	prefs.account_photo = None;
 	state::save(&path, &prefs)?;
 	status(&app)
 }
@@ -229,6 +257,43 @@ pub async fn drive_backup_now(
 	prefs.last_backups.insert(tenant.id, created_at);
 	state::save(&path, &prefs)?;
 	Ok(outcome)
+}
+
+/// Backup key of a registered business — what its Drive folder is filed under.
+fn key_for(app: &AppHandle, tenant_id: &str) -> Result<String, String> {
+	let tenant = tenants::get_tenant(app, tenant_id)?;
+	let marker = tenants::read_marker(&PathBuf::from(&tenant.path))?;
+	Ok(plan::backup_key(&marker.id, &marker.created_at))
+}
+
+/// Complete backups of one registered business, newest first. Empty (not an
+/// error) when it has never been backed up.
+#[tauri::command]
+pub async fn drive_list_backups(app: AppHandle, tenant_id: String) -> Result<Vec<SnapshotInfo>, String> {
+	let key = key_for(&app, &tenant_id)?;
+	restore::list_snapshots(&client()?, &key).await.inspect_err(|e| note_error(e))
+}
+
+/// Move one OLDER backup to the Drive trash. The newest is refused: this
+/// feature exists so there is always something to restore, and "delete" on the
+/// only good copy is never what a tidy-up meant. (It can still be removed in
+/// drive.google.com.)
+#[tauri::command]
+pub async fn drive_delete_backup(
+	app: AppHandle,
+	drive: State<'_, DriveState>,
+	tenant_id: String,
+	stem: String,
+) -> Result<Vec<SnapshotInfo>, String> {
+	let _busy = begin_operation(&drive)?;
+	let key = key_for(&app, &tenant_id)?;
+	let remote = client()?;
+	let existing = restore::list_snapshots(&remote, &key).await.inspect_err(|e| note_error(e))?;
+	if existing.first().is_some_and(|newest| newest.stem == stem) {
+		return Err("The latest backup can't be deleted here — it is the one you would restore from.".into());
+	}
+	backup::delete_snapshot(&remote, &key, &stem, &work_dir(&app)?).await.inspect_err(|e| note_error(e))?;
+	restore::list_snapshots(&remote, &key).await.inspect_err(|e| note_error(e))
 }
 
 #[tauri::command]

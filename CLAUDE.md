@@ -357,8 +357,31 @@ Spec/plan: `docs/superpowers/{specs,plans}/2026-09-19-google-drive-backup*`.
   silent, never fatal) → `open_tenant`, which upserts the registry by marker id
   and leaves any existing folder untouched. `relocate_stored_paths` heals the
   absolute attachment/logo paths on the next `ensure_tenant_db`.
+- **The card acts on the OPEN business only** (`DriveBackupCard.vue`): it needs
+  the live db and, if encrypted, the session key — other businesses aren't
+  listed. Below it sits that business's backups AS THEY EXIST ON DRIVE
+  (`drive_list_backups`, which derives the key from the tenant's marker — the
+  frontend never sees a `backup_key`), so backups made on another machine show
+  up too, and "Backed up N days ago" prefers Drive's newest over this
+  machine's `last_backups`. The list error is INLINE, not a toast: it loads on
+  every visit and being offline is an ordinary state here.
+- **Deleting a backup** (`drive_delete_backup` → `backup::delete_snapshot`)
+  trashes the zip FIRST (commit marker), then the sidecar, then re-runs `prune`
+  so attachments only that snapshot referenced go too. **The newest backup is
+  refused** in Rust as well as hidden in the UI — it is the one a restore uses.
+- **Account label**: `GDrive::account()` reads `about.user` —
+  `displayName` / `emailAddress` / `photoLink`, ALL optional. Google withholds
+  `emailAddress` from a `drive.file`-only app for many accounts; the first
+  parser required it, the lookup failed, and `.ok()` hid why (the card just
+  said "your Google account"). Failures are `eprintln!`'d now, and the card
+  calls `drive_refresh_account` when connected with nothing to show. The photo
+  is fetched ONCE by Rust (no bearer token — the link is public) and cached as
+  a `data:` URL, so the webview makes no network request and it renders
+  offline. Guaranteeing an email would need the `email` scope — a consent-text
+  change, deliberately not taken.
 - **Per-machine state** is `%APPDATA%/com.sakoram.billing/backup.json`
-  (`reminder_days`, `account_email`, `last_backups`). No tenant-DB column, no
+  (`reminder_days`, `account_email` / `account_name` / `account_photo`,
+  `last_backups`). No tenant-DB column, no
   migration, no `SCHEMA_VERSION` bump.
 
 **Landmines:**
