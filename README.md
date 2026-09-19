@@ -164,4 +164,9 @@ sakoram_app/
 
 ## 📜 License
 
-[MIT](./LICENSE) © Sakoram
+[MIT](./LICENSE) © 2026 Srisaravana Manicaraja — <srisar@proton.me>
+
+The project was scaffolded from [Nuxtor](https://github.com/NicolaSpadari/nuxtor)
+by Nicola Spadari (MIT); that copyright notice is kept in `LICENSE` as the
+licence requires. The bundled fonts are under the SIL Open Font License — see
+`src-tauri/fonts/OFL.txt`.

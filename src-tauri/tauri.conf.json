@@ -16,7 +16,7 @@
 		],
 		"resources": ["fonts/*"],
 		"externalBin": ["binaries/typst"],
-		"copyright": "",
+		"copyright": "Copyright © 2026 Srisaravana Manicaraja",
 		"category": "Business",
 		"shortDescription": "",
 		"longDescription": "",
@@ -32,7 +32,7 @@
 		"devUrl": "http://localhost:4004"
 	},
 	"productName": "Sakoram",
-	"version": "0.160.1",
+	"version": "0.160.2",
 	"identifier": "com.sakoram.billing",
 	"plugins": {},
 	"app": {

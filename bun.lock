@@ -2,7 +2,7 @@
   "lockfileVersion": 1,
   "workspaces": {
     "": {
-      "name": "nuxtor",
+      "name": "sakoram-billing",
       "dependencies": {
         "@nuxt/ui": "^4.4.0",
         "@pinia/nuxt": "^0.11.3",

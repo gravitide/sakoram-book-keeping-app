@@ -805,6 +805,13 @@ Code-signing requires a CA cert (~$200–400/year), out of scope.
 ### Common gotchas
 
 - **`.nuxt` directory missing or stale**: `rm -rf .nuxt && bunx nuxi prepare`.
+- **Desktop only — there are no mobile targets.** The project was scaffolded from
+  the Nuxtor template, which shipped `src-tauri/gen/{android,apple}` (package id
+  `com.nicolaspadari.nuxtor`) and `tauri:*:ios|android` scripts; both were removed
+  in v0.160.2. If a mobile build is ever wanted, regenerate them with
+  `tauri android init` / `tauri ios init` so they pick up `com.sakoram.billing`.
+  `LICENSE` keeps the template author's copyright line beside the owner's —
+  MIT requires it; do not remove it.
 - **Tauri capability changes** require a Rust rebuild (capabilities are
   baked in at compile time).
 - **Tauri/JS plugin version mismatch** errors on `tauri:build`: the
