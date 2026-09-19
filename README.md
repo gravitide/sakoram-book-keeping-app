@@ -16,7 +16,7 @@
 	<img src="https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
 	<img src="https://img.shields.io/badge/SQLite-local-003B57?logo=sqlite&logoColor=white" alt="SQLite" />
 	<img src="https://img.shields.io/badge/PDF-Typst-239DAD" alt="Typst" />
-	<img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license" />
+	<img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="GPL-3.0 license" />
 </p>
 
 ---
@@ -164,4 +164,20 @@ sakoram_app/
 
 ## 📜 License
 
-[MIT](./LICENSE) © Sakoram
+Copyright © 2026 [Gravitide](https://gravitide.dev) · <hello@gravitide.com>
+
+Sakoram is **free software** under the [GNU General Public License v3](./LICENSE)
+(`GPL-3.0-only`). In short:
+
+- **Use it for anything**, including running a business's books — free of charge.
+- **Study, change and share it.** If you distribute it, changed or not, you must
+  pass on the same freedoms and publish the complete source of what you ship
+  under the GPL v3. A closed or proprietary version is not allowed.
+- **No warranty.** It is provided "as is"; Gravitide is not liable for any loss
+  arising from its use.
+- **The name and logo are not part of the licence.** "Sakoram" and its logos are
+  trademarks of Gravitide — a fork must use its own name and branding. See
+  [`TRADEMARKS.md`](./TRADEMARKS.md).
+
+Third-party notices — the Nuxtor project template (MIT), the bundled fonts (SIL
+OFL), Typst (Apache-2.0) and the libraries — are in [`NOTICE.md`](./NOTICE.md).
