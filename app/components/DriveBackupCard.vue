@@ -1,6 +1,9 @@
 <template>
 	<div v-if="drive.status?.configured" id="google-drive" class="mt-8 scroll-mt-4">
 		<SectionCard title="Google Drive backup" icon="i-lucide-cloud-upload">
+			<template #title-extra>
+				<HelpButton slug="backup-google-drive" size="xs" />
+			</template>
 			<p class="text-sm text-(--ui-text-muted) select-none">
 				Keep a copy of your books in <strong>your own</strong> Google Drive, so a dead PC isn't the end of them.
 				Backups run only when you press the button — Sakoram never uploads in the background.

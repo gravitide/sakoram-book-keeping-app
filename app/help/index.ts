@@ -57,7 +57,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 	{
 		slug: "backup-google-drive",
 		title: "Backing up to Google Drive",
-		summary: "Keep a copy of your books in your own Google Drive, and restore it on any computer. Manual backups with a reminder — not sync.",
+		summary: "Keep a copy of your books in your own Google Drive and restore it on any computer: connecting (tick the Drive box), backing up, managing and deleting old backups, restoring, and what to do when something goes wrong.",
 		category: "general",
 		icon: "i-lucide-cloud-upload",
 		relatedSlugs: ["security", "bookkeeping-basics"],
