@@ -5,3 +5,5 @@
 // is no sync and NOTHING here may run on the window-close path.
 
 pub mod plan;
+pub mod snapshot;
+pub mod state;
