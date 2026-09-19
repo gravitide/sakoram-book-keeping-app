@@ -18,6 +18,13 @@
 			<UButton size="sm" variant="ghost" icon="i-lucide-external-link" @click="onConnect">
 				Open sign-in again
 			</UButton>
+			<!-- Because we ask for the email address too, Google lists the Drive
+				permission as a checkbox that starts UNTICKED. Missing it grants the
+				email and nothing else, and the connect is refused. -->
+			<p class="basis-full flex items-start gap-1.5 text-xs text-(--ui-warning) select-none" :class="center ? 'justify-center' : ''">
+				<UIcon name="i-lucide-square-check-big" class="size-3.5 mt-px shrink-0" />
+				<span>On Google's screen, <strong>tick the Google Drive box</strong> before you press Continue.</span>
+			</p>
 		</div>
 	</div>
 </template>
@@ -41,7 +48,14 @@
 			// by "Open sign-in again" — neither is an error worth a toast.
 			const info = describeDriveError(err, "Couldn't connect Google Drive");
 			if (info.cancelled) return;
-			toast.add({ title: info.title, description: info.description, color: "error", icon: "i-lucide-circle-alert" });
+			toast.add({
+				title: info.title,
+				description: info.description,
+				color: "error",
+				icon: "i-lucide-circle-alert",
+				duration: 12000,
+				actions: [{ label: "Try again", icon: "i-lucide-rotate-ccw", onClick: () => void onConnect() }]
+			});
 		}
 	};
 

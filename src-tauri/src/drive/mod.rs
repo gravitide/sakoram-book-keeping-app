@@ -172,6 +172,9 @@ pub async fn drive_connect_finish(app: AppHandle, drive: State<'_, DriveState>) 
 	let pending = drive.pending.lock().unwrap().take().ok_or("No Google sign-in is in progress.")?;
 	let tokens = oauth::finish(pending, id, secret).await?;
 	if !oauth::grants_drive(tokens.scope.as_deref()) {
+		// Scope names are not secret — log what Google actually granted so a
+		// refusal can be diagnosed rather than guessed at.
+		eprintln!("[drive] connect refused; granted scopes: {}", tokens.scope.as_deref().unwrap_or("<none reported>"));
 		// Don't keep a grant that can't do the one thing we need it for.
 		if let Some(token) = tokens.refresh_token.as_deref() {
 			oauth::revoke(&reqwest::Client::new(), token).await;

@@ -383,8 +383,13 @@ Spec/plan: `docs/superpowers/{specs,plans}/2026-09-19-google-drive-backup*`.
   predates it. `userinfo_email` swallows every failure ON PURPOSE: a 401 there
   means "no email scope", and letting it reach `note_error` would drop a good
   token as if it were revoked.
-- **Two scopes ⇒ Google shows a checkbox per permission**, so a user can untick
-  Drive and still complete sign-in. `drive_connect_finish` checks the GRANTED
+- **Two scopes ⇒ Google lists Drive as a checkbox that starts UNTICKED** (the
+  email scope is a sign-in scope and is granted automatically), so a user who
+  just presses Continue grants the email and NOTHING else. This bit the owner
+  on the first reconnect. It is the standing cost of showing the email —
+  dropping `EMAIL_SCOPE` restores a one-click Allow. While it stays,
+  `DriveConnectButton` says "tick the Google Drive box" during the wait and its
+  error toast carries a Try again action. `drive_connect_finish` checks the GRANTED
   `scope` in the token response (`oauth::grants_drive`, exact-match, not
   substring), revokes and refuses when `drive.file` is missing — otherwise the
   app would say "connected" and then 403 on every backup.
