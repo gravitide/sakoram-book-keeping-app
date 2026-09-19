@@ -570,7 +570,7 @@ sakoram_app/
 │  │  ├─ NewInvoiceModal.vue          ← "New invoice" form-in-a-modal — replaces /invoices/new
 │  │  ├─ NewBillModal.vue             ← "New bill" form-in-a-modal (vendor picker) — replaces /bills/new
 │  │  ├─ NewPayslipModal.vue          ← "New payslip" form-in-a-modal (employee + 3 dates + dup-period guard) — replaces /payslips/new
-│  │  ├─ SectionCard.vue              ← header-with-icon card; used on company / client / vendor / employee edit pages
+│  │  ├─ SectionCard.vue              ← header-with-icon card; used on company / client / vendor / employee edit pages. Optional `#title-extra` slot sits beside the title (the Drive backup card puts its HelpButton there)
 │  │  ├─ DateField.vue                ← UInputDate + UCalendar wrapper; ISO-string v-model + min/max with is-date-unavailable strikethrough. Renders shrink-to-content by default — pass class="w-full" when it sits in a row next to full-width inputs (heights already match; width is the only mismatch)
 │  │  ├─ DateRangeField.vue           ← same idea, range mode (v-model:from / v-model:to)
 │  │  ├─ DayOfMonthField.vue          ← 1–31 integer input + "Last day of month" toggle (used on payroll settings)

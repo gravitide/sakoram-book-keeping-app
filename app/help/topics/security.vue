@@ -123,6 +123,15 @@
 		</HelpSection>
 
 		<HelpSection title="Backups &amp; restore" icon="i-lucide-archive">
+			<HelpCallout variant="tip" title="Also back up to Google Drive">
+				An exported <span class="font-mono text-xs">.zip</span> is only as safe as the place you keep it. For a copy
+				that survives a lost or broken computer, connect
+				<NuxtLink to="/help/backup-google-drive" class="text-(--ui-primary) hover:underline">
+					Google Drive backup
+				</NuxtLink>
+				too. For an encrypted business, the database in a Drive backup stays encrypted and restores with the
+				same password or recovery key — no separate backup password to remember.
+			</HelpCallout>
 			<p>
 				Export a full backup of any business from <NuxtLink to="/settings/businesses" class="text-(--ui-primary) hover:underline">
 					Settings → Businesses

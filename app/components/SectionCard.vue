@@ -6,8 +6,10 @@
 					<UIcon :name="icon" class="size-5" />
 				</div>
 				<div class="min-w-0 flex-1">
-					<div class="font-medium leading-tight">
+					<div class="font-medium leading-tight flex items-center gap-1">
 						{{ title }}
+						<!-- Optional inline extra beside the title — e.g. a HelpButton. -->
+						<slot name="title-extra" />
 					</div>
 					<div v-if="subtitle" class="text-xs text-(--ui-text-muted) mt-0.5">
 						{{ subtitle }}
