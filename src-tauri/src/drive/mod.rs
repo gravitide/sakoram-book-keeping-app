@@ -4,6 +4,9 @@
 // Backup is a manual, one-way push; restore is an explicit user action. There
 // is no sync and NOTHING here may run on the window-close path.
 
+pub mod backup;
 pub mod plan;
+pub mod remote;
+pub mod restore;
 pub mod snapshot;
 pub mod state;
