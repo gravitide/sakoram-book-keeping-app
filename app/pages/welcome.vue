@@ -233,6 +233,21 @@
 			</UButton>
 		</div>
 
+		<!-- Restore from Google Drive — disaster recovery on a fresh machine.
+			Hidden when this build carries no Google credentials. -->
+		<div v-if="drive.status?.configured" class="text-center mt-4">
+			<UButton
+				icon="i-lucide-cloud-download"
+				variant="outline"
+				color="neutral"
+				:disabled="seedingDemo || opening"
+				@click="showDriveRestore = true"
+			>
+				Restore from Google Drive…
+			</UButton>
+		</div>
+		<RestoreFromDriveModal v-model:open="showDriveRestore" />
+
 		<!-- Import a backup — always available, including when there are no
 			businesses yet (you might be restoring one you removed). Imports as
 			a new business; an encrypted backup prompts for its password. -->
@@ -368,6 +383,7 @@
 	import pkg from "~~/package.json";
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import { createDemoBusiness } from "~/lib/demo-seed";
+	import { useDriveBackupStore } from "~/stores/drive_backup";
 	import { useTenantsStore } from "~/stores/tenants";
 
 	definePageMeta({
@@ -484,6 +500,11 @@
 
 	// ---- Open an existing business folder ----
 	const opening = ref(false);
+
+	// ---- Restore from Google Drive ----
+	const drive = useDriveBackupStore();
+	const showDriveRestore = ref(false);
+	onMounted(() => drive.ensureLoaded());
 	const onOpenBusiness = async () => {
 		if (opening.value) return;
 		let dir: string | null = null;
