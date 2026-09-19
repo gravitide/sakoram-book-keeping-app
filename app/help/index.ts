@@ -51,8 +51,17 @@ export const HELP_TOPICS: HelpTopic[] = [
 		summary: "Password-protect a business with at-rest database encryption (+ recovery key), and lock generated PDFs against editing. Two separate protections.",
 		category: "general",
 		icon: "i-lucide-shield-check",
-		relatedSlugs: ["bookkeeping-basics"],
+		relatedSlugs: ["bookkeeping-basics", "backup-google-drive"],
 		component: () => import("./topics/security.vue")
+	},
+	{
+		slug: "backup-google-drive",
+		title: "Backing up to Google Drive",
+		summary: "Keep a copy of your books in your own Google Drive, and restore it on any computer. Manual backups with a reminder — not sync.",
+		category: "general",
+		icon: "i-lucide-cloud-upload",
+		relatedSlugs: ["security", "bookkeeping-basics"],
+		component: () => import("./topics/backup-google-drive.vue")
 	},
 	// Documents
 	{

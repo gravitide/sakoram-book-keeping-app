@@ -2,7 +2,8 @@
 
 A single-user desktop bookkeeping app for a Sri Lankan business. Manages
 quotes, invoices, bills, vouchers, employees, payslips, and renders
-professional PDFs. Runs fully offline with local SQLite. Multi-tenant:
+professional PDFs. Runs fully offline by default with local SQLite (the only
+network feature is the optional, user-initiated Google Drive backup). Multi-tenant:
 one SQLite file per business.
 
 If you're a fresh Claude session picking this up, read this whole file
@@ -312,6 +313,90 @@ Off by default; unencrypted businesses are unaffected.
 
 ---
 
+## Google Drive backup (optional, opt-in)
+
+Disaster recovery, not sync. The user connects **their own** Google Drive
+("Sign in with Google" — we host nothing, it costs us nothing) and presses
+**Back up now**; on another machine, welcome → **Restore from Google Drive**.
+Spec/plan: `docs/superpowers/{specs,plans}/2026-09-19-google-drive-backup*`.
+
+- **One-way push, explicit restore. No sync, no merge, no scheduler.** A
+  reminder banner (`BackupReminderBanner.vue`, default layout) nudges when the
+  last backup is older than `reminder_days` (1/7/14/30/off). Restoring on a
+  second machine is a deliberate point-in-time copy — newest restore wins.
+- **Module map** — `src-tauri/src/drive/`: `plan.rs` (pure: upload diff,
+  snapshot naming, retention, attachment GC, `backup_key`), `state.rs`
+  (`backup.json`), `snapshot.rs` (`VACUUM INTO`, sealing, zip, safe extract),
+  `remote.rs` (`RemoteStore` trait + test-only `MemoryStore`), `backup.rs` /
+  `restore.rs` (orchestration, written against the TRAIT so they are tested
+  end-to-end with no network), `oauth.rs` (PKCE + loopback listener +
+  keychain), `gdrive.rs` (Drive v3 REST — the only real `RemoteStore`),
+  `mod.rs` (`DriveState` + the `drive_*` commands).
+- **Drive layout mirrors the business folder** so a restore can be done by
+  hand: `Sakoram Backups/<Business name>/{snapshots/<stem>.zip + .manifest.json,
+  attachments/<type>/<id>/<uuid>.<ext>}`. The snapshot zip holds `business.db`
+  (or `business.db.enc` + `business.vault.json`), `business.json`, `logos/*`,
+  `pdf-header*` and `backup-manifest.json` — **not** attachments, which upload
+  once each and are reused by later backups (diffed on size + Drive's native
+  `md5Checksum`).
+- **Lookup is by `appProperties`, never by name or folder walk**: `skKind`
+  (`root` / `business` / `dir` / `file`), `skKey`, `skPath`. One paginated
+  query lists a whole business. Drive caps each property at **124 UTF-8 bytes
+  key+value** — `plan::fits_app_property` guards uploads, and device names are
+  ASCII-sanitised to 20 chars for the same reason.
+- **Upload order: attachments → sidecar manifest → zip LAST.** The zip is the
+  commit marker; an interrupted run leaves no zip, is not a backup, and the
+  retry re-uploads nothing. Retention keeps the 10 newest complete snapshots;
+  everything removed goes to Drive **trash** (30-day recovery), never a
+  permanent delete. Attachment GC is switched OFF entirely if any retained
+  manifest is unreadable — never delete on incomplete knowledge.
+- **Restore**: `fetch_snapshot` → `check_schema` (a backup from a NEWER app is
+  refused before anything is written; older migrates forward) →
+  `create_business_folder` → `materialise` (zip-slip-safe extract, then every
+  attachment MD5-verified with one retry; failures are reported by path, never
+  silent, never fatal) → `open_tenant`, which upserts the registry by marker id
+  and leaves any existing folder untouched. `relocate_stored_paths` heals the
+  absolute attachment/logo paths on the next `ensure_tenant_db`.
+- **Per-machine state** is `%APPDATA%/com.sakoram.billing/backup.json`
+  (`reminder_days`, `account_email`, `last_backups`). No tenant-DB column, no
+  migration, no `SCHEMA_VERSION` bump.
+
+**Landmines:**
+- **Never on the window-close path.** `lock-on-close.client.ts` races the vault
+  seal against a 5 s timeout; a network call there hangs quit. Backups snapshot
+  a LIVE db via `VACUUM INTO` on their own connection instead.
+- **The refresh token is keychain-only** (`keyring`, service
+  `com.sakoram.billing.gdrive`). Not `tenants.json`, not `backup.json`, and
+  never a business folder — those are portable and would carry the login along.
+- **`backup_key = md5(tenant_id + "\n" + marker.created_at)` identifies a
+  business on Drive, NOT the tenant id.** Ids are slugs of the business name;
+  two businesses called the same thing share one.
+- **Cloud backups carry the raw SQLite file, NOT the `data_io` JSON export.**
+  `import_tenant_data` refuses a bundle whose `schema_version` differs from the
+  running build — fatal for a recovery months later. `open_tenant` migrates.
+- **Google credentials are `option_env!`** (`SAKORAM_GOOGLE_CLIENT_ID` /
+  `_SECRET`, CI secrets on both release workflows). `build.rs` carries the
+  `rerun-if-env-changed` lines — without them a changed secret silently doesn't
+  rebuild. Absent/empty ⇒ `drive_status.configured = false` ⇒ the card, banner
+  and welcome button all hide. For dev, export both in the shell that runs
+  `bun run tauri:dev`. The Google OAuth consent screen must be **published to
+  Production** — Testing-mode refresh tokens die after 7 days.
+- **No `std::sync::MutexGuard` across an `.await`** in `gdrive.rs` / `mod.rs`
+  (the command futures must be `Send`): id-cache access goes through
+  `cached`/`remember`, and `drive_connect_finish` `take()`s the `PendingAuth`
+  before awaiting.
+- **Encrypted businesses**: the snapshot is sealed with the session DEK
+  (`prepare_db` → `vault::encrypt_file` → `secure_remove` of the plaintext
+  temp), so "Back up now" is disabled while locked. **Attachments are plaintext
+  on Drive**, exactly as they are on disk — the vault only ever covered the db.
+- **Error strings are an API.** `RemoteError`'s `Display` begins with a stable
+  code (`DRIVE_OFFLINE` / `DRIVE_RECONNECT` / `DRIVE_QUOTA` / `DRIVE_NOT_FOUND` /
+  `DRIVE_ERROR`, plus `DRIVE_CANCELLED` from `backup.rs`) that
+  `app/lib/drive-errors.ts` maps to copy. `DRIVE_RECONNECT` also makes the
+  command layer drop the dead keychain token. Keep both sides in sync.
+
+---
+
 ## Licensing & feature tiers
 
 > **The app is now FREE (since v0.130.0). No tiers, no trial, no gating.**
@@ -454,6 +539,10 @@ sakoram_app/
 │  │  ├─ MonthlySalaryPaidChart.vue   ← payroll dashboard: 12-month salary-paid bars
 │  │  ├─ ReceivablesAgingChart.vue    ← dashboard: outstanding invoices by days-past-due bucket
 │  │  ├─ ExpensesByCategoryChart.vue  ← dashboard: bills donut by category, last 90 days
+│  │  ├─ DriveBackupCard.vue          ← Settings → Businesses card: connect / disconnect Google Drive, reminder interval, per-business last-backup + "Back up now" (active business only). Hidden when the build has no Google credentials.
+│  │  ├─ DriveBackupProgressModal.vue ← store-driven progress modal for backup (mounted once, in the default layout)
+│  │  ├─ BackupReminderBanner.vue     ← "Last backup N days ago · Back up now · Later" banner in the default layout; shows only when Drive is connected, the business is unlocked and the backup is due
+│  │  ├─ RestoreFromDriveModal.vue    ← welcome-screen restore flow: connect → pick business + snapshot → folder dialog → progress → "N of N attachments restored" → open
 │  │  └─ TopClientsChart.vue          ← dashboard: top clients by invoiced revenue, last 12 months
 │  ├─ composables/
 │  │  ├─ usePdfPreview.ts             ← preview→commit flow used by every detail page that has a PDF button
@@ -491,6 +580,8 @@ sakoram_app/
 │  │  ├─ document-guards.ts           ← pure lifecycle rules: `invoiceMutationBlocker` (receipts / issued credit notes pin an invoice), the credit-note FSM, and `assertEditable` (Golden Rule #5 enforced store-side). The stores do the SQL counting and hand the numbers here.
 │  │  ├─ route-query.ts               ← `queryString` / `queryInt` / `withoutQueryKeys` — typed readers for vue-router query values.
 │  │  ├─ recurring-schedule.ts        ← `advanceDate(iso, frequency, anchorDay?)` + `anchorDayOf`. The anchor (the template's start day) stops one short month permanently decaying a schedule (31st → 28th forever); a hand-typed day is still respected. Re-exported from the recurring_invoices store.
+│  │  ├─ backup-reminder.ts           ← pure: `isBackupDue` / `daysSinceBackup` / `backupAgeLabel` + REMINDER_OPTIONS for the Google Drive backup reminder
+│  │  ├─ drive-errors.ts              ← pure: maps the stable `DRIVE_*` error codes from src-tauri/src/drive to friendly copy (+ reconnect / cancelled flags)
 │  │  ├─ load-once.ts                 ← `createLoadOnce(load, isLoaded)` — the shared-in-flight-promise rule behind `ensureLoaded()`. Use it; don't write `if (!loaded && !loading) await load()`, which lets a concurrent caller return with state still null.
 │  │  ├─ licensing.ts                 ← tier registry (FEATURES) + hasFeature + trial math + effectiveEntitlement (license supersedes trial)
 │  │  └─ theme.ts                     ← THEME_COLORS palette (name → hex)
@@ -519,6 +610,7 @@ sakoram_app/
 │     ├─ recurring_bills.ts           ← vendor-side mirror of recurring_invoices; generated bills land in status `unpaid` (not draft — bills have no draft state).
 │     ├─ bank_statements.ts           ← imported bank statement rows + imports table. linkMatch / unlinkMatch run as two sequential auto-commits per the connection-pool caveat. suggestMatchesFor wraps the pure matcher in app/lib/reconcile-match.ts.
 │     ├─ license.ts                   ← per-install entitlement store (tier/trial); loaded at startup via tenant.global.ts
+│     ├─ drive_backup.ts              ← per-INSTALL Google Drive backup state (status / busy / progress) bridging the `drive_*` commands; works on the welcome screen with no active tenant
 │     └─ tenants.ts                   ← bridges JS to Rust tenant registry
 └─ src-tauri/
    ├─ Cargo.toml                      ← Rust deps (tauri 2.10, sqlx 0.8, zip 2, qpdf 0.3 vendored)
@@ -546,6 +638,7 @@ sakoram_app/
       ├─ pdf.rs                       ← export_*_pdf commands (quote/invoice/bill/voucher/payslip), copy_file, open_path
       ├─ phone_upload.rs              ← LAN HTTP server (axum) for phone→invoice photo uploads + import_invoice_attachment
       ├─ data_io.rs                   ← export_tenant_data / import_tenant_data (.zip bundles)
+      ├─ drive/                       ← Google Drive backup & restore (plan / state / snapshot / remote / backup / restore / oauth / gdrive / mod) — see "Google Drive backup"
       ├─ license.rs                   ← Ed25519 license-key verify + license.json trial state + commands (per-install)
       └─ bin/mint_license.rs          ← local key-minting CLI (keygen + mint); NOT bundled into the app
 .github/
@@ -2207,6 +2300,11 @@ persisted to localStorage).
   `bank_statement_rows`), dedupe via sha256 hash so re-imports skip
   duplicates. `vouchers.business_bank_id` FK added (migration 0033)
   so matching is cleanly scoped per bank.
+- ✅ **Google Drive backup & restore** (v0.160.0) — manual "Back up now" +
+  reminder banner, restore from the welcome screen. User's own Drive via
+  OAuth (`drive.file` scope only); DB snapshot zip + attachments uploaded once
+  each; 10-snapshot retention to Drive trash; encrypted businesses stay sealed.
+  See the "Google Drive backup" section for the layout + landmines.
 - ✅ **Letters** — shipped. Free-form rich-text correspondence
   (service letters, internship confirmations, anything) composed on
   the business letterhead and rendered to PDF via `letter.typ`. New
