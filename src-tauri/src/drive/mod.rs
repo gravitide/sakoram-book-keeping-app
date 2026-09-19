@@ -5,6 +5,8 @@
 // is no sync and NOTHING here may run on the window-close path.
 
 pub mod backup;
+pub mod gdrive;
+pub mod oauth;
 pub mod plan;
 pub mod remote;
 pub mod restore;
