@@ -9,7 +9,7 @@
 	"license": "GPL-3.0-only",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/srisar/sakoram-book-keeping-app.git"
+		"url": "git+https://github.com/gravitide/sakoram-book-keeping-app.git"
 	},
 	"comment:overrides": "TipTap + @nuxt/ui's bundled TipTap pulled TWO prosemirror-model versions (1.25.4 vs 1.25.10). Both loaded at runtime → structural commands (lists, Enter/splitBlock) threw 'multiple versions of prosemirror-model'. Pin one copy so node schema identity is shared.",
 	"scripts": {

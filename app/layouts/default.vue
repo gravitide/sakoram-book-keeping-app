@@ -261,7 +261,7 @@
 									GNU General Public License v3
 								</button>.
 								It comes with <strong>no warranty</strong>. The
-								<button type="button" class="text-(--ui-primary) hover:underline cursor-pointer" @click="openLink('https://github.com/srisar/sakoram-book-keeping-app')">
+								<button type="button" class="text-(--ui-primary) hover:underline cursor-pointer" @click="openLink('https://github.com/gravitide/sakoram-book-keeping-app')">
 									source code
 								</button>
 								is public. The Sakoram name and logo are trademarks of Gravitide.

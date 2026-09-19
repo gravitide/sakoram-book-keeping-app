@@ -8,7 +8,7 @@ default-run = "sakoram_billing"
 version = "0.160.2"
 description = "Sakoram — desktop bookkeeper for quotes, invoices, bills and vouchers"
 authors = [ "Gravitide <hello@gravitide.com>" ]
-repository = "https://github.com/srisar/sakoram-book-keeping-app"
+repository = "https://github.com/gravitide/sakoram-book-keeping-app"
 license = "GPL-3.0-only"
 edition = "2021"
 

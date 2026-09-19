@@ -2,7 +2,7 @@ export default defineAppConfig({
 	app: {
 		name: "Sakoram",
 		author: "Gravitide",
-		repo: "https://github.com/srisar/sakoram-book-keeping-app"
+		repo: "https://github.com/gravitide/sakoram-book-keeping-app"
 	},
 	ui: {
 		colors: {
