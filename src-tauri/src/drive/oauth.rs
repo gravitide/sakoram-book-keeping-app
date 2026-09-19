@@ -221,6 +221,17 @@ mod tests {
 		);
 	}
 
+	/// Run with `--nocapture` to see what build.rs resolved from the environment
+	/// / the repo-root `.env`. Prints only whether credentials exist, never them.
+	#[test]
+	fn client_creds_are_all_or_nothing() {
+		let creds = client_creds();
+		eprintln!("google drive credentials compiled in: {}", creds.is_some());
+		if let Some((id, secret)) = creds {
+			assert!(!id.is_empty() && !secret.is_empty());
+		}
+	}
+
 	#[test]
 	fn random_tokens_are_url_safe_43_chars_and_unique() {
 		let a = random_token();

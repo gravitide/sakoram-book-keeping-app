@@ -375,12 +375,18 @@ Spec/plan: `docs/superpowers/{specs,plans}/2026-09-19-google-drive-backup*`.
   `import_tenant_data` refuses a bundle whose `schema_version` differs from the
   running build — fatal for a recovery months later. `open_tenant` migrates.
 - **Google credentials are `option_env!`** (`SAKORAM_GOOGLE_CLIENT_ID` /
-  `_SECRET`, CI secrets on both release workflows). `build.rs` carries the
-  `rerun-if-env-changed` lines — without them a changed secret silently doesn't
-  rebuild. Absent/empty ⇒ `drive_status.configured = false` ⇒ the card, banner
-  and welcome button all hide. For dev, export both in the shell that runs
-  `bun run tauri:dev`. The Google OAuth consent screen must be **published to
-  Production** — Testing-mode refresh tokens die after 7 days.
+  `_SECRET`). `build.rs` resolves each key as: a real non-empty env var (CI
+  secrets on both release workflows) → the gitignored repo-root **`.env`**
+  (local dev; `.env.example` lists the keys) → nothing. It forwards ONLY those
+  two keys via `cargo:rustc-env` and carries `rerun-if-env-changed` +
+  `rerun-if-changed=.env`, so editing `.env` rebuilds on the next run and a bare
+  `cargo test` sees the same values as `bun run tauri:dev` (relying on bun
+  auto-loading `.env` would not). Absent/empty ⇒ `drive_status.configured =
+  false` ⇒ the card, banner and welcome button all hide. Check what a build
+  resolved with `cargo test --lib client_creds_are_all_or_nothing -- --nocapture`
+  — don't grep the test binary, the linker dead-strips unused consts there. The
+  Google OAuth consent screen must be **published to Production** —
+  Testing-mode refresh tokens die after 7 days.
 - **No `std::sync::MutexGuard` across an `.await`** in `gdrive.rs` / `mod.rs`
   (the command futures must be `Send`): id-cache access goes through
   `cached`/`remember`, and `drive_connect_finish` `take()`s the `PendingAuth`
