@@ -220,7 +220,7 @@ async fn wipe_tenant_data(pool: &SqlitePool) -> Result<(), String> {
 	Ok(())
 }
 
-fn current_iso_utc() -> String {
+pub(crate) fn current_iso_utc() -> String {
 	use std::time::{SystemTime, UNIX_EPOCH};
 	let secs = SystemTime::now()
 		.duration_since(UNIX_EPOCH)

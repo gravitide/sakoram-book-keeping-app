@@ -199,7 +199,7 @@ fn write_marker(folder: &Path, m: &Marker) -> Result<(), String> {
 		.map_err(|e| e.to_string())
 }
 
-fn read_marker(folder: &Path) -> Result<Marker, String> {
+pub(crate) fn read_marker(folder: &Path) -> Result<Marker, String> {
 	let raw = std::fs::read(marker_path(folder))
 		.map_err(|_| "Not a Sakoram business folder (missing business.json).".to_string())?;
 	serde_json::from_slice(&raw).map_err(|e| format!("Corrupt business.json: {e}"))
@@ -395,7 +395,7 @@ fn safe_folder_name(name: &str) -> String {
 /// de-duplicated with " (2)", " (3)"… if that name is already taken. Returns
 /// the created folder path. Race-safe within a single process (create then
 /// bump on collision).
-fn create_business_folder(parent_dir: &str, folder_name: &str) -> Result<PathBuf, String> {
+pub(crate) fn create_business_folder(parent_dir: &str, folder_name: &str) -> Result<PathBuf, String> {
 	if parent_dir.trim().is_empty() {
 		return Err("A location for the business folder is required.".into());
 	}

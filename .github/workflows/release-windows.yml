@@ -106,6 +106,12 @@ jobs:
 
       - name: Build Tauri app
         run: bun run tauri:build
+        # Google Drive backup (src-tauri/src/drive/oauth.rs reads these via
+        # option_env!). Unset secrets expand to empty strings, which the app
+        # treats as "not configured" and hides the feature — forks still build.
+        env:
+          SAKORAM_GOOGLE_CLIENT_ID: ${{ secrets.SAKORAM_GOOGLE_CLIENT_ID }}
+          SAKORAM_GOOGLE_CLIENT_SECRET: ${{ secrets.SAKORAM_GOOGLE_CLIENT_SECRET }}
 
       - name: Upload Windows installers to draft release
         uses: softprops/action-gh-release@v2
