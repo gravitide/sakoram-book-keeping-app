@@ -25,8 +25,10 @@
 				<li>Back in Sakoram, press <strong>Back up now</strong> next to the open business.</li>
 			</ol>
 			<HelpCallout variant="info">
-				Sakoram asks Google only for permission to see <em>files it created itself</em>. It cannot read the rest
-				of your Drive, your email or your photos. The storage used comes out of your own free 15 GB.
+				Sakoram asks Google for two things: permission to see <em>files it created itself</em>, and your
+				<em>email address</em> — used only to show which account is connected. It cannot read the rest of your
+				Drive, your mail or your photos. Leave the Google Drive permission ticked on Google's screen; without it
+				there is nothing to back up to. The storage used comes out of your own free 15 GB.
 			</HelpCallout>
 		</HelpSection>
 

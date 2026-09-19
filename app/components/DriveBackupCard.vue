@@ -9,7 +9,8 @@
 			<div v-if="!drive.status.connected" class="mt-4">
 				<DriveConnectButton @connected="onConnected" />
 				<p class="text-xs text-(--ui-text-muted) mt-2 select-none">
-					Your browser opens to sign in. Sakoram can only see files it created itself — not the rest of your Drive.
+					Your browser opens to sign in. Sakoram can only see files it created itself — not the rest of your Drive —
+					plus your email address, which is only used to show which account is connected.
 				</p>
 			</div>
 

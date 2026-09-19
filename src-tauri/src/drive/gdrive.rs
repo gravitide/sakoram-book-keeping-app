@@ -18,6 +18,7 @@ const API: &str = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API: &str = "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable";
 const FOLDER_MIME: &str = "application/vnd.google-apps.folder";
 const ROOT_NAME: &str = "Sakoram Backups";
+const USERINFO: &str = "https://www.googleapis.com/oauth2/v3/userinfo";
 
 /// Profile photos are tiny; anything bigger is not something to inline.
 const MAX_PHOTO_BYTES: usize = 256 * 1024;
@@ -270,11 +271,31 @@ impl GDrive {
 			Some(link) => self.fetch_photo(link).await,
 			None => None,
 		};
+		// userinfo is authoritative for the address; Drive's copy is the fallback
+		// for a connection made before the email scope was requested.
+		let email = match self.userinfo_email().await {
+			Some(email) => Some(email),
+			None => user.email.filter(|v| !v.is_empty()),
+		};
 		Ok(Account {
-			email: user.email.filter(|v| !v.is_empty()),
+			email,
 			name: user.name.filter(|v| !v.is_empty()),
 			photo,
 		})
+	}
+
+	/// The account's address via the `email` scope. `None` for a token granted
+	/// before that scope was requested (or with it unticked). Every failure is
+	/// swallowed ON PURPOSE: a 401/403 here means "no email scope", NOT a revoked
+	/// sign-in, and must never reach `note_error` and drop a perfectly good token.
+	async fn userinfo_email(&self) -> Option<String> {
+		#[derive(Deserialize)]
+		struct Info {
+			#[serde(default)]
+			email: Option<String>,
+		}
+		let info: Info = self.send(self.http.get(USERINFO)).await.ok()?.json().await.ok()?;
+		info.email.filter(|v| !v.is_empty())
 	}
 
 	/// The profile photo as a `data:` URL. Fetched ONCE, here, so the webview never

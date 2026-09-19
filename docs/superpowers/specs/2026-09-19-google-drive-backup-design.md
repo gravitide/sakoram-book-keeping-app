@@ -155,7 +155,11 @@ shape as import-as-new).
 - **OAuth 2.0 for installed apps**: system browser + PKCE + loopback redirect to
   `http://127.0.0.1:<ephemeral port>`, caught by a one-shot `axum` listener (the
   phone-upload pattern). `state` parameter checked.
-- **Scope: `drive.file` only** — the app sees only files it created. Lowest-risk
+- **Scopes: `drive.file` + `userinfo.email`** (the second added 2026-09-19 so
+  the card can always show WHICH account is connected — Drive's `about.user`
+  withholds the address from a drive.file-only app). Two scopes make Google show
+  per-permission checkboxes, so connect verifies `drive.file` was actually
+  granted and refuses otherwise. For Drive itself: the app sees only files it created. Lowest-risk
   scope tier; consent screen reads "files created by this app". Access is per
   app + Google account, so a second machine sees the first machine's backups.
   Connected-account email via `about.get` (no extra scope).

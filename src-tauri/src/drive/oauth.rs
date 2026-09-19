@@ -19,7 +19,12 @@ use tokio::sync::oneshot;
 
 use super::remote::RemoteError;
 
+/// Files this app created — the ONLY Drive access we ever ask for.
 pub const SCOPE: &str = "https://www.googleapis.com/auth/drive.file";
+/// Just enough to show WHICH account is connected. Drive's own `about.user`
+/// withholds `emailAddress` from a drive.file-only app for many accounts.
+/// Deliberately not `profile`: the name + photo already come from Drive.
+pub const EMAIL_SCOPE: &str = "https://www.googleapis.com/auth/userinfo.email";
 const AUTH_ENDPOINT: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT: &str = "https://oauth2.googleapis.com/token";
 const REVOKE_ENDPOINT: &str = "https://oauth2.googleapis.com/revoke";
@@ -57,7 +62,7 @@ pub fn auth_url(client_id: &str, redirect_uri: &str, challenge: &str, state: &st
 		("client_id", client_id),
 		("redirect_uri", redirect_uri),
 		("response_type", "code"),
-		("scope", SCOPE),
+		("scope", &format!("{SCOPE} {EMAIL_SCOPE}")),
 		("code_challenge", challenge),
 		("code_challenge_method", "S256"),
 		("state", state),
@@ -165,6 +170,17 @@ pub struct Tokens {
 	pub expires_in: u64,
 	#[serde(default)]
 	pub refresh_token: Option<String>,
+	/// Space-separated scopes Google actually GRANTED — not what we asked for.
+	#[serde(default)]
+	pub scope: Option<String>,
+}
+
+/// Asking for more than one scope makes Google's consent screen show a
+/// checkbox per permission, so the user can untick Drive and still "succeed".
+/// That would connect fine and then fail every backup with a 403. A response
+/// with no `scope` field is given the benefit of the doubt.
+pub fn grants_drive(granted: Option<&str>) -> bool {
+	granted.is_none_or(|scopes| scopes.split_whitespace().any(|s| s == SCOPE))
 }
 
 pub async fn finish(pending: PendingAuth, client_id: &str, client_secret: &str) -> Result<Tokens, String> {
@@ -269,12 +285,21 @@ mod tests {
 	}
 
 	#[test]
-	fn auth_url_requests_offline_access_with_only_the_drive_file_scope() {
+	fn drive_must_be_among_the_granted_scopes() {
+		assert!(grants_drive(Some("https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive.file openid")));
+		assert!(!grants_drive(Some("https://www.googleapis.com/auth/userinfo.email openid")));
+		// A lookalike must not pass a substring check.
+		assert!(!grants_drive(Some("https://www.googleapis.com/auth/drive.file.evil")));
+		assert!(grants_drive(None));
+	}
+
+	#[test]
+	fn auth_url_requests_offline_access_for_drive_file_and_email_only() {
 		let url = auth_url("cid.apps.googleusercontent.com", "http://127.0.0.1:5123", "CHAL", "STATE");
 		let parsed = reqwest::Url::parse(&url).unwrap();
 		let q: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
 		assert_eq!(parsed.host_str(), Some("accounts.google.com"));
-		assert_eq!(q["scope"], "https://www.googleapis.com/auth/drive.file");
+		assert_eq!(q["scope"], "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email");
 		assert_eq!(q["redirect_uri"], "http://127.0.0.1:5123");
 		assert_eq!(q["code_challenge"], "CHAL");
 		assert_eq!(q["code_challenge_method"], "S256");

@@ -377,8 +377,17 @@ Spec/plan: `docs/superpowers/{specs,plans}/2026-09-19-google-drive-backup*`.
   calls `drive_refresh_account` when connected with nothing to show. The photo
   is fetched ONCE by Rust (no bearer token — the link is public) and cached as
   a `data:` URL, so the webview makes no network request and it renders
-  offline. Guaranteeing an email would need the `email` scope — a consent-text
-  change, deliberately not taken.
+  offline. The email itself comes from the userinfo endpoint via the
+  **`userinfo.email` scope** (added on request; NOT `profile` — name + photo
+  already come from Drive), with Drive's copy as the fallback for a grant that
+  predates it. `userinfo_email` swallows every failure ON PURPOSE: a 401 there
+  means "no email scope", and letting it reach `note_error` would drop a good
+  token as if it were revoked.
+- **Two scopes ⇒ Google shows a checkbox per permission**, so a user can untick
+  Drive and still complete sign-in. `drive_connect_finish` checks the GRANTED
+  `scope` in the token response (`oauth::grants_drive`, exact-match, not
+  substring), revokes and refuses when `drive.file` is missing — otherwise the
+  app would say "connected" and then 403 on every backup.
 - **Per-machine state** is `%APPDATA%/com.sakoram.billing/backup.json`
   (`reminder_days`, `account_email` / `account_name` / `account_photo`,
   `last_backups`). No tenant-DB column, no
