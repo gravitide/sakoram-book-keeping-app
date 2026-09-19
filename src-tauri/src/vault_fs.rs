@@ -77,7 +77,7 @@ pub fn enable_encryption_at(
 /// Zero-filling first and deleting second (the old order) left a same-length
 /// file of NULs behind when the delete failed — which `unlock_at` then treated
 /// as the newest copy of the database.
-fn secure_remove(path: &std::path::Path) -> Result<(), VaultFsError> {
+pub(crate) fn secure_remove(path: &std::path::Path) -> Result<(), VaultFsError> {
     use std::io::{Seek, SeekFrom, Write};
     let len = match std::fs::metadata(path) {
         Ok(m) => m.len(),

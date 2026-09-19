@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-	A fast, fully offline desktop bookkeeping app for small Sri Lankan businesses.<br/>
+	A fast, offline-first desktop bookkeeping app for small Sri Lankan businesses.<br/>
 	Manage clients, quotes, invoices, bills, and vouchers — and produce
 	professional PDFs — all from a single local SQLite file.
 </p>
@@ -44,8 +44,9 @@
   machine.
 - **Sri Lanka–first defaults** — LKR currency, April–March fiscal year,
   integer-cents money math (no float drift, banker's rounding).
-- **Fully offline** — no servers, no accounts, no telemetry. Your data
-  lives in `%APPDATA%\com.sakoram.billing\`.
+- **Offline by default** — no servers, no accounts, no telemetry. The only
+  network feature is the optional Google Drive backup, which you switch on
+  yourself and which writes to *your own* Drive.
 
 ## 🛠 Tech stack
 

@@ -5,6 +5,7 @@ use tauri::{
 };
 use tauri::Manager;
 mod data_io;
+mod drive;
 pub mod license;
 mod pdf;
 mod phone_upload;
@@ -79,6 +80,7 @@ pub fn run() {
 		.plugin(tauri_plugin_store::Builder::new().build())
 		.manage(phone_upload::PhoneUploadState::default())
 		.manage(vault_fs::VaultSessions::default())
+		.manage(drive::DriveState::default())
 		.invoke_handler(tauri::generate_handler![
 			pdf::export_quote_pdf,
 			pdf::export_invoice_pdf,
@@ -118,6 +120,20 @@ pub fn run() {
 			vault_fs::lock_tenant,
 			vault_fs::change_tenant_password,
 			vault_fs::disable_tenant_encryption,
+			drive::drive_status,
+			drive::drive_connect_begin,
+			drive::drive_connect_finish,
+			drive::drive_connect_cancel,
+			drive::drive_refresh_account,
+			drive::drive_disconnect,
+			drive::drive_set_reminder_days,
+			drive::drive_cancel,
+			drive::drive_backup_now,
+			drive::drive_list_businesses,
+			drive::drive_list_snapshots,
+			drive::drive_list_backups,
+			drive::drive_delete_backup,
+			drive::drive_restore,
 			license::validate_license,
 			license::read_license_state,
 			license::write_license_state,

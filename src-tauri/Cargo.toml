@@ -5,7 +5,7 @@ name = "sakoram_billing"
 # can't pick a binary. Pin the app binary so the tool stays out of the way
 # (mint it explicitly via `cargo run --bin mint_license`).
 default-run = "sakoram_billing"
-version = "0.159.3"
+version = "0.160.0"
 description = "Sakoram — desktop bookkeeper for quotes, invoices, bills and vouchers"
 authors = [ "Sakoram" ]
 license = "MIT"
@@ -91,6 +91,17 @@ sqlx = { version = "0.8", features = [
 
 # Used by the data_io module to bundle/extract export archives.
 zip = { version = "2", default-features = false, features = [ "deflate" ] }
+
+# Google Drive backup (src/drive/): reqwest talks to the Drive v3 REST API and
+# the OAuth token endpoint (rustls — no system OpenSSL). md-5 matches Drive's
+# native `md5Checksum` so presence + integrity are verified against Google's
+# own value. sha2 is the PKCE S256 challenge.
+reqwest = { version = "0.12", default-features = false, features = [
+	"rustls-tls",
+	"json"
+] }
+md-5 = "0.10"
+sha2 = "0.10"
 
 # Owner-password PDF encryption applied as a post-process after Typst
 # renders a document (see src/pdf.rs). `vendored` builds libqpdf from the
