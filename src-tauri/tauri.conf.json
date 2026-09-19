@@ -16,7 +16,7 @@
 		],
 		"resources": ["fonts/*"],
 		"externalBin": ["binaries/typst"],
-		"copyright": "Copyright © 2026 Srisaravana Manicaraja",
+		"copyright": "Copyright © 2026 Gravitide. Free software under the GNU GPL v3.",
 		"category": "Business",
 		"shortDescription": "",
 		"longDescription": "",

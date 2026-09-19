@@ -1,7 +1,7 @@
 export default defineAppConfig({
 	app: {
 		name: "Sakoram",
-		author: "Srisaravana Manicaraja",
+		author: "Gravitide",
 		repo: "https://github.com/srisar/sakoram-book-keeping-app"
 	},
 	ui: {

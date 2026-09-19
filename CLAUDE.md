@@ -810,8 +810,19 @@ Code-signing requires a CA cert (~$200–400/year), out of scope.
   `com.nicolaspadari.nuxtor`) and `tauri:*:ios|android` scripts; both were removed
   in v0.160.2. If a mobile build is ever wanted, regenerate them with
   `tauri android init` / `tauri ios init` so they pick up `com.sakoram.billing`.
-  `LICENSE` keeps the template author's copyright line beside the owner's —
-  MIT requires it; do not remove it.
+- **Source licence: GPL-3.0-only, copyright Gravitide** (a registered Sri Lankan
+  company; contact `hello@gravitide.com`) — relicensed from MIT in v0.160.2 so
+  nobody can ship a closed or rebranded paid fork. `LICENSE` is the VERBATIM GPL
+  text (GitHub detects it; never edit it, including the `<year>` placeholders in
+  its own appendix). The project's copyright + no-warranty statement, and every
+  third-party notice, live in `NOTICE.md` — including the **Nuxtor template's
+  MIT notice, which MIT requires us to keep; do not remove it**. `TRADEMARKS.md`
+  reserves the Sakoram name + logos (the GPL covers code, not brand). The About
+  modal carries the GPL's "Appropriate Legal Notices" — never reintroduce "All
+  rights reserved". A NEW dependency must be GPL-3-compatible: permissive,
+  MPL-2.0, LGPL and Apache-2.0 are fine; GPL-2.0-only, SSPL, BUSL and
+  "non-commercial" licences are not. This is unrelated to the dormant
+  *product* licence-key code under "Licensing & feature tiers".
 - **Tauri capability changes** require a Rust rebuild (capabilities are
   baked in at compile time).
 - **Tauri/JS plugin version mismatch** errors on `tauri:build`: the

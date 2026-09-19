@@ -252,8 +252,23 @@
 								</dd>
 							</dl>
 
+							<!-- GPL §0 "Appropriate Legal Notices": copyright, no warranty, that it
+								may be shared under the licence, and where to read it. Never
+								"All rights reserved" — that contradicts the licence. -->
+							<p class="text-xs text-(--ui-text-muted) leading-relaxed">
+								Sakoram is free software: you may use, study, share and change it under the
+								<button type="button" class="text-(--ui-primary) hover:underline cursor-pointer" @click="openLink('https://www.gnu.org/licenses/gpl-3.0.html')">
+									GNU General Public License v3
+								</button>.
+								It comes with <strong>no warranty</strong>. The
+								<button type="button" class="text-(--ui-primary) hover:underline cursor-pointer" @click="openLink('https://github.com/srisar/sakoram-book-keeping-app')">
+									source code
+								</button>
+								is public. The Sakoram name and logo are trademarks of Gravitide.
+							</p>
+
 							<div class="text-xs text-(--ui-text-muted) border-t border-(--ui-border) pt-4 flex items-center justify-between gap-3">
-								<span>© {{ copyrightYear }} Gravitide. All rights reserved.</span>
+								<span>© {{ copyrightYear }} Gravitide</span>
 								<div class="flex items-center gap-3 shrink-0">
 									<button
 										type="button"

@@ -5,8 +5,8 @@
 	"private": true,
 	"packageManager": "bun@1.3.6",
 	"description": "Sakoram — desktop bookkeeper for quotes, invoices, bills, vouchers",
-	"author": "Srisaravana Manicaraja <srisar@proton.me>",
-	"license": "MIT",
+	"author": "Gravitide <hello@gravitide.com> (https://gravitide.dev)",
+	"license": "GPL-3.0-only",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/srisar/sakoram-book-keeping-app.git"
