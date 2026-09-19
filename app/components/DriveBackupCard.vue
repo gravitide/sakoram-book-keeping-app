@@ -25,7 +25,7 @@
 				</div>
 
 				<UFormField label="Remind me to back up" class="max-w-xs">
-					<USelect :model-value="reminderValue" :items="reminderItems" @update:model-value="onReminderChange" />
+					<USelect :model-value="reminderValue" :items="reminderItems" class="w-full" @update:model-value="onReminderChange" />
 				</UFormField>
 
 				<div class="rounded-md border border-(--ui-border) divide-y divide-(--ui-border)">

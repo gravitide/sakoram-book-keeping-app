@@ -52,10 +52,10 @@
 					</p>
 					<template v-else>
 						<UFormField label="Business">
-							<USelect v-model="selectedKey" :items="businessItems" placeholder="Choose a business" />
+							<USelect v-model="selectedKey" :items="businessItems" placeholder="Choose a business" class="w-full" />
 						</UFormField>
 						<UFormField v-if="selectedKey" label="Backup">
-							<USelect v-model="selectedStem" :items="snapshotItems" placeholder="Choose a backup" :loading="loadingSnapshots" />
+							<USelect v-model="selectedStem" :items="snapshotItems" placeholder="Choose a backup" :loading="loadingSnapshots" class="w-full" />
 						</UFormField>
 						<p class="text-xs text-(--ui-text-muted) select-none">
 							The business is restored into a NEW folder you choose next. Nothing already on this computer is overwritten.
