@@ -696,9 +696,8 @@ sakoram_app/
       └─ bin/mint_license.rs          ← local key-minting CLI (keygen + mint); NOT bundled into the app
 .github/
 └─ workflows/
-   ├─ release-windows.yml             ← Windows MSI + NSIS build, triggered by tag push or manual dispatch. Also mirrors installers to Cloudflare R2 (when secrets configured).
-   ├─ release-macos.yml               ← macOS Apple Silicon DMG + .app.tar.gz build, same triggers + R2 mirror.
-   └─ publish-latest.yml              ← manual workflow_dispatch that points `sakoram/releases.json` in R2 at an already-uploaded build, per platform (windows/mac/linux). Builds nothing — it lists the version's R2 prefix to derive filename/size/upload-date, then merges one platform's entry into the manifest. Merge logic is the pure, unit-tested `scripts/release-manifest.mjs`. `latest.json` (the old flat manifest the website still reads) is deliberately left frozen — migrating the site to `releases.json` is separate work.
+   ├─ release-windows.yml             ← Windows MSI + NSIS build, triggered by tag push or manual dispatch. Uploads to the GitHub release for the tag.
+   └─ release-macos.yml               ← macOS Apple Silicon DMG + .app.tar.gz build, same triggers, same release.
 ```
 
 ---
@@ -2094,17 +2093,17 @@ persisted to localStorage).
   tag push (parallel) and have their own "Run workflow" button on
   the Actions tab for one-platform rebuilds. Each handles its own
   tag resolution + published-release guard.
-- ✅ **Cloudflare R2 mirror for installers** — both release workflows
-  upload the produced installer files to an R2 bucket under
-  `sakoram/<version>/<filename>` (with spaces in Tauri-produced
-  filenames replaced by dots for clean URLs). R2 has a connected
-  custom domain so installers are served at
-  `https://downloads.gravitide.dev/sakoram/<version>/...` directly,
-  no GitHub-Releases hop. The mirror step skips cleanly when the
-  required secrets (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
-  `R2_ACCOUNT_ID`, `R2_BUCKET`) aren't configured on the repo, so
-  forks / contributor branches aren't coupled to the
-  gravitide.dev bucket.
+- ✅ **Installers are hosted on GitHub Releases** (since v0.160.3). The repo is
+  public under `gravitide/`, so each release workflow uploads its installers to
+  the GitHub release for the tag and the website links to the latest release.
+  The Cloudflare R2 mirror (`downloads.gravitide.dev`), the `publish-latest`
+  workflow and `scripts/release-manifest.mjs` (the `releases.json` manifest
+  builder) were removed — do not reintroduce them. **The workflows create the
+  release as a DRAFT**; `/releases/latest` and the API's `latest` only resolve
+  PUBLISHED releases, so the website keeps pointing at the previous version
+  until someone publishes the draft — and it must only be published once BOTH
+  platforms have uploaded (macOS finishes ~15 min before Windows), or the site
+  serves a release with no Windows installer.
 - ✅ **Calendar** — `/calendar` page with month-grid view of every
   upcoming due date (invoices, bills, quote expiries, payslips).
   Hand-rolled grid (no FullCalendar / VCal dep). Filter chips for
