@@ -24,6 +24,9 @@ pub struct BackupPrefs {
 	/// Profile photo as a `data:` URL (a few KB) — no network needed to render it.
 	#[serde(default)]
 	pub account_photo: Option<String>,
+	/// Diagnostic only: why `account_photo` is empty. Never shown in the UI.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub account_photo_note: Option<String>,
 	/// tenant id → ISO UTC timestamp of the last COMPLETE backup from this machine.
 	#[serde(default)]
 	pub last_backups: HashMap<String, String>,
@@ -36,6 +39,7 @@ impl Default for BackupPrefs {
 			account_email: None,
 			account_name: None,
 			account_photo: None,
+			account_photo_note: None,
 			last_backups: HashMap::new(),
 		}
 	}

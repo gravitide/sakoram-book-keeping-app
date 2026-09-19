@@ -101,6 +101,7 @@ async fn cache_account(app: &AppHandle, remote: &GDrive) -> Result<(), String> {
 	prefs.account_email = account.email;
 	prefs.account_name = account.name;
 	prefs.account_photo = account.photo;
+	prefs.account_photo_note = account.photo_note;
 	state::save(&path, &prefs)
 }
 
@@ -208,6 +209,7 @@ pub async fn drive_disconnect(app: AppHandle) -> Result<DriveStatus, String> {
 	prefs.account_email = None;
 	prefs.account_name = None;
 	prefs.account_photo = None;
+	prefs.account_photo_note = None;
 	state::save(&path, &prefs)?;
 	status(&app)
 }

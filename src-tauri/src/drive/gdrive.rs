@@ -30,6 +30,10 @@ pub struct Account {
 	pub name: Option<String>,
 	/// `data:` URL — see `GDrive::fetch_photo`.
 	pub photo: Option<String>,
+	/// Why there is no photo, when there isn't one. The photo is cosmetic so its
+	/// failure never fails the lookup — but a silently missing avatar is
+	/// undiagnosable, so the reason is kept (and cached in backup.json).
+	pub photo_note: Option<String>,
 }
 
 pub fn photo_data_url(mime: &str, bytes: &[u8]) -> Option<String> {
@@ -88,7 +92,12 @@ pub struct GDrive {
 
 impl GDrive {
 	pub fn new(client_id: &str, client_secret: &str, refresh_token: String) -> Self {
-		let http = reqwest::Client::builder().timeout(Duration::from_secs(120)).build().expect("reqwest client");
+		// A User-Agent is set because Google's image host may refuse anonymous clients.
+		let http = reqwest::Client::builder()
+			.timeout(Duration::from_secs(120))
+			.user_agent(concat!("Sakoram/", env!("CARGO_PKG_VERSION")))
+			.build()
+			.expect("reqwest client");
 		Self {
 			http,
 			client_id: client_id.into(),
@@ -267,10 +276,16 @@ impl GDrive {
 			.await
 			.map_err(|e| RemoteError::Other(e.to_string()))?;
 		let user = about.user.ok_or_else(|| RemoteError::Other("Google did not describe the connected account.".into()))?;
-		let photo = match user.photo.as_deref() {
-			Some(link) => self.fetch_photo(link).await,
-			None => None,
+		let (photo, photo_note) = match user.photo.as_deref() {
+			Some(link) => match self.fetch_photo(link).await {
+				Ok(data_url) => (Some(data_url), None),
+				Err(why) => (None, Some(why)),
+			},
+			None => (None, Some("Google returned no photoLink for this account".to_string())),
 		};
+		if let Some(why) = &photo_note {
+			eprintln!("[drive] no profile photo: {why}");
+		}
 		// userinfo is authoritative for the address; Drive's copy is the fallback
 		// for a connection made before the email scope was requested.
 		let email = match self.userinfo_email().await {
@@ -281,6 +296,7 @@ impl GDrive {
 			email,
 			name: user.name.filter(|v| !v.is_empty()),
 			photo,
+			photo_note,
 		})
 	}
 
@@ -301,21 +317,28 @@ impl GDrive {
 	/// The profile photo as a `data:` URL. Fetched ONCE, here, so the webview never
 	/// makes a network request of its own and the card still renders offline.
 	/// The link is public — the bearer token is deliberately NOT sent to it.
-	/// Best-effort: any oddity (non-image, oversized, offline) just means no photo.
-	async fn fetch_photo(&self, link: &str) -> Option<String> {
+	/// Best-effort: any oddity (non-image, oversized, offline) just means no photo
+	/// — but the `Err` says WHICH oddity, without echoing the link itself.
+	async fn fetch_photo(&self, link: &str) -> Result<String, String> {
 		if !link.starts_with("https://") {
-			return None;
+			return Err("photoLink is not https".into());
 		}
-		let resp = self.http.get(link).send().await.ok()?;
+		let resp = self.http.get(link).send().await.map_err(|e| format!("download failed: {e}"))?;
 		if !resp.status().is_success() {
-			return None;
+			return Err(format!("download returned HTTP {}", resp.status().as_u16()));
 		}
-		let mime = resp.headers().get(reqwest::header::CONTENT_TYPE)?.to_str().ok()?.split(';').next()?.trim().to_string();
+		let mime = resp
+			.headers()
+			.get(reqwest::header::CONTENT_TYPE)
+			.and_then(|v| v.to_str().ok())
+			.and_then(|v| v.split(';').next())
+			.map(|v| v.trim().to_string())
+			.unwrap_or_default();
 		if !mime.starts_with("image/") {
-			return None;
+			return Err(format!("download was not an image (content-type {mime:?})"));
 		}
-		let bytes = resp.bytes().await.ok()?;
-		photo_data_url(&mime, &bytes)
+		let bytes = resp.bytes().await.map_err(|e| format!("download interrupted: {e}"))?;
+		photo_data_url(&mime, &bytes).ok_or_else(|| format!("image was empty or over the size cap ({} bytes)", bytes.len()))
 	}
 }
 

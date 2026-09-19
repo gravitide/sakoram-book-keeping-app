@@ -171,11 +171,12 @@
 	const accountTitle = computed(() => drive.status?.name ?? drive.status?.email ?? "your Google account");
 	const accountSubtitle = computed(() => (drive.status?.name && drive.status.email ? drive.status.email : null));
 
-	// Connected but nothing to show = the lookup failed at connect time (or the
-	// connect predates it). Try once per mount; it is cosmetic, so stay quiet.
+	// Connected but something is missing = the lookup (or just the photo
+	// download) failed at connect time. Try once per mount; it is cosmetic, so
+	// stay quiet. An account with genuinely no photo costs one call per visit.
 	const healAccount = async () => {
 		const s = drive.status;
-		if (!s?.connected || s.name || s.email) return;
+		if (!s?.connected || ((s.name || s.email) && s.photo)) return;
 		await drive.refreshAccount().catch((err) => console.warn("[drive] account lookup failed:", err));
 	};
 
