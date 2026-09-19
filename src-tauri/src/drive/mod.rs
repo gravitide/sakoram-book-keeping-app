@@ -31,6 +31,9 @@ use restore::SnapshotInfo;
 #[derive(Default)]
 pub struct DriveState {
 	pending: Mutex<Option<oauth::PendingAuth>>,
+	/// Aborts the sign-in currently being waited on by `drive_connect_finish`
+	/// (which has already `take()`n `pending`, so this is the only handle left).
+	canceller: Mutex<Option<oauth::AuthCanceller>>,
 	cancel: Arc<AtomicBool>,
 	/// One Drive operation at a time — a backup and a restore must not interleave.
 	busy: AtomicBool,
@@ -118,10 +121,27 @@ pub fn drive_status(app: AppHandle) -> Result<DriveStatus, String> {
 #[tauri::command]
 pub async fn drive_connect_begin(drive: State<'_, DriveState>) -> Result<String, String> {
 	let (id, _) = oauth::client_creds().ok_or("Google Drive backup is not configured in this build.")?;
-	let (url, pending) = oauth::begin(id).await?;
+	// A second Connect click must not queue behind an abandoned attempt: end
+	// the previous wait first, so its `drive_connect_finish` returns right away.
+	if let Some(previous) = drive.canceller.lock().unwrap().take() {
+		previous.cancel();
+	}
+	let (url, pending, canceller) = oauth::begin(id).await?;
 	// Replacing a stale PendingAuth drops it, which shuts its listener down.
 	*drive.pending.lock().unwrap() = Some(pending);
+	*drive.canceller.lock().unwrap() = Some(canceller);
 	Ok(url)
+}
+
+/// Abort an in-flight sign-in (browser tab closed, user changed their mind).
+/// Safe to call when nothing is in flight.
+#[tauri::command]
+pub fn drive_connect_cancel(drive: State<'_, DriveState>) {
+	if let Some(canceller) = drive.canceller.lock().unwrap().take() {
+		canceller.cancel();
+	}
+	// Covers a begin whose finish was never called.
+	drive.pending.lock().unwrap().take();
 }
 
 #[tauri::command]

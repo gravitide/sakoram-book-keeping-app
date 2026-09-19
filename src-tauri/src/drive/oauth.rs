@@ -69,6 +69,30 @@ pub fn auth_url(client_id: &str, redirect_uri: &str, challenge: &str, state: &st
 	.to_string()
 }
 
+/// What the loopback route hands to `wait_for_code`. Shared with
+/// `AuthCanceller` so a cancel travels down the SAME channel as a real
+/// redirect — no `select!` needed (tokio's `macros` feature is off).
+type ParamsSender = Arc<Mutex<Option<oneshot::Sender<HashMap<String, String>>>>>;
+
+/// `error` value `AuthCanceller` injects; never sent by Google.
+const CANCEL_MARKER: &str = "sakoram_cancelled";
+
+/// Same stable code as `backup::CANCELLED`, so the frontend stays silent.
+pub const SIGN_IN_CANCELLED: &str = "DRIVE_CANCELLED: Sign-in cancelled.";
+
+/// Aborts the sign-in that `begin` started. Without it, closing the browser tab
+/// left `finish` waiting out the full 5-minute consent timeout with the Connect
+/// button stuck loading. Idempotent; a no-op once the redirect has arrived.
+pub struct AuthCanceller(ParamsSender);
+
+impl AuthCanceller {
+	pub fn cancel(&self) {
+		if let Some(tx) = self.0.lock().unwrap().take() {
+			let _ = tx.send(HashMap::from([("error".to_string(), CANCEL_MARKER.to_string())]));
+		}
+	}
+}
+
 /// An authorisation in flight. Dropping it shuts the loopback listener down.
 pub struct PendingAuth {
 	verifier: String,
@@ -80,13 +104,14 @@ pub struct PendingAuth {
 
 /// Bind the loopback listener and build the consent URL the caller opens in
 /// the system browser.
-pub async fn begin(client_id: &str) -> Result<(String, PendingAuth), String> {
+pub async fn begin(client_id: &str) -> Result<(String, PendingAuth, AuthCanceller), String> {
 	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.map_err(|e| format!("could not start sign-in listener: {e}"))?;
 	let port = listener.local_addr().map_err(|e| e.to_string())?.port();
 	let redirect_uri = format!("http://127.0.0.1:{port}");
 
 	let (tx, rx) = oneshot::channel::<HashMap<String, String>>();
-	let tx = Arc::new(Mutex::new(Some(tx)));
+	let tx: ParamsSender = Arc::new(Mutex::new(Some(tx)));
+	let canceller = AuthCanceller(tx.clone());
 	let router = Router::new().route(
 		"/",
 		get(move |Query(params): Query<HashMap<String, String>>| {
@@ -111,7 +136,7 @@ pub async fn begin(client_id: &str) -> Result<(String, PendingAuth), String> {
 	let verifier = random_token();
 	let state = random_token();
 	let url = auth_url(client_id, &redirect_uri, &pkce_challenge(&verifier), &state);
-	Ok((url, PendingAuth { verifier, state, redirect_uri, rx, _shutdown: shutdown_tx }))
+	Ok((url, PendingAuth { verifier, state, redirect_uri, rx, _shutdown: shutdown_tx }, canceller))
 }
 
 /// Wait for the browser redirect → `(code, verifier, redirect_uri)`.
@@ -122,6 +147,9 @@ async fn wait_for_code(pending: PendingAuth) -> Result<(String, String, String),
 		.map_err(|_| "Timed out waiting for Google sign-in.".to_string())?
 		.map_err(|_| "Sign-in was interrupted.".to_string())?;
 	if let Some(err) = params.get("error") {
+		if err == CANCEL_MARKER {
+			return Err(SIGN_IN_CANCELLED.to_string());
+		}
 		return Err(format!("Google sign-in was declined ({err})."));
 	}
 	if params.get("state").map(String::as_str) != Some(state.as_str()) {
@@ -259,7 +287,7 @@ mod tests {
 	#[test]
 	fn loopback_listener_delivers_the_code_and_rejects_a_wrong_state() {
 		tauri::async_runtime::block_on(async {
-			let (url, pending) = begin("cid").await.unwrap();
+			let (url, pending, _canceller) = begin("cid").await.unwrap();
 			let parsed = reqwest::Url::parse(&url).unwrap();
 			let q: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
 			let redirect = q["redirect_uri"].clone();
@@ -273,9 +301,35 @@ mod tests {
 	}
 
 	#[test]
+	fn cancelling_ends_the_wait_immediately_with_the_cancelled_code() {
+		tauri::async_runtime::block_on(async {
+			let (_url, pending, canceller) = begin("cid").await.unwrap();
+			canceller.cancel();
+			canceller.cancel(); // idempotent
+			let started = std::time::Instant::now();
+			let err = wait_for_code(pending).await.unwrap_err();
+			assert_eq!(err, SIGN_IN_CANCELLED);
+			assert!(started.elapsed() < Duration::from_secs(2), "must not wait out the consent timeout");
+		});
+	}
+
+	#[test]
+	fn a_cancel_after_the_redirect_arrived_does_not_clobber_the_code() {
+		tauri::async_runtime::block_on(async {
+			let (url, pending, canceller) = begin("cid").await.unwrap();
+			let parsed = reqwest::Url::parse(&url).unwrap();
+			let q: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
+			reqwest::Client::new().get(format!("{}/?code=abc&state={}", q["redirect_uri"], q["state"])).send().await.unwrap();
+			canceller.cancel();
+			let (code, _, _) = wait_for_code(pending).await.unwrap();
+			assert_eq!(code, "abc");
+		});
+	}
+
+	#[test]
 	fn loopback_listener_returns_the_code_for_the_right_state() {
 		tauri::async_runtime::block_on(async {
-			let (url, pending) = begin("cid").await.unwrap();
+			let (url, pending, _canceller) = begin("cid").await.unwrap();
 			let parsed = reqwest::Url::parse(&url).unwrap();
 			let q: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
 			let http = reqwest::Client::new();

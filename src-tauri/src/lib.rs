@@ -123,6 +123,7 @@ pub fn run() {
 			drive::drive_status,
 			drive::drive_connect_begin,
 			drive::drive_connect_finish,
+			drive::drive_connect_cancel,
 			drive::drive_disconnect,
 			drive::drive_set_reminder_days,
 			drive::drive_cancel,

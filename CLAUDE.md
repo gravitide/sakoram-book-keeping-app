@@ -391,6 +391,16 @@ Spec/plan: `docs/superpowers/{specs,plans}/2026-09-19-google-drive-backup*`.
   (the command futures must be `Send`): id-cache access goes through
   `cached`/`remember`, and `drive_connect_finish` `take()`s the `PendingAuth`
   before awaiting.
+- **The sign-in wait must always be escapable.** Consent happens in the system
+  browser where we can't see it — the tab gets closed, or Google shows an error
+  page that never redirects — and `drive_connect_finish` would then sit out the
+  5-minute timeout with Connect stuck loading (shipped once). `oauth::begin`
+  returns an `AuthCanceller` that injects a cancel down the SAME oneshot the
+  redirect uses (no `select!` — tokio `macros` is off); `drive_connect_cancel`
+  fires it, and a second `drive_connect_begin` fires the previous one first. In
+  the store `connect()` attempts are numbered so a superseded attempt rejecting
+  late can't switch off the live attempt's spinner. UI lives in ONE place,
+  `DriveConnectButton.vue` (card + restore modal) — never a bare `:loading`.
 - **Encrypted businesses**: the snapshot is sealed with the session DEK
   (`prepare_db` → `vault::encrypt_file` → `secure_remove` of the plaintext
   temp), so "Back up now" is disabled while locked. **Attachments are plaintext

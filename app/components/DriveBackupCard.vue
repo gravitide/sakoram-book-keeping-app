@@ -7,9 +7,7 @@
 			</p>
 
 			<div v-if="!drive.status.connected" class="mt-4">
-				<UButton icon="i-lucide-log-in" :loading="drive.connecting" @click="onConnect">
-					Connect Google Drive
-				</UButton>
+				<DriveConnectButton @connected="onConnected" />
 				<p class="text-xs text-(--ui-text-muted) mt-2 select-none">
 					Your browser opens to sign in. Sakoram can only see files it created itself — not the rest of your Drive.
 				</p>
@@ -92,13 +90,8 @@
 		toast.add({ title: info.title, description: info.description, color: "error", icon: "i-lucide-circle-alert" });
 	};
 
-	const onConnect = async () => {
-		try {
-			await drive.connect();
-			toast.add({ title: "Google Drive connected", color: "success", icon: "i-lucide-check" });
-		} catch (err) {
-			fail(err);
-		}
+	const onConnected = () => {
+		toast.add({ title: "Google Drive connected", color: "success", icon: "i-lucide-check" });
 	};
 
 	const onDisconnect = async () => {

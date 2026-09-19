@@ -7,9 +7,7 @@
 					<p class="text-sm text-(--ui-text-muted) mb-3 select-none">
 						Sign in with the Google account you backed up to.
 					</p>
-					<UButton icon="i-lucide-log-in" :loading="drive.connecting" @click="onConnect">
-						Connect Google Drive
-					</UButton>
+					<DriveConnectButton center @connected="loadBusinesses" />
 				</div>
 
 				<!-- Step: working -->
@@ -142,7 +140,10 @@
 	// The welcome page is kept alive, so this modal instance is reused: reset
 	// everything each time it opens instead of trusting a fresh mount.
 	watch(open, async (isOpen) => {
-		if (!isOpen) return;
+		if (!isOpen) {
+			if (drive.connecting) void drive.cancelConnect().catch(() => { /* nothing in flight */ });
+			return;
+		}
 		businesses.value = [];
 		snapshots.value = [];
 		selectedKey.value = undefined;
@@ -166,15 +167,6 @@
 			loadingSnapshots.value = false;
 		}
 	});
-
-	const onConnect = async () => {
-		try {
-			await drive.connect();
-			await loadBusinesses();
-		} catch (err) {
-			fail(err);
-		}
-	};
 
 	const onRestore = async () => {
 		if (!selectedKey.value || !selectedStem.value) return;

@@ -78,15 +78,30 @@ export const useDriveBackupStore = defineStore("drive_backup", () => {
 
 	const ensureLoaded = createLoadOnce(refresh, () => status.value !== null);
 
+	// The sign-in happens in the system browser, out of our sight, so an attempt
+	// can be abandoned (tab closed) or restarted at any time. Each call is
+	// numbered: only the NEWEST attempt may switch `connecting` off, otherwise a
+	// superseded attempt rejecting late would kill the spinner of the live one.
+	let connectAttempt = 0;
+
 	const connect = async () => {
+		const attempt = ++connectAttempt;
 		connecting.value = true;
 		try {
+			// Also ends any previous in-flight attempt (it rejects DRIVE_CANCELLED).
 			const url = await invoke<string>("drive_connect_begin");
 			await openInBrowser(url);
 			status.value = await invoke<DriveStatus>("drive_connect_finish");
 		} finally {
-			connecting.value = false;
+			if (attempt === connectAttempt) connecting.value = false;
 		}
+	};
+
+	/** Stop waiting for the browser. The pending `connect()` rejects DRIVE_CANCELLED. */
+	const cancelConnect = async () => {
+		connectAttempt++;
+		connecting.value = false;
+		await invoke("drive_connect_cancel");
 	};
 
 	const disconnect = async () => {
@@ -133,6 +148,7 @@ export const useDriveBackupStore = defineStore("drive_backup", () => {
 		ensureLoaded,
 		refresh,
 		connect,
+		cancelConnect,
 		disconnect,
 		setReminderDays,
 		backupNow,
