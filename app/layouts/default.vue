@@ -42,7 +42,7 @@
 
 				<OverlayScrollbar class="flex-1 min-h-0">
 					<nav class="p-2 space-y-1">
-						<template v-for="item in nav" :key="item.to ?? item.label">
+						<template v-for="item in nav" :key="item.to ?? item.key ?? item.label">
 							<!-- Optional rule above this item to break the list into
 					logical groups (documents / contacts / settings). -->
 							<div
@@ -73,34 +73,32 @@
 								<UIcon :name="item.icon" class="size-4" />
 								{{ item.label }}
 							</button>
-							<!-- Group parent (has children): the label still navigates to
-							its landing page; the chevron on the right (or a double-click on the header) collapses/expands
-							the group's sub-items. Collapsed state is persisted per
-							group (by its `to`) to localStorage. -->
-							<div v-else-if="item.children" class="flex items-stretch" @dblclick="toggleGroup(item.to)">
-								<NuxtLink
-									:to="item.to"
-									class="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 rounded-md text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
-									active-class=""
-									exact-active-class="!bg-(--ui-primary)/10 !text-(--ui-primary) font-medium"
-								>
-									<UIcon :name="item.icon" class="size-4" />
-									{{ item.label }}
-									<UIcon v-if="item.feature && !license.hasFeature(item.feature)" name="i-lucide-lock" class="size-3 text-(--ui-text-dimmed) ml-auto shrink-0" />
-								</NuxtLink>
-								<button
-									type="button"
-									class="px-1.5 flex items-center justify-center rounded-md text-(--ui-text-muted) hover:bg-(--ui-bg-elevated) hover:text-(--ui-text) cursor-pointer shrink-0"
-									:aria-label="isGroupCollapsed(item.to) ? `Expand ${item.label}` : `Collapse ${item.label}`"
-									@click="toggleGroup(item.to)"
-								>
-									<UIcon
-										name="i-lucide-chevron-down"
-										class="size-4 transition-transform"
-										:class="isGroupCollapsed(item.to) ? '-rotate-90' : ''"
-									/>
-								</button>
-							</div>
+							<!-- Group parent (has children): the whole row is one button
+							that only collapses/expands the sub-items — it never
+							navigates (groups have no page of their own). The label
+							tints primary while one of its children is the active
+							route, so a collapsed group still shows where you are.
+							Collapsed state is persisted per group `key` to
+							localStorage. -->
+							<button
+								v-else-if="item.children"
+								type="button"
+								class="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm hover:bg-(--ui-bg-elevated) cursor-pointer text-left"
+								:class="isGroupActive(item)
+									? 'text-(--ui-primary) font-medium'
+									: 'text-(--ui-text-muted) hover:text-(--ui-text)'"
+								:aria-expanded="!isGroupCollapsed(item.key)"
+								@click="toggleGroup(item.key)"
+							>
+								<UIcon :name="item.icon" class="size-4" />
+								{{ item.label }}
+								<UIcon v-if="item.feature && !license.hasFeature(item.feature)" name="i-lucide-lock" class="size-3 text-(--ui-text-dimmed) shrink-0" />
+								<UIcon
+									name="i-lucide-chevron-down"
+									class="size-4 ml-auto shrink-0 transition-transform"
+									:class="isGroupCollapsed(item.key) ? '-rotate-90' : ''"
+								/>
+							</button>
 							<NuxtLink
 								v-else
 								:to="item.to"
@@ -113,8 +111,8 @@
 								<UIcon v-if="item.feature && !license.hasFeature(item.feature)" name="i-lucide-lock" class="size-3 text-(--ui-text-dimmed) ml-auto shrink-0" />
 							</NuxtLink>
 
-							<!-- Sub-items: collapsible per group via the chevron above. -->
-							<div v-if="item.children && !isGroupCollapsed(item.to)" class="ml-3 pl-3 border-l border-(--ui-border) space-y-1">
+							<!-- Sub-items: collapsible per group via the group button above. -->
+							<div v-if="item.children && !isGroupCollapsed(item.key)" class="ml-3 pl-3 border-l border-(--ui-border) space-y-1">
 								<template v-for="child in item.children" :key="child.to">
 									<NuxtLink
 										:to="child.to"
@@ -589,40 +587,38 @@
 		mainEl.value?.scrollTo({ top: 0 });
 	});
 
-	// Sidebar nav — Settings is a parent with two children. Sub-items are
-	// always visible (no click-to-expand) since the tree is small.
-	// Group order: Dashboard → documents (quotes/invoices/bills/vouchers)
-	// → contacts (clients/vendors) → settings. `divider: true` draws a thin
-	// rule above the item so the eye can pick out group boundaries without
-	// reading every label.
+	// Sidebar nav. Group order: Dashboard → documents (quotes/invoices/
+	// bills/vouchers) → payroll → reports → lists → settings. `divider: true`
+	// draws a thin rule above the item so the eye can pick out group
+	// boundaries without reading every label.
 	//
+	// An item with `children` is a GROUP: a pure expand/collapse button with
+	// no page of its own (no `to`), identified by a stable `key`.
 	// A child may carry `sections`: in-page #anchors rendered as a third
 	// level, shown only when the user is on that child's route.
-	// Collapsible nav groups. Collapsed group keys (the group's `to`) persist
-	// to localStorage so the user's layout survives reloads / tenant switches.
+	//
+	// Collapsed group keys persist to localStorage so the user's layout
+	// survives reloads / tenant switches.
 	const COLLAPSED_GROUPS_KEY = "sidebar-collapsed-groups";
 	const collapsedGroups = ref<Set<string>>(new Set());
-	onMounted(() => {
+	const setCollapsedGroups = (next: Set<string>): void => {
+		collapsedGroups.value = next;
 		try {
-			const raw = localStorage.getItem(COLLAPSED_GROUPS_KEY);
-			if (raw) collapsedGroups.value = new Set(JSON.parse(raw) as string[]);
-		} catch { /* ignore malformed storage */ }
-	});
+			localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify([...next]));
+		} catch { /* ignore */ }
+	};
 	const isGroupCollapsed = (key?: string): boolean => !!key && collapsedGroups.value.has(key);
 	const toggleGroup = (key?: string): void => {
 		if (!key) return;
 		const next = new Set(collapsedGroups.value);
 		if (next.has(key)) next.delete(key);
 		else next.add(key);
-		collapsedGroups.value = next;
-		try {
-			localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify([...next]));
-		} catch { /* ignore */ }
+		setCollapsedGroups(next);
 	};
 
 	interface NavSection { hash: string, label: string, icon: string }
 	interface NavChild { to: string, label: string, icon: string, sections?: NavSection[], feature?: string }
-	interface NavItem { to?: string, label: string, icon?: string, divider?: boolean, children?: NavChild[], action?: () => void, heading?: boolean, feature?: string }
+	interface NavItem { to?: string, key?: string, label: string, icon?: string, divider?: boolean, children?: NavChild[], action?: () => void, heading?: boolean, feature?: string }
 
 	const nav: NavItem[] = [
 		{ to: "/", label: "Dashboard", icon: "i-lucide-layout-dashboard" },
@@ -644,10 +640,7 @@
 		{ heading: true, label: "Correspondence", divider: true },
 		{ to: "/letters", label: "Letters", icon: "i-lucide-mail" },
 		{
-			// `/payroll` is the landing card grid (mirrors `/reports`).
-			// Dashboard lives at `/payroll/dashboard` so the top-level
-			// link can land on the overview-of-overview page.
-			to: "/payroll",
+			key: "payroll",
 			label: "Payroll",
 			icon: "i-lucide-wallet",
 			divider: true,
@@ -675,7 +668,7 @@
 			]
 		},
 		{
-			to: "/reports",
+			key: "reports",
 			label: "Reports",
 			icon: "i-lucide-chart-pie",
 			divider: true,
@@ -691,12 +684,7 @@
 			]
 		},
 		{
-			// `/lists` is the landing card grid (mirrors `/reports` +
-			// `/payroll`). The underlying list pages stay at their
-			// existing top-level URLs — this index just gives the
-			// group a proper landing instead of jumping straight to
-			// Clients.
-			to: "/lists",
+			key: "lists",
 			label: "Lists",
 			icon: "i-lucide-library",
 			divider: true,
@@ -711,7 +699,7 @@
 			// business and (mostly) travels with the export bundle. Includes
 			// all security for this business: database encryption + PDF
 			// protection both live on the Security page.
-			to: "/settings",
+			key: "business",
 			label: "Business",
 			icon: "i-lucide-building-2",
 			divider: true,
@@ -783,7 +771,7 @@
 			// App-wide preferences + multi-tenant administration — not tied
 			// to any single business (Appearance is per-machine; Businesses
 			// manages the whole tenant set).
-			to: "/settings/appearance",
+			key: "settings",
 			label: "Settings",
 			icon: "i-lucide-settings",
 			divider: true,
@@ -818,4 +806,29 @@
 			divider: true
 		}
 	];
+
+	// A child owns its route and everything nested under it
+	// (`/employees` covers `/employees/12`).
+	const isChildActive = (child: NavChild): boolean =>
+		route.path === child.to || route.path.startsWith(`${child.to}/`);
+	const isGroupActive = (item: NavItem): boolean => !!item.children?.some(isChildActive);
+
+	// Navigating into a collapsed group's page from elsewhere (a dashboard
+	// tile, a row action) re-opens that group so the active item is visible.
+	// Only fires on route change, so the user can still collapse it by hand.
+	const expandActiveGroup = (): void => {
+		const active = nav.find((item) => isGroupActive(item));
+		if (!active?.key || !collapsedGroups.value.has(active.key)) return;
+		const next = new Set(collapsedGroups.value);
+		next.delete(active.key);
+		setCollapsedGroups(next);
+	};
+	onMounted(() => {
+		try {
+			const raw = localStorage.getItem(COLLAPSED_GROUPS_KEY);
+			if (raw) collapsedGroups.value = new Set(JSON.parse(raw) as string[]);
+		} catch { /* ignore malformed storage */ }
+		expandActiveGroup();
+	});
+	watch(() => route.path, expandActiveGroup);
 </script>

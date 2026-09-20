@@ -1,15 +1,10 @@
 <template>
 	<div class="select-none">
-		<!-- Top toolbar row: back link on the left, action cluster on the
-			right. Mirrors the invoice / quote / bill detail-page pattern
+		<!-- Top toolbar row: action cluster on the right.
+			Mirrors the invoice / quote / bill detail-page pattern
 			so the button position is consistent across the app — sits
 			above the title block, not crammed beside the description. -->
-		<div class="mb-4 flex items-center justify-between gap-4">
-			<NuxtLink to="/reports" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
-				<UIcon name="i-lucide-arrow-left" class="size-4" />
-				Back to Reports
-			</NuxtLink>
-
+		<div class="mb-4 flex items-center justify-end gap-4">
 			<!-- PDF & Print: hands the same filtered/totals view-model to
 				the report template the user is looking at. Disabled
 				while data is loading so we don't render an empty PDF. -->

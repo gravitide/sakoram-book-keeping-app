@@ -46,9 +46,7 @@
 		</NuxtLink>
 
 		<!-- Topics grouped by category, with the basics slug filtered
-			out (it's in the hero above). Same card shape as the
-			/reports + /payroll + /lists landing pages so the help
-			library feels like a first-class part of the app. -->
+			out (it's in the hero above). -->
 		<div v-if="grouped.length === 0" class="py-12 text-center text-sm text-(--ui-text-muted)">
 			<UIcon name="i-lucide-book-open" class="size-10 mx-auto mb-2 opacity-50" />
 			No help topics published yet.

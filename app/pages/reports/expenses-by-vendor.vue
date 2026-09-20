@@ -2,14 +2,9 @@
 	<div class="select-none">
 		<FeatureLock v-if="locked" title="Expenses by vendor" tier-label="Plus" feature="reports.expenses_by_vendor" />
 
-		<!-- Top toolbar — back link + PDF action. Same layout as the
+		<!-- Top toolbar — PDF action. Same layout as the
 			rest of the reports for consistency. -->
-		<div class="mb-4 flex items-center justify-between gap-4">
-			<NuxtLink to="/reports" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
-				<UIcon name="i-lucide-arrow-left" class="size-4" />
-				Back to Reports
-			</NuxtLink>
-
+		<div class="mb-4 flex items-center justify-end gap-4">
 			<UButton
 				size="sm"
 				color="neutral"

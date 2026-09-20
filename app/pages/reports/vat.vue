@@ -1,13 +1,8 @@
 <template>
 	<div class="select-none">
-		<!-- Top toolbar row: back link on the left, action cluster on the
-			right. Mirrors the invoice / quote / bill detail-page pattern. -->
-		<div class="mb-4 flex items-center justify-between gap-4">
-			<NuxtLink to="/reports" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
-				<UIcon name="i-lucide-arrow-left" class="size-4" />
-				Back to Reports
-			</NuxtLink>
-
+		<!-- Top toolbar row: action cluster on the right.
+			Mirrors the invoice / quote / bill detail-page pattern. -->
+		<div class="mb-4 flex items-center justify-end gap-4">
 			<UButton
 				size="sm"
 				color="neutral"

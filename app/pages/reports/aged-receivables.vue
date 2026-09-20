@@ -2,14 +2,9 @@
 	<div class="select-none">
 		<FeatureLock v-if="locked" title="Aged receivables" tier-label="Plus" feature="reports.aged_receivables" />
 
-		<!-- Top toolbar — back link + PDF action. Same layout as P&L /
+		<!-- Top toolbar — PDF action. Same layout as P&L /
 			VAT for consistency across the reports module. -->
-		<div class="mb-4 flex items-center justify-between gap-4">
-			<NuxtLink to="/reports" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
-				<UIcon name="i-lucide-arrow-left" class="size-4" />
-				Back to Reports
-			</NuxtLink>
-
+		<div class="mb-4 flex items-center justify-end gap-4">
 			<UButton
 				size="sm"
 				color="neutral"
