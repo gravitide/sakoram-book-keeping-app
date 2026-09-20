@@ -7,6 +7,7 @@
 
 const SIDEBAR_KEY = "sakoram.ui.sidebarCollapsed";
 const ZOOM_KEY = "sakoram.ui.zoomLevel";
+const BREAKPOINT_BADGE_KEY = "sakoram.ui.showBreakpointBadge";
 
 // Discrete zoom steps surfaced in the Appearance picker. 100 is the
 // browser-default 16px root font-size; everything else scales the
@@ -46,5 +47,20 @@ export function useUiState() {
 		} catch { /* idem */ }
 	};
 
-	return { sidebarCollapsed, toggleSidebar, zoomLevel, setZoomLevel };
+	// Developer option (Settings → Developer). Off by default in every
+	// build — dev and production alike — so the badge is a deliberate
+	// opt-in rather than something tied to `import.meta.dev`.
+	const showBreakpointBadge = useState<boolean>("ui-show-breakpoint-badge", () => {
+		if (typeof localStorage === "undefined") return false;
+		return localStorage.getItem(BREAKPOINT_BADGE_KEY) === "1";
+	});
+
+	const setShowBreakpointBadge = (next: boolean) => {
+		showBreakpointBadge.value = next;
+		try {
+			localStorage.setItem(BREAKPOINT_BADGE_KEY, next ? "1" : "0");
+		} catch { /* idem */ }
+	};
+
+	return { sidebarCollapsed, toggleSidebar, zoomLevel, setZoomLevel, showBreakpointBadge, setShowBreakpointBadge };
 }

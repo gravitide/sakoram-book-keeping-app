@@ -552,10 +552,11 @@ sakoram_app/
 │  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), light/dark/system toggle, zoom (6 discrete steps)
 │  │     ├─ payroll.vue               ← cycle template (period_start_day / period_end_day / pay_day)
 │  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + pre-printed top/bottom margins (letter_preprinted_top/bottom_margin_mm) with a live A4 preview + letterhead-templates placeholder. (Signatures moved to /settings/company#signatures — they're shared across letters + quote/invoice "Prepared by".)
-│  │     └─ businesses.vue            ← tenant CRUD + Export/Import
+│  │     ├─ businesses.vue            ← tenant CRUD + Export/Import
+│  │     └─ developer.vue             ← per-machine developer options (localStorage via useUiState, no save bar). Currently: the breakpoint-badge switch. Everything defaults OFF in every build.
 │  ├─ components/
 │  │  ├─ TitleBar.vue                 ← custom titlebar — Windows: full chrome (sidebar toggle + back + drag region + min/max/close). macOS: 78px reservation for OS traffic lights + sidebar toggle + back; OS owns close/min/max. Pixel-pinned sizing so zoom doesn't scale it.
-│  │  ├─ BreakpointBadge.vue          ← dev-only floating chip at bottom-right showing current Tailwind breakpoint + viewport width
+│  │  ├─ BreakpointBadge.vue          ← opt-in floating chip at bottom-right showing current Tailwind breakpoint + viewport width. Gated on `useUiState().showBreakpointBadge` (Settings → Developer), NOT `import.meta.dev` — so it can be switched on in an installed build and is off by default in dev too
 │  │  ├─ ResizableDataTable.vue       ← shared wrapper around PrimeVue DataTable: drag-pan, sort/page state in localStorage, auto-fit columns, "Fit" page-size that adapts to viewport, right-click row context menu, multi-select checkbox column
 │  │  ├─ ClientPicker.vue             ← UPopover with search
 │  │  ├─ VendorPicker.vue             ← clone of ClientPicker, used by bill creation
@@ -599,7 +600,7 @@ sakoram_app/
 │  ├─ composables/
 │  │  ├─ usePdfPreview.ts             ← preview→commit flow used by every detail page that has a PDF button
 │  │  ├─ useDocumentNumber.ts         ← editable sequence + live formatted preview + uniqueness check for the New* forms
-│  │  ├─ useUiState.ts                ← localStorage-backed UI prefs: sidebarCollapsed, zoomLevel
+│  │  ├─ useUiState.ts                ← localStorage-backed UI prefs: sidebarCollapsed, zoomLevel, showBreakpointBadge
 │  │  ├─ useWindowState.ts            ← reactive isMaximized; subscribes to Tauri onResized
 │  │  ├─ useActiveCurrency.ts         ← live ref of the active business's currency meta
 │  │  ├─ useUserPlatform.ts           ← cached host platform via @tauri-apps/plugin-os — exposes isMac / isWindows / isLinux for platform-conditional UI (e.g. macOS titlebar layout)
@@ -852,6 +853,9 @@ Code-signing requires a CA cert (~$200–400/year), out of scope.
   `app/middleware/tenant.global.ts`, drop a throwaway page under
   `app/pages/`, and hit it on the dev server (port 4004 — already running
   when `tauri:dev` is up, HMR picks the edits up). Revert all three after.
+  A page in the DEFAULT layout can need a fourth guard: `BackupReminderBanner`
+  calls `drive.ensureLoaded()` on mount, whose Tauri `listen()` throws
+  `reading 'transformCallback'` with no shell and 500s the whole page.
 - **Background dev server exit code 255** = user closed the window. Not
   an error.
 - **Dev server port lives in `scripts/tauri-dev.ts`, not `tauri.conf.json`.**
@@ -1878,7 +1882,8 @@ Settings                ← app-wide prefs + multi-tenant administration
   │   ├─ Theme color            shown only on /settings/appearance
   │   ├─ Theme
   │   └─ Zoom
-  └─ Businesses
+  ├─ Businesses
+  └─ Developer          ← /settings/developer — per-machine developer options (breakpoint badge); off by default in every build
 ─── (divider)
 Help                  ← /help — in-app library of bookkeeping explainers + how-to guides. Per-page `?` icon (HelpButton) drops users into the relevant topic via modal; this entry exposes the full library.
 ```

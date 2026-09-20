@@ -380,9 +380,8 @@
 			</div>
 		</div>
 
-		<!-- Dev-only floating chip showing the active Tailwind
-			breakpoint + viewport width. Self-gates on `import.meta.dev`
-			so the production build excludes it. -->
+		<!-- Opt-in floating chip showing the active Tailwind breakpoint +
+			viewport width. Self-gates on the Settings → Developer switch. -->
 		<BreakpointBadge />
 	</div>
 </template>
@@ -787,7 +786,8 @@
 						{ hash: "#zoom", label: "Zoom", icon: "i-lucide-zoom-in" }
 					]
 				},
-				{ to: "/settings/businesses", label: "Businesses", icon: "i-lucide-briefcase" }
+				{ to: "/settings/businesses", label: "Businesses", icon: "i-lucide-briefcase" },
+				{ to: "/settings/developer", label: "Developer", icon: "i-lucide-code-xml" }
 			]
 		},
 		{
