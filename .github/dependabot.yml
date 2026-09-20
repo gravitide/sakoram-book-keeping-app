@@ -1,0 +1,19 @@
+# Keeps the SHA-pinned GitHub Actions current. Every action in
+# .github/workflows is pinned to a full commit SHA (a tag like @v2 can be moved
+# to different code after we reviewed it; a SHA cannot), so nothing updates
+# unless something proposes the new SHA — that is this file's only job.
+#
+# Deliberately NOT enabled for npm / cargo: those bumps need the app's own
+# gates (tests, a Tauri build) and are done by hand.
+#
+# Dependabot PRs run without access to repository secrets, and no workflow here
+# triggers on pull requests at all.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore(ci)

@@ -822,6 +822,24 @@ Code-signing requires a CA cert (~$200–400/year), out of scope.
   MPL-2.0, LGPL and Apache-2.0 are fine; GPL-2.0-only, SSPL, BUSL and
   "non-commercial" licences are not. This is unrelated to the dormant
   *product* licence-key code under "Licensing & feature tiers".
+- **The release pipeline is a security boundary (public repo, since v0.160.4).**
+  The two release workflows build with secrets and publish installers people
+  run, so: triggers stay `push: tags` + `workflow_dispatch` — NEVER add
+  `pull_request_target` / `workflow_run` / `issue_comment` (they run with
+  secrets on a stranger's code; a plain fork PR gets none). The build job runs
+  in the protected **`release` environment** — a maintainer must approve each
+  run, and the Google secrets are ENVIRONMENT secrets, not repository ones, so
+  a new workflow can't read them. Every action is pinned to a full commit SHA
+  with the version in a trailing comment (`.github/dependabot.yml` proposes
+  bumps; `dtolnay/rust-toolchain` is pinned to a commit of its `stable` branch,
+  hence the explicit `toolchain: stable`). Repository rulesets protect `main`
+  (PR required, no force-push, no delete) and `v*` tags (only admins create /
+  move / delete them — so the manual-dispatch "create tag" step only works for
+  a tag that already exists; push the tag yourself). Workflow token default is
+  `permissions: {}`. Treat any outside PR touching `.github/`, `build.rs`,
+  `scripts/`, `package.json` scripts or dependencies as security-sensitive —
+  it cannot read secrets as a PR, but it runs inside the next tagged build.
+  Vulnerability reports: `SECURITY.md` + GitHub private reporting.
 - **Tauri capability changes** require a Rust rebuild (capabilities are
   baked in at compile time).
 - **Tauri/JS plugin version mismatch** errors on `tauri:build`: the
