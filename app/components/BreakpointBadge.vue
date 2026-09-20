@@ -1,5 +1,5 @@
 <template>
-	<!-- Dev-only floating badge that shows the active Tailwind
+	<!-- Opt-in floating badge that shows the active Tailwind
 		breakpoint + the live viewport width. Useful for designing
 		responsive layouts ("at 1200px we're in lg…"). The
 		breakpoint label is driven entirely by CSS — each span is
@@ -7,10 +7,10 @@
 		utility chains — so the label is always in sync with whatever
 		Tailwind would actually be applying. The width readout uses
 		VueUse's `useWindowSize` so it updates live as you drag the
-		window. Renders only in dev (gated by `import.meta.dev`); the
-		production build excludes the whole component. -->
+		window. Off by default in every build; switched on from
+		Settings → Developer (per-machine, see useUiState). -->
 	<div
-		v-if="dev"
+		v-if="showBreakpointBadge"
 		class="fixed bottom-3 right-3 z-50 flex items-center gap-2 px-2.5 py-1.5 rounded-full bg-(--ui-bg-elevated) border-2 border-(--ui-primary)/40 shadow-lg text-xs font-medium tabular-nums select-none pointer-events-none"
 	>
 		<span class="text-(--ui-primary)">
@@ -28,10 +28,7 @@
 <script setup lang="ts">
 	import { useWindowSize } from "@vueuse/core";
 
-	// `import.meta.dev` is true under `nuxt dev` and `bun run tauri:dev`,
-	// false in the static production build — so the badge auto-disappears
-	// from any installer-built artefact without us having to flag it.
-	const dev = import.meta.dev;
+	const { showBreakpointBadge } = useUiState();
 
 	const { width } = useWindowSize();
 </script>
