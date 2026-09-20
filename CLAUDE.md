@@ -541,10 +541,9 @@ sakoram_app/
 │  │  ├─ vouchers/                    ← list, new, [id] (money in/out; read-only by default → click Edit to mutate). Still uses a /new page — form is too heavy for a modal (8+ fields, prefill from ?bill=/?invoice=/?payslip=, overpayment guard).
 │  │  ├─ reconcile.vue                ← bank reconciliation: import bank statement CSV, match rows to vouchers, create vouchers from unmatched. /reconcile route.
 │  │  ├─ letters/                     ← list w/ row context menu, [id] (free-form rich-text letters rendered on the business letterhead — service letters, internship confirmations, etc.). "New letter" opens NewLetterModal. Rich text via TipTap (body_json); pre-printed toggle switches app-rendered letterhead vs blank top space. No lines, no snapshot, always editable. Duplicate-to-clone.
-│  │  ├─ payroll/                     ← index.vue is a landing card grid (mirrors /reports); dashboard.vue holds the upcoming-cycle hero + MoM chart + recent runs + outstanding
+│  │  ├─ payroll/                     ← dashboard.vue holds the upcoming-cycle hero + MoM chart + recent runs + outstanding
 │  │  ├─ payslips/                    ← list w/ row context menu (multi-select bulk PDF), [id], bulk (auto-issue + auto-pay). "New payslip" opens NewPayslipModal.
-│  │  ├─ reports/                     ← aggregate views over the books. index.vue lists available + upcoming reports; profit-loss.vue (accrual P&L), vat.vue (output VAT vs input VAT), aged-receivables.vue (open-invoice snapshot by days past due), aged-payables.vue (open-bill mirror), and cash-flow.vue (receipts in − payments out by month, cash basis) are wired up. No DB writes.
-│  │  ├─ lists/                       ← index.vue is a landing card grid (mirrors /reports + /payroll) linking to /clients, /vendors, /categories. The list pages themselves live at their existing top-level URLs.
+│  │  ├─ reports/                     ← aggregate views over the books (no index page — the sidebar group is the only entry). profit-loss.vue (accrual P&L), vat.vue (output VAT vs input VAT), aged-receivables.vue (open-invoice snapshot by days past due), aged-payables.vue (open-bill mirror), and cash-flow.vue (receipts in − payments out by month, cash basis) are wired up. No DB writes.
 │  │  ├─ help/                        ← in-app help library. /help index lists all topics grouped by category; /help/[slug] is the full-page reading view. Plain-English bookkeeping explainers tuned for SL businesses (LKR examples, IRD references, fiscal year April–March).
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
@@ -1845,20 +1844,20 @@ Recurring bills       ← /recurring-bills — vendor-side mirror of /recurring-
 Vouchers
 Reconcile             ← /reconcile — bank reconciliation; import CSV statement, match rows to vouchers, create vouchers from unmatched rows
 ─── (divider)
-Payroll               ← /payroll — landing card grid mirroring /reports
+Payroll               ← group (expand/collapse only — no page of its own)
   ├─ Dashboard       ← /payroll/dashboard — cycle / KPIs / MoM chart / recent runs
   ├─ Employees
   ├─ Payslips
   └─ Settings        ← /settings/payroll — cycle template (period_start_day / period_end_day / pay_day)
 ─── (divider)
-Reports               ← aggregate views over the books (no editing)
+Reports               ← group; aggregate views over the books (no editing)
   ├─ Profit & Loss   ← /reports/profit-loss — income − bills − payroll, accrual
   ├─ VAT             ← /reports/vat — output VAT − input VAT, net payable for the period
   ├─ Aged receivables ← /reports/aged-receivables — open-invoice snapshot by days past due
   ├─ Aged payables    ← /reports/aged-payables    — open-bill mirror, per-vendor breakdown
   └─ Cash flow        ← /reports/cash-flow        — receipts in − payments out by month (cash basis)
 ─── (divider)
-Lists                 ← /lists — landing card grid mirroring /reports + /payroll
+Lists                 ← group (expand/collapse only)
   ├─ Clients         ← /clients
   ├─ Vendors         ← /vendors
   └─ Bill categories ← /categories
@@ -1898,8 +1897,19 @@ generated PDFs). The two passwords are unrelated. PDF protection lives
 on `company_settings.pdf_protect_*`; the PDF settings page keeps a
 pointer link to it.
 
+**A nav item with `children` is a GROUP, not a page** (since v0.160.6).
+The whole row is one button that only expands / collapses its children
+(chevron right = collapsed, down = expanded); it has a stable `key`
+instead of a `to`, and the old `/payroll`, `/reports`, `/lists` landing
+card-grid pages were deleted — don't reintroduce them or a "Back to
+Reports" link. The group label tints primary while one of its children
+is the active route (`isGroupActive`, prefix match so `/employees/12`
+counts), and navigating into a collapsed group's page re-opens it
+(`expandActiveGroup`, on route change only, so a manual collapse sticks).
+Collapsed keys persist to localStorage (`sidebar-collapsed-groups`).
+
 The sidebar nav supports three levels: top-level items, `children`
-(always visible), and an optional third level of `sections` — in-page
+(collapsible per group), and an optional third level of `sections` — in-page
 `#anchor` links that appear under a child only while that child's own
 route is active (currently PDF and Appearance). Section links scroll
 to the matching card; the active section is matched on `route.hash`.
