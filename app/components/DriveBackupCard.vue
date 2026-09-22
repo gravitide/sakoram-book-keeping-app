@@ -158,6 +158,7 @@
 
 <script setup lang="ts">
 	import type { SnapshotInfo } from "~/stores/drive_backup";
+	import { useDriveBackupAction } from "~/composables/useDriveBackupAction";
 	import { backupAgeLabel, REMINDER_OPTIONS } from "~/lib/backup-reminder";
 	import { describeDriveError } from "~/lib/drive-errors";
 	import { formatBytes } from "~/lib/format-bytes";
@@ -268,22 +269,9 @@
 		}
 	};
 
-	const onBackup = async () => {
-		const id = tenants.activeTenantId;
-		if (!id) return;
-		try {
-			const out = await drive.backupNow(id); // the busy watcher reloads the list
-			const skipped = out.skipped.length > 0 ? ` ${out.skipped.length} attachment(s) could not be read and were skipped.` : "";
-			toast.add({
-				title: "Backed up to Google Drive",
-				description: `${out.attachments_uploaded} new attachment(s) uploaded, ${out.attachments_total} in total.${skipped}`,
-				color: out.skipped.length > 0 ? "warning" : "success",
-				icon: "i-lucide-check"
-			});
-		} catch (err) {
-			fail(err);
-		}
-	};
+	// Shared with the titlebar button + reminder banner (toasts included);
+	// the busy watcher above reloads the list afterwards.
+	const { backupNow: onBackup } = useDriveBackupAction();
 
 	// ---- Delete an older backup ----
 	const confirmOpen = ref(false);

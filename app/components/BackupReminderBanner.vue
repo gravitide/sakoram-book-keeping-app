@@ -14,45 +14,20 @@
 </template>
 
 <script setup lang="ts">
-	import { backupAgeLabel, isBackupDue } from "~/lib/backup-reminder";
-	import { describeDriveError } from "~/lib/drive-errors";
-	import { useDriveBackupStore } from "~/stores/drive_backup";
-	import { useTenantsStore } from "~/stores/tenants";
+	import { useDriveBackupAction } from "~/composables/useDriveBackupAction";
+	import { backupAgeLabel } from "~/lib/backup-reminder";
 
-	const drive = useDriveBackupStore();
-	const tenants = useTenantsStore();
-	const toast = useToast();
+	// Availability + due + the backup itself are shared with the titlebar
+	// button and the Businesses card — see useDriveBackupAction.
+	const { drive, tenants, lastBackup, due, backupNow: onBackup } = useDriveBackupAction();
 
 	onMounted(() => drive.ensureLoaded());
 
-	const last = computed(() => drive.lastBackupFor(tenants.activeTenantId));
-	const ageLabel = computed(() => backupAgeLabel(last.value, new Date()));
+	const ageLabel = computed(() => backupAgeLabel(lastBackup.value, new Date()));
 
-	// Only nudge someone who has opted in (connected) and can act (unlocked).
-	const visible = computed(() =>
-		!!drive.status?.configured
-		&& drive.status.connected
-		&& !!tenants.activeTenantId
-		&& !tenants.activeLocked
-		&& !drive.reminderDismissed
-		&& !drive.busy
-		&& isBackupDue(last.value, drive.status.reminder_days, new Date())
-	);
+	const visible = computed(() => due.value && !drive.reminderDismissed && !drive.busy);
 
 	const onLater = () => {
 		drive.reminderDismissed = true;
-	};
-
-	const onBackup = async () => {
-		const id = tenants.activeTenantId;
-		if (!id) return;
-		try {
-			await drive.backupNow(id);
-			toast.add({ title: "Backed up to Google Drive", color: "success", icon: "i-lucide-check" });
-		} catch (err) {
-			const info = describeDriveError(err);
-			if (info.cancelled) return;
-			toast.add({ title: info.title, description: info.description, color: "error", icon: "i-lucide-circle-alert" });
-		}
 	};
 </script>

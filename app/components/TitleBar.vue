@@ -88,6 +88,32 @@
 			<UIcon name="i-lucide-lock" class="size-[16px]" />
 		</button>
 
+		<!-- Quick "Back up now" — one click pushes the open business to
+			Google Drive, the same call as the reminder banner and the
+			Businesses card (useDriveBackupAction). Only rendered when a
+			backup is actually possible (Drive connected, business open and
+			unlocked); a warning dot marks a backup that is due by the
+			reminder interval. Hidden in the docs window via
+			`show-backup-button="false"`. -->
+		<button
+			v-if="showBackupButton && backup.available.value"
+			type="button"
+			class="relative flex items-center justify-center hover:bg-(--ui-bg-accented) transition shrink-0 disabled:opacity-60"
+			:class="isMac ? 'w-[36px]' : 'w-[44px]'"
+			:title="backup.drive.busy ? 'Backing up…' : (backup.due.value ? 'Backup due — back up to Google Drive now' : 'Back up to Google Drive now')"
+			:aria-label="backup.drive.busy ? 'Backing up' : 'Back up to Google Drive now'"
+			:disabled="backup.drive.busy"
+			data-testid="titlebar-backup"
+			@click="backup.backupNow"
+		>
+			<UIcon :name="backup.drive.busy ? 'i-lucide-loader-circle' : 'i-lucide-cloud-upload'" class="size-[16px]" :class="backup.drive.busy ? 'animate-spin' : ''" />
+			<span
+				v-if="backup.due.value && !backup.drive.busy"
+				class="absolute top-[8px] right-[10px] size-[7px] rounded-full bg-(--ui-warning) ring-2 ring-(--ui-bg)"
+				aria-hidden="true"
+			/>
+		</button>
+
 		<!-- Quick light/dark theme toggle. Flips the persisted colour-mode
 			preference (Settings → Appearance keeps the full light/dark/system
 			control). Always visible, sits just left of the help button. -->
@@ -158,6 +184,7 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import { getCurrentWindow } from "@tauri-apps/api/window";
 	import sakoramIcon from "~/assets/sakoram-icon.svg?url";
+	import { useDriveBackupAction } from "~/composables/useDriveBackupAction";
 	import { useHelpWindow } from "~/composables/useHelpWindow";
 	import { resetDbCache } from "~/lib/db";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -172,11 +199,22 @@
 		// Whether to render the quick-lock icon. Default on; the docs
 		// window flips this off so it can never drive the vault lifecycle.
 		showLockButton?: boolean
+		// Whether to render the quick-backup icon. Default on; off in the
+		// docs window (no business context there).
+		showBackupButton?: boolean
 	}>(), {
 		showSidebarToggle: false,
 		showHelpButton: true,
-		showLockButton: true
+		showLockButton: true,
+		showBackupButton: true
 	});
+
+	// Quick backup — availability, due-dot and the click handler all come
+	// from the shared composable. The drive status is loaded by the
+	// reminder banner / Businesses card on the same page; ensureLoaded is
+	// a no-op once either has run.
+	const backup = useDriveBackupAction();
+	onMounted(() => backup.drive.ensureLoaded());
 
 	// Spawns (or focuses) the docs WebviewWindow. Same composable the
 	// sidebar's Help item uses, so the behaviour is identical from

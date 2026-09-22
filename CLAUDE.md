@@ -393,6 +393,12 @@ Spec/plan: `docs/superpowers/{specs,plans}/2026-09-19-google-drive-backup*`.
   `scope` in the token response (`oauth::grants_drive`, exact-match, not
   substring), revokes and refuses when `drive.file` is missing — otherwise the
   app would say "connected" and then 403 on every backup.
+- **Titlebar quick-backup button** (v0.162.0): a cloud-upload icon left of the
+  theme toggle, rendered only while a backup is possible (configured +
+  connected + business open + unlocked — `useDriveBackupAction().available`),
+  with a warning dot when the backup is due by the reminder interval and a
+  spinner while `drive.busy`. Same `backupNow` + toasts as the banner and the
+  card. Off in the help window (`show-backup-button="false"`).
 - **Per-machine state** is `%APPDATA%/com.sakoram.billing/backup.json`
   (`reminder_days`, `account_email` / `account_name` / `account_photo`,
   `last_backups`). No tenant-DB column, no
@@ -608,6 +614,7 @@ sakoram_app/
 │  │  ├─ useCalendarEvents.ts         ← aggregates due-date events from invoices / bills / quotes / payslips into a Map<YYYY-MM-DD, CalendarEvent[]>. Per-source emitters are easy to extend — just add another computed + push into the sources array.
 │  │  ├─ usePageLoading.ts            ← per-page loading flag with a guaranteed rAF yield around the async work so list / detail pages actually paint a skeleton before stores load. Pair with ListPageSkeleton for content-shaped placeholders.
 │  │  ├─ useCsvParser.ts              ← parseCsv(input) → { headers, rows } for bank reconciliation imports. Handles quoted fields, escaped quotes, CR/LF/CRLF, empty fields, UTF-8 BOM. Pure function, fully unit-tested.
+│  │  ├─ useDriveBackupAction.ts      ← the ONE "Back up now" action (availability rule + due flag + backupNow with its toasts) shared by the titlebar button, BackupReminderBanner and DriveBackupCard — add a fourth surface here, don't re-implement the toasts
 │  │  ├─ useHelpWindow.ts             ← spawns / focuses the help WebviewWindow (single stable label `help-main` so clicking Help twice doesn't pile up windows). Emits `help:navigate` Tauri event when a slug is supplied so an existing window routes to that topic. Falls back to in-place router push outside the Tauri runtime.
 │  │  ├─ useQueryTrigger.ts           ← one-shot `?new=1` route triggers that survive keep-alive (a watch on the query, not onMounted). Used by every list page's quick-create shortcut. See the keep-alive landmine.
 │  │  └─ useRehydrateOnActivate.ts    ← re-hydrates a kept-alive detail page on every re-activation: skips the first activation, preserves dirty edits, bounces to the list when the row is gone. On every document + address-book detail page.
@@ -853,9 +860,10 @@ Code-signing requires a CA cert (~$200–400/year), out of scope.
   `app/middleware/tenant.global.ts`, drop a throwaway page under
   `app/pages/`, and hit it on the dev server (port 4004 — already running
   when `tauri:dev` is up, HMR picks the edits up). Revert all three after.
-  A page in the DEFAULT layout can need a fourth guard: `BackupReminderBanner`
-  calls `drive.ensureLoaded()` on mount, whose Tauri `listen()` throws
-  `reading 'transformCallback'` with no shell and 500s the whole page.
+  Any page can need two more guards: `BackupReminderBanner` (default layout)
+  and `TitleBar` (every layout) call `drive.ensureLoaded()` on mount, whose
+  Tauri `listen()` throws `reading 'transformCallback'` with no shell and
+  500s the whole page.
 - **Background dev server exit code 255** = user closed the window. Not
   an error.
 - **Dev server port lives in `scripts/tauri-dev.ts`, not `tauri.conf.json`.**
