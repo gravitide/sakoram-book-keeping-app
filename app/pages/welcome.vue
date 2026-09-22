@@ -351,15 +351,11 @@
 						Setting up your demo business
 					</h2>
 					<p class="text-sm text-(--ui-text-muted) mb-4">
-						Seeding 18 months of clients, vendors, quotes, invoices,
-						bills, vouchers, and payslips at real-business volume.
-						This can take a couple of minutes — the dashboard will
-						open automatically when it's ready.
+						A small sample business — clients, quotes, invoices, bills,
+						payroll, letters and a bank statement to reconcile. The
+						dashboard opens automatically when it's ready.
 					</p>
-					<!-- Live stage label so the spinner has context. The seed
-						callback updates this every few rows; values like
-						"Seeding bills · 425 / 1000" tell the user how far
-						along we are without needing a real progress bar. -->
+					<!-- Live stage label so the spinner has context. -->
 					<div
 						v-if="seedingStage"
 						class="text-sm tabular-nums font-medium text-(--ui-primary)"
@@ -573,7 +569,7 @@
 			}, demoParent);
 			toast.add({
 				title: `${t.name} created`,
-				description: "Sample clients, invoices, bills, and vouchers are ready to explore.",
+				description: "Sample clients, invoices, bills, payslips and letters are ready to explore.",
 				color: "success",
 				icon: "i-lucide-check"
 			});
