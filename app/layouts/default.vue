@@ -787,6 +787,7 @@
 					]
 				},
 				{ to: "/settings/businesses", label: "Businesses", icon: "i-lucide-briefcase" },
+				{ to: "/settings/backup", label: "Backup", icon: "i-lucide-cloud-upload" },
 				{ to: "/settings/developer", label: "Developer", icon: "i-lucide-code-xml" }
 			]
 		},

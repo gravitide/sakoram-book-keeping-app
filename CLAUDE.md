@@ -357,6 +357,8 @@ Spec/plan: `docs/superpowers/{specs,plans}/2026-09-19-google-drive-backup*`.
   silent, never fatal) → `open_tenant`, which upserts the registry by marker id
   and leaves any existing folder untouched. `relocate_stored_paths` heals the
   absolute attachment/logo paths on the next `ensure_tenant_db`.
+- **The card lives on its own page, `/settings/backup`** (Settings group, since
+  v0.163.0 — it used to be the last card on Businesses, where nobody found it).
 - **The card acts on the OPEN business only** (`DriveBackupCard.vue`): it needs
   the live db and, if encrypted, the session key — other businesses aren't
   listed. Below it sits that business's backups AS THEY EXIST ON DRIVE
@@ -558,7 +560,8 @@ sakoram_app/
 │  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), light/dark/system toggle, zoom (6 discrete steps)
 │  │     ├─ payroll.vue               ← cycle template (period_start_day / period_end_day / pay_day)
 │  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + pre-printed top/bottom margins (letter_preprinted_top/bottom_margin_mm) with a live A4 preview + letterhead-templates placeholder. (Signatures moved to /settings/company#signatures — they're shared across letters + quote/invoice "Prepared by".)
-│  │     ├─ businesses.vue            ← tenant CRUD + Export/Import
+│  │     ├─ businesses.vue            ← tenant CRUD + Export/Import (local .zip)
+│  │     ├─ backup.vue                ← Google Drive backup — hosts DriveBackupCard (moved off the Businesses page in v0.163.0 so it is findable); shows a "not available in this build" note when there are no Google credentials
 │  │     └─ developer.vue             ← per-machine developer options (localStorage via useUiState, no save bar). Currently: the breakpoint-badge switch. Everything defaults OFF in every build.
 │  ├─ components/
 │  │  ├─ TitleBar.vue                 ← custom titlebar — Windows: full chrome (sidebar toggle + back + drag region + min/max/close). macOS: 78px reservation for OS traffic lights + sidebar toggle + back; OS owns close/min/max. Pixel-pinned sizing so zoom doesn't scale it.
@@ -598,7 +601,7 @@ sakoram_app/
 │  │  ├─ MonthlySalaryPaidChart.vue   ← payroll dashboard: 12-month salary-paid bars
 │  │  ├─ ReceivablesAgingChart.vue    ← dashboard: outstanding invoices by days-past-due bucket
 │  │  ├─ ExpensesByCategoryChart.vue  ← dashboard: bills donut by category, last 90 days
-│  │  ├─ DriveBackupCard.vue          ← Settings → Businesses card: connect / disconnect Google Drive, reminder interval, per-business last-backup + "Back up now" (active business only). Hidden when the build has no Google credentials.
+│  │  ├─ DriveBackupCard.vue          ← Settings → Backup card: connect / disconnect Google Drive, reminder interval, per-business last-backup + "Back up now" (active business only). Hidden when the build has no Google credentials.
 │  │  ├─ DriveBackupProgressModal.vue ← store-driven progress modal for backup (mounted once, in the default layout)
 │  │  ├─ BackupReminderBanner.vue     ← "Last backup N days ago · Back up now · Later" banner in the default layout; shows only when Drive is connected, the business is unlocked and the backup is due
 │  │  ├─ RestoreFromDriveModal.vue    ← welcome-screen restore flow: connect → pick business + snapshot → folder dialog → progress → "N of N attachments restored" → open
@@ -1891,6 +1894,7 @@ Settings                ← app-wide prefs + multi-tenant administration
   │   ├─ Theme
   │   └─ Zoom
   ├─ Businesses
+  ├─ Backup             ← /settings/backup — Google Drive backup (DriveBackupCard)
   └─ Developer          ← /settings/developer — per-machine developer options (breakpoint badge); off by default in every build
 ─── (divider)
 Help                  ← /help — in-app library of bookkeeping explainers + how-to guides. Per-page `?` icon (HelpButton) drops users into the relevant topic via modal; this entry exposes the full library.
@@ -2412,7 +2416,8 @@ persisted to localStorage).
   duplicates. `vouchers.business_bank_id` FK added (migration 0033)
   so matching is cleanly scoped per bank.
 - ✅ **Google Drive backup & restore** (v0.160.0) — manual "Back up now" +
-  reminder banner, restore from the welcome screen. User's own Drive via
+  reminder banner, restore from the welcome screen; own page at
+  `/settings/backup` + a titlebar quick-backup button since v0.162–0.163. User's own Drive via
   OAuth (`drive.file` scope only); DB snapshot zip + attachments uploaded once
   each; 10-snapshot retention to Drive trash; encrypted businesses stay sealed.
   See the "Google Drive backup" section for the layout + landmines.
