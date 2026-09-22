@@ -351,8 +351,8 @@
 		</UModal>
 
 		<!-- Full-screen progress overlay during demo seeding. Matches the
-			welcome page's pattern — the seed can run for 2-3 minutes at
-			real-business volume so a frozen "Loading" spinner would
+			welcome page's pattern — the seed takes a few seconds and
+			a frozen "Loading" spinner would
 			be misleading. -->
 		<Teleport to="body">
 			<div
@@ -368,7 +368,7 @@
 						Setting up your demo business
 					</h2>
 					<p class="text-sm text-(--ui-text-muted) mb-4">
-						Seeding 18 months of data at real-business volume — this can take a couple of minutes.
+						Setting up a small sample business — this only takes a moment.
 					</p>
 					<div
 						v-if="seedingStage"
@@ -525,7 +525,7 @@
 			}, demoParent);
 			toast.add({
 				title: `${t.name} created`,
-				description: "Sample data ready to explore.",
+				description: "Sample clients, invoices, bills, payslips and letters are ready to explore.",
 				color: "success",
 				icon: "i-lucide-check"
 			});

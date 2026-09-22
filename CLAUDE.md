@@ -624,7 +624,7 @@ sakoram_app/
 │  ├─ help/                           ← in-app help library. `index.ts` is the topic registry (slug, title, summary, category, icon, lazy component); one `.vue` per topic under `topics/`. See "Why help topics are Vue components" decision below.
 │  ├─ lib/
 │  │  ├─ db.ts                        ← getDb() (lazy, reads active tenant URL), select/execute
-│  │  ├─ demo-seed.ts                 ← createDemoBusiness() — curated + bulk-fill at real-business volume: 200 clients / 150 vendors / 600 quotes / 800 invoices / 1000 bills / 400 standalone vouchers spread across ~18 months, 15 employees, 14 months of payslips, ~10 sample attachments. Takes 2-3 min; surfaces SeedProgress callback so the welcome page + Settings → Businesses can show a live stage label.
+│  │  ├─ demo-seed.ts                 ← createDemoBusiness() — a SHOWCASE business, not a stress test (since v0.164.0): 8 clients / 6 vendors, one quote + invoice + bill per status, a credit note (one invoice lands `credited`), recurring templates with one of each already due, 2 bank accounts, 4 employees × 3 months of payslips, 2 signatures + 3 letters, a bank-statement import with matched + unmatched rows, 4 attachments — all within the last ~6 months. Seeds in seconds through the stores (no direct SQL); SeedProgress callback still feeds the overlay's stage label. Add a new feature → add one row of it here.
 │  │  ├─ money.ts                     ← toCents, formatMoney/formatLKR, computeLineTotals (integer math). Plus the runtime currency registry: built-in CURRENCIES map + registerCurrency() / isBuiltinCurrency() helpers so user-defined currencies (slotted in by the settings store on load from company_settings.currency_symbol_override) work everywhere formatMoney does.
 │  │  ├─ numbering.ts                 ← allocateDocumentNumber (single-statement atomic)
 │  │  ├─ pdf.ts                       ← preview/commit/legacy export helpers; PdfCommand union
@@ -2115,22 +2115,16 @@ persisted to localStorage).
   Step 1 has a "Skip onboarding" link for power users.
 - ✅ Allow deleting the active / last business
 - ✅ Pagination + click-to-sort columns on every list page
-- ✅ **Demo seed at real-business volume** — `createDemoBusiness()`
-  now builds ~18 months of activity at the scale a real Sri Lankan
-  small business would generate: 200 clients, 150 vendors, 600
-  quotes, 800 invoices, 1000 bills, 400 standalone vouchers, 15
-  employees, 14 months of payslips, plus ~10 sample image
-  attachments scattered across documents. Bulk loops use coprime
-  date strides against a 540-day spread so issue dates land
-  uniformly across the range (the P&L fiscal-year preset and the
-  Last-year / This-year date chips all return meaningfully
-  different slices). Seed takes 2-3 minutes; a `SeedProgressFn`
-  callback feeds a live stage label ("Seeding bills · 425 / 1000")
-  into the welcome page + Settings → Businesses overlay so the
-  spinner has context. Original curated set (4 clients / 3
-  vendors / 3 quotes / 4 invoices / 3 bills / 4 vouchers) is
-  preserved as the "feature showcase" — those rows still drive the
-  dashboard's recent-activity feed and the detail-page demos.
+- ✅ **Demo seed is a showcase** (v0.164.0) — `createDemoBusiness()`
+  builds a small hand-written business with one of everything: every
+  quote / invoice / bill / payslip status, an issued credit note, recurring
+  invoice + bill templates (one of each already due), two bank accounts, a
+  bank-statement import with matched and unmatched rows, letters with
+  saved signatures, and a few attachments — all within the last ~6 months
+  so the dashboard, calendar and report presets light up. Seeds in
+  seconds. The earlier 200-client / 800-invoice bulk fill (a list-paging
+  stress test) was retired; if a stress fixture is wanted again, build it
+  as a separate script, not into the demo.
 - ✅ Line-ending normalization via `.gitattributes`
 - ✅ Production build pipeline (MSI + NSIS installers)
 - ✅ **CI release workflows split per platform** — `release-windows.yml`
