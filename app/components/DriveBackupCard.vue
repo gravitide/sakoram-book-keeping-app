@@ -1,5 +1,5 @@
 <template>
-	<div v-if="drive.status?.configured" id="google-drive" class="mt-8 scroll-mt-4">
+	<div v-if="drive.status?.configured" id="google-drive" class="scroll-mt-4">
 		<SectionCard title="Google Drive backup" icon="i-lucide-cloud-upload">
 			<template #title-extra>
 				<HelpButton slug="backup-google-drive" size="xs" />

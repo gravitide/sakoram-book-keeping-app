@@ -20,10 +20,10 @@
 			<ol class="list-decimal pl-5 space-y-1">
 				<li>
 					Open
-					<NuxtLink to="/settings/businesses#google-drive" class="text-(--ui-primary) hover:underline">
-						Settings → Businesses
+					<NuxtLink to="/settings/backup" class="text-(--ui-primary) hover:underline">
+						Settings → Backup
 					</NuxtLink>
-					and scroll to <strong>Google Drive backup</strong>. Press <strong>Connect Google Drive</strong>.
+					and press <strong>Connect Google Drive</strong>.
 				</li>
 				<li>Your browser opens Google's sign-in page. Choose your Google account.</li>
 				<li>
