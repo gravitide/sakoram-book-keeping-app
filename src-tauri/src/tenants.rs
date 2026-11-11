@@ -3,7 +3,6 @@
 // App-level state stays under app_data_dir:
 //
 //   tenants.json                 ← registry + active_tenant_id (only this)
-//   license.json                 ← per-install license/trial (untouched here)
 //
 // A business folder (chosen by the user, anywhere on disk) contains
 // everything for that business:

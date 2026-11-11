@@ -1,6 +1,5 @@
 <template>
 	<div v-if="creditNote" class="select-none">
-		<FeatureLock v-if="licLocked" title="Credit notes" tier-label="Plus" feature="credit_notes" />
 		<!-- Top toolbar — back link + action cluster, same shape as
 			invoice / quote / bill detail pages. -->
 		<div class="mb-4 flex items-center justify-between gap-4">
@@ -17,7 +16,6 @@
 					color="neutral"
 					variant="outline"
 					:icon="a.icon"
-					:disabled="licLocked"
 					@click="a.onSelect"
 				>
 					{{ a.label }}
@@ -301,7 +299,7 @@
 			<UButton size="sm" color="neutral" variant="outline" :disabled="saving" @click="hydrate">
 				Discard
 			</UButton>
-			<UButton size="sm" :loading="saving" :disabled="licLocked" icon="i-lucide-save" @click="save">
+			<UButton size="sm" :loading="saving" icon="i-lucide-save" @click="save">
 				Save changes
 			</UButton>
 		</div>
@@ -342,15 +340,12 @@
 	import { useClientsStore } from "~/stores/clients";
 	import { useCreditNotesStore } from "~/stores/credit_notes";
 	import { useInvoicesStore } from "~/stores/invoices";
-	import { useLicenseStore } from "~/stores/license";
 
 	definePageMeta({ title: "Credit note" });
 
 	const route = useRoute();
 	const router = useRouter();
 	const toast = useToast();
-	const license = useLicenseStore();
-	const licLocked = computed(() => !license.hasFeature("credit_notes"));
 
 	const clientsStore = useClientsStore();
 	const creditNotesStore = useCreditNotesStore();
@@ -560,7 +555,6 @@
 
 	const save = async () => {
 		if (!creditNote.value) return;
-		if (licLocked.value) return;
 		saving.value = true;
 		try {
 			if (!editable.value) {
@@ -643,7 +637,6 @@
 			icon: transitionIcon[target],
 			onSelect: async () => {
 				if (!creditNote.value) return;
-				if (licLocked.value) return;
 				try {
 					await creditNotesStore.setStatus(creditNote.value.id, target);
 					await hydrate();
@@ -700,7 +693,6 @@
 		const transitions: ActionItem[] = transitionActions.value.map((a) => ({
 			label: a.label,
 			icon: a.icon,
-			disabled: licLocked.value,
 			onSelect: a.onSelect
 		}));
 		const destructive: ActionItem[] = [{

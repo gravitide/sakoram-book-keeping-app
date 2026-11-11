@@ -2,16 +2,14 @@ import { describe, expect, it } from "vitest";
 import { resolveTemplateKey } from "./pdf-templates";
 
 describe("resolveTemplateKey", () => {
-	it("returns the stored key when entitled and known", () => {
-		expect(resolveTemplateKey("modern", true)).toBe("modern");
-		expect(resolveTemplateKey("classic", true)).toBe("classic");
-	});
-	it("forces classic when not entitled (downgrade-safe)", () => {
-		expect(resolveTemplateKey("modern", false)).toBe("classic");
+	it("returns the stored key when it is a known template", () => {
+		expect(resolveTemplateKey("modern")).toBe("modern");
+		expect(resolveTemplateKey("classic")).toBe("classic");
+		expect(resolveTemplateKey("letterhead")).toBe("letterhead");
 	});
 	it("falls back to classic for unknown / null stored keys", () => {
-		expect(resolveTemplateKey("bogus", true)).toBe("classic");
-		expect(resolveTemplateKey(null, true)).toBe("classic");
-		expect(resolveTemplateKey(undefined, true)).toBe("classic");
+		expect(resolveTemplateKey("bogus")).toBe("classic");
+		expect(resolveTemplateKey(null)).toBe("classic");
+		expect(resolveTemplateKey(undefined)).toBe("classic");
 	});
 });

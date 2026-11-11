@@ -7,10 +7,9 @@
 // re-encrypting the whole DB. See
 // docs/superpowers/specs/2026-06-02-per-business-encryption-design.md §4.
 //
-// Phase 1 (this file) is the pure library: no Tauri commands, no DB, no UI.
-// Phase 2 wires these functions into the tenant lifecycle, which is why the
-// public functions are currently unused.
-#![allow(dead_code)]
+// This file is the pure library: no Tauri commands, no DB, no UI. The tenant
+// lifecycle (vault_fs.rs), encrypted exports (data_io.rs) and Drive snapshots
+// (drive/) call into it.
 
 use serde::{Deserialize, Serialize};
 

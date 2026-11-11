@@ -6,7 +6,6 @@ use tauri::{
 use tauri::Manager;
 mod data_io;
 mod drive;
-pub mod license;
 mod pdf;
 mod phone_upload;
 mod tenants;
@@ -14,8 +13,8 @@ mod vault;
 mod vault_fs;
 
 // Multi-tenancy: each business is a portable user-chosen FOLDER holding its
-// own SQLite file (business.db). Only tenants.json + license.json stay under
-// app_data_dir. We don't register migrations with tauri-plugin-sql because new
+// own SQLite file (business.db). Only per-install files (tenants.json,
+// backup.json) stay under app_data_dir. We don't register migrations with tauri-plugin-sql because new
 // tenants get added at runtime — instead the `tenants` module runs migrations
 // directly via sqlx whenever a business DB is opened.
 
@@ -134,9 +133,6 @@ pub fn run() {
 			drive::drive_list_backups,
 			drive::drive_delete_backup,
 			drive::drive_restore,
-			license::validate_license,
-			license::read_license_state,
-			license::write_license_state,
 		])
 		.build(tauri::generate_context!())
 		.expect("error while building tauri application")

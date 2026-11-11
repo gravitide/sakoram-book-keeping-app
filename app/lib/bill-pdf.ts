@@ -21,7 +21,6 @@ export interface BillPdfArgs {
 	settings: CompanySettingsRow | null
 	currency: { code: string, symbol: string }
 	paidCents: number
-	entitledToTemplates?: boolean
 }
 
 // Extract the category name from `category_snapshot` JSON; empty
@@ -36,7 +35,7 @@ const categoryNameFromSnapshot = (json: string | null): string => {
 	}
 };
 
-export const buildBillPdfPayload = ({ row: b, lines, settings, currency, paidCents, entitledToTemplates = false }: BillPdfArgs) => {
+export const buildBillPdfPayload = ({ row: b, lines, settings, currency, paidCents }: BillPdfArgs) => {
 	let vendor: VendorSnapshot | null = null;
 	try {
 		if (b.vendor_snapshot) vendor = JSON.parse(b.vendor_snapshot) as VendorSnapshot;
@@ -65,7 +64,7 @@ export const buildBillPdfPayload = ({ row: b, lines, settings, currency, paidCen
 		kind: "bill",
 		number: b.number,
 		title,
-		template: resolveTemplateKey(settings?.pdf_template, entitledToTemplates),
+		template: resolveTemplateKey(settings?.pdf_template),
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,

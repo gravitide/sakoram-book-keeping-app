@@ -1,6 +1,5 @@
 <template>
 	<div v-if="template" class="select-none">
-		<FeatureLock v-if="licLocked" title="Recurring bills" tier-label="Plus" feature="recurring" />
 		<div class="mb-4 flex items-center justify-between gap-4">
 			<NuxtLink to="/recurring-bills" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
 				<UIcon name="i-lucide-arrow-left" class="size-4" />
@@ -12,7 +11,7 @@
 					size="sm"
 					color="primary"
 					icon="i-lucide-play"
-					:disabled="!isPending || dirty || licLocked"
+					:disabled="!isPending || dirty"
 					:title="dirty ? 'Save first' : isPending ? 'Generate the next bill from this template' : 'Not yet due — next issue date is in the future'"
 					@click="onGenerateNow"
 				>
@@ -23,7 +22,6 @@
 					color="neutral"
 					variant="outline"
 					:icon="template.is_paused === 1 ? 'i-lucide-play' : 'i-lucide-pause'"
-					:disabled="licLocked"
 					@click="onTogglePause"
 				>
 					{{ template.is_paused === 1 ? "Resume" : "Pause" }}
@@ -338,7 +336,7 @@
 					</UButton>
 					<UButton
 						:loading="saving"
-						:disabled="!dirty || licLocked"
+						:disabled="!dirty"
 						icon="i-lucide-save"
 						@click="save"
 					>
@@ -386,7 +384,6 @@
 	import { bundleTaxCents, computeLineTotals, formatLKR, splitInclusiveTotal, sumCents } from "~/lib/money";
 	import { buildCategorySnapshot, useBillCategoriesStore } from "~/stores/bill_categories";
 	import { useBillsStore } from "~/stores/bills";
-	import { useLicenseStore } from "~/stores/license";
 	import { useRecurringBillsStore } from "~/stores/recurring_bills";
 	// advanceDate is owned by the recurring_invoices store (single source of
 	// truth — see #249); import it from there, not via recurring_bills.
@@ -398,8 +395,6 @@
 	const route = useRoute();
 	const router = useRouter();
 	const toast = useToast();
-	const license = useLicenseStore();
-	const licLocked = computed(() => !license.hasFeature("recurring"));
 
 	const vendorsStore = useVendorsStore();
 	const billsStore = useBillsStore();
@@ -633,7 +628,6 @@
 
 	const save = async () => {
 		if (!template.value) return;
-		if (licLocked.value) return;
 		saving.value = true;
 		try {
 			const bp = formApplyVat.value ? Math.round(vatRatePct.value * 100) : 0;
@@ -755,13 +749,12 @@
 		primary.push({
 			label: "Generate now",
 			icon: "i-lucide-play",
-			disabled: !isPending.value || dirty.value || licLocked.value,
+			disabled: !isPending.value || dirty.value,
 			onSelect: onGenerateNow
 		});
 		primary.push({
 			label: template.value?.is_paused === 1 ? "Resume" : "Pause",
 			icon: template.value?.is_paused === 1 ? "i-lucide-play" : "i-lucide-pause",
-			disabled: licLocked.value,
 			onSelect: onTogglePause
 		});
 		const destructive = [{

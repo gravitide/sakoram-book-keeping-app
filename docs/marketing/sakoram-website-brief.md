@@ -1,8 +1,8 @@
 # Sakoram — Website Feature Brief
 
 > A handoff document for the agent/designer building the Sakoram marketing
-> website. It describes the product, every feature, the pricing tiers, the
-> differentiators, and suggested website sections + copy. Screenshots of every
+> website. It describes the product, every feature, how it is offered (free and
+> open source), the differentiators, and suggested website sections + copy. Screenshots of every
 > screen are available separately — a screenshot-mapping guide is at the end.
 
 ---
@@ -41,12 +41,12 @@ Use these as the pillars of the homepage.
 3. **Professional documents.** Beautiful, print-ready PDF quotes, invoices,
    bills, vouchers, payslips and statements — with your logo, your fonts, your
    brand colour.
-4. **Run every business from one app.** Unlimited businesses (on paid tiers),
-   each in its own isolated file, switchable in one click.
+4. **Run every business from one app.** Unlimited businesses, each in its own
+   isolated file, switchable in one click.
 5. **Fast and focused.** A native desktop app — instant, keyboard-friendly,
    no spinner-laden web pages.
-6. **One-time purchase, no rent.** Buy a tier once and own it. A generous free
-   tier and a full 30-day trial mean you can start today.
+6. **Free, with nothing held back.** Every feature, every business, no trial,
+   no subscription, no account. The source is open (GPL-3.0).
 
 ---
 
@@ -143,7 +143,7 @@ Printable, date-ranged reports — every one exports to PDF:
 ### 3.9 Multi-business
 - Run **multiple businesses** from one install, each in its own isolated data
   file, switch with one click, each with its own logo, settings, and books.
-  (Free tier: up to 2 businesses; paid tiers: unlimited.)
+  No limit on how many.
 
 ### 3.10 Security & data ownership
 - **Per-business encryption (opt-in)** — lock a business behind a password;
@@ -171,38 +171,23 @@ Printable, date-ranged reports — every one exports to PDF:
 
 ---
 
-## 4. Pricing & tiers
+## 4. Price: free
 
-Sakoram is sold as a **one-time purchase per tier** (perpetual licence — buy
-once, own it; no subscription). Every install starts with a **30-day full-
-featured (Premium) free trial**, then drops to a **free Basic tier** forever.
-A licence key unlocks Plus or Premium permanently.
+Sakoram is **free** (since v0.130.0): no tiers, no trial, no licence key, no
+account, no subscription. Every feature in §3 is available to everyone, with
+no limit on the number of businesses. The source code is public under
+**GPL-3.0-only** (copyright Gravitide), so nobody can ship a closed or
+rebranded paid fork. The Sakoram name and logos are reserved trademarks
+(`TRADEMARKS.md`). On first run the user accepts a short as-is / back-up-your-
+data disclaimer, and that is the only gate.
 
-> **Note for the website:** the *prices* are the owner's to set — leave them as
-> placeholders or pull from the owner. The feature split below is final.
+> **Note for the website:** there is no pricing page. If one is wanted for SEO
+> or FAQ purposes, it should say "Free" and point at the download and the
+> GitHub repository.
 
-| Feature area | 🟢 **Basic** (free) | 🔵 **Plus** | 🟣 **Premium** |
-|---|:---:|:---:|:---:|
-| Quotes, Invoices, Bills, Vouchers | ✓ | ✓ | ✓ |
-| Profit & Loss + VAT reports | ✓ | ✓ | ✓ |
-| Professional PDFs, attachments, phone upload | ✓ | ✓ | ✓ |
-| Dashboard, Calendar, Clients/Vendors/Categories | ✓ | ✓ | ✓ |
-| Number of businesses | up to 2 | unlimited | unlimited |
-| Recurring invoices & bills | — | ✓ | ✓ |
-| Credit notes & customer statements | — | ✓ | ✓ |
-| Bank reconciliation | — | ✓ | ✓ |
-| All advanced reports (aged receivables/payables, cash flow, sales-by-client, expenses-by-vendor) | — | ✓ | ✓ |
-| PDF password protection | — | ✓ | ✓ |
-| Per-business encryption | — | ✓ | ✓ |
-| **Full Payroll** (employees, payslips, EPF/ETF/PAYE, payroll dashboard & register) | — | — | ✓ |
-
-**Positioning of the tiers for a pricing page:**
-- **Basic — "Invoice & get paid, free."** Everything a tiny business needs to
-  bill customers, track expenses, and file VAT — at no cost.
-- **Plus — "Automate & report."** Recurring billing, credit notes, statements,
-  bank reconciliation, and the full reporting suite for a growing business.
-- **Premium — "The whole back office."** Adds complete Sri-Lankan payroll
-  (EPF / ETF / PAYE) — the full app.
+An earlier draft of this brief described a three-tier paid model (Basic / Plus
+/ Premium with a 30-day trial). That model was dropped in v0.130.0; don't
+reuse it.
 
 ---
 
@@ -212,8 +197,8 @@ A licence key unlocks Plus or Premium permanently.
   Sakoram is a desktop app that needs no internet and stores nothing online —
   a real selling point for privacy-conscious owners and unreliable-connectivity
   contexts.
-- **One-time purchase, not a subscription.** No monthly rent to see your own
-  data.
+- **Free and open source, not a subscription.** No monthly rent to see your
+  own data, and the code is public.
 - **Sri-Lanka-native.** LKR, VAT/IRD, April–March fiscal year, and EPF/ETF/PAYE
   baked in — not bolted on.
 - **Professional, consistent PDFs.** Typeset output, not browser printouts.
@@ -237,11 +222,11 @@ A licence key unlocks Plus or Premium permanently.
 A recommended page/section layout for the agent:
 
 1. **Hero** — Logo + *"Sakoram — The desktop bookkeeper!"* + one-liner +
-   primary CTA *"Download free"* (30-day trial) + a product screenshot
+   primary CTA *"Download free"* + a product screenshot
    (Dashboard). Sub-CTA: *"See the features."*
    - Hook ideas: *"Your books. Your computer. No cloud, no subscription."*
      · *"Bookkeeping built for Sri Lankan business."*
-2. **Trust strip** — small icons: *Works offline · One-time purchase ·
+2. **Trust strip** — small icons: *Works offline · Free & open source ·
    Windows & macOS · LKR / VAT / EPF-ETF-PAYE · Your data stays local.*
 3. **Feature sections** (alternating image/text, one per area from §3) —
    Sales, Purchases, Money & Banking, Payroll, Reports, PDFs & Branding,
@@ -250,13 +235,13 @@ A recommended page/section layout for the agent:
    year, EPF/ETF/PAYE. Strong local-trust block.
 5. **Privacy/offline section** — "Nothing leaves your machine." Explain
    local-only storage, optional encryption, and ownership of backups.
-6. **Pricing** — the three-tier table from §4 (+ owner's prices) with the
-   30-day trial and free-Basic story prominent.
+6. **Free & open source** — a short block from §4: free for everyone, GPL-3.0
+   source on GitHub, no account. No pricing table.
 7. **Reports & PDFs gallery** — a visual showcase of the PDF outputs (these
    look premium; lead with them).
 8. **FAQ** — seeds in §9.
-9. **Download / final CTA** — Windows & macOS download buttons; "Start your
-   30-day free trial — no card, no account."
+9. **Download / final CTA** — Windows & macOS download buttons; "Free — no
+   card, no account."
 
 **Tone:** confident, plain-spoken, trustworthy. Avoid jargon; emphasise
 "professional results without the cloud or the subscription."
@@ -283,12 +268,12 @@ A recommended page/section layout for the agent:
 
 - **Does it need the internet?** No — Sakoram is fully offline. Nothing is sent
   to any server; your data lives on your computer.
-- **Is it a subscription?** No — it's a one-time purchase per tier. There's a
-  free Basic tier and a 30-day full trial.
-- **Can I run more than one business?** Yes — unlimited on Plus/Premium (up to
-  2 on free Basic), each isolated in its own file.
+- **Is it a subscription?** No — it's free. No trial, no licence key, no
+  account.
+- **Can I run more than one business?** Yes — as many as you like, each
+  isolated in its own file.
 - **Does it handle Sri Lankan payroll?** Yes — EPF, ETF, and PAYE/APIT with
-  configurable rates and the current tax table (Premium).
+  configurable rates and the current tax table.
 - **Will it do VAT?** Yes — a VAT report of output vs input VAT and net payable
   for the period.
 - **Is my data safe?** It stays on your machine. You can password-encrypt any
@@ -323,9 +308,7 @@ italics):
 | Settings → Appearance | Personalisation | *"Make it yours — colour, fonts, dark mode."* |
 | Business switcher / welcome | Multi-business | *"All your businesses, one app."* |
 | Security / encryption settings | Security | *"Lock a business behind a password."* |
-| Settings → License / pricing | Pricing | *"Start free. Upgrade when you're ready."* |
 
 ---
 
-*Everything described above is implemented in the current build. Prices are the
-only placeholder — set them with the owner.*
+*Everything described above is implemented in the current build.*

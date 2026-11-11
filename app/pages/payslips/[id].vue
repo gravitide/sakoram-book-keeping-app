@@ -1,6 +1,5 @@
 <template>
 	<div class="select-none">
-		<FeatureLock v-if="licLocked" title="Payslips" tier-label="Premium" feature="payroll" />
 		<!-- Top toolbar row: back link on the left, action cluster on
 			the right. Pinned above the title block so buttons can't
 			collide with the number / status / employee meta as the
@@ -21,7 +20,6 @@
 					size="sm"
 					color="primary"
 					icon="i-lucide-banknote"
-					:disabled="licLocked"
 					@click="recordPayment"
 				>
 					Record payment
@@ -44,7 +42,7 @@
 					color="neutral"
 					variant="outline"
 					icon="i-lucide-send"
-					:disabled="!canIssue || licLocked"
+					:disabled="!canIssue"
 					:loading="busy"
 					@click="markIssued"
 				>
@@ -56,7 +54,7 @@
 					color="neutral"
 					variant="outline"
 					icon="i-lucide-rotate-ccw"
-					:disabled="busy || licLocked"
+					:disabled="busy"
 					@click="revertToDraft"
 				>
 					Revert to draft
@@ -67,7 +65,7 @@
 					color="neutral"
 					variant="outline"
 					icon="i-lucide-circle-x"
-					:disabled="busy || licLocked"
+					:disabled="busy"
 					@click="cancel"
 				>
 					Cancel
@@ -177,11 +175,11 @@
 								Earnings & deductions
 							</h2>
 							<div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-								<label v-if="!locked" class="flex items-center gap-2 text-xs text-(--ui-text-muted) shrink-0">
+								<label class="flex items-center gap-2 text-xs text-(--ui-text-muted) shrink-0">
 									Apply EPF / ETF
 									<USwitch v-model="statutoryEnabled" />
 								</label>
-								<label v-if="!locked" class="flex items-center gap-2 text-xs text-(--ui-text-muted) shrink-0">
+								<label class="flex items-center gap-2 text-xs text-(--ui-text-muted) shrink-0">
 									Apply PAYE
 									<USwitch v-model="payeEnabled" />
 								</label>
@@ -367,7 +365,7 @@
 					<UButton variant="ghost" color="neutral" :disabled="saving" @click="onDiscard">
 						Discard
 					</UButton>
-					<UButton :loading="saving" :disabled="!dirty || licLocked" icon="i-lucide-save" @click="onSave">
+					<UButton :loading="saving" :disabled="!dirty" icon="i-lucide-save" @click="onSave">
 						{{ locked ? "Save notes" : "Save changes" }}
 					</UButton>
 				</div>
@@ -429,7 +427,6 @@
 	import { formatMoney } from "~/lib/money";
 	import { buildPayslipPdfPayload } from "~/lib/payslip-pdf";
 	import { computePaye, computeStatutory } from "~/lib/statutory";
-	import { useLicenseStore } from "~/stores/license";
 	import { usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
@@ -443,8 +440,6 @@
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
 	const toast = useToast();
-	const license = useLicenseStore();
-	const licLocked = computed(() => !license.hasFeature("payroll"));
 
 	const idParam = String(route.params.id ?? "");
 	const payslipId = Number(idParam);
@@ -783,8 +778,7 @@
 			settings: settingsStore.settings,
 			currency: currency.value,
 			paidCents: paidCents.value,
-			balanceCents: balanceCents.value,
-			entitledToTemplates: license.hasFeature("pdf_templates")
+			balanceCents: balanceCents.value
 		});
 	};
 
@@ -844,7 +838,6 @@
 			primary.push({
 				label: "Record payment",
 				icon: "i-lucide-banknote",
-				disabled: licLocked.value,
 				onSelect: recordPayment
 			});
 		}
@@ -860,7 +853,7 @@
 			transitions.push({
 				label: "Mark issued",
 				icon: "i-lucide-send",
-				disabled: !canIssue.value || busy.value || licLocked.value,
+				disabled: !canIssue.value || busy.value,
 				onSelect: markIssued
 			});
 		}
@@ -868,7 +861,7 @@
 			transitions.push({
 				label: "Cancel",
 				icon: "i-lucide-circle-x",
-				disabled: busy.value || licLocked.value,
+				disabled: busy.value,
 				onSelect: cancel
 			});
 		}

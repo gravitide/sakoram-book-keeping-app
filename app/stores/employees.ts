@@ -5,7 +5,7 @@
 // fields: NIC, designation, joining date, integer-cents basic salary,
 // and a per-employee bank-payment block.
 //
-// Payslips (separate store, later PR) FK into employees with
+// Payslips (app/stores/payslips.ts) FK into employees with
 // ON DELETE RESTRICT and snapshot the row at issue, so any rename /
 // salary change here doesn't rewrite the history of past payslips.
 

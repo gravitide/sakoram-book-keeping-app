@@ -308,11 +308,9 @@
 							v-for="t in PDF_TEMPLATES"
 							:key="t.key"
 							type="button"
-							:disabled="!canPickTemplate(t.key)"
-							class="p-2 rounded-md border text-left transition"
+							class="p-2 rounded-md border text-left transition cursor-pointer hover:border-(--ui-primary)/50"
 							:class="[
-								form.pdf_template === t.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)',
-								canPickTemplate(t.key) ? 'cursor-pointer hover:border-(--ui-primary)/50' : 'opacity-50 cursor-not-allowed'
+								form.pdf_template === t.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)'
 							]"
 							@click="form.pdf_template = t.key"
 						>
@@ -321,7 +319,6 @@
 							</div>
 							<div class="text-xs font-medium flex items-center gap-1">
 								{{ t.label }}
-								<UIcon v-if="!canPickTemplate(t.key)" name="i-lucide-lock" class="size-3 text-(--ui-text-muted)" />
 							</div>
 						</button>
 					</div>
@@ -473,7 +470,6 @@
 	import { PDF_TEMPLATES } from "~/lib/pdf-templates";
 	import { THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
-	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
 
@@ -486,15 +482,8 @@
 	const settingsStore = useSettingsStore();
 	const banksStore = useBusinessBanksStore();
 	const tenants = useTenantsStore();
-	const license = useLicenseStore();
 
 	await settingsStore.ensureLoaded();
-
-	// PDF templates are a Plus feature. A fresh install is on the Premium
-	// trial so all are pickable; after the trial only Classic is. Mirrors
-	// the gate on /settings/pdf.
-	const entitledToTemplates = computed(() => license.hasFeature("pdf_templates"));
-	const canPickTemplate = (key: string): boolean => entitledToTemplates.value || key === "classic";
 
 	// Step state machine. `steps` is a typed array purely for the indicator
 	// UI labels. Steps 1-5 save settings; step 6 (Security) is the optional

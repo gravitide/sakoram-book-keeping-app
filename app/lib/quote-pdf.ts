@@ -18,14 +18,9 @@ export interface QuotePdfArgs {
 	lines: QuoteLineRow[]
 	settings: CompanySettingsRow | null
 	currency: { code: string, symbol: string }
-	/**
-	 * Whether the business may use non-Classic templates (Plus feature). When
-	 *  false, the payload's `template` is forced to "classic".
-	 */
-	entitledToTemplates?: boolean
 }
 
-export const buildQuotePdfPayload = ({ row: q, lines, settings, currency, entitledToTemplates = false }: QuotePdfArgs) => {
+export const buildQuotePdfPayload = ({ row: q, lines, settings, currency }: QuotePdfArgs) => {
 	let client: ClientSnapshot | null = null;
 	try {
 		if (q.client_snapshot) client = JSON.parse(q.client_snapshot) as ClientSnapshot;
@@ -56,7 +51,7 @@ export const buildQuotePdfPayload = ({ row: q, lines, settings, currency, entitl
 	return {
 		kind: "quote",
 		number: q.number,
-		template: resolveTemplateKey(settings?.pdf_template, entitledToTemplates),
+		template: resolveTemplateKey(settings?.pdf_template),
 		title,
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",

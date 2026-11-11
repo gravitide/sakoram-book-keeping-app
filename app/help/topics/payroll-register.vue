@@ -112,7 +112,9 @@
 				If you're a PAYE-registered employer, the deductions stack should include the PAYE withheld per employee. Run this report monthly and reconcile against your PAYE return (T-10) before filing — easier to catch mistakes here than at year-end.
 			</HelpCallout>
 			<p>
-				Sakoram doesn't auto-compute EPF / ETF / PAYE today — they're entered as manual deduction lines on each payslip. The roadmap calls out statutory auto-compute as a future enhancement.
+				Sakoram can work out EPF, ETF and PAYE for you. Turn them on in Payroll settings and every new payslip gets the employee EPF and PAYE deductions as managed lines, with employer EPF and ETF recorded alongside. The figures are frozen when the payslip is issued, so this register always matches what was paid. See <NuxtLink to="/help/statutory-paye" class="text-(--ui-primary) hover:underline">
+					EPF, ETF &amp; PAYE
+				</NuxtLink> for how to set it up.
 			</p>
 		</HelpSection>
 
