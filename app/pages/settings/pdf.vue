@@ -406,13 +406,6 @@
 						title="Templates"
 						subtitle="Pick one layout for your quote, invoice, bill, and payslip PDFs. Your theme colour, font, and header logo apply to every template — only the layout changes."
 					>
-						<FeatureLock
-							v-if="!entitledToTemplates"
-							title="PDF templates"
-							tier-label="Plus"
-							feature="pdf_templates"
-						/>
-
 						<div>
 							<div class="text-sm font-medium mb-2">
 								PDF template
@@ -422,12 +415,10 @@
 									v-for="t in TEMPLATES"
 									:key="t.key"
 									type="button"
-									:disabled="!canPick(t.key)"
 									:title="t.description"
-									class="p-2 rounded-md border text-left transition"
+									class="p-2 rounded-md border text-left transition cursor-pointer hover:border-(--ui-primary)/50"
 									:class="[
-										form.pdf_template === t.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)',
-										canPick(t.key) ? 'cursor-pointer hover:border-(--ui-primary)/50' : 'opacity-50 cursor-not-allowed'
+										form.pdf_template === t.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)'
 									]"
 									@click="form.pdf_template = t.key"
 								>
@@ -436,7 +427,6 @@
 									</div>
 									<div class="text-xs font-medium flex items-center gap-1">
 										{{ t.label }}
-										<UIcon v-if="!canPick(t.key)" name="i-lucide-lock" class="size-3 text-(--ui-text-muted)" />
 									</div>
 								</button>
 							</div>
@@ -543,7 +533,6 @@
 	import { PDF_TOKENS } from "~/lib/pdf-tokens";
 	import { sampleInvoicePayload } from "~/lib/sample-pdf";
 	import { isHexColor, THEME_COLORS, themeHex } from "~/lib/theme";
-	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
 
@@ -570,13 +559,8 @@
 		pdf_footer_text: null
 	});
 
-	// PDF templates are a Plus feature. Basic users see the pickers but can
-	// only select Classic; rendering also forces Classic when not entitled.
-	const license = useLicenseStore();
-	const entitledToTemplates = computed(() => license.hasFeature("pdf_templates"));
 	const currency = useActiveCurrency();
 	const TEMPLATES = PDF_TEMPLATES;
-	const canPick = (key: string) => entitledToTemplates.value || key === "classic";
 	const colors = THEME_COLORS;
 	// Accent colour for the schematic thumbnails — tracks the live (unsaved)
 	// PDF colour selection so picking a swatch updates the previews instantly.

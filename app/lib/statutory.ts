@@ -1,10 +1,12 @@
-// Pure Sri Lankan statutory contribution math (EPF + ETF).
+// Pure Sri Lankan statutory payroll math: EPF + ETF (computeStatutory) and
+// monthly-table PAYE/APIT (computePaye). Cumulative / YTD APIT and the
+// lump-sum tables are not implemented.
 //
 // No Pinia / Vue deps so it is trivially unit-testable — same shape as
 // reconcile-match.ts and payroll-cycle.ts. Rates are basis points
 // (golden rule #3): 8% = 800. All amounts are integer cents computed
 // with banker's (half-even) rounding, mirroring computeLineTotals in
-// money.ts. PAYE/APIT is deliberately out of scope.
+// money.ts.
 
 import { roundHalfEven } from "./money";
 

@@ -159,7 +159,7 @@ Forget like a file. Only two app-level files stay in `%APPDATA%`:
 ```
 %APPDATA%\com.sakoram.billing\
   ├─ tenants.json     ← registry: { active_tenant_id, tenants: [{ id, name, path, logo_file, encrypted }] }
-  └─ license.json     ← per-install trial/license (per-machine; NEVER travels with a folder)
+  └─ backup.json      ← per-machine Google Drive backup state (see "Google Drive backup"; NEVER travels with a folder)
 ```
 
 A **business folder** (anywhere the user picks) holds everything for that
@@ -228,7 +228,7 @@ is no longer encoded in filenames):
 
 `com.sakoram.billing` is the Tauri bundle identifier. **Do not change
 it** — it still determines `app_data_dir` (home of `tenants.json` +
-`license.json`). Renaming would orphan the registry + license state.
+`backup.json`). Renaming would orphan the registry and the backup state.
 
 ---
 
@@ -458,59 +458,30 @@ Spec/plan: `docs/superpowers/{specs,plans}/2026-09-19-google-drive-backup*`.
 
 ---
 
-## Licensing & feature tiers
+## Free app — no licensing, one Terms gate
 
-> **The app is now FREE (since v0.130.0). No tiers, no trial, no gating.**
-> `app/stores/license.ts` was neutered to report `tier = Premium`,
-> `isTrial = false`, `businessLimit = ∞`, and `hasFeature`/`canCreateBusiness`
-> always `true` — so every gated UI element (lock badges, `<FeatureLock>`,
-> `<UpgradeButton>`, capped business creation) auto-hides with zero callsite
-> edits. The **reachable** licensing UI is deleted: `/upgrade` page,
-> `/settings/license` page, the License nav entry, the trial banner, and the
-> About-modal tier line. Left **dormant** pending a follow-up cleanup PR:
-> `src-tauri/src/license.rs` + `bin/mint_license.rs` + their crate deps,
-> `app/lib/licensing.ts` (+ its unit test), and `FeatureLock` / `UpgradeButton`
-> — none of these render or run once the store is neutered.
->
-> **First-run Terms gate** replaces licensing as the only pre-use wall.
-> `app/lib/terms.ts` (`TERMS_VERSION` + `hasAcceptedTerms`) + `useTerms()`
-> composable store a versioned acceptance flag in localStorage
-> (`sakoram.terms.acceptedVersion`, per-machine). `tenant.global.ts` redirects
-> to `/terms` until accepted; the Terms are re-readable via the About modal.
-> The disclaimer is a liability/as-is/backup-your-own-data notice — bump
-> `TERMS_VERSION` to force everyone to re-accept after a material copy change.
+**The app is free (since v0.130.0): no tiers, no trial, no feature gating.**
+The licensing engine was neutered in v0.130.0 and **deleted in v0.164.1**:
+`license.rs` and its three Tauri commands, the `mint_license` CLI and
+`scripts/mint-license.sh`, the `ed25519-dalek` / `machine-uid` crates,
+`app/lib/licensing.ts`, the license store, `<FeatureLock>` / `<UpgradeButton>`,
+nav lock badges, the `New*Modal` `/upgrade` redirects, and the
+`entitledToTemplates` flag on the PDF builders (`resolveTemplateKey(stored)`
+now takes only the stored key). Don't reintroduce a gate: every feature is
+available to everyone. A stale `license.json` may still sit in `app_data_dir`
+on dev machines from old builds; nothing reads it.
 
-The historical commercial 3-tier design (now dormant) — spec/plan:
+**First-run Terms gate** is the only pre-use wall.
+`app/lib/terms.ts` (`TERMS_VERSION` + `hasAcceptedTerms`) + `useTerms()`
+composable store a versioned acceptance flag in localStorage
+(`sakoram.terms.acceptedVersion`, per-machine). `tenant.global.ts` redirects
+to `/terms` until accepted; the Terms are re-readable via the About modal.
+The disclaimer is a liability/as-is/backup-your-own-data notice — bump
+`TERMS_VERSION` to force everyone to re-accept after a material copy change.
+
+The historical commercial 3-tier design (Basic / Plus / Premium, offline
+Ed25519 keys, 30-day trial) is preserved only as a record in
 `docs/superpowers/{specs,plans}/2026-06-04-licensing-tiers.*`.
-
-- **Tiers:** Basic (free) < Plus < Premium. Fresh install = 30-day full
-  **Premium trial** → then free **Basic**; a paid key unlocks Plus/Premium
-  permanently (perpetual one-time purchase).
-- **Keys = offline Ed25519-signed tokens.** `src-tauri/src/license.rs` holds
-  the embedded **public** key + `validate()`; only the **private** key
-  (off-repo at `~/.sakoram/license-signing.key`, gitignored `*.signing.key` /
-  `*.lic`) can mint one. Forge-proof, but the client-side gate is an accepted
-  soft deterrent (we don't fight binary patching). Buyer name/email embedded
-  as a sharing deterrent.
-- **Mint:** `scripts/mint-license.sh <plus|premium> "Name" email` (wraps the
-  `mint_license` bin; auto-IDs + CSV ledger under `~/.sakoram`). Keypair via
-  `cargo run --bin mint_license -- keygen`; paste the printed key into
-  `EMBEDDED_PUBLIC_KEY` in `license.rs`.
-- **Per-install, not per-tenant:** state lives in
-  `{app_data_dir}/license.json` (`license_key` + `trial_start` +
-  `last_seen_date` clock-rollback guard) — NOT a tenant DB, no migration.
-  Delete it + restart the app to reset trial/license for testing.
-- **`app/lib/licensing.ts` is the source of truth:** `Tier` enum, the
-  **`FEATURES` feature→min-tier registry**, `hasFeature`, trial math, and
-  `effectiveEntitlement` (**a valid license supersedes the trial** — a paying
-  customer is never "on trial"). Pure + unit-tested. `app/stores/license.ts`
-  loads it at startup (warmed in `tenant.global.ts`).
-- **Gating (client-side, view-only on downgrade):** nav items carry an
-  optional `feature` (lock badge in `default.vue`); `<FeatureLock>` /
-  `<UpgradeButton>` banners + hidden create actions on paid pages (existing
-  data stays viewable); `New*Modal` submits + higher-tier detail edits gated;
-  Basic capped at 2 businesses (gates creation only). UI: `/upgrade` +
-  `/settings/license`.
 
 ---
 
@@ -646,7 +617,6 @@ sakoram_app/
 │  │  ├─ backup-reminder.ts           ← pure: `isBackupDue` / `daysSinceBackup` / `backupAgeLabel` + REMINDER_OPTIONS for the Google Drive backup reminder
 │  │  ├─ drive-errors.ts              ← pure: maps the stable `DRIVE_*` error codes from src-tauri/src/drive to friendly copy (+ reconnect / cancelled flags)
 │  │  ├─ load-once.ts                 ← `createLoadOnce(load, isLoaded)` — the shared-in-flight-promise rule behind `ensureLoaded()`. Use it; don't write `if (!loaded && !loading) await load()`, which lets a concurrent caller return with state still null.
-│  │  ├─ licensing.ts                 ← tier registry (FEATURES) + hasFeature + trial math + effectiveEntitlement (license supersedes trial)
 │  │  └─ theme.ts                     ← THEME_COLORS palette (name → hex)
 │  ├─ middleware/
 │  │  └─ tenant.global.ts             ← redirect to /welcome if no active tenant
@@ -672,7 +642,6 @@ sakoram_app/
 │     ├─ recurring_invoices.ts        ← invoice TEMPLATES that materialise as draft invoices on a user-initiated cadence. generateOne(id) clones lines with recomputed totals and advances next_issue_date.
 │     ├─ recurring_bills.ts           ← vendor-side mirror of recurring_invoices; generated bills land in status `unpaid` (not draft — bills have no draft state).
 │     ├─ bank_statements.ts           ← imported bank statement rows + imports table. linkMatch / unlinkMatch run as two sequential auto-commits per the connection-pool caveat. suggestMatchesFor wraps the pure matcher in app/lib/reconcile-match.ts.
-│     ├─ license.ts                   ← per-install entitlement store (tier/trial); loaded at startup via tenant.global.ts
 │     ├─ drive_backup.ts              ← per-INSTALL Google Drive backup state (status / busy / progress) bridging the `drive_*` commands; works on the welcome screen with no active tenant
 │     └─ tenants.ts                   ← bridges JS to Rust tenant registry
 └─ src-tauri/
@@ -701,13 +670,11 @@ sakoram_app/
       ├─ pdf.rs                       ← export_*_pdf commands (quote/invoice/bill/voucher/payslip), copy_file, open_path
       ├─ phone_upload.rs              ← LAN HTTP server (axum) for phone→invoice photo uploads + import_invoice_attachment
       ├─ data_io.rs                   ← export_tenant_data / import_tenant_data (.zip bundles)
-      ├─ drive/                       ← Google Drive backup & restore (plan / state / snapshot / remote / backup / restore / oauth / gdrive / mod) — see "Google Drive backup"
-      ├─ license.rs                   ← Ed25519 license-key verify + license.json trial state + commands (per-install)
-      └─ bin/mint_license.rs          ← local key-minting CLI (keygen + mint); NOT bundled into the app
+      └─ drive/                       ← Google Drive backup & restore (plan / state / snapshot / remote / backup / restore / oauth / gdrive / mod) — see "Google Drive backup"
 .github/
 └─ workflows/
    ├─ release-windows.yml             ← Windows MSI + NSIS build, triggered by tag push or manual dispatch. Uploads to the GitHub release for the tag.
-   └─ release-macos.yml               ← macOS Apple Silicon DMG + .app.tar.gz build, same triggers, same release.
+   └─ release-macos.yml               ← macOS Apple Silicon DMG build, same triggers, same release.
 ```
 
 ---
@@ -830,8 +797,8 @@ Code-signing requires a CA cert (~$200–400/year), out of scope.
   modal carries the GPL's "Appropriate Legal Notices" — never reintroduce "All
   rights reserved". A NEW dependency must be GPL-3-compatible: permissive,
   MPL-2.0, LGPL and Apache-2.0 are fine; GPL-2.0-only, SSPL, BUSL and
-  "non-commercial" licences are not. This is unrelated to the dormant
-  *product* licence-key code under "Licensing & feature tiers".
+  "non-commercial" licences are not. (The app itself has no product licence
+  keys — see "Free app — no licensing, one Terms gate".)
 - **The release pipeline is a security boundary (public repo, since v0.160.4).**
   The two release workflows build with secrets and publish installers people
   run, so: triggers stay `push: tags` + `workflow_dispatch` — NEVER add
@@ -1617,7 +1584,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0047_continuous_document_numbering.sql  ← drop the fiscal-year scope from document numbering. `document_counters` is dropped + recreated keyed on `document_type` alone (was `(document_type, fiscal_year)`); numbers go `{PREFIX}-{YYYY}-{NNNN}` → `{PREFIX}-{NNNN}` (QUO-0004). Numbering is now date-independent — no year reset, no year jump on quote→invoice conversion, no back-date renumber. `numbering.ts` dropped `parseDocumentNumber` + `renumberForIssueDate`; `formatDocumentNumber(type, seq)` lost its fiscalYear arg; `useDocumentNumber` dropped its `issueDate` option. Old YYYY-format numbers on existing docs keep their stored strings (pre-1.0, disposable). SCHEMA_VERSION → 47.
 0048_bank_colors.sql                    ← `business_banks.color` (TEXT NOT NULL DEFAULT 'green') — one of the 8 predefined THEME_COLORS swatch names (same palette bill categories use). Auto-assigns distinct swatches to existing banks by id order (interleaved hue families) so markers work with zero setup. Rendered by the shared `BankColorDot.vue` in front of the bank identity everywhere: settings bank list, vouchers-list Method cell, bank USelects on quote/invoice/recurring-invoice/voucher pages (+ /reconcile) via `#leading` / `#item-leading` slots. SCHEMA_VERSION → 48.
 0049_payslip_signatures.sql             ← `company_settings.payslip_show_signatures` (INTEGER, default 0) — opt-in two-column sign-off block ("Authorised by" / "Received by (employee)") at the foot of the payslip PDF. Business-wide, not per-payslip (a business either wants sign-off lines or it doesn't; a per-payslip flag would fight the issued-payslips-are-immutable rule and make bulk PDF export inhomogeneous). The 72pt lead-in lives INSIDE the `#if data.show_signatures == true` in `payslip.typ`, so with signatures off the page ends cleanly after notes instead of trailing an inch of whitespace. Toggled on `/settings/payroll` (`#signatures` card); threaded into the payload by `app/lib/payslip-pdf.ts`, which every render path (detail page, list row, bulk export) already shares. Defaults OFF, so existing tenants stop printing the block until they opt in. SCHEMA_VERSION → 49.
-0050_unified_pdf_template.sql           ← collapse `pdf_template_invoice` + `pdf_template_quote` into a single `company_settings.pdf_template` (TEXT NOT NULL DEFAULT 'classic'); the invoice choice wins the collapse. One picker on /settings/pdf now drives quote / invoice / bill / payslip alike. `common.typ` gained `template-config(data)` (page margins / base size / par / footer per key) + `doc-header(data)` (the 5 header treatments); `payslip.typ` imports common.typ for the first time and consumes both, so `letterhead`'s 45mm top reservation and `compact`'s density finally reach payslips — and `export_payslip_pdf` now writes `common.typ` alongside. `export_bill_pdf` stopped hardcoding doc-classic. **The 5 `doc-*.typ` files still carry their own inline header copies** — unifying them is a deliberate follow-up, kept out of scope so client-facing render paths stayed untouched. SCHEMA_VERSION → 50.
+0050_unified_pdf_template.sql           ← collapse `pdf_template_invoice` + `pdf_template_quote` into a single `company_settings.pdf_template` (TEXT NOT NULL DEFAULT 'classic'); the invoice choice wins the collapse. One picker on /settings/pdf now drives quote / invoice / bill / payslip alike. `common.typ` gained `template-config(data)` (page margins / base size / par / footer per key) + `doc-header(data)` (the 5 header treatments); `payslip.typ` imports common.typ for the first time and consumes both, so `letterhead`'s 45mm top reservation and `compact`'s density finally reach payslips — and `export_payslip_pdf` now writes `common.typ` alongside. `export_bill_pdf` stopped hardcoding doc-classic. The 5 `doc-*.typ` files kept their own inline header copies at first; they were switched to the shared `doc-header(data)` in v0.152.1 (#319). SCHEMA_VERSION → 50.
 0051_pdf_logo_controls.sql              ← `company_settings.pdf_logo_scale` (INTEGER, default 100 — percent, UI 50..150 step 5) + `pdf_logo_crop` (TEXT JSON {x,y,w,h} in source px, NULL for SVG/uncropped). Header-logo revamp: raster uploads keep the untouched original at `pdf-header-original.<ext>` (business-folder root) and a hand-rolled canvas cropper (`ImageCropModal.vue` + pure `app/lib/crop-rect.ts`) writes the `pdf-header.<ext>` derivative the PDFs render; "Re-crop" reopens the original with the stored rect via the `read_business_asset` command (bytes, because asset:// URLs are cross-origin and taint the canvas). SVG passes through uncropped (stays vector). All 9 template logo sites now render through `header-logo(data, base-h)` in common.typ — baseline × scale with a fixed 55mm width clamp via measure() so banner crops shrink instead of colliding with the title (note: Typst rejects length×length, so ratios must be parenthesised — `h * (m.width / m.height)`). voucher/report/statement gained a SELECTIVE `#import "common.typ": header-logo` (a wildcard would shadow their local label/faint — the payslip landmine from #315) + common.typ as a render companion. The upload tile + crop stage are fixed white in both themes: they preview against the PDF's actual background. SCHEMA_VERSION → 51.
 0052_pdf_header_footer_text.sql         ← `company_settings.pdf_header_custom` / `pdf_header_text` / `pdf_footer_custom` / `pdf_footer_text`. Opt-in rich-text page chrome: when a flag is on, the stored TipTap JSON replaces the built-in header block (printed opposite the logo) or the footer line. Flags default 0 so existing tenants render byte-identically — proven by sha256 over all 5 doc templates before/after. `{business_name}` / `{address}` / `{city}` / `{phone}` / `{email}` / `{website}` / `{tax_id}` tokens are substituted over the BLOCK TREE by `app/lib/pdf-tokens.ts` (so a token inside a bold run stays bold); unknown tokens render literally so typos are visible. `app/lib/pdf-chrome.ts` turns settings into the `header_blocks` / `footer_blocks` payload arrays for all 9 builders and caps the footer at 3 blocks — the page footer is a FIXED region repeated on every page. `render-blocks` gained a `spacing` param (default 8pt = unchanged) and **`footer-content` MOVED below it** in common.typ (definition-order rule — it now calls render-blocks). Header text reaches the 5 doc-* templates + payslip via `doc-header`; voucher/report/statement/letter get the footer only (bespoke headers). Letterhead skips header text by design. `RichTextEditor` gained a `minimal` prop (marks + align only) and an exposed `insertText()` for the Insert-field menu. SCHEMA_VERSION → 52.
 0053_logo_crop.sql                      ← `company_settings.logo_crop` (TEXT JSON {x,y,w,h} in source px, NULL for SVG/uncropped) — the square-identity-logo mirror of `pdf_logo_crop`. Raster uploads now keep the untouched original at `logos/logo-original.<ext>` and the CROPPED derivative at `logos/logo.<ext>`; `save_business_asset`/`read_business_asset` gained a `logo-original` kind (the stale-ext sweep keys on `file_stem`, and `logo-original` != `logo`, so the pair never collide). `ImageCropModal` gained `aspect` (1 = square; omitted keeps the wide PDF letterhead free-form) plus `title`/`hint` props — its copy was hardcoded to the PDF header and leaked into the logo modal. Aspect math lives in the pure `fullRect(w,h,aspect)` / `resizeRect(...,aspect)`; clamping at an image edge shrinks BOTH axes so the ratio survives. **The sharp edge: cropping emits PNG, so a JPEG upload lands as `logo.png` — `tenants.setLogoFile` must get the extension of the file ACTUALLY written**, because welcome + Businesses read `tenants.json` directly, not the DB. The logo now renders on a WHITE PLATE (sidebar / welcome / Businesses / uploader tile) but only when a logo is set — the empty-state icon keeps the muted bg, since a white square holding a grey icon reads as a broken image in dark mode. Originals are local-only: `data_io` bundles the derivative alone (same as `pdf-header-original`), so Re-crop falls back to cropping the derivative after a backup import. SCHEMA_VERSION → 53.
@@ -1991,7 +1958,7 @@ persisted to localStorage).
   - **Bulk PDF export** on the payslips list — multi-select rows
     via checkbox column, pick output folder, progress modal, one
     `{number}.pdf` per row.
-  - **Payroll dashboard** at `/payroll` — upcoming-cycle hero with
+  - **Payroll dashboard** at `/payroll/dashboard` — upcoming-cycle hero with
     urgency badge (overdue red / 7-day amber / further green), KPI
     tiles (active employees / outstanding payroll / paid this year),
     12-month salaries-paid bar chart, recent runs panel, outstanding
@@ -2452,10 +2419,10 @@ persisted to localStorage).
   connections to the app. It works on machines where the user has
   already allowed the app; the production installer should add a
   program-scoped inbound rule so end users don't hit a silent block.
-- **Drag-drop reorder for `PayslipLineEditor`** —
+- **Reorder lines in `PayslipLineEditor`** —
   `DocumentLineEditor` already has it (grip handle + HTML5
   drag/drop in both bundle + itemized modes); `PayslipLineEditor`
-  still uses up/down arrow buttons.
+  has no reordering at all (add / remove only).
 - **Localised dates in list pages** — list tables show raw
   `2026-05-05` strings. Could use `Intl.DateTimeFormat`.
 - **Soften schema-version gate on import** — currently refuses if
@@ -2630,8 +2597,8 @@ sheet is possible without double-entry (out of scope — see "Explicitly
 out of scope" above, reconfirmed 2026-09-08);
 inter-bank transfers and owner capital / drawings have nowhere to go and
 currently distort cash flow + P&L; `bill_categories` is flat, so a laptop
-and an electricity bill both land in P&L as expense; and the dead
-licensing surface is still compiled with three registered Tauri commands.
+and an electricity bill both land in P&L as expense. (The dead licensing
+surface flagged in the same audit was deleted in v0.164.1.)
 
 ---
 
@@ -2775,10 +2742,11 @@ licensing surface is still compiled with three registered Tauri commands.
   registration.
 - **A second `src/bin/*.rs` binary breaks `tauri dev`** unless
   `default-run = "sakoram_billing"` is set in `Cargo.toml` `[package]` —
-  `tauri dev` runs `cargo run`, which is ambiguous with >1 binary
-  (`mint_license` + the app). `cargo build` / `cargo test` pass anyway; only
-  `cargo run` / `tauri dev` surface it (error: "could not determine which
-  binary to run").
+  `tauri dev` runs `cargo run`, which is ambiguous with >1 binary. There is
+  no helper binary today (the old `mint_license` CLI was deleted in
+  v0.164.1), but `default-run` stays pinned so adding one is safe.
+  `cargo build` / `cargo test` pass either way; only `cargo run` /
+  `tauri dev` surface it (error: "could not determine which binary to run").
 - **Before merging any old/leftover branch, diff it against main**
   (`git diff --stat main..<branch>`). Two abandoned early-project branches
   (`docs/per-business-encryption-spec`, `style/appearance-2col`) predate most
@@ -2828,12 +2796,12 @@ licensing surface is still compiled with three registered Tauri commands.
   Build a blob URL from the file's bytes (read via the fs plugin)
   and point the iframe at that — blob URLs inherit the renderer's
   origin. The `PdfPreviewModal` shows the pattern.
-- **Tauri checkout actions need v5 for Node 24.** GitHub deprecated
-  Node 20 on Actions in June 2026; `actions/checkout@v4` runs on
-  Node 20 and will start warning. Use `@v5`. Other actions used
-  here (`oven-sh/setup-bun@v2`, `Swatinem/rust-cache@v2`,
-  `softprops/action-gh-release@v2`, `dtolnay/rust-toolchain@stable`)
-  are already Node-24 compatible.
+- **Workflow actions must be Node-24 compatible.** GitHub deprecated
+  Node 20 on Actions in June 2026. Every action in the release workflows
+  is pinned to a full commit SHA of a Node-24 release (checkout v7,
+  setup-bun v2.2, rust-cache v2.9, action-gh-release v3) with the version
+  in a trailing comment; take bumps through the Dependabot PRs rather
+  than by hand, and keep the SHA + comment pairing when you do.
 - **TipTap needs a single ProseMirror copy — `nuxt.config.ts` dedupes it.**
   `@nuxt/ui` bundles its OWN TipTap at a different `prosemirror-model` version
   than the one our Letters editor uses. With both loaded, node schema identity

@@ -24,11 +24,10 @@ export interface PayslipPdfPayloadArgs {
 	currency: CurrencyMeta
 	paidCents: number
 	balanceCents: number
-	entitledToTemplates?: boolean
 }
 
 export function buildPayslipPdfPayload(args: PayslipPdfPayloadArgs): Record<string, unknown> {
-	const { row, lines, settings, currency, paidCents, balanceCents, entitledToTemplates = false } = args;
+	const { row, lines, settings, currency, paidCents, balanceCents } = args;
 
 	let employee: EmployeeSnapshot | null = null;
 	try {
@@ -60,7 +59,7 @@ export function buildPayslipPdfPayload(args: PayslipPdfPayloadArgs): Record<stri
 
 	return {
 		number: row.number,
-		template: resolveTemplateKey(settings?.pdf_template, entitledToTemplates),
+		template: resolveTemplateKey(settings?.pdf_template),
 		title: "PAY SLIP",
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",

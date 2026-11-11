@@ -2,12 +2,6 @@
 	<div class="select-none">
 		<!-- select-none on the page root: this list is for navigating to
 			employees, not copying cell text out of the table. -->
-		<FeatureLock
-			v-if="locked"
-			title="Employees"
-			tier-label="Premium"
-			feature="payroll"
-		/>
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
 			<div>
 				<h1 class="text-2xl font-semibold">
@@ -17,7 +11,7 @@
 					{{ archivedCounts.active }} active · {{ archivedCounts.archived }} archived
 				</p>
 			</div>
-			<UButton v-if="!locked" icon="i-lucide-plus" @click="newEmployee">
+			<UButton icon="i-lucide-plus" @click="newEmployee">
 				New employee
 			</UButton>
 		</header>
@@ -135,15 +129,12 @@
 	import { andClauses, likeClause, makeSortResolver } from "~/lib/list-query";
 	import { formatMoney } from "~/lib/money";
 	import { useEmployeesStore } from "~/stores/employees";
-	import { useLicenseStore } from "~/stores/license";
 
 	definePageMeta({ title: "Employees" });
 
 	const store = useEmployeesStore();
 	const toast = useToast();
 	const router = useRouter();
-	const license = useLicenseStore();
-	const locked = computed(() => !license.hasFeature("payroll"));
 
 	// Server-paginated: search + the archived toggle hit the DB.
 	const SEARCH_COLUMNS = ["full_name", "employee_number", "email", "designation", "phone", "nic"];

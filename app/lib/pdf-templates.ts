@@ -1,4 +1,4 @@
-// Registry of client-facing PDF templates + the entitlement-aware key resolver.
+// Registry of client-facing PDF templates + the stored-key resolver.
 // Pure (no Vue/Tauri) so it's unit-testable in node. The Rust registry in
 // `src-tauri/src/pdf.rs` is the actual render-time validator (unknown key →
 // classic); this list drives the Settings picker and the `resolveTemplateKey`
@@ -21,12 +21,10 @@ export const PDF_TEMPLATES: PdfTemplateMeta[] = [
 const KEYS = new Set(PDF_TEMPLATES.map((t) => t.key));
 
 /**
- * The template key to render with. A Plus feature: when the user isn't
- * entitled, always render `classic` (so a downgrade keeps their stored choice
- * but reverts the output). Unknown / null stored keys also fall back.
+ * The template key to render with: the stored key when it is a known
+ * template, otherwise `classic` (covers null / unknown / stale keys).
  */
-export function resolveTemplateKey(stored: string | null | undefined, entitled: boolean): string {
-	if (!entitled) return "classic";
+export function resolveTemplateKey(stored: string | null | undefined): string {
 	if (stored && KEYS.has(stored)) return stored;
 	return "classic";
 }

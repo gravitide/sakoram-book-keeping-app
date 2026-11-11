@@ -1,10 +1,8 @@
 // Vendors store: list + search + create/update/archive.
 //
 // Mirrors the clients store exactly — same shape, same patterns. Vendors
-// are the counterparties on the bills side of the ledger, kept as a
-// standalone address book in this initial cut. (A future change can
-// thread a saved vendor through into bill creation; for now bills keep
-// their own free-text vendor fields.)
+// are the counterparties on the bills side of the ledger: bills carry a
+// vendor_id FK plus a vendor_snapshot frozen at creation (migration 0008).
 
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";

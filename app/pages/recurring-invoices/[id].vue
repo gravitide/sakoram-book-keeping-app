@@ -1,6 +1,5 @@
 <template>
 	<div v-if="template" class="select-none">
-		<FeatureLock v-if="licLocked" title="Recurring invoices" tier-label="Plus" feature="recurring" />
 		<div class="mb-4 flex items-center justify-between gap-4">
 			<NuxtLink to="/recurring-invoices" class="text-sm text-(--ui-text-muted) hover:text-(--ui-text) inline-flex items-center gap-1">
 				<UIcon name="i-lucide-arrow-left" class="size-4" />
@@ -12,7 +11,7 @@
 					size="sm"
 					color="primary"
 					icon="i-lucide-play"
-					:disabled="!isPending || dirty || licLocked"
+					:disabled="!isPending || dirty"
 					:title="dirty ? 'Save first' : isPending ? 'Generate the next draft invoice from this template' : 'Not yet due — next issue date is in the future'"
 					@click="onGenerateNow"
 				>
@@ -23,7 +22,6 @@
 					color="neutral"
 					variant="outline"
 					:icon="template.is_paused === 1 ? 'i-lucide-play' : 'i-lucide-pause'"
-					:disabled="licLocked"
 					@click="onTogglePause"
 				>
 					{{ template.is_paused === 1 ? "Resume" : "Pause" }}
@@ -395,7 +393,7 @@
 					</UButton>
 					<UButton
 						:loading="saving"
-						:disabled="!dirty || licLocked"
+						:disabled="!dirty"
 						icon="i-lucide-save"
 						@click="save"
 					>
@@ -449,7 +447,6 @@
 	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
-	import { useLicenseStore } from "~/stores/license";
 	import { advanceDate, useRecurringInvoicesStore } from "~/stores/recurring_invoices";
 
 	definePageMeta({ title: "Recurring invoice" });
@@ -457,8 +454,6 @@
 	const route = useRoute();
 	const router = useRouter();
 	const toast = useToast();
-	const license = useLicenseStore();
-	const licLocked = computed(() => !license.hasFeature("recurring"));
 
 	const banksStore = useBusinessBanksStore();
 	const clientsStore = useClientsStore();
@@ -739,7 +734,6 @@
 
 	const save = async () => {
 		if (!template.value) return;
-		if (licLocked.value) return;
 		saving.value = true;
 		try {
 			// VAT toggle gates the rate. Unchecked = persist 0 (the
@@ -878,13 +872,12 @@
 		primary.push({
 			label: "Generate now",
 			icon: "i-lucide-play",
-			disabled: !isPending.value || dirty.value || licLocked.value,
+			disabled: !isPending.value || dirty.value,
 			onSelect: onGenerateNow
 		});
 		primary.push({
 			label: template.value?.is_paused === 1 ? "Resume" : "Pause",
 			icon: template.value?.is_paused === 1 ? "i-lucide-play" : "i-lucide-pause",
-			disabled: licLocked.value,
 			onSelect: onTogglePause
 		});
 		const destructive = [{

@@ -688,7 +688,6 @@
 	import { useClientsStore } from "~/stores/clients";
 	import { useCreditNotesStore } from "~/stores/credit_notes";
 	import { useInvoicesStore } from "~/stores/invoices";
-	import { useLicenseStore } from "~/stores/license";
 	import { useQuotesStore } from "~/stores/quotes";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
@@ -700,7 +699,6 @@
 	const toast = useToast();
 
 	const settingsStore = useSettingsStore();
-	const license = useLicenseStore();
 	const banksStore = useBusinessBanksStore();
 	const clientsStore = useClientsStore();
 	const invoicesStore = useInvoicesStore();
@@ -1259,8 +1257,7 @@
 			settings: settingsStore.settings,
 			currency: currency.value,
 			paidCents: invoicesStore.paidCentsFor(invoice.value!.id),
-			creditedCents: invoicesStore.creditedCentsFor(invoice.value!.id),
-			entitledToTemplates: license.hasFeature("pdf_templates")
+			creditedCents: invoicesStore.creditedCentsFor(invoice.value!.id)
 		});
 
 	// Preview-then-save flow. Same pattern as quotes/[id].vue — see there

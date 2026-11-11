@@ -315,7 +315,6 @@
 	import { queryString } from "~/lib/route-query";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
-	import { useLicenseStore } from "~/stores/license";
 	import { useSettingsStore } from "~/stores/settings";
 
 	definePageMeta({ title: "Invoices" });
@@ -323,7 +322,6 @@
 	const router = useRouter();
 	const toast = useToast();
 	const store = useInvoicesStore();
-	const license = useLicenseStore();
 	const clientsStore = useClientsStore();
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
@@ -558,8 +556,7 @@
 				settings: settingsStore.settings,
 				currency: currency.value,
 				paidCents: currentInvoice.value._paid,
-				creditedCents: currentInvoice.value._credited,
-				entitledToTemplates: license.hasFeature("pdf_templates")
+				creditedCents: currentInvoice.value._credited
 			});
 		},
 		fileName: () => `${currentInvoice.value?.number ?? "invoice"}.pdf`,

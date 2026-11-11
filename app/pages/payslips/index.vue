@@ -2,12 +2,6 @@
 	<div class="select-none">
 		<!-- select-none on the page root: this list is for navigating to
 			payslips, not copying cell text out of the table. -->
-		<FeatureLock
-			v-if="locked"
-			title="Payslips"
-			tier-label="Premium"
-			feature="payroll"
-		/>
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
 			<div>
 				<h1 class="text-2xl font-semibold flex items-center gap-3">
@@ -27,7 +21,7 @@
 					</template>
 				</p>
 			</div>
-			<div v-if="!locked" class="flex items-center gap-2">
+			<div class="flex items-center gap-2">
 				<UButton
 					icon="i-lucide-users"
 					variant="soft"
@@ -175,10 +169,9 @@
 
 			<!-- Selection action bar — renders above the table whenever any
 				row is ticked. PrimeVue's selection model lives in
-				`selectedRows`; we surface a count + Clear + Generate PDFs.
-				Hidden when locked (payroll is a Premium feature). -->
+				`selectedRows`; we surface a count + Clear + Generate PDFs. -->
 			<div
-				v-if="selectedRows.length > 0 && !isLoading && !locked"
+				v-if="selectedRows.length > 0 && !isLoading"
 				class="mb-3 flex items-center justify-between gap-3 px-3 py-2 rounded-md border border-(--ui-primary)/30 bg-(--ui-primary)/10 text-sm"
 			>
 				<div>
@@ -365,7 +358,6 @@
 	import { resolveProtectPassword } from "~/lib/pdf";
 	import { queryInt, withoutQueryKeys } from "~/lib/route-query";
 	import { useEmployeesStore } from "~/stores/employees";
-	import { useLicenseStore } from "~/stores/license";
 	import { monthBounds, usePayslipsStore } from "~/stores/payslips";
 	import { useSettingsStore } from "~/stores/settings";
 
@@ -378,8 +370,6 @@
 	const employeesStore = useEmployeesStore();
 	const settingsStore = useSettingsStore();
 	const currency = useActiveCurrency();
-	const license = useLicenseStore();
-	const locked = computed(() => !license.hasFeature("payroll"));
 
 	// Each row carries derived `_paid` / `_balance` / `_status` from the SQL
 	// subquery, so neither all payslips NOR all vouchers load in memory.
@@ -625,8 +615,7 @@
 				settings: settingsStore.settings,
 				currency: currency.value,
 				paidCents: currentPayslip.value._paid,
-				balanceCents: currentPayslip.value._balance,
-				entitledToTemplates: license.hasFeature("pdf_templates")
+				balanceCents: currentPayslip.value._balance
 			});
 		},
 		fileName: () => `${currentPayslip.value?.number ?? "payslip"}.pdf`,
@@ -828,8 +817,7 @@
 					settings: settingsStore.settings,
 					currency: currency.value,
 					paidCents: row._paid,
-					balanceCents: row._balance,
-					entitledToTemplates: license.hasFeature("pdf_templates")
+					balanceCents: row._balance
 				});
 
 				const outputPath = await join(folder, `${safeName(row.number)}.pdf`);

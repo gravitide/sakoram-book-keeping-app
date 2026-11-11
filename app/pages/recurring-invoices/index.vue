@@ -1,6 +1,5 @@
 <template>
 	<div class="select-none">
-		<FeatureLock v-if="locked" title="Recurring invoices" tier-label="Plus" feature="recurring" />
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
 			<div>
 				<h1 class="text-2xl font-semibold flex items-center gap-3">
@@ -29,7 +28,6 @@
 					stays in muscle memory (rather than appearing/disappearing
 					and confusing the user). -->
 				<UButton
-					v-if="!locked"
 					color="primary"
 					variant="soft"
 					icon="i-lucide-play"
@@ -38,7 +36,7 @@
 				>
 					Generate pending<span v-if="store.pendingCount > 0"> ({{ store.pendingCount }})</span>
 				</UButton>
-				<UButton v-if="!locked" icon="i-lucide-plus" @click="newTemplate">
+				<UButton icon="i-lucide-plus" @click="newTemplate">
 					New recurring
 				</UButton>
 			</div>
@@ -244,7 +242,6 @@
 <script setup lang="ts">
 	import type { RecurringFrequency, RecurringInvoiceRow } from "~/stores/recurring_invoices";
 	import { useClientsStore } from "~/stores/clients";
-	import { useLicenseStore } from "~/stores/license";
 	import { useRecurringInvoicesStore } from "~/stores/recurring_invoices";
 
 	definePageMeta({ title: "Recurring invoices" });
@@ -253,8 +250,6 @@
 	const toast = useToast();
 	const store = useRecurringInvoicesStore();
 	const clientsStore = useClientsStore();
-	const license = useLicenseStore();
-	const locked = computed(() => !license.hasFeature("recurring"));
 
 	const { isLoading, runLoad } = usePageLoading();
 	onMounted(() => runLoad(async () => {

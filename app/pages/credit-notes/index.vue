@@ -1,14 +1,11 @@
 <template>
 	<div class="select-none">
-		<FeatureLock v-if="locked" title="Credit notes" tier-label="Plus" feature="credit_notes" />
 		<header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
 			<div>
 				<h1 class="text-2xl font-semibold flex items-center gap-3">
 					Credit notes
 					<!-- Help icon sits next to the title so it's discoverable
-						without crowding the action cluster on the right.
-						Same pattern works on any list page — we'll roll
-						this out across the app in follow-up PRs. -->
+						without crowding the action cluster on the right. -->
 					<HelpButton slug="credit-notes" />
 					<UIcon
 						v-if="isLoading"
@@ -23,7 +20,7 @@
 					</template>
 				</p>
 			</div>
-			<UButton v-if="!locked" icon="i-lucide-plus" @click="newCreditNote">
+			<UButton icon="i-lucide-plus" @click="newCreditNote">
 				New credit note
 			</UButton>
 		</header>
@@ -185,15 +182,12 @@
 	import { queryString } from "~/lib/route-query";
 	import { useClientsStore } from "~/stores/clients";
 	import { useCreditNotesStore } from "~/stores/credit_notes";
-	import { useLicenseStore } from "~/stores/license";
 
 	definePageMeta({ title: "Credit notes" });
 
 	const store = useCreditNotesStore();
 	const clientsStore = useClientsStore();
 	const router = useRouter();
-	const license = useLicenseStore();
-	const locked = computed(() => !license.hasFeature("credit_notes"));
 
 	// Server-paginated: status / client / search hit the DB. Filter refs stay
 	// on the store so cross-doc navigation + stickiness keep working.

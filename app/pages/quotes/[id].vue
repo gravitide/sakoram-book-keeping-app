@@ -703,7 +703,6 @@
 	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useClientsStore } from "~/stores/clients";
 	import { useInvoicesStore } from "~/stores/invoices";
-	import { useLicenseStore } from "~/stores/license";
 	import { canTransition, useQuotesStore } from "~/stores/quotes";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useVouchersStore } from "~/stores/vouchers";
@@ -715,7 +714,6 @@
 	const toast = useToast();
 
 	const settingsStore = useSettingsStore();
-	const license = useLicenseStore();
 	const banksStore = useBusinessBanksStore();
 	const clientsStore = useClientsStore();
 	const quotesStore = useQuotesStore();
@@ -1105,8 +1103,7 @@
 			row: quote.value!,
 			lines: lineRows,
 			settings: settingsStore.settings,
-			currency: currency.value,
-			entitledToTemplates: license.hasFeature("pdf_templates")
+			currency: currency.value
 		});
 
 	// Cache of line rows fetched at preview time. We can't make

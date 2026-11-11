@@ -474,9 +474,7 @@
 
 // --- shared document header --------------------------------------------
 // The five selectable header treatments. Needs data.title and data.number.
-// NOTE: doc-*.typ still carry their own inline copies — this function is
-// consumed by payslip.typ only, so the client-facing render paths stay
-// untouched. Unifying them is a follow-up cleanup.
+// Shared by all five doc-*.typ templates and payslip.typ.
 #let doc-header(data) = {
   let key = data.at("template", default: "classic")
   let logo-or-wordmark(logo-h, name-size) = if data.logo_file != none {

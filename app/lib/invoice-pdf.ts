@@ -26,14 +26,9 @@ export interface InvoicePdfArgs {
 	 *  but every caller should pass it — the balance is wrong without it.
 	 */
 	creditedCents?: number
-	/**
-	 * Whether the business may use non-Classic templates (Plus feature). When
-	 *  false, the payload's `template` is forced to "classic".
-	 */
-	entitledToTemplates?: boolean
 }
 
-export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, paidCents, creditedCents = 0, entitledToTemplates = false }: InvoicePdfArgs) => {
+export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, paidCents, creditedCents = 0 }: InvoicePdfArgs) => {
 	let client: ClientSnapshot | null = null;
 	try {
 		if (inv.client_snapshot) client = JSON.parse(inv.client_snapshot) as ClientSnapshot;
@@ -71,7 +66,7 @@ export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, pa
 		kind: "invoice",
 		number: inv.number,
 		title,
-		template: resolveTemplateKey(settings?.pdf_template, entitledToTemplates),
+		template: resolveTemplateKey(settings?.pdf_template),
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,
