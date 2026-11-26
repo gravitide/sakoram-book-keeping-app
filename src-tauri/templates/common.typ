@@ -339,34 +339,35 @@
 //
 // The metadata marker is what `bun run verify:pdf` queries to prove every page
 // of a multi-page document is numbered and no single-page one is.
-#let page-number-footer(footer) = context {
+//
+// `bottom` is where the number's bottom edge sits, measured down from the top
+// of the footer box. Both placements below go through here, so the text and
+// the marker can't drift apart.
+#let page-number(bottom) = context {
   let total = counter(page).final().first()
   if total > 1 {
     let n = counter(page).get().first()
     // Measured cap-height to descender, so the 'g' clears the footer rule.
-    // The tightest gap is Compact on A5 (12 mm × 148/210 × 30% ≈ 7.2pt);
-    // this box (6.65pt in Akt) + the 0.5pt lift still fits inside it.
     let num = text(size: 7pt, fill: rgb("#6b7280"), top-edge: "cap-height", bottom-edge: "descender")[Page #n of #total]
-    place(top + right, dy: -measure(num).height - 0.5pt, [#num#metadata((page: n, total: total))<sakoram-page-number>])
+    place(top + right, dy: bottom - measure(num).height, [#num#metadata((page: n, total: total))<sakoram-page-number>])
   }
+}
+
+// Built-in: the number floats 0.5pt above the footer. The tightest gap is
+// Compact on A5 (12 mm × 148/210 × 30% ≈ 7.2pt); the number's box (6.65pt in
+// Akt) + the 0.5pt lift still fits inside it.
+#let page-number-footer(footer) = {
+  page-number(-0.5pt)
   footer
 }
 
-// The same number for every mode other than Built-in (Pre-printed paper and
-// pre-printed letters today): it must never print over the paper's own
-// footer or artwork, so it sits INSIDE the Safe area at its bottom edge.
-// page-setup grows the bottom margin by `strip` and sets footer-descent to 0,
-// so the footer box starts exactly `strip` above the Safe area's bottom; the
-// number is placed with its bottom on that edge. Content reflows by the strip
-// in these modes (decided after #355 — they have no byte-identity baseline).
-#let safe-area-page-number(strip) = context {
-  let total = counter(page).final().first()
-  if total > 1 {
-    let n = counter(page).get().first()
-    let num = text(size: 7pt, fill: rgb("#6b7280"), top-edge: "cap-height", bottom-edge: "descender")[Page #n of #total]
-    place(top + right, dy: strip - measure(num).height, [#num#metadata((page: n, total: total))<sakoram-page-number>])
-  }
-}
+// Every mode other than Built-in (Pre-printed paper and pre-printed letters
+// today): the number must never print over the paper's own footer or artwork,
+// so it sits INSIDE the Safe area at its bottom edge. page-setup grows the
+// bottom margin by `strip` and sets footer-descent to 0, so the footer box
+// starts exactly `strip` above the Safe area's bottom, and page-number(strip)
+// puts the number's bottom on that edge. Content reflows by the strip in these
+// modes (decided after #355 — they have no byte-identity baseline).
 
 // --- page setup ----------------------------------------------------------
 // The ONE page setup every template applies, as
@@ -386,7 +387,7 @@
 //                 template's own footer; drawn only past one page.
 //   page_number_position
 //                 "footer" (Built-in) → page-number-footer; "safe_area"
-//                 (every other mode) → safe-area-page-number, inside the
+//                 (every other mode) → page-number(strip), inside the
 //                 Safe area with a strip reserved for it.
 //   chrome        false under any Stationery other than Built-in: the
 //                 template's footer (built-in or custom) is dropped here, so
@@ -418,7 +419,7 @@
       flipped: flipped,
       margin: (top: m.top * 1mm, right: m.right * 1mm, bottom: m.bottom * 1mm + strip, left: m.left * 1mm),
       footer-descent: 0pt,
-      footer: [#safe-area-page-number(strip)#foot],
+      footer: [#page-number(strip)#foot],
     )
   }
   (
@@ -553,6 +554,32 @@
   }
   image(data.logo_file, width: w, height: h)
 }
+
+// --- logo or wordmark ---------------------------------------------------
+// The header logo at `logo-h`, or — with no logo uploaded — the business name
+// as a bold wordmark, right-aligned in a box of the same height (an empty box
+// when there's no name either, so the header keeps its height).
+// MUST stay below header-logo and above its callers (definition order).
+#let logo-or-wordmark(data, logo-h, name-size) = if data.logo_file != none {
+  header-logo(data, logo-h)
+} else if data.business_name != none and data.business_name != "" {
+  box(height: logo-h)[
+    #set align(right + horizon)
+    #text(weight: "bold", size: name-size, tracking: 0.02em)[#data.business_name]
+  ]
+} else {
+  box(height: logo-h)
+}
+
+// The bespoke templates' header mark (voucher / report / statement / letter):
+// the logo or wordmark top-right, then `below` of space — Built-in stationery
+// only. Any other mode's paper or artwork already carries the business
+// identity, so it draws nothing (the template keeps its own accent rule).
+#let builtin-logo(data, logo-h, name-size, below: 0pt) = if data.page.chrome {
+  align(right)[#logo-or-wordmark(data, logo-h, name-size)]
+  v(below)
+}
+
 // --- tapered rule -------------------------------------------------------
 // The modern template's accent divider: one long bar, then three dashes
 // stepping down in length. Built as a grid of fractional columns so it
@@ -602,16 +629,6 @@
       #align(center, text(weight: "bold", size: 14pt, tracking: 0.04em)[#data.title])
       #v(14pt)
     ]
-  }
-  let logo-or-wordmark(logo-h, name-size) = if data.logo_file != none {
-    header-logo(data, logo-h)
-  } else if data.business_name != none and data.business_name != "" {
-    box(height: logo-h)[
-      #set align(right + horizon)
-      #text(weight: "bold", size: name-size, tracking: 0.02em)[#data.business_name]
-    ]
-  } else {
-    box(height: logo-h)
   }
   // Optional custom header text (company_settings.pdf_header_custom). Empty
   // for everyone who hasn't opted in, and every branch below keeps its
@@ -665,10 +682,10 @@
         align: top,
         gutter: 16pt,
         render-blocks(ht, spacing: 1pt),
-        logo-or-wordmark(9mm, 13pt),
+        logo-or-wordmark(data, 9mm, 13pt),
       )
     } else {
-      align(right)[#logo-or-wordmark(9mm, 13pt)]
+      align(right)[#logo-or-wordmark(data, 9mm, 13pt)]
     }
     #v(-1.5mm)
     #line(length: 100%, stroke: 1.5pt + rgb(data.theme_color))
@@ -682,10 +699,10 @@
         align: top,
         gutter: 16pt,
         render-blocks(ht, spacing: 2pt),
-        logo-or-wordmark(12mm, 16pt),
+        logo-or-wordmark(data, 12mm, 16pt),
       )
     } else {
-      align(right)[#logo-or-wordmark(12mm, 16pt)]
+      align(right)[#logo-or-wordmark(data, 12mm, 16pt)]
     }
     #v(2mm)
     #line(length: 100%, stroke: 2pt + rgb(data.theme_color))

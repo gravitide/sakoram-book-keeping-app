@@ -18,7 +18,7 @@
 // render-blocks is for the opt-in custom footer (settings → PDF → Header &
 // footer): the builders always sent `footer_blocks`, but this template
 // hard-coded its footer line, so the custom text was silently ignored here.
-#import "common.typ": header-logo, page-setup, render-blocks
+#import "common.typ": builtin-logo, page-setup, render-blocks
 
 #let data = json("data.json")
 
@@ -60,23 +60,9 @@
 // ============================================================
 // Header: logo (or wordmark) + red rule
 // ============================================================
-// Built-in stationery only: any other mode owns the page edges, so the logo
-// / wordmark goes and only the accent rule stays.
-#if data.page.chrome {
-  align(right)[
-    #if data.logo_file != none {
-      header-logo(data, 12mm)
-    } else if data.business_name != none and data.business_name != "" {
-      box(height: 12mm)[
-        #set align(right + horizon)
-        #text(weight: "bold", size: 16pt, tracking: 0.02em)[#data.business_name]
-      ]
-    } else {
-      box(height: 12mm)
-    }
-  ]
-  v(-2mm)
-}
+// Logo or wordmark (Built-in stationery only — see builtin-logo); the accent
+// rule stays under every mode.
+#builtin-logo(data, 12mm, 16pt, below: -2mm)
 #line(length: 100%, stroke: 2pt + theme)
 
 // ============================================================

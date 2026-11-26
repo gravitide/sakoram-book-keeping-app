@@ -613,6 +613,7 @@
 
 <script setup lang="ts">
 	import type { CropRect } from "~/lib/crop-rect";
+	import type { PdfLayoutKey } from "~/lib/pdf-layouts";
 	import type { StationeryMode } from "~/lib/stationery";
 	import type { CompanySettingsRow, SettingsUpdate } from "~/stores/settings";
 	import { invoke } from "@tauri-apps/api/core";
@@ -641,7 +642,8 @@
 	// The Stationery JSON column is edited as plain numbers here (only
 	// Pre-printed paper's two bands are settable for now) and re-assembled on
 	// save on top of whatever else is stored, so another mode's settings survive.
-	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_theme_color" | "pdf_layout" | "pdf_paper_size" | "pdf_logo_scale" | "pdf_header_custom" | "pdf_header_text" | "pdf_footer_custom" | "pdf_footer_text"> & {
+	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_theme_color" | "pdf_paper_size" | "pdf_logo_scale" | "pdf_header_custom" | "pdf_header_text" | "pdf_footer_custom" | "pdf_footer_text"> & {
+		pdf_layout: PdfLayoutKey
 		// The RESOLVED mode the picker shows; onSubmit maps it back (stationeryModeToSave).
 		pdf_stationery_mode: StationeryMode
 		preprinted_top_mm: number

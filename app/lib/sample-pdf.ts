@@ -5,6 +5,7 @@
 // without touching the database. Theme colour / font / logo / business contact
 // come from the live settings so the preview reflects the user's branding.
 
+import type { PdfLayoutKey } from "./pdf-layouts";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { buildPageSettings } from "./page-settings";
 import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
@@ -30,7 +31,7 @@ const SAMPLE_FORMATTED = {
 	total_no_symbol: "276,120.00"
 };
 
-function base(settings: CompanySettingsRow | null, currency: SampleCurrency, layoutKey: string) {
+function base(settings: CompanySettingsRow | null, currency: SampleCurrency, layoutKey: PdfLayoutKey) {
 	return {
 		layout: layoutKey,
 		page: buildPageSettings(settings),
@@ -72,7 +73,7 @@ function base(settings: CompanySettingsRow | null, currency: SampleCurrency, lay
 	};
 }
 
-export function sampleInvoicePayload(settings: CompanySettingsRow | null, currency: SampleCurrency, layoutKey: string) {
+export function sampleInvoicePayload(settings: CompanySettingsRow | null, currency: SampleCurrency, layoutKey: PdfLayoutKey) {
 	return {
 		...base(settings, currency, layoutKey),
 		kind: "invoice",

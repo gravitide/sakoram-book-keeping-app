@@ -13,7 +13,7 @@
 // ordered_list blocks whose inline runs carry bold/italic/underline flags.
 // Text is always plain JSON string values — never interpreted as Typst markup.
 
-#import "common.typ": caption, footer-content, header-logo, page-setup, render-blocks
+#import "common.typ": builtin-logo, caption, footer-content, page-setup, render-blocks
 
 #let data = json("data.json")
 
@@ -42,21 +42,10 @@
 
 // --- letterhead header (Built-in stationery only) ------------------------
 // Matches doc-classic: logo top-right at 12mm (or business-name wordmark),
-// theme-coloured 2pt rule below.
+// theme-coloured 2pt rule below. Unlike the other bespoke templates, a letter
+// drops its rule too under any other Stationery.
+#builtin-logo(data, 12mm, 16pt, below: 2mm)
 #if data.page.chrome {
-  align(right)[
-    #if data.logo_file != none {
-      header-logo(data, 12mm)
-    } else if data.business_name != none and data.business_name != "" {
-      box(height: 12mm)[
-        #set align(right + horizon)
-        #text(weight: "bold", size: 16pt, tracking: 0.02em)[#data.business_name]
-      ]
-    } else {
-      box(height: 12mm)
-    }
-  ]
-  v(2mm)
   line(length: 100%, stroke: 2pt + rgb(data.theme_color))
   v(12pt)
 }

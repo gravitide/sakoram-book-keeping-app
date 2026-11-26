@@ -30,10 +30,12 @@
 	// "Preview" button shows the real Typst PDF. Uses the live theme colour so
 	// the accent matches the user's branding. No image assets, no drift.
 
+	import type { PdfLayoutKey } from "~/lib/pdf-layouts";
+
 	interface Rect { x: number, y: number, w: number, h: number, rx?: number, fill: string, opacity?: number }
 
 	const props = withDefaults(defineProps<{
-		layoutKey: string
+		layoutKey: PdfLayoutKey
 		/** Theme accent colour (hex). */
 		color?: string
 	}>(), {

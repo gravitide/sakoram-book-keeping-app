@@ -26,9 +26,12 @@
 // Pure, store-free, relative imports only: vitest and the render-check script
 // (scripts/verify-pdf-render.ts) both import it.
 
-import type { StationeryMode } from "./stationery";
+import type { StationeryMarginsMm, StationeryMode } from "./stationery";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { parseStationery, resolveStationeryMode } from "./stationery";
+
+// The Stationery's four margins are the only margins a page block carries.
+export type { StationeryMarginsMm } from "./stationery";
 
 /**
  * The business's Paper size. The stored value (company_settings.pdf_paper_size)
@@ -60,14 +63,6 @@ export function resolvePaperSize(stored: string | null | undefined): PaperSizeOp
 	return PAPER_SIZES.find((p) => p.key === stored) ?? DEFAULT_PAPER;
 }
 
-/** Page margins in millimetres. */
-export interface PageMarginsMm {
-	top: number
-	right: number
-	bottom: number
-	left: number
-}
-
 export interface PageSettings {
 	paper: PaperSize
 	/**
@@ -86,7 +81,7 @@ export interface PageSettings {
 	 */
 	chrome: boolean
 	/** null = the Layout's built-in margins apply; see the header comment. */
-	margins: PageMarginsMm | null
+	margins: StationeryMarginsMm | null
 	/**
 	 * Print "Page N of M". Every document, every Stationery mode; `page-setup`
 	 * only draws it once the document runs past one page, so single-page PDFs
@@ -121,7 +116,7 @@ export interface PageSettingsOverride {
 type PageSettingsKey = "pdf_paper_size" | "pdf_stationery_mode" | "pdf_stationery";
 type PageSettingsSource = Partial<Pick<CompanySettingsRow, PageSettingsKey>>;
 
-const marginsFor = (mode: StationeryMode, settings: PageSettingsSource | null): PageMarginsMm | null => {
+const marginsFor = (mode: StationeryMode, settings: PageSettingsSource | null): StationeryMarginsMm | null => {
 	if (mode === "builtin") return null;
 	return { ...parseStationery(settings?.pdf_stationery).preprinted };
 };

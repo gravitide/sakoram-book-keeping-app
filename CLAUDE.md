@@ -2710,16 +2710,19 @@ surface flagged in the same audit was deleted in v0.164.1.)
   Under any Stationery other than Built-in (`page.page_number_position:
   "safe_area"`) the number instead sits INSIDE the Safe area at its bottom
   edge: `page-setup` grows the bottom margin by a 5 mm strip, sets
-  `footer-descent: 0pt` and places `safe-area-page-number` in it, so it never
+  `footer-descent: 0pt` and places `page-number(strip)` in it, so it never
   prints over pre-printed paper or artwork. Content reflows by that strip there
   (accepted — those modes have no byte-identity baseline).
 - **Stationery suppression is `page.chrome`, read in two places only.** It is
   true only for Built-in. `page-setup` drops the template's footer when it is
   false (no template gates its own footer); `doc-header` returns a title +
-  number + accent-rule-only header per Layout, and voucher/report/statement
-  gate their logo/wordmark box (keeping the accent rule) and letter its whole
-  letterhead on it. Read `chrome`, not the mode name, so a new Stationery mode
-  needs no template edits for suppression. The Layout key travels as
+  number + accent-rule-only header per Layout, and voucher/report/statement/
+  letter draw their logo/wordmark through common.typ's `builtin-logo` (gated
+  on it; each keeps its accent rule, except letter, which drops its rule too).
+  The statement also drops its FROM business block. `verify:pdf` reads every
+  `chrome: false` render back as text (`scripts/pdf-text.ts`) and fails if the
+  business's address, phone or website is printed. Read `chrome`, not the mode
+  name, so a new Stationery mode needs no template edits for suppression. The Layout key travels as
   `layout` (was `template`); `pdf-layouts.test.ts` fails if `PDF_LAYOUTS` and
   `layout_template` in pdf.rs disagree.
 - **Every Typst template with a bespoke footer must read `footer_blocks`.** The
