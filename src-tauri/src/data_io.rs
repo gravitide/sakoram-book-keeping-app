@@ -5,6 +5,10 @@
 //   manifest.json     metadata: schema version, app version, business name
 //   data.json         { "<table>": [...rows...], ... }
 //   assets/logo.<ext> the tenant's logo file, if any
+//   assets/pdf-header.<ext>  the PDF header logo, if any
+//   attachments/<type>/<id>/<file>  document attachments
+//   stationery/<file> the folder's Stationery artwork + untouched originals
+//                     (fixed names; the DB stores no path to them)
 //
 // For ENCRYPTED bundles `manifest.json` stays cleartext (so the import
 // preview can show the business name / timestamp / version without the
@@ -249,6 +253,140 @@ pub(crate) fn current_iso_utc() -> String {
 	format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", z, m_cal, d, h, m, s)
 }
 
+// ---------- Bundle assets ---------------------------------------------------
+
+/// Every file a bundle carries besides `data.json`.
+#[derive(Debug, Default)]
+pub(crate) struct BundleAssets {
+	/// (asset name e.g. "logo.png", bytes) — `assets/<name>`.
+	pub logo: Option<(String, Vec<u8>)>,
+	/// ("pdf-header.<ext>", bytes) — `assets/<name>`.
+	pub pdf_header: Option<(String, Vec<u8>)>,
+	/// ("<type>/<id>/<basename>", bytes) — `attachments/<rel>`.
+	pub attachments: Vec<(String, Vec<u8>)>,
+	/// (file name, bytes) of everything in the folder's `stationery/` — the
+	/// Full-page background artwork AND its untouched original (ADR 0001).
+	/// Bundled as `stationery/<name>`. No DB column points at them (the DB
+	/// stores only the extension), so import just puts them back.
+	pub stationery: Vec<(String, Vec<u8>)>,
+}
+
+/// The files directly inside `<folder>/stationery/` as (name, bytes).
+pub(crate) fn collect_stationery(folder: &Path) -> Result<Vec<(String, Vec<u8>)>, String> {
+	let Ok(entries) = std::fs::read_dir(folder.join(tenants::STATIONERY_DIR)) else { return Ok(Vec::new()) };
+	let mut out = Vec::new();
+	for entry in entries.flatten().filter(|e| e.path().is_file()) {
+		let bytes = std::fs::read(entry.path()).map_err(|e| format!("read stationery: {e}"))?;
+		out.push((entry.file_name().to_string_lossy().to_string(), bytes));
+	}
+	Ok(out)
+}
+
+/// A bundled stationery file name is used only if it is a single plain file
+/// name — a crafted bundle can't climb out of (or nest inside) `stationery/`.
+fn plain_file_name(name: &str) -> bool {
+	!name.is_empty()
+		&& !name.contains(['/', '\\', ':'])
+		&& Path::new(name).components().count() == 1
+		&& matches!(Path::new(name).components().next(), Some(std::path::Component::Normal(_)))
+}
+
+/// Make `<folder>/stationery/` hold exactly `files` (the bundle is the truth:
+/// artwork the folder had that the bundle doesn't is removed).
+pub(crate) fn write_stationery(folder: &Path, files: &[(String, Vec<u8>)]) -> Result<(), String> {
+	let dir = folder.join(tenants::STATIONERY_DIR);
+	if let Ok(entries) = std::fs::read_dir(&dir) {
+		for entry in entries.flatten().filter(|e| e.path().is_file()) {
+			std::fs::remove_file(entry.path()).map_err(|e| format!("clear stationery: {e}"))?;
+		}
+	}
+	for (name, bytes) in files.iter().filter(|(name, _)| plain_file_name(name)) {
+		std::fs::create_dir_all(&dir).map_err(|e| format!("create stationery dir: {e}"))?;
+		std::fs::write(dir.join(name), bytes).map_err(|e| format!("write stationery {name}: {e}"))?;
+	}
+	Ok(())
+}
+
+/// Stationery for the sealed payload of an encrypted bundle.
+pub(crate) fn stationery_to_payload(files: &[(String, Vec<u8>)]) -> Value {
+	Value::Array(files.iter().map(|(name, bytes)| serde_json::json!({ "name": name, "bytes_b64": BASE64.encode(bytes) })).collect())
+}
+
+/// Stationery back out of a decrypted payload (none for older bundles).
+pub(crate) fn stationery_from_payload(payload: &Value) -> Result<Vec<(String, Vec<u8>)>, String> {
+	let mut out = Vec::new();
+	if let Some(Value::Array(list)) = payload.get("stationery") {
+		for f in list {
+			let name = f.get("name").and_then(|v| v.as_str()).unwrap_or("");
+			let b64 = f.get("bytes_b64").and_then(|v| v.as_str()).unwrap_or("");
+			if name.is_empty() {
+				continue;
+			}
+			let bytes = BASE64.decode(b64.as_bytes()).map_err(|e| format!("bad stationery bytes: {e}"))?;
+			out.push((name.to_string(), bytes));
+		}
+	}
+	Ok(out)
+}
+
+/// Write an UNENCRYPTED bundle: manifest, data.json, assets/, attachments/,
+/// stationery/.
+pub(crate) fn write_plain_bundle<W: Write + Seek>(w: W, manifest: &ExportManifest, data: &Value, assets: &BundleAssets) -> Result<(), String> {
+	let mut zip = zip::ZipWriter::new(w);
+	let opts: zip::write::FileOptions<'_, ()> =
+		zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+	let entry = |zip: &mut zip::ZipWriter<W>, name: &str, bytes: &[u8]| -> Result<(), String> {
+		zip.start_file(name, opts).map_err(|e| e.to_string())?;
+		zip.write_all(bytes).map_err(|e| e.to_string())
+	};
+	entry(&mut zip, "manifest.json", &serde_json::to_vec_pretty(manifest).map_err(|e| e.to_string())?)?;
+	entry(&mut zip, "data.json", &serde_json::to_vec_pretty(data).map_err(|e| e.to_string())?)?;
+	if let Some((name, bytes)) = &assets.logo {
+		entry(&mut zip, &format!("assets/{name}"), bytes)?;
+	}
+	if let Some((name, bytes)) = &assets.pdf_header {
+		entry(&mut zip, &format!("assets/{name}"), bytes)?;
+	}
+	for (rel, bytes) in &assets.attachments {
+		entry(&mut zip, &format!("attachments/{rel}"), bytes)?;
+	}
+	for (name, bytes) in &assets.stationery {
+		entry(&mut zip, &format!("{}/{name}", tenants::STATIONERY_DIR), bytes)?;
+	}
+	zip.finish().map_err(|e| format!("finalize zip: {e}"))?;
+	Ok(())
+}
+
+/// Read an UNENCRYPTED bundle's data and assets. The logo is the one the
+/// manifest names; the PDF header, attachments and stationery are found by
+/// scanning entry names.
+pub(crate) fn read_plain_bundle<R: Read + Seek>(archive: &mut zip::ZipArchive<R>, manifest: &ExportManifest) -> Result<(Value, BundleAssets), String> {
+	let data: Value = read_zip_json(archive, "data.json")?;
+	let mut assets = BundleAssets::default();
+	if let Some(name) = &manifest.logo_asset {
+		assets.logo = Some((name.clone(), read_zip_bytes(archive, &format!("assets/{name}"))?));
+	}
+	let names: Vec<String> = archive.file_names().map(|s| s.to_string()).collect();
+	let stationery_prefix = format!("{}/", tenants::STATIONERY_DIR);
+	for name in names {
+		if name.ends_with('/') {
+			continue;
+		}
+		if let Some(ext) = name.strip_prefix("assets/pdf-header.") {
+			assets.pdf_header = Some((format!("pdf-header.{ext}"), read_zip_bytes(archive, &name)?));
+		} else if let Some(rel) = name.strip_prefix("attachments/") {
+			if !rel.is_empty() {
+				assets.attachments.push((rel.to_string(), read_zip_bytes(archive, &name)?));
+			}
+		} else if let Some(file) = name.strip_prefix(&stationery_prefix) {
+			if plain_file_name(file) {
+				assets.stationery.push((file.to_string(), read_zip_bytes(archive, &name)?));
+			}
+		}
+	}
+	Ok((data, assets))
+}
+
 // ---------- Export ----------------------------------------------------------
 
 #[tauri::command]
@@ -287,6 +425,7 @@ pub async fn export_tenant_data(
 	// Collect attachments + PDF header before sealing the bundle.
 	let attachment_files = collect_attachment_files(&data);
 	let pdf_header = collect_pdf_header(&data);
+	let stationery_files = collect_stationery(&folder)?;
 
 	// Resolve the logo file (if present) from the business folder's logos/ dir.
 	let mut logo_payload: Option<(String, Vec<u8>)> = None;
@@ -323,6 +462,7 @@ pub async fn export_tenant_data(
 			"attachments": attachment_files.iter()
 				.map(|(path, bytes)| serde_json::json!({ "path": path, "bytes_b64": BASE64.encode(bytes) }))
 				.collect::<Vec<_>>(),
+			"stationery": stationery_to_payload(&stationery_files),
 		});
 		let payload_bytes = serde_json::to_vec(&payload).map_err(|e| e.to_string())?;
 		encrypted_blob = Some(vault::encrypt_bytes(&payload_bytes, &key).map_err(|e| e.to_string())?);
@@ -349,34 +489,25 @@ pub async fn export_tenant_data(
 		std::fs::create_dir_all(parent).ok();
 	}
 	let file = std::fs::File::create(&out_path).map_err(|e| format!("create zip: {e}"))?;
+	let Some(blob) = encrypted_blob else {
+		let assets = BundleAssets {
+			logo: logo_payload,
+			pdf_header,
+			attachments: attachment_files,
+			stationery: stationery_files,
+		};
+		return write_plain_bundle(file, &manifest, &Value::Object(data), &assets);
+	};
+
+	// Encrypted: only the cleartext manifest + the sealed payload.
 	let mut zip = zip::ZipWriter::new(file);
 	let opts: zip::write::FileOptions<'_, ()> =
 		zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-
 	zip.start_file("manifest.json", opts).map_err(|e| e.to_string())?;
 	zip.write_all(&serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?)
 		.map_err(|e| e.to_string())?;
-
-	if let Some(blob) = encrypted_blob {
-		zip.start_file("payload.enc", opts).map_err(|e| e.to_string())?;
-		zip.write_all(&blob).map_err(|e| e.to_string())?;
-	} else {
-		zip.start_file("data.json", opts).map_err(|e| e.to_string())?;
-		zip.write_all(&serde_json::to_vec_pretty(&Value::Object(data)).map_err(|e| e.to_string())?)
-			.map_err(|e| e.to_string())?;
-		if let Some((name, bytes)) = logo_payload {
-			zip.start_file(format!("assets/{name}"), opts).map_err(|e| e.to_string())?;
-			zip.write_all(&bytes).map_err(|e| e.to_string())?;
-		}
-		if let Some((name, bytes)) = &pdf_header {
-			zip.start_file(format!("assets/{name}"), opts).map_err(|e| e.to_string())?;
-			zip.write_all(bytes).map_err(|e| e.to_string())?;
-		}
-		for (rel, bytes) in &attachment_files {
-			zip.start_file(format!("attachments/{rel}"), opts).map_err(|e| e.to_string())?;
-			zip.write_all(bytes).map_err(|e| e.to_string())?;
-		}
-	}
+	zip.start_file("payload.enc", opts).map_err(|e| e.to_string())?;
+	zip.write_all(&blob).map_err(|e| e.to_string())?;
 
 	zip.finish().map_err(|e| format!("finalize zip: {e}"))?;
 	Ok(())
@@ -437,13 +568,7 @@ pub async fn import_tenant_data(
 	let file = std::fs::File::open(&in_path).map_err(|e| format!("open zip: {e}"))?;
 	let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("read zip: {e}"))?;
 
-	let (mut data, logo_name, logo_bytes, pdf_header, attachments): (
-		Value,
-		Option<String>,
-		Option<Vec<u8>>,
-		Option<(String, Vec<u8>)>,
-		Vec<(String, Vec<u8>)>,
-	) = if manifest.encrypted {
+	let (mut data, assets): (Value, BundleAssets) = if manifest.encrypted {
 		let pass = passphrase
 			.as_deref()
 			.filter(|p| !p.trim().is_empty())
@@ -490,35 +615,14 @@ pub async fn import_tenant_data(
 				attachments.push((path.to_string(), bytes));
 			}
 		}
-		(data, logo_name, logo_bytes, pdf_header, attachments)
-	} else {
-		let data: Value = read_zip_json(&mut archive, "data.json")?;
-		let logo_name = manifest.logo_asset.clone();
-		let logo_bytes = match &manifest.logo_asset {
-			Some(name) => Some(read_zip_bytes(&mut archive, &format!("assets/{name}"))?),
-			None => None,
+		let logo = match (logo_name, logo_bytes) {
+			(Some(name), Some(bytes)) => Some((name, bytes)),
+			_ => None,
 		};
-		// PDF header logo (assets/pdf-header.<ext>) and attachment files —
-		// discover by scanning entry names.
-		let mut pdf_header: Option<(String, Vec<u8>)> = None;
-		let mut attachments: Vec<(String, Vec<u8>)> = Vec::new();
-		{
-			let names: Vec<String> = (0..archive.len())
-				.filter_map(|i| archive.by_index(i).ok().map(|f| f.name().to_string()))
-				.collect();
-			for name in names {
-				if let Some(ext) = name.strip_prefix("assets/pdf-header.") {
-					let bytes = read_zip_bytes(&mut archive, &name)?;
-					pdf_header = Some((format!("pdf-header.{ext}"), bytes));
-				} else if let Some(rel) = name.strip_prefix("attachments/") {
-					if !rel.is_empty() && !name.ends_with('/') {
-						let bytes = read_zip_bytes(&mut archive, &name)?;
-						attachments.push((rel.to_string(), bytes));
-					}
-				}
-			}
-		}
-		(data, logo_name, logo_bytes, pdf_header, attachments)
+		let stationery = stationery_from_payload(&payload)?;
+		(data, BundleAssets { logo, pdf_header, attachments, stationery })
+	} else {
+		read_plain_bundle(&mut archive, &manifest)?
 	};
 	drop(archive);
 
@@ -532,13 +636,13 @@ pub async fn import_tenant_data(
 			let parent = target_parent
 				.filter(|p| !p.trim().is_empty())
 				.ok_or_else(|| "Importing as a new business needs a location for its folder.".to_string())?;
-			import_as_new_tenant(&app, &name, &parent, &mut data, logo_name.as_deref(), logo_bytes, &pdf_header, &attachments).await
+			import_as_new_tenant(&app, &name, &parent, &mut data, &assets).await
 		}
 		"replace" => {
 			let id = target_tenant_id
 				.ok_or_else(|| "Replace mode requires a target tenant ID.".to_string())?;
 			rewrite_attachment_paths(&app, &id, &mut data)?;
-			import_replace(&app, &id, &data, logo_name.as_deref(), logo_bytes, &pdf_header, &attachments).await
+			import_replace(&app, &id, &data, &assets).await
 		}
 		other => Err(format!("Unknown import mode: {other}")),
 	}
@@ -573,10 +677,7 @@ async fn import_as_new_tenant(
 	name: &str,
 	parent_dir: &str,
 	data: &mut Value,
-	logo_name: Option<&str>,
-	logo_bytes: Option<Vec<u8>>,
-	pdf_header: &Option<(String, Vec<u8>)>,
-	attachments: &[(String, Vec<u8>)],
+	assets: &BundleAssets,
 ) -> Result<tenants::Tenant, String> {
 	// Use the existing create path — produces a unique id, a fresh business
 	// folder + migrated DB + marker, and a registry entry.
@@ -585,7 +686,7 @@ async fn import_as_new_tenant(
 	// Run the actual restore; if anything fails partway, tear the freshly-
 	// created tenant back down so a failed import never leaves a broken
 	// business (registered + empty DB + orphaned files) in the picker.
-	match populate_new_tenant(app, &tenant.id, data, logo_name, logo_bytes, pdf_header, attachments).await {
+	match populate_new_tenant(app, &tenant.id, data, assets).await {
 		Ok(()) => tenants::get_tenant(app, &tenant.id),
 		Err(e) => {
 			tenants::discard_tenant(app, &tenant.id);
@@ -601,11 +702,10 @@ async fn populate_new_tenant(
 	app: &AppHandle,
 	tenant_id: &str,
 	data: &mut Value,
-	logo_name: Option<&str>,
-	logo_bytes: Option<Vec<u8>>,
-	pdf_header: &Option<(String, Vec<u8>)>,
-	attachments: &[(String, Vec<u8>)],
+	assets: &BundleAssets,
 ) -> Result<(), String> {
+	let (logo_name, logo_bytes) = logo_parts(assets);
+	let (pdf_header, attachments) = (&assets.pdf_header, &assets.attachments);
 	// Rewrite attachment paths now that we know the new tenant id.
 	rewrite_attachment_paths(app, tenant_id, data)?;
 
@@ -654,6 +754,7 @@ async fn populate_new_tenant(
 			.map_err(|e| format!("clear pdf_header_logo_path: {e}"))?;
 	}
 	write_attachment_files(app, tenant_id, attachments)?;
+	write_stationery(&tenants::folder_for(app, tenant_id)?, &assets.stationery)?;
 
 	pool.close().await;
 
@@ -666,11 +767,10 @@ async fn import_replace(
 	app: &AppHandle,
 	target_id: &str,
 	data: &Value,
-	logo_name: Option<&str>,
-	logo_bytes: Option<Vec<u8>>,
-	pdf_header: &Option<(String, Vec<u8>)>,
-	attachments: &[(String, Vec<u8>)],
+	assets: &BundleAssets,
 ) -> Result<tenants::Tenant, String> {
+	let (logo_name, logo_bytes) = logo_parts(assets);
+	let (pdf_header, attachments) = (&assets.pdf_header, &assets.attachments);
 	let folder = tenants::folder_for(app, target_id)?;
 	let db_path = folder.join("business.db");
 	if !db_path.exists() {
@@ -723,6 +823,7 @@ async fn import_replace(
 			.map_err(|e| format!("clear pdf_header_logo_path: {e}"))?;
 	}
 	write_attachment_files(app, target_id, attachments)?;
+	write_stationery(&folder, &assets.stationery)?;
 
 	pool.close().await;
 
@@ -840,6 +941,14 @@ fn collect_pdf_header(data: &serde_json::Map<String, Value>) -> Option<(String, 
 	Some((format!("pdf-header.{ext}"), bytes))
 }
 
+/// The bundle's logo as the (name, bytes) pair write_logo takes.
+fn logo_parts(assets: &BundleAssets) -> (Option<&str>, Option<Vec<u8>>) {
+	match &assets.logo {
+		Some((name, bytes)) => (Some(name.as_str()), Some(bytes.clone())),
+		None => (None, None),
+	}
+}
+
 /// Absolute path of a logo file (by relative name) inside the business folder's
 /// `logos/` dir, creating the dir if needed.
 fn logos_path(app: &AppHandle, tenant_id: &str, name: &str) -> Result<PathBuf, String> {
@@ -865,4 +974,115 @@ async fn write_logo(
 	let path = logos_path(app, tenant_id, &file_name)?;
 	std::fs::write(&path, bytes).map_err(|e| format!("write logo: {e}"))?;
 	Ok(Some(file_name))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::io::Cursor;
+
+	fn temp_dir(tag: &str) -> PathBuf {
+		let d = std::env::temp_dir().join(format!("sakoram-data-io-{tag}-{}", uuid::Uuid::new_v4()));
+		std::fs::create_dir_all(&d).unwrap();
+		d
+	}
+
+	fn manifest() -> ExportManifest {
+		ExportManifest {
+			format: "sakoram-export".into(),
+			format_version: FORMAT_VERSION,
+			schema_version: SCHEMA_VERSION,
+			app_version: "0.0.0".into(),
+			exported_at: "2026-11-26T00:00:00Z".into(),
+			business_name: "Acme".into(),
+			tenant_id: "acme".into(),
+			logo_asset: Some("logo.png".into()),
+			encrypted: false,
+			kdf_salt: None,
+		}
+	}
+
+	/// A business folder with a Full-page background and its original.
+	fn folder_with_stationery(tag: &str) -> PathBuf {
+		let folder = temp_dir(tag);
+		std::fs::create_dir_all(folder.join("stationery")).unwrap();
+		std::fs::write(folder.join("stationery").join("background.pdf"), b"%PDF-art").unwrap();
+		std::fs::write(folder.join("stationery").join("background-original.png"), b"PNG-original").unwrap();
+		folder
+	}
+
+	fn sorted(mut files: Vec<(String, Vec<u8>)>) -> Vec<(String, Vec<u8>)> {
+		files.sort();
+		files
+	}
+
+	#[test]
+	fn export_bundle_round_trips_every_asset() {
+		let folder = folder_with_stationery("export");
+		let assets = BundleAssets {
+			logo: Some(("logo.png".into(), b"LOGO".to_vec())),
+			pdf_header: Some(("pdf-header.svg".into(), b"<svg/>".to_vec())),
+			attachments: vec![("invoice/1/a.jpg".into(), b"scan".to_vec())],
+			stationery: collect_stationery(&folder).unwrap(),
+		};
+		let data = serde_json::json!({ "company_settings": [{ "id": 1 }] });
+		let mut buf = Cursor::new(Vec::new());
+		write_plain_bundle(&mut buf, &manifest(), &data, &assets).unwrap();
+
+		let mut archive = zip::ZipArchive::new(Cursor::new(buf.into_inner())).unwrap();
+		let names: Vec<String> = archive.file_names().map(|s| s.to_string()).collect();
+		assert!(names.contains(&"stationery/background.pdf".to_string()));
+		assert!(names.contains(&"stationery/background-original.png".to_string()));
+
+		let (back_data, back) = read_plain_bundle(&mut archive, &manifest()).unwrap();
+		assert_eq!(back_data, data);
+		assert_eq!(back.logo, assets.logo);
+		assert_eq!(back.pdf_header, assets.pdf_header);
+		assert_eq!(back.attachments, assets.attachments);
+		assert_eq!(sorted(back.stationery), sorted(assets.stationery));
+	}
+
+	#[test]
+	fn an_encrypted_bundle_carries_the_stationery_inside_the_sealed_payload() {
+		let files = collect_stationery(&folder_with_stationery("enc")).unwrap();
+		let payload = serde_json::json!({ "stationery": stationery_to_payload(&files) });
+		assert_eq!(sorted(stationery_from_payload(&payload).unwrap()), sorted(files));
+		assert!(stationery_from_payload(&serde_json::json!({})).unwrap().is_empty());
+	}
+
+	#[test]
+	fn importing_stationery_replaces_what_the_folder_had() {
+		let target = temp_dir("import");
+		std::fs::create_dir_all(target.join("stationery")).unwrap();
+		std::fs::write(target.join("stationery").join("background.svg"), b"old").unwrap();
+		let files = collect_stationery(&folder_with_stationery("import-src")).unwrap();
+		write_stationery(&target, &files).unwrap();
+		assert_eq!(sorted(collect_stationery(&target).unwrap()), sorted(files));
+	}
+
+	#[test]
+	fn a_bundle_without_stationery_clears_the_folders_artwork() {
+		let target = folder_with_stationery("import-none");
+		write_stationery(&target, &[]).unwrap();
+		assert!(collect_stationery(&target).unwrap().is_empty());
+	}
+
+	#[test]
+	fn stationery_names_from_a_crafted_bundle_cannot_escape_the_folder() {
+		let target = temp_dir("import-evil");
+		let evil = vec![
+			("../escape.svg".to_string(), b"x".to_vec()),
+			("sub/dir.svg".to_string(), b"x".to_vec()),
+			(r"..\escape.svg".to_string(), b"x".to_vec()),
+			("background.svg".to_string(), b"ok".to_vec()),
+		];
+		write_stationery(&target, &evil).unwrap();
+		assert_eq!(collect_stationery(&target).unwrap(), vec![("background.svg".to_string(), b"ok".to_vec())]);
+		assert!(!target.parent().unwrap().join("escape.svg").exists());
+	}
+
+	#[test]
+	fn a_business_without_stationery_exports_none() {
+		assert!(collect_stationery(&temp_dir("none")).unwrap().is_empty());
+	}
 }
