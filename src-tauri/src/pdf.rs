@@ -156,6 +156,12 @@ async fn render_pdf(
 		obj.insert("logo_file".into(), Value::Null);
 	}
 
+	// 2b. Full-page background artwork (if the page block asks for one) from
+	//     the OPEN business's folder. The DB stores only its format, never a
+	//     path, so a moved folder needs no rewrite.
+	let business_folder = crate::tenants::active_folder(app).ok().flatten();
+	stage_background(&mut data, business_folder.as_deref(), &work_dir)?;
+
 	// 3. Write data.json
 	let data_path = work_dir.join("data.json");
 	std::fs::write(&data_path, serde_json::to_vec_pretty(&data)?)?;
@@ -236,6 +242,39 @@ async fn render_pdf(
 		}
 	}
 
+	Ok(())
+}
+
+/// Stage a Full-page background for Typst. The payload's `page.background` is
+/// `{ ext }` (app/lib/page-settings.ts) — the artwork always lives at
+/// `<business folder>/stationery/background.<ext>`. Copy it into the work dir
+/// as `stationery-background.<ext>` and add `file` (what common.typ's
+/// page-background reads). No business folder, an extension that isn't a
+/// plain word, or a missing file all turn `background` into null: the page
+/// renders without artwork rather than failing. Pages without a background
+/// (every other Stationery mode) are left untouched.
+/// scripts/verify-pdf-render.ts mirrors this — keep the two in step.
+pub(crate) fn stage_background(data: &mut Value, business_folder: Option<&Path>, work_dir: &Path) -> std::io::Result<()> {
+	let Some(bg) = data.pointer_mut("/page/background") else { return Ok(()) };
+	if bg.is_null() {
+		return Ok(());
+	}
+	let ext = bg.get("ext").and_then(|v| v.as_str()).unwrap_or("").to_string();
+	let plain = !ext.is_empty() && ext.len() <= 5 && ext.chars().all(|c| c.is_ascii_alphanumeric());
+	let src = business_folder
+		.filter(|_| plain)
+		.map(|f| f.join(crate::tenants::STATIONERY_DIR).join(format!("background.{ext}")))
+		.filter(|p| p.is_file());
+	match src {
+		Some(src) => {
+			let name = format!("stationery-background.{ext}");
+			std::fs::copy(&src, work_dir.join(&name))?;
+			if let Some(obj) = bg.as_object_mut() {
+				obj.insert("file".into(), Value::String(name));
+			}
+		}
+		None => *bg = Value::Null,
+	}
 	Ok(())
 }
 
@@ -423,7 +462,73 @@ pub fn open_path(path: String) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-	use super::layout_template;
+	use super::{layout_template, stage_background};
+	use serde_json::json;
+	use std::path::PathBuf;
+
+	fn temp_dir(tag: &str) -> PathBuf {
+		let d = std::env::temp_dir().join(format!("sakoram-pdf-{tag}-{}", uuid::Uuid::new_v4()));
+		std::fs::create_dir_all(&d).unwrap();
+		d
+	}
+
+	/// A business folder holding `stationery/background.<ext>`.
+	fn folder_with_background(tag: &str, ext: &str, bytes: &[u8]) -> PathBuf {
+		let folder = temp_dir(tag);
+		std::fs::create_dir_all(folder.join("stationery")).unwrap();
+		std::fs::write(folder.join("stationery").join(format!("background.{ext}")), bytes).unwrap();
+		folder
+	}
+
+	#[test]
+	fn background_artwork_is_copied_beside_the_template_and_named_for_typst() {
+		let folder = folder_with_background("stage", "svg", b"<svg/>");
+		let work = temp_dir("stage-work");
+		let mut data = json!({ "page": { "stationery": "background", "background": { "ext": "svg" } } });
+		stage_background(&mut data, Some(&folder), &work).unwrap();
+		assert_eq!(data["page"]["background"], json!({ "ext": "svg", "file": "stationery-background.svg" }));
+		assert_eq!(std::fs::read(work.join("stationery-background.svg")).unwrap(), b"<svg/>");
+	}
+
+	#[test]
+	fn a_missing_artwork_file_renders_without_a_background() {
+		let folder = temp_dir("stage-missing");
+		let work = temp_dir("stage-missing-work");
+		let mut data = json!({ "page": { "background": { "ext": "pdf" } } });
+		stage_background(&mut data, Some(&folder), &work).unwrap();
+		assert!(data["page"]["background"].is_null());
+	}
+
+	#[test]
+	fn no_open_business_renders_without_a_background() {
+		let work = temp_dir("stage-nofolder-work");
+		let mut data = json!({ "page": { "background": { "ext": "png" } } });
+		stage_background(&mut data, None, &work).unwrap();
+		assert!(data["page"]["background"].is_null());
+	}
+
+	#[test]
+	fn pages_without_a_background_are_left_alone() {
+		let folder = folder_with_background("stage-none", "svg", b"<svg/>");
+		let work = temp_dir("stage-none-work");
+		for page in [json!({ "stationery": "builtin", "background": null }), json!({ "stationery": "builtin" })] {
+			let mut data = json!({ "page": page.clone() });
+			stage_background(&mut data, Some(&folder), &work).unwrap();
+			assert_eq!(data["page"], page);
+		}
+		let mut no_page = json!({ "title": "x" });
+		stage_background(&mut no_page, Some(&folder), &work).unwrap();
+		assert_eq!(no_page, json!({ "title": "x" }));
+	}
+
+	#[test]
+	fn an_extension_that_is_not_a_plain_word_is_refused() {
+		let folder = folder_with_background("stage-ext", "svg", b"<svg/>");
+		let work = temp_dir("stage-ext-work");
+		let mut data = json!({ "page": { "background": { "ext": "svg/../../business.db" } } });
+		stage_background(&mut data, Some(&folder), &work).unwrap();
+		assert!(data["page"]["background"].is_null());
+	}
 
 	#[test]
 	fn each_layout_renders_its_own_template() {

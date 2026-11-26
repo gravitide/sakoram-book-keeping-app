@@ -700,7 +700,7 @@ const stageBackground = (page: PageBlock | undefined, folder: string, work: stri
 	if (!page?.background) return page;
 	const { ext } = page.background;
 	const src = join(folder, "stationery", `background.${ext}`);
-	if (!/^[a-z0-9]+$/.test(ext) || !existsSync(src)) return { ...page, background: null };
+	if (!/^[a-z0-9]{1,5}$/i.test(ext) || !existsSync(src)) return { ...page, background: null };
 	const file = `stationery-background.${ext}`;
 	copyFileSync(src, join(work, file));
 	return { ...page, background: { ...page.background, file } };

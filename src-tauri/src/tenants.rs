@@ -172,6 +172,19 @@ pub fn logos_dir_for(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
 	Ok(d)
 }
 
+/// The folder inside a business folder that holds Stationery artwork
+/// (`background.<ext>` + `background-original.<ext>`). Fixed names; the DB
+/// stores only the extension (ADR 0001).
+pub const STATIONERY_DIR: &str = "stationery";
+
+/// The OPEN business's folder, or None when no business is open.
+pub fn active_folder(app: &AppHandle) -> Result<Option<PathBuf>, String> {
+	match read_registry(app)?.active_tenant_id {
+		Some(id) => Ok(Some(folder_for(app, &id)?)),
+		None => Ok(None),
+	}
+}
+
 /// `<folder>/attachments/` (not created here — callers append <type>/<id>).
 pub fn attachments_dir_for(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
 	Ok(folder_for(app, id)?.join("attachments"))
@@ -896,25 +909,102 @@ pub async fn tenant_logo_path(
 	})
 }
 
-/// Write a logo / PDF-header image into the business folder from the frontend.
+/// Where each business-asset kind lives inside a business folder:
+/// (sub-directory, fixed file stem). The extension follows the upload.
+///
+/// The "-original" kinds hold the untouched upload that Re-crop reopens; the
+/// un-suffixed file is the derivative every render path actually uses. Stale-
+/// extension sweeps key on `file_stem`, and "logo-original" != "logo" (and
+/// "background-original" != "background"), so a pair never collide.
+///
+/// Logo originals stay LOCAL-ONLY (`data_io` bundles the derivative alone).
+/// Stationery artwork AND its original travel in both the export bundle and
+/// the Drive snapshot (ADR 0001): the whole `stationery/` folder is copied.
+fn asset_slot(kind: &str) -> Option<(&'static str, &'static str)> {
+	Some(match kind {
+		"logo" => ("logos", "logo"),
+		"logo-original" => ("logos", "logo-original"),
+		"pdf-header" => ("", "pdf-header"),
+		"pdf-header-original" => ("", "pdf-header-original"),
+		"stationery-background" => (STATIONERY_DIR, "background"),
+		"stationery-background-original" => (STATIONERY_DIR, "background-original"),
+		_ => return None,
+	})
+}
+
+fn asset_dir_and_stem(folder: &Path, kind: &str) -> Result<(PathBuf, &'static str), String> {
+	let (sub, stem) = asset_slot(kind).ok_or_else(|| format!("unknown asset kind: {kind}"))?;
+	Ok((if sub.is_empty() { folder.to_path_buf() } else { folder.join(sub) }, stem))
+}
+
+/// Every file in `dir` whose stem is `stem` (any extension).
+fn files_with_stem(dir: &Path, stem: &str) -> Vec<PathBuf> {
+	let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
+	entries
+		.flatten()
+		.map(|e| e.path())
+		.filter(|p| p.is_file() && p.file_stem().and_then(|s| s.to_str()) == Some(stem))
+		.collect()
+}
+
+/// Write an asset into `folder`, replacing any copy of it in another format.
+/// Returns the absolute path written. The extension must be a short plain word
+/// (it becomes part of a file name, and arrives from the frontend).
+pub(crate) fn write_asset(folder: &Path, kind: &str, ext: &str, bytes: &[u8]) -> Result<PathBuf, String> {
+	let ext = {
+		let e = ext.trim().trim_start_matches('.').to_lowercase();
+		if e.is_empty() { "png".to_string() } else { e }
+	};
+	if ext.len() > 5 || !ext.chars().all(|c| c.is_ascii_alphanumeric()) {
+		return Err(format!("unsupported file extension: {ext}"));
+	}
+	let (dir, stem) = asset_dir_and_stem(folder, kind)?;
+	std::fs::create_dir_all(&dir).map_err(|e| format!("create asset dir: {e}"))?;
+	// Drop any stale <stem>.<other-ext> so a format change doesn't orphan a file.
+	for stale in files_with_stem(&dir, stem) {
+		let same_ext = stale.extension().and_then(|s| s.to_str()).map(|e| e.to_lowercase()) == Some(ext.clone());
+		if !same_ext {
+			let _ = std::fs::remove_file(&stale);
+		}
+	}
+	let dest = dir.join(format!("{stem}.{ext}"));
+	std::fs::write(&dest, bytes).map_err(|e| format!("write asset: {e}"))?;
+	Ok(dest)
+}
+
+/// Read an asset as (extension, bytes); an error when there is none.
+pub(crate) fn read_asset(folder: &Path, kind: &str) -> Result<(String, Vec<u8>), String> {
+	let (dir, stem) = asset_dir_and_stem(folder, kind)?;
+	let p = files_with_stem(&dir, stem).into_iter().next().ok_or_else(|| format!("no {kind} asset found"))?;
+	let ext = p.extension().and_then(|s| s.to_str()).unwrap_or("png").to_lowercase();
+	let bytes = std::fs::read(&p).map_err(|e| format!("read asset: {e}"))?;
+	Ok((ext, bytes))
+}
+
+/// Delete every format of an asset. Nothing to delete is not an error.
+pub(crate) fn remove_asset(folder: &Path, kind: &str) -> Result<(), String> {
+	let (dir, stem) = asset_dir_and_stem(folder, kind)?;
+	for p in files_with_stem(&dir, stem) {
+		std::fs::remove_file(&p).map_err(|e| format!("remove {}: {e}", p.display()))?;
+	}
+	Ok(())
+}
+
+/// Write a logo / PDF-header / stationery image into the business folder from
+/// the frontend.
 ///
 /// Done in Rust (std::fs, which is NOT gated by Tauri's capability scope)
 /// rather than the JS fs plugin, because a business folder can live on ANY
-/// drive (e.g. D:\Sakoram\…) — outside the fs plugin's allow-list, which can't
+/// drive (e.g. D:Sakoram…) — outside the fs plugin's allow-list, which can't
 /// cleanly glob arbitrary drive roots. The path is derived from the registry
 /// (never caller-controlled), so this stays safe. Returns the absolute path of
-/// the written file (stored on company_settings.{logo_path,pdf_header_logo_path}).
+/// the written file (stored on company_settings.{logo_path,pdf_header_logo_path};
+/// stationery artwork stores only its extension, never this path).
 ///
-/// `kind` is "logo" (→ <folder>/logos/logo.<ext>) or "pdf-header"
-/// (→ <folder>/pdf-header.<ext>). Any stale same-stem file of a different
+/// `kind` is one of the `asset_slot` kinds, e.g. "logo" (→ logos/logo.<ext>),
+/// "pdf-header" (→ pdf-header.<ext>) or "stationery-background"
+/// (→ stationery/background.<ext>). Any stale same-stem file of a different
 /// extension is removed so there's never two.
-///
-/// The "-original" variants ("logo-original", "pdf-header-original") hold the
-/// untouched upload that Re-crop reopens; the un-suffixed file is the cropped
-/// derivative every render path actually uses. The stale-extension sweep keys
-/// on `file_stem`, and "logo-original" != "logo", so the pair never collide.
-/// Originals are deliberately LOCAL-ONLY — `data_io` bundles the derivative
-/// alone, so Re-crop is unavailable after a backup import until re-upload.
 #[tauri::command]
 pub fn save_business_asset(
 	app: AppHandle,
@@ -923,40 +1013,12 @@ pub fn save_business_asset(
 	ext: String,
 	bytes: Vec<u8>,
 ) -> Result<String, String> {
-	let ext = {
-		let e = ext.trim().trim_start_matches('.').to_lowercase();
-		if e.is_empty() { "png".to_string() } else { e }
-	};
-	let (dir, stem) = match kind.as_str() {
-		"logo" => (logos_dir_for(&app, &id)?, "logo"),
-		"logo-original" => (logos_dir_for(&app, &id)?, "logo-original"),
-		"pdf-header" => (folder_for(&app, &id)?, "pdf-header"),
-		"pdf-header-original" => (folder_for(&app, &id)?, "pdf-header-original"),
-		_ => return Err(format!("unknown asset kind: {kind}")),
-	};
-	std::fs::create_dir_all(&dir).map_err(|e| format!("create asset dir: {e}"))?;
-	// Drop any stale <stem>.<other-ext> so a format change doesn't orphan a file.
-	if let Ok(entries) = std::fs::read_dir(&dir) {
-		for entry in entries.flatten() {
-			let p = entry.path();
-			let same_stem = p.file_stem().and_then(|s| s.to_str()) == Some(stem);
-			let same_ext = p
-				.extension()
-				.and_then(|s| s.to_str())
-				.map(|e| e.to_lowercase())
-				== Some(ext.clone());
-			if same_stem && !same_ext {
-				let _ = std::fs::remove_file(&p);
-			}
-		}
-	}
-	let dest = dir.join(format!("{stem}.{ext}"));
-	std::fs::write(&dest, &bytes).map_err(|e| format!("write asset: {e}"))?;
+	let dest = write_asset(&folder_for(&app, &id)?, &kind, &ext, &bytes)?;
 	Ok(dest.to_string_lossy().to_string())
 }
 
-/// Read a business asset's bytes for the frontend. Needed by the logo crop
-/// modal: canvas pixel access requires a same-origin image, and the asset
+/// Read a business asset's bytes for the frontend. Needed by the crop
+/// modals: canvas pixel access requires a same-origin image, and the asset
 /// protocol's convertFileSrc URLs are cross-origin (drawing one taints the
 /// canvas, making toBlob throw). Bytes -> blob URL keeps the canvas clean.
 /// Returns (extension, bytes); errors when no file exists for the stem.
@@ -966,27 +1028,18 @@ pub fn read_business_asset(
 	id: String,
 	kind: String,
 ) -> Result<(String, Vec<u8>), String> {
-	let (dir, stem) = match kind.as_str() {
-		"logo" => (logos_dir_for(&app, &id)?, "logo"),
-		"logo-original" => (logos_dir_for(&app, &id)?, "logo-original"),
-		"pdf-header" => (folder_for(&app, &id)?, "pdf-header"),
-		"pdf-header-original" => (folder_for(&app, &id)?, "pdf-header-original"),
-		_ => return Err(format!("unknown asset kind: {kind}")),
-	};
-	let entries = std::fs::read_dir(&dir).map_err(|e| format!("read asset dir: {e}"))?;
-	for entry in entries.flatten() {
-		let p = entry.path();
-		if p.file_stem().and_then(|s| s.to_str()) == Some(stem) && p.is_file() {
-			let ext = p
-				.extension()
-				.and_then(|s| s.to_str())
-				.unwrap_or("png")
-				.to_lowercase();
-			let bytes = std::fs::read(&p).map_err(|e| format!("read asset: {e}"))?;
-			return Ok((ext, bytes));
-		}
-	}
-	Err(format!("no {kind} asset found"))
+	read_asset(&folder_for(&app, &id)?, &kind)
+}
+
+/// Delete a business asset (every format of it). The Stationery Remove
+/// action — switching Stationery modes never calls this.
+#[tauri::command]
+pub fn remove_business_asset(
+	app: AppHandle,
+	id: String,
+	kind: String,
+) -> Result<(), String> {
+	remove_asset(&folder_for(&app, &id)?, &kind)
 }
 
 /// Whether a path exists on disk. Used by the welcome / Businesses pages to
@@ -1298,5 +1351,62 @@ mod tests {
 		let back: Marker = serde_json::from_str(&json).unwrap();
 		assert_eq!(back.id, "acme");
 		assert_eq!(back.schema_version, SCHEMA_VERSION);
+	}
+
+	// ---- business assets (logo / PDF header / stationery artwork) ----------
+
+	#[test]
+	fn background_artwork_and_its_original_live_under_stationery_with_fixed_names() {
+		let folder = temp_folder("asset-bg");
+		let art = write_asset(&folder, "stationery-background", "svg", b"<svg/>").unwrap();
+		let orig = write_asset(&folder, "stationery-background-original", "png", b"PNG").unwrap();
+		assert_eq!(art, folder.join("stationery").join("background.svg"));
+		assert_eq!(orig, folder.join("stationery").join("background-original.png"));
+		assert_eq!(read_asset(&folder, "stationery-background").unwrap(), ("svg".to_string(), b"<svg/>".to_vec()));
+		assert_eq!(read_asset(&folder, "stationery-background-original").unwrap(), ("png".to_string(), b"PNG".to_vec()));
+	}
+
+	#[test]
+	fn replacing_artwork_with_another_format_leaves_no_stale_file_but_keeps_the_original() {
+		let folder = temp_folder("asset-replace");
+		write_asset(&folder, "stationery-background", "png", b"old").unwrap();
+		write_asset(&folder, "stationery-background-original", "jpg", b"orig").unwrap();
+		write_asset(&folder, "stationery-background", "pdf", b"new").unwrap();
+		let mut names: Vec<String> = std::fs::read_dir(folder.join("stationery")).unwrap()
+			.flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
+		names.sort();
+		assert_eq!(names, vec!["background-original.jpg", "background.pdf"]);
+	}
+
+	#[test]
+	fn remove_deletes_every_format_of_that_asset_only() {
+		let folder = temp_folder("asset-remove");
+		write_asset(&folder, "stationery-background", "svg", b"art").unwrap();
+		write_asset(&folder, "stationery-background-original", "png", b"orig").unwrap();
+		remove_asset(&folder, "stationery-background").unwrap();
+		assert!(read_asset(&folder, "stationery-background").is_err());
+		assert!(read_asset(&folder, "stationery-background-original").is_ok());
+		// Removing what isn't there is not an error (Remove twice, or never uploaded).
+		remove_asset(&folder, "stationery-background").unwrap();
+		remove_asset(&folder, "stationery-background-original").unwrap();
+		assert!(read_asset(&folder, "stationery-background-original").is_err());
+	}
+
+	#[test]
+	fn existing_asset_kinds_keep_their_places() {
+		let folder = temp_folder("asset-legacy");
+		assert_eq!(write_asset(&folder, "logo", "png", b"l").unwrap(), folder.join("logos").join("logo.png"));
+		assert_eq!(write_asset(&folder, "logo-original", "jpg", b"o").unwrap(), folder.join("logos").join("logo-original.jpg"));
+		assert_eq!(write_asset(&folder, "pdf-header", "svg", b"h").unwrap(), folder.join("pdf-header.svg"));
+		assert_eq!(write_asset(&folder, "pdf-header-original", "png", b"o").unwrap(), folder.join("pdf-header-original.png"));
+	}
+
+	#[test]
+	fn an_unknown_kind_or_an_extension_that_is_not_a_plain_word_is_refused() {
+		let folder = temp_folder("asset-refuse");
+		assert!(write_asset(&folder, "business-db", "db", b"x").is_err());
+		assert!(write_asset(&folder, "stationery-background", "svg/../../evil", b"x").is_err());
+		assert!(write_asset(&folder, "stationery-background", "../x", b"x").is_err());
+		assert!(remove_asset(&folder, "business-db").is_err());
 	}
 }
