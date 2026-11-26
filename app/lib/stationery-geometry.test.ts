@@ -4,14 +4,17 @@ import {
 	dragMargin,
 	fitMargins,
 	fitScale,
+	layoutMarginsMm,
 	marginLimits,
 	MIN_SAFE_AREA_MM,
 	mmToPx,
 	placeholderBars,
 	PRINTER_BAND_MM,
+	printerBandRects,
 	pxToMm,
 	rulerTicks,
 	safeAreaRect,
+	scaleForWidth,
 	setMargin,
 	snapValue,
 	stepZoom
@@ -167,6 +170,37 @@ describe("fitMargins", () => {
 		expect(safeAreaRect(A5, fitted).h).toBeGreaterThanOrEqual(MIN_SAFE_AREA_MM);
 		expect(fitted.top).toBeGreaterThan(fitted.bottom);
 		expect(fitted.left).toBe(18);
+	});
+});
+
+describe("layoutMarginsMm", () => {
+	it("is each Layout's own A4 page margins under Built-in stationery", () => {
+		expect(layoutMarginsMm("classic", A4)).toEqual({ top: 16, right: 18, bottom: 18, left: 18 });
+		expect(layoutMarginsMm("minimal", A4)).toEqual({ top: 22, right: 22, bottom: 22, left: 22 });
+		expect(layoutMarginsMm("compact", A4)).toEqual({ top: 12, right: 14, bottom: 12, left: 14 });
+	});
+
+	it("scales with the paper's width, as the PDF does", () => {
+		const a5 = layoutMarginsMm("classic", A5);
+		expect(a5.left).toBeCloseTo(18 * 148 / 210);
+		expect(a5.top).toBeCloseTo(16 * 148 / 210);
+	});
+});
+
+describe("printerBandRects", () => {
+	it("is a 5 mm strip along each of the four edges", () => {
+		expect(printerBandRects(A4)).toEqual([
+			{ x: 0, y: 0, w: 210, h: 5 },
+			{ x: 0, y: 292, w: 210, h: 5 },
+			{ x: 0, y: 5, w: 5, h: 287 },
+			{ x: 205, y: 5, w: 5, h: 287 }
+		]);
+	});
+});
+
+describe("scaleForWidth", () => {
+	it("is the scale that draws the page at the given width", () => {
+		expect(scaleForWidth(A5, 296)).toBe(2);
 	});
 });
 

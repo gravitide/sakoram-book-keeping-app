@@ -11,6 +11,7 @@ import type { CompanySettingsRow } from "~/stores/settings";
 import { computeLineTotals, formatMoney, formatQty } from "./money";
 import { buildPageSettings, resolvePaperSize } from "./page-settings";
 import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
+import { layoutMarginsMm, safeAreaRect } from "./stationery-geometry";
 import { pdfThemeHex } from "./theme";
 
 interface SampleCurrency {
@@ -114,18 +115,14 @@ const SAMPLE_FIXED_MM = 175;
 const SAMPLE_LINE_MM = 9;
 const SAMPLE_MAX_LINES = 80;
 
-// Vertical page margins (top + bottom, mm on A4) of each Layout under Built-in
-// stationery — layout-config in src-tauri/templates/common.typ, scaled with
-// the paper's width as page-geometry does there. Every other mode uses the
-// Stationery's own margins instead.
-const LAYOUT_VERTICAL_MARGINS_MM: Record<PdfLayoutKey, number> = { classic: 34, modern: 34, minimal: 44, compact: 24 };
-
-/** How tall the Safe area is on one page of the business's paper (mm). */
+/**
+ * How tall the Safe area is on one page of the business's paper (mm): the
+ * Stationery's margins, or under Built-in the Layout's own.
+ */
 function safeAreaHeightMm(page: PageSettings, layoutKey: PdfLayoutKey): number {
-	const vertical = page.margins
-		? page.margins.top + page.margins.bottom
-		: LAYOUT_VERTICAL_MARGINS_MM[layoutKey] * page.margin_scale;
-	return resolvePaperSize(page.paper).heightMm - vertical;
+	const paper = resolvePaperSize(page.paper);
+	const margins = page.margins ?? layoutMarginsMm(layoutKey, paper);
+	return safeAreaRect(paper, margins).h;
 }
 
 /** Lines that put the sample at about one and a half pages. */

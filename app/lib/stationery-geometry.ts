@@ -14,6 +14,7 @@
 //
 // Pure, store-free, relative imports only.
 
+import type { PdfLayoutKey } from "./pdf-layouts";
 import type { StationeryMarginsMm } from "./stationery";
 import { MAX_BAND_MM } from "./stationery";
 
@@ -151,6 +152,41 @@ export function fitMargins(page: PageDims, margins: StationeryMarginsMm): Statio
 		}
 	}
 	return out;
+}
+
+// Each Layout's own page margins (A4, mm) — layout-config in
+// src-tauri/templates/common.typ (the doc-*.typ templates use the same
+// values). They apply only under Built-in stationery; every other mode uses
+// the Stationery's margins (ADR 0001).
+const LAYOUT_MARGINS_MM: Record<PdfLayoutKey, StationeryMarginsMm> = {
+	classic: { top: 16, right: 18, bottom: 18, left: 18 },
+	modern: { top: 16, right: 18, bottom: 18, left: 18 },
+	minimal: { top: 22, right: 22, bottom: 22, left: 22 },
+	compact: { top: 12, right: 14, bottom: 12, left: 14 }
+};
+const A4_WIDTH_MM = 210;
+
+/** A Layout's Built-in page margins on this sheet: the A4 values scaled by paper width, as page-geometry does. */
+export function layoutMarginsMm(layout: PdfLayoutKey, page: PageDims): StationeryMarginsMm {
+	const k = page.widthMm / A4_WIDTH_MM;
+	const m = LAYOUT_MARGINS_MM[layout];
+	return { top: m.top * k, right: m.right * k, bottom: m.bottom * k, left: m.left * k };
+}
+
+/** The printer band as four strips: top, bottom, then the two sides between them. */
+export function printerBandRects(page: PageDims): MmRect[] {
+	const b = PRINTER_BAND_MM;
+	return [
+		{ x: 0, y: 0, w: page.widthMm, h: b },
+		{ x: 0, y: page.heightMm - b, w: page.widthMm, h: b },
+		{ x: 0, y: b, w: b, h: page.heightMm - 2 * b },
+		{ x: page.widthMm - b, y: b, w: b, h: page.heightMm - 2 * b }
+	];
+}
+
+/** The scale (px per mm) that draws the page `widthPx` wide — for fixed-size thumbnails. */
+export function scaleForWidth(page: PageDims, widthPx: number): number {
+	return widthPx / page.widthMm;
 }
 
 /** The Safe area: the page less its four margins. */
