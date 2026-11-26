@@ -531,7 +531,7 @@ sakoram_app/
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
 │  │     ├─ company.vue               ← business info, address, bank, signatures, defaults, logo
-│  │     ├─ pdf.vue                   ← Paper & layout (paper size + Layout picker, then the Colour card) · Stationery (mode picker; Pre-printed paper bands; `StationeryBackgroundCard` — upload / aspect-locked crop + ~300 DPI downscale / live-text SVG warning / Remove / four Safe-area margins — while Full-page background; Built-in-only header logo + header/footer text cards) · Font. Every card has a sidebar anchor.
+│  │     ├─ pdf.vue                   ← Paper & layout (paper size + Layout picker, then the Colour card) · Stationery (mode picker; Pre-printed paper bands; a to-scale thumbnail of the current page (`StationeryPage`) + **Edit stationery** (`StationeryEditorModal`) for Full-page background / Pre-printed paper; `StationeryBackgroundCard` — upload / aspect-locked crop + ~300 DPI downscale / live-text SVG warning / Remove — while Full-page background; Built-in-only header logo + header/footer text cards) · Font. Every card has a sidebar anchor.
 │  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), light/dark/system toggle, zoom (6 discrete steps)
 │  │     ├─ payroll.vue               ← cycle template (period_start_day / period_end_day / pay_day)
 │  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + a pointer card to the Pre-printed paper bands (they live on the Stationery at /settings/pdf#stationery since 0056) + a "Stationery artwork" coming-soon placeholder (#artwork). (Signatures moved to /settings/company#signatures — they're shared across letters + quote/invoice "Prepared by".)
@@ -549,6 +549,8 @@ sakoram_app/
 │  │  ├─ CategoryFormModal.vue        ← create/edit category (8-color × 16-icon picker)
 │  │  ├─ CurrencyPicker.vue           ← onboarding + Settings → Business details currency dropdown. Built-in CURRENCIES list plus a "Custom currency…" option that reveals Code + Symbol inputs; emits both v-models so parents just bind code + symbol-override.
 │  │  ├─ BusinessBankFormModal.vue    ← create/edit modal for managed bank accounts (label + bank fields + 8-swatch colour tag; new banks pre-pick the least-used swatch). Auto-marks the first bank as default so freshly-created accounts immediately seed new quotes / invoices.
+│  │  ├─ StationeryEditorModal.vue    ← full-window Stationery editor: page to scale with mm rulers, artwork, four draggable / arrow-key margin guides, grey placeholder content, the informational 5 mm printer band, zoom, and "Preview sample invoice" (always two pages). Edits a DRAFT; Apply hands the margins to /settings/pdf's form (saved with Save changes). Holds NO geometry — every rule is in `app/lib/stationery-geometry.ts`
+│  │  ├─ StationeryPage.vue           ← one to-scale sheet (artwork / pre-printed bands, Safe area, placeholder bars, optional printer band); the thumbnail and the editor both draw it, the editor's guides sit in its slot
 │  │  ├─ BankColorDot.vue             ← the bank-account colour marker (business_banks.color → themeHex dot, grey fallback) rendered in front of bank identities everywhere
 │  │  ├─ NewQuoteModal.vue            ← "New quote" form-in-a-modal (client + project title) — replaces /quotes/new
 │  │  ├─ NewInvoiceModal.vue          ← "New invoice" form-in-a-modal — replaces /invoices/new
@@ -2748,6 +2750,25 @@ surface flagged in the same audit was deleted in v0.164.1.)
   go through `save_business_asset` / `read_business_asset` /
   `remove_business_asset` (kinds `stationery-background[-original]`), never the
   fs plugin. Export bundles and Drive snapshots both carry `stationery/*`.
+- **The Stationery editor holds no geometry.** mm ↔ px at any zoom, margin
+  drag / nudge limits (margins never cross: the Safe area keeps
+  `MIN_SAFE_AREA_MM`; each band ≤ `MAX_BAND_MM`), snapping (whole mm, side
+  margins to each other), ruler ticks, placeholder bars, the printer band and
+  the Built-in Layout margins all live in `app/lib/stationery-geometry.ts`
+  (vitest). The printer band is INFORMATION only — nothing snaps to it or is
+  refused for crossing it. `LAYOUT_MARGINS_MM` there mirrors `layout-config`
+  in common.typ — change both. The preview artwork comes from
+  `useStationeryArtwork` (one shared, ref-counted blob URL; a PDF background
+  is rendered to PNG by Typst through `render_stationery_artwork_png`, since
+  an `<img>` can't show a PDF). A same-format re-upload leaves the stored
+  JSON identical, so the uploader calls its `reload()`.
+- **The Stationery preview sample is exactly two pages, everywhere.**
+  `sampleStationeryPreviewPayload` (sample-pdf.ts) sizes its line count from
+  the Safe area's height so the invoice lands at ~1.5 pages; `verify:pdf`
+  renders it on every Layout × Paper size × Stationery (incl. shallow, deep
+  and wide margins) as `checkOnly` cases (page count, no baseline) and fails
+  on anything but two pages. If a template change makes it fail,
+  recalibrate `SAMPLE_FIXED_MM` / `SAMPLE_LINE_MM` — don't drop the check.
 - **Every Typst template with a bespoke footer must read `footer_blocks`.** The
   builders always send it; `voucher.typ` / `report.typ` / `statement.typ`
   hard-coded their footer line and silently ignored the custom footer for
