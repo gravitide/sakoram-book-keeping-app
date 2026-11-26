@@ -1,7 +1,7 @@
 {
 	"name": "sakoram-billing",
 	"type": "module",
-	"version": "0.164.3",
+	"version": "0.165.0",
 	"private": true,
 	"packageManager": "bun@1.3.6",
 	"description": "Sakoram — desktop bookkeeper for quotes, invoices, bills, vouchers",
@@ -20,6 +20,7 @@
 		"lint": "eslint . --fix",
 		"test": "vitest run",
 		"verify:sql": "bun run scripts/verify-derived-sql.ts",
+		"verify:pdf": "bun run scripts/verify-pdf-render.ts",
 		"test:watch": "vitest",
 		"bump": "bumpp",
 		"tauri": "tauri",

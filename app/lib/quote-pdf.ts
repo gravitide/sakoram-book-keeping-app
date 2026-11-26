@@ -7,11 +7,12 @@
 
 import type { BankSnapshot, ClientSnapshot, QuoteLineRow, QuoteRow } from "~/stores/quotes";
 import type { CompanySettingsRow } from "~/stores/settings";
-import { formatLKR, formatQty, formatRate } from "~/lib/money";
-import { buildFooterBlocks, buildHeaderBlocks } from "~/lib/pdf-chrome";
-import { resolveTemplateKey } from "~/lib/pdf-templates";
-import { richTextToBlocks } from "~/lib/rich-text";
-import { pdfThemeHex } from "~/lib/theme";
+import { formatLKR, formatQty, formatRate } from "./money";
+import { buildPageSettings } from "./page-settings";
+import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
+import { resolveLayoutKey } from "./pdf-layouts";
+import { richTextToBlocks } from "./rich-text";
+import { pdfThemeHex } from "./theme";
 
 export interface QuotePdfArgs {
 	row: QuoteRow
@@ -51,8 +52,9 @@ export const buildQuotePdfPayload = ({ row: q, lines, settings, currency }: Quot
 	return {
 		kind: "quote",
 		number: q.number,
-		template: resolveTemplateKey(settings?.pdf_template),
+		layout: resolveLayoutKey(settings?.pdf_layout),
 		title,
+		page: buildPageSettings(settings),
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,

@@ -4,15 +4,15 @@
 //
 // Driven by data.json fields produced by app/lib/payslip-pdf.ts. Page setup
 // and the header come from common.typ so the payslip honours the user's
-// selected PDF template (migration 0050) exactly as quotes/invoices do.
+// selected Layout (migration 0055) exactly as quotes/invoices do.
 
 #import "common.typ": *
 
 #let data = json("data.json")
-#let cfg = template-config(data)
+#let cfg = layout-config(data)
 
 #set document(title: data.number, author: if data.business_name != none { data.business_name } else { () })
-#set page(paper: "a4", margin: cfg.margin, footer: cfg.footer)
+#set page(..page-setup(data, margin: cfg.margin, footer: cfg.footer))
 #set text(font: resolve-font(data), size: cfg.text-size, lang: "en", number-width: "tabular")
 #set par(leading: cfg.leading, spacing: cfg.spacing)
 
@@ -90,13 +90,18 @@
   content
 )
 
+// A fixed 30% amount column is too narrow on paper smaller than A4 (A5:
+// "150,000.00" overran its cell), so there it sizes to its content instead.
+// Kept at 30% on A4 and wider so A4 output is unchanged.
+#let amount-col = if data.page.margin_scale < 1 { auto } else { 30% }
+
 #grid(
   columns: (1fr, 1fr),
   column-gutter: 14pt,
   // ===== Earnings =====
   [
     #table(
-      columns: (1fr, 30%),
+      columns: (1fr, amount-col),
       stroke: 0.5pt + rgb("#e5e7eb"),
       align: (left + top, right + top),
 
@@ -120,7 +125,7 @@
   // ===== Deductions =====
   [
     #table(
-      columns: (1fr, 30%),
+      columns: (1fr, amount-col),
       stroke: 0.5pt + rgb("#e5e7eb"),
       align: (left + top, right + top),
 

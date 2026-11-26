@@ -14,7 +14,7 @@
 // render-blocks is for the opt-in custom footer (settings → PDF → Header &
 // footer): the builders always sent `footer_blocks`, but this template
 // hard-coded its footer line, so the custom text was silently ignored here.
-#import "common.typ": header-logo, render-blocks
+#import "common.typ": builtin-logo, page-setup, render-blocks
 
 #let data = json("data.json")
 
@@ -25,30 +25,26 @@
 // amount onto two lines; landscape gives every column its natural
 // width and leaves the aging tiles / party blocks better proportioned
 // to the page edge.
-#set page(
-  paper: "a4",
+#set page(..page-setup(
+  data,
   flipped: true,
   margin: (x: 18mm, top: 16mm, bottom: 20mm),
   footer: [
     #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))
     #v(4pt)
-    #grid(
-      columns: (1fr, auto),
-      align(left, text(size: 8pt, fill: rgb("#6b7280"))[
-        #if data.at("footer_blocks", default: ()).len() > 0 {
-          render-blocks(data.footer_blocks, default-align: "left", spacing: 2pt)
-        } else [
-          #if data.business_name != none [#data.business_name]
-          #if data.website != none [ | #data.website]
-          #if data.phone != none [ | #data.phone]
-        ]
-      ]),
-      align(right, text(size: 8pt, fill: rgb("#6b7280"))[
-        Page #context counter(page).display() of #context counter(page).final().first()
-      ]),
-    )
+    // "Page N of M" comes from page-setup (only past one page), like every
+    // other template — this footer used to print it on every page itself.
+    #align(left, text(size: 8pt, fill: rgb("#6b7280"))[
+      #if data.at("footer_blocks", default: ()).len() > 0 {
+        render-blocks(data.footer_blocks, default-align: "left", spacing: 2pt)
+      } else [
+        #if data.business_name != none [#data.business_name]
+        #if data.website != none [ | #data.website]
+        #if data.phone != none [ | #data.phone]
+      ]
+    ])
   ],
-)
+))
 
 // Font cascade same as document.typ — user pick first, bundled
 // fallbacks after.
@@ -68,19 +64,9 @@
 // ============================================================
 // Header: logo (or wordmark) + theme rule
 // ============================================================
-#align(right)[
-  #if data.logo_file != none {
-    header-logo(data, 12mm)
-  } else if data.business_name != none and data.business_name != "" {
-    box(height: 12mm)[
-      #set align(right + horizon)
-      #text(weight: "bold", size: 16pt, tracking: 0.02em)[#data.business_name]
-    ]
-  } else {
-    box(height: 12mm)
-  }
-]
-#v(-2mm)
+// Logo or wordmark (Built-in stationery only — see builtin-logo); the accent
+// rule stays under every mode.
+#builtin-logo(data, 12mm, 16pt, below: -2mm)
 #line(length: 100%, stroke: 2pt + theme)
 
 // ============================================================
@@ -108,13 +94,15 @@
 #v(14pt)
 
 // ============================================================
-// Two-column party block: business (left), client (right)
+// Two-column party block: business (left, Built-in only), client (right)
 // ============================================================
 #grid(
   columns: (1fr, 1fr),
   column-gutter: 14pt,
-  // FROM block
-  block(
+  // FROM block — the business's own identity, so Built-in stationery only:
+  // any other mode's paper or artwork already carries it, and STATEMENT FOR
+  // then takes the left column at the same width.
+  ..if data.page.chrome { (block(
     fill: rgb("#f9fafb"),
     stroke: 0.5pt + line-color,
     radius: 4pt,
@@ -136,7 +124,7 @@
       #v(2pt)
       #text(size: 8.5pt, fill: muted)[Phone: #data.business_phone]
     ]
-  ],
+  ],) } else { () },
   // TO block
   block(
     fill: theme.lighten(92%),

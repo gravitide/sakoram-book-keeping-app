@@ -9,11 +9,12 @@
 
 import type { BillLineRow, BillRow, VendorSnapshot } from "~/stores/bills";
 import type { CompanySettingsRow } from "~/stores/settings";
-import { formatLKR, formatQty, formatRate } from "~/lib/money";
-import { buildFooterBlocks, buildHeaderBlocks } from "~/lib/pdf-chrome";
-import { resolveTemplateKey } from "~/lib/pdf-templates";
-import { richTextToBlocks } from "~/lib/rich-text";
-import { pdfThemeHex } from "~/lib/theme";
+import { formatLKR, formatQty, formatRate } from "./money";
+import { buildPageSettings } from "./page-settings";
+import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
+import { resolveLayoutKey } from "./pdf-layouts";
+import { richTextToBlocks } from "./rich-text";
+import { pdfThemeHex } from "./theme";
 
 export interface BillPdfArgs {
 	row: BillRow
@@ -64,7 +65,8 @@ export const buildBillPdfPayload = ({ row: b, lines, settings, currency, paidCen
 		kind: "bill",
 		number: b.number,
 		title,
-		template: resolveTemplateKey(settings?.pdf_template),
+		layout: resolveLayoutKey(settings?.pdf_layout),
+		page: buildPageSettings(settings),
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,

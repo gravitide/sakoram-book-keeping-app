@@ -25,7 +25,7 @@ use serde_json::Value;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_shell::ShellExt;
 
-// Client-facing document templates. `common.typ` holds the shared rendering
+// Client-facing document Layouts. `common.typ` holds the shared rendering
 // (items table, party/meta blocks, etc.); each `doc-*.typ` owns its layout and
 // `#import "common.typ"`. `render_pdf` writes common.typ as an extra file.
 const COMMON_TEMPLATE: &str = include_str!("../templates/common.typ");
@@ -33,7 +33,6 @@ const DOC_CLASSIC: &str = include_str!("../templates/doc-classic.typ");
 const DOC_MODERN: &str = include_str!("../templates/doc-modern.typ");
 const DOC_MINIMAL: &str = include_str!("../templates/doc-minimal.typ");
 const DOC_COMPACT: &str = include_str!("../templates/doc-compact.typ");
-const DOC_LETTERHEAD: &str = include_str!("../templates/doc-letterhead.typ");
 const VOUCHER_TEMPLATE: &str = include_str!("../templates/voucher.typ");
 const PAYSLIP_TEMPLATE: &str = include_str!("../templates/payslip.typ");
 const REPORT_TEMPLATE: &str = include_str!("../templates/report.typ");
@@ -271,14 +270,15 @@ fn extract_typst_errors(stderr: &str) -> Option<String> {
 // is what tells the template whether it's rendering a quote, invoice, or
 // bill (party labels, secondary date label, paid/balance rows, etc.).
 
-// Map the payload's `template` key to the on-disk filename + embedded source.
-// Unknown / missing keys fall back to Classic. New layouts add an arm here.
-fn document_template(key: Option<&str>) -> (&'static str, &'static str) {
+// Map the payload's `layout` key to the on-disk filename + embedded source.
+// Unknown / missing keys (including the retired `letterhead`, migration 0055)
+// fall back to Classic. New Layouts add an arm here AND to PDF_LAYOUTS in
+// app/lib/pdf-layouts.ts — pdf-layouts.test.ts fails if the two disagree.
+fn layout_template(key: Option<&str>) -> (&'static str, &'static str) {
 	match key {
 		Some("modern") => ("doc-modern.typ", DOC_MODERN),
 		Some("minimal") => ("doc-minimal.typ", DOC_MINIMAL),
 		Some("compact") => ("doc-compact.typ", DOC_COMPACT),
-		Some("letterhead") => ("doc-letterhead.typ", DOC_LETTERHEAD),
 		_ => ("doc-classic.typ", DOC_CLASSIC),
 	}
 }
@@ -290,7 +290,7 @@ pub async fn export_quote_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	let (name, src) = document_template(data.get("template").and_then(|v| v.as_str()));
+	let (name, src) = layout_template(data.get("layout").and_then(|v| v.as_str()));
 	render_pdf(&app, name, src, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
 }
 
@@ -301,7 +301,7 @@ pub async fn export_invoice_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	let (name, src) = document_template(data.get("template").and_then(|v| v.as_str()));
+	let (name, src) = layout_template(data.get("layout").and_then(|v| v.as_str()));
 	render_pdf(&app, name, src, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
 }
 
@@ -312,7 +312,7 @@ pub async fn export_bill_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	let (name, src) = document_template(data.get("template").and_then(|v| v.as_str()));
+	let (name, src) = layout_template(data.get("layout").and_then(|v| v.as_str()));
 	render_pdf(&app, name, src, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
 }
 
@@ -419,4 +419,24 @@ pub fn open_path(path: String) -> Result<(), String> {
 			.map_err(|e| e.to_string())?;
 	}
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::layout_template;
+
+	#[test]
+	fn each_layout_renders_its_own_template() {
+		for key in ["modern", "minimal", "compact"] {
+			assert_eq!(layout_template(Some(key)).0, format!("doc-{key}.typ"));
+		}
+		assert_eq!(layout_template(Some("classic")).0, "doc-classic.typ");
+	}
+
+	#[test]
+	fn retired_letterhead_and_unknown_keys_render_classic() {
+		for key in [Some("letterhead"), Some("bogus"), None] {
+			assert_eq!(layout_template(key).0, "doc-classic.typ");
+		}
+	}
 }

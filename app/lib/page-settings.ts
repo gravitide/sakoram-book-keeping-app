@@ -1,0 +1,140 @@
+// The one place a PDF's page geometry is decided.
+//
+// Every PDF payload builder (quote, invoice, bill, voucher, payslip,
+// statement, report, letter, and the Settings sample preview) puts the result
+// of `buildPageSettings` on its payload as `page`, and every Typst template
+// hands `data.page` to the shared `page-setup` helper in common.typ. No builder
+// and no template decides paper or Stationery margins on its own.
+//
+// Two sources of margins, on purpose (ADR 0001):
+//   - `margins: null` — Built-in stationery: the Layout's own margins apply
+//     (they are part of how Compact or Minimal look), so the template passes
+//     its margins to `page-setup` and the helper uses them.
+//   - `margins: {…}` — the Stationery owns the page: these four margins
+//     bound the Safe area and the Layout only arranges content inside them.
+//     That is every mode other than Built-in (today: Pre-printed paper, for
+//     the whole business or for one letter — both reserve the same
+//     business-wide Pre-printed paper bands).
+//
+// `chrome` is the matching suppression rule: only Built-in stationery draws
+// the business identity (logo / wordmark, custom header text, the business
+// block, the built-in or custom footer). Under any other mode the Stationery
+// owns the page edges, so Layouts keep only their title, number and accent
+// rule. Templates read `data.page.chrome` rather than the mode, so a new mode
+// doesn't have to touch every template.
+//
+// Pure, store-free, relative imports only: vitest and the render-check script
+// (scripts/verify-pdf-render.ts) both import it.
+
+import type { StationeryMarginsMm, StationeryMode } from "./stationery";
+import type { CompanySettingsRow } from "~/stores/settings";
+import { parseStationery, resolveStationeryMode } from "./stationery";
+
+// The Stationery's four margins are the only margins a page block carries.
+export type { StationeryMarginsMm } from "./stationery";
+
+/**
+ * The business's Paper size. The stored value (company_settings.pdf_paper_size)
+ * IS the Typst paper name, so no template has to map it.
+ */
+export type PaperSize = "a4" | "a5" | "us-letter" | "us-legal";
+
+export interface PaperSizeOption {
+	key: PaperSize
+	label: string
+	/** Portrait sheet width / height in millimetres. */
+	widthMm: number
+	heightMm: number
+}
+
+/** Every sheet a business can pick, A4 (the default) first. */
+export const PAPER_SIZES: readonly PaperSizeOption[] = [
+	{ key: "a4", label: "A4", widthMm: 210, heightMm: 297 },
+	{ key: "a5", label: "A5", widthMm: 148, heightMm: 210 },
+	{ key: "us-letter", label: "US Letter", widthMm: 215.9, heightMm: 279.4 },
+	{ key: "us-legal", label: "US Legal", widthMm: 215.9, heightMm: 355.6 }
+];
+
+const DEFAULT_PAPER: PaperSizeOption = PAPER_SIZES[0]!;
+const A4_WIDTH_MM = DEFAULT_PAPER.widthMm;
+
+/** The stored paper key, or A4 for anything missing or unknown. */
+export function resolvePaperSize(stored: string | null | undefined): PaperSizeOption {
+	return PAPER_SIZES.find((p) => p.key === stored) ?? DEFAULT_PAPER;
+}
+
+export interface PageSettings {
+	paper: PaperSize
+	/**
+	 * Factor applied to the Layout's own (A4-designed) margins: paper width /
+	 * A4 width, so 18 mm on A4 is ~12.7 mm on A5. Exactly 1 on A4. Only used
+	 * when `margins` is null — Stationery margins are never scaled. Type sizes
+	 * are never scaled either; they stay fixed in points.
+	 */
+	margin_scale: number
+	/** The Stationery mode this document renders with. */
+	stationery: StationeryMode
+	/**
+	 * true only for Built-in stationery: the app draws the business identity
+	 * (logo / wordmark, header text, business block, footer). See the header
+	 * comment.
+	 */
+	chrome: boolean
+	/** null = the Layout's built-in margins apply; see the header comment. */
+	margins: StationeryMarginsMm | null
+	/**
+	 * Print "Page N of M". Every document, every Stationery mode; `page-setup`
+	 * only draws it once the document runs past one page, so single-page PDFs
+	 * stay clean. A switch rather than a constant so the render check can
+	 * prove the number is the only thing it adds.
+	 */
+	page_numbers: boolean
+	/**
+	 * Where "Page N of M" sits.
+	 *   "footer"    — Built-in: just above the footer, in the top of the bottom
+	 *                 band. Takes no flow space, so it changes nothing else.
+	 *   "safe_area" — every other mode: INSIDE the Safe area at its bottom edge,
+	 *                 with room reserved for it, so it can never print over
+	 *                 pre-printed paper or artwork. Content reflows by that strip.
+	 */
+	page_number_position: PageNumberPosition
+}
+
+export type PageNumberPosition = "footer" | "safe_area";
+
+/** Per-document override of the business's page settings. */
+export interface PageSettingsOverride {
+	/**
+	 * This document prints onto Pre-printed paper, whatever the business's
+	 * active Stationery mode (letters only, today). It reserves the business's
+	 * own Pre-printed paper bands — there are no per-letter margins. false /
+	 * absent = use the business's Stationery like every other document.
+	 */
+	preprinted?: boolean
+}
+
+type PageSettingsKey = "pdf_paper_size" | "pdf_stationery_mode" | "pdf_stationery";
+type PageSettingsSource = Partial<Pick<CompanySettingsRow, PageSettingsKey>>;
+
+const marginsFor = (mode: StationeryMode, settings: PageSettingsSource | null): StationeryMarginsMm | null => {
+	if (mode === "builtin") return null;
+	return { ...parseStationery(settings?.pdf_stationery).preprinted };
+};
+
+export function buildPageSettings(settings: PageSettingsSource | null, override?: PageSettingsOverride): PageSettings {
+	const paper = resolvePaperSize(settings?.pdf_paper_size);
+	// Width is the short side for every supported sheet, so this also holds
+	// for the landscape statement (decisions: margins scale on the short side).
+	const margin_scale = paper.widthMm / A4_WIDTH_MM;
+	const stationery = override?.preprinted ? "preprinted" : resolveStationeryMode(settings?.pdf_stationery_mode);
+	const builtin = stationery === "builtin";
+	return {
+		paper: paper.key,
+		margin_scale,
+		stationery,
+		chrome: builtin,
+		margins: marginsFor(stationery, settings),
+		page_numbers: true,
+		page_number_position: builtin ? "footer" : "safe_area"
+	};
+}

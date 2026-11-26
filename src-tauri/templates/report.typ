@@ -18,34 +18,30 @@
 // render-blocks is for the opt-in custom footer (settings → PDF → Header &
 // footer): the builders always sent `footer_blocks`, but this template
 // hard-coded its footer line, so the custom text was silently ignored here.
-#import "common.typ": header-logo, render-blocks
+#import "common.typ": builtin-logo, page-setup, render-blocks
 
 #let data = json("data.json")
 
 #set document(title: data.title, author: if data.business_name != none { data.business_name } else { () })
-#set page(
-  paper: "a4",
+#set page(..page-setup(
+  data,
   margin: (x: 18mm, top: 16mm, bottom: 20mm),
   footer: [
     #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))
     #v(4pt)
-    #grid(
-      columns: (1fr, auto),
-      align(left, text(size: 8pt, fill: rgb("#6b7280"))[
-        #if data.at("footer_blocks", default: ()).len() > 0 {
-          render-blocks(data.footer_blocks, default-align: "left", spacing: 2pt)
-        } else [
-          #if data.business_name != none [#data.business_name]
-          #if data.website != none [ | #data.website]
-          #if data.phone != none [ | #data.phone]
-        ]
-      ]),
-      align(right, text(size: 8pt, fill: rgb("#6b7280"))[
-        Page #context counter(page).display() of #context counter(page).final().first()
-      ]),
-    )
+    // "Page N of M" comes from page-setup (only past one page), like every
+    // other template — this footer used to print it on every page itself.
+    #align(left, text(size: 8pt, fill: rgb("#6b7280"))[
+      #if data.at("footer_blocks", default: ()).len() > 0 {
+        render-blocks(data.footer_blocks, default-align: "left", spacing: 2pt)
+      } else [
+        #if data.business_name != none [#data.business_name]
+        #if data.website != none [ | #data.website]
+        #if data.phone != none [ | #data.phone]
+      ]
+    ])
   ],
-)
+))
 
 // Font cascade same as document.typ — user pick first, bundled
 // fallbacks after.
@@ -64,19 +60,9 @@
 // ============================================================
 // Header: logo (or wordmark) + red rule
 // ============================================================
-#align(right)[
-  #if data.logo_file != none {
-    header-logo(data, 12mm)
-  } else if data.business_name != none and data.business_name != "" {
-    box(height: 12mm)[
-      #set align(right + horizon)
-      #text(weight: "bold", size: 16pt, tracking: 0.02em)[#data.business_name]
-    ]
-  } else {
-    box(height: 12mm)
-  }
-]
-#v(-2mm)
+// Logo or wordmark (Built-in stationery only — see builtin-logo); the accent
+// rule stays under every mode.
+#builtin-logo(data, 12mm, 16pt, below: -2mm)
 #line(length: 100%, stroke: 2pt + theme)
 
 // ============================================================

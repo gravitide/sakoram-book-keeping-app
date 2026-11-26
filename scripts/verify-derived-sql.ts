@@ -24,6 +24,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { Database } from "bun:sqlite";
 import { billDerivedFrom, clientDerivedFrom, invoiceDerivedFrom } from "../app/lib/derived-status.ts";
+import { parseStationery } from "../app/lib/stationery.ts";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const MIGRATIONS = join(REPO, "src-tauri/migrations");
@@ -178,6 +179,67 @@ console.log("\n-- overpaid bill --");
 check("_paid", bill._paid, 1005000);
 check("_balance floors at 0 (was -5000)", bill._balance, 0);
 check("_status", bill._status, "paid");
+
+// --- 11. Layout + Stationery (migration 0055) --------------------------
+// The retired Letterhead template must land on Classic + Pre-printed paper;
+// other templates keep their Layout on Built-in stationery. Each case runs
+// every migration up to 0054, sets the old template, then applies 0055.
+// Pre-printed paper's bands start from the business's letter bands, read
+// through the real Zod parser.
+console.log("\n-- migration 0055: pdf_template → pdf_layout + stationery --");
+const before0055 = files.filter((f: string) => f < "0055");
+const at0055 = files.find((f: string) => f.startsWith("0055"));
+if (!at0055) {
+	console.log("✗ no 0055 migration");
+	failures++;
+}
+for (const [template, layout, mode] of [
+	["letterhead", "classic", "preprinted"],
+	["modern", "modern", "builtin"],
+	["compact", "compact", "builtin"],
+	["classic", "classic", "builtin"]
+] as const) {
+	const m = new Database(":memory:");
+	for (const f of before0055) m.exec(readFileSync(join(MIGRATIONS, f), "utf8"));
+	m.exec(`UPDATE company_settings SET pdf_template = '${template}', letter_preprinted_top_margin_mm = 60, letter_preprinted_bottom_margin_mm = 25`);
+	m.exec(readFileSync(join(MIGRATIONS, at0055!), "utf8"));
+	const row = m.query(`SELECT pdf_layout, pdf_stationery_mode, pdf_stationery FROM company_settings`).get() as Record<string, string>;
+	check(`${template} → layout`, row.pdf_layout, layout);
+	check(`${template} → stationery mode`, row.pdf_stationery_mode, mode);
+	check(`${template} → pre-printed bands from the letter's`, JSON.stringify(parseStationery(row.pdf_stationery).preprinted), JSON.stringify({ top: 60, right: 18, bottom: 25, left: 18 }));
+}
+const fresh = db.query(`SELECT pdf_layout, pdf_stationery_mode FROM company_settings`).get() as Record<string, string>;
+check("fresh business layout", fresh.pdf_layout, "classic");
+check("fresh business stationery", fresh.pdf_stationery_mode, "builtin");
+let rejected = false;
+try {
+	db.exec(`UPDATE company_settings SET pdf_layout = 'letterhead'`);
+} catch {
+	rejected = true;
+}
+check("pdf_layout refuses 'letterhead'", rejected, true);
+
+// --- 12. Letter pre-printed margins retired (migration 0056) -----------
+// A pre-printed letter now reserves the business's Pre-printed paper bands
+// (pdf_stationery), so the letter-only columns go. The bands 0055 seeded
+// from them must survive the drop.
+console.log("\n-- migration 0056: letter_preprinted_* dropped --");
+const at0056 = files.find((f: string) => f.startsWith("0056"));
+if (!at0056) {
+	console.log("✗ no 0056 migration");
+	failures++;
+} else {
+	const m = new Database(":memory:");
+	for (const f of files.filter((f: string) => f < "0055")) m.exec(readFileSync(join(MIGRATIONS, f), "utf8"));
+	m.exec(`UPDATE company_settings SET letter_preprinted_top_margin_mm = 60, letter_preprinted_bottom_margin_mm = 25`);
+	m.exec(readFileSync(join(MIGRATIONS, at0055!), "utf8"));
+	m.exec(readFileSync(join(MIGRATIONS, at0056), "utf8"));
+	const row = m.query(`SELECT pdf_stationery FROM company_settings`).get() as Record<string, string>;
+	check("letter bands survive on the Stationery", JSON.stringify(parseStationery(row.pdf_stationery).preprinted), JSON.stringify({ top: 60, right: 18, bottom: 25, left: 18 }));
+}
+const settingsColumns = (db.query(`SELECT name FROM pragma_table_info('company_settings')`).all() as { name: string }[]).map((c) => c.name);
+check("letter_preprinted_top_margin_mm is gone", settingsColumns.includes("letter_preprinted_top_margin_mm"), false);
+check("letter_preprinted_bottom_margin_mm is gone", settingsColumns.includes("letter_preprinted_bottom_margin_mm"), false);
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

@@ -722,11 +722,14 @@
 					label: "PDF",
 					icon: "i-lucide-file-text",
 					sections: [
-						{ hash: "#font", label: "Font", icon: "i-lucide-type" },
+						// One per card on the page (none orphaned): Colour sits in the
+						// Paper & layout section, the two Built-in cards in Stationery.
+						{ hash: "#paper-layout", label: "Paper & layout", icon: "i-lucide-layout-template" },
 						{ hash: "#color", label: "Colour", icon: "i-lucide-palette" },
+						{ hash: "#stationery", label: "Stationery", icon: "i-lucide-stamp" },
 						{ hash: "#header-logo", label: "Header logo", icon: "i-lucide-image" },
 						{ hash: "#header-footer", label: "Header & footer", icon: "i-lucide-panel-top" },
-						{ hash: "#templates", label: "Templates", icon: "i-lucide-layout-template" }
+						{ hash: "#font", label: "Font", icon: "i-lucide-type" }
 					]
 				},
 				{
@@ -736,7 +739,7 @@
 					sections: [
 						{ hash: "#categories", label: "Categories", icon: "i-lucide-tags" },
 						{ hash: "#preprinted", label: "Pre-printed", icon: "i-lucide-file-text" },
-						{ hash: "#templates", label: "Templates", icon: "i-lucide-layout-template" }
+						{ hash: "#artwork", label: "Artwork", icon: "i-lucide-image" }
 					]
 				},
 				{

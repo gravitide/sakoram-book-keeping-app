@@ -5,7 +5,7 @@
 		preserveAspectRatio="xMidYMid meet"
 		xmlns="http://www.w3.org/2000/svg"
 		role="img"
-		:aria-label="`${templateKey} layout preview`"
+		:aria-label="`${layoutKey} layout preview`"
 	>
 		<!-- paper -->
 		<rect x="0.5" y="0.5" width="55" height="78" rx="2.5" fill="#ffffff" stroke="#e2e8f0" stroke-width="0.75" />
@@ -25,15 +25,17 @@
 
 <script setup lang="ts">
 	// A tiny schematic A4 mockup of each client-facing PDF layout, used in the
-	// Settings template pickers. It conveys *where things sit* (header band,
+	// Settings Layout pickers. It conveys *where things sit* (header band,
 	// centred title, blank top, density) rather than being a pixel render — the
 	// "Preview" button shows the real Typst PDF. Uses the live theme colour so
 	// the accent matches the user's branding. No image assets, no drift.
 
+	import type { PdfLayoutKey } from "~/lib/pdf-layouts";
+
 	interface Rect { x: number, y: number, w: number, h: number, rx?: number, fill: string, opacity?: number }
 
 	const props = withDefaults(defineProps<{
-		templateKey: string
+		layoutKey: PdfLayoutKey
 		/** Theme accent colour (hex). */
 		color?: string
 	}>(), {
@@ -60,7 +62,7 @@
 
 	const marks = computed<Rect[]>(() => {
 		const c = props.color;
-		switch (props.templateKey) {
+		switch (props.layoutKey) {
 		case "modern":
 			// Left-aligned letterhead: logo and header text SIDE BY SIDE, the
 			// text vertically centred on the logo, then the tapered accent rule
@@ -101,13 +103,6 @@
 				{ x: 34, y: 60, w: 16, h: 2.6, rx: 0.5, fill: c, opacity: 0.5 }
 			];
 		}
-		case "letterhead":
-			return [
-				// blank top ~third (pre-printed letterhead), then centred title + rule
-				{ x: 18, y: 30, w: 20, h: 3.2, fill: MARK },
-				{ x: 6, y: 35, w: 44, h: 1.5, fill: c },
-				...body(40)
-			];
 		default: // classic
 			return [
 				{ x: 39, y: 6, w: 11, h: 5.5, fill: MARK },

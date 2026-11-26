@@ -15,11 +15,13 @@
 // ascending) so the longest-outstanding rows lead the table — the
 // collections-chasing user wants to see those first.
 
+import type { PageSettings } from "./page-settings";
 import type { BusinessBankRow } from "~/stores/business_banks";
 import type { ClientRow } from "~/stores/clients";
 import type { InvoiceRow } from "~/stores/invoices";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatMoney } from "./money";
+import { buildPageSettings } from "./page-settings";
 import { buildFooterBlocks } from "./pdf-chrome";
 import { pdfThemeHex } from "./theme";
 
@@ -56,6 +58,7 @@ interface StatementPdfPayload {
 	website: string | null
 	phone: string | null
 	logo_path: string | null
+	page: PageSettings
 	theme_color: string
 	font_family: string | null
 	currency_code: string
@@ -294,6 +297,7 @@ export const buildCustomerStatementPdfPayload = (
 		logo_scale: input.settings?.pdf_logo_scale ?? 100,
 		footer_blocks: buildFooterBlocks(input.settings),
 		logo_path: input.settings?.pdf_header_logo_path ?? null,
+		page: buildPageSettings(input.settings),
 		theme_color: pdfThemeHex(input.settings),
 		font_family: input.settings?.pdf_font ?? null,
 		currency_code: input.currency.code,
