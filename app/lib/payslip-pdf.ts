@@ -12,10 +12,10 @@
 import type { CurrencyMeta } from "~/lib/money";
 import type { EmployeeSnapshot, PayslipLineRow, PayslipRow } from "~/stores/payslips";
 import type { CompanySettingsRow } from "~/stores/settings";
-import { formatLKR } from "~/lib/money";
-import { buildFooterBlocks, buildHeaderBlocks } from "~/lib/pdf-chrome";
-import { resolveTemplateKey } from "~/lib/pdf-templates";
-import { pdfThemeHex } from "~/lib/theme";
+import { formatLKR } from "./money";
+import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
+import { resolveTemplateKey } from "./pdf-templates";
+import { pdfThemeHex } from "./theme";
 
 export interface PayslipPdfPayloadArgs {
 	row: PayslipRow

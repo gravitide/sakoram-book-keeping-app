@@ -7,11 +7,11 @@
 
 import type { BankSnapshot, ClientSnapshot, QuoteLineRow, QuoteRow } from "~/stores/quotes";
 import type { CompanySettingsRow } from "~/stores/settings";
-import { formatLKR, formatQty, formatRate } from "~/lib/money";
-import { buildFooterBlocks, buildHeaderBlocks } from "~/lib/pdf-chrome";
-import { resolveTemplateKey } from "~/lib/pdf-templates";
-import { richTextToBlocks } from "~/lib/rich-text";
-import { pdfThemeHex } from "~/lib/theme";
+import { formatLKR, formatQty, formatRate } from "./money";
+import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
+import { resolveTemplateKey } from "./pdf-templates";
+import { richTextToBlocks } from "./rich-text";
+import { pdfThemeHex } from "./theme";
 
 export interface QuotePdfArgs {
 	row: QuoteRow

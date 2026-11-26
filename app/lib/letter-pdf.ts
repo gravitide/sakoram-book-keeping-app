@@ -5,9 +5,9 @@
 
 import type { LetterRow } from "~/stores/letters";
 import type { CompanySettingsRow } from "~/stores/settings";
-import { letterBodyToBlocks } from "~/lib/letter-body";
-import { buildFooterBlocks } from "~/lib/pdf-chrome";
-import { pdfThemeHex } from "~/lib/theme";
+import { letterBodyToBlocks } from "./letter-body";
+import { buildFooterBlocks } from "./pdf-chrome";
+import { pdfThemeHex } from "./theme";
 
 export interface LetterPdfArgs {
 	row: LetterRow
