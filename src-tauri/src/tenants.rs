@@ -107,6 +107,7 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(51, "pdf logo controls", include_str!("../migrations/0051_pdf_logo_controls.sql")),
 	(52, "pdf header footer text", include_str!("../migrations/0052_pdf_header_footer_text.sql")),
 	(53, "logo crop", include_str!("../migrations/0053_logo_crop.sql")),
+	(54, "pdf paper size", include_str!("../migrations/0054_pdf_paper_size.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
