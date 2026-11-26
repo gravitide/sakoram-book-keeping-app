@@ -59,27 +59,27 @@ describe("buildPageSettings", () => {
 	});
 });
 
-describe("Stationery mode", () => {
-	it("Built-in: the Layout's margins apply and the app draws its own identity", () => {
+describe("stationery mode", () => {
+	it("built-in: the Layout's margins apply and the app draws its own identity", () => {
 		const page = buildPageSettings(onStationery("builtin", { preprinted: { top: 40, right: 10, bottom: 30, left: 10 } }));
 		expect(page).toMatchObject({ stationery: "builtin", chrome: true, margins: null });
 	});
 
-	it("Pre-printed paper: the Stationery's four margins bound the Safe area", () => {
+	it("pre-printed paper: the Stationery's four margins bound the Safe area", () => {
 		const page = buildPageSettings(onStationery("preprinted", { preprinted: { top: 40, right: 10, bottom: 30, left: 12 } }));
 		expect(page.margins).toEqual({ top: 40, right: 10, bottom: 30, left: 12 });
 	});
 
-	it("Pre-printed paper: nothing of the built-in identity is drawn (no logo, header text, business block or footer)", () => {
+	it("pre-printed paper: nothing of the built-in identity is drawn (no logo, header text, business block or footer)", () => {
 		const page = buildPageSettings(onStationery("preprinted"));
 		expect({ stationery: page.stationery, chrome: page.chrome }).toEqual({ stationery: "preprinted", chrome: false });
 	});
 
-	it("Pre-printed paper with nothing stored reserves today's 55 mm / 20 mm letter bands", () => {
+	it("pre-printed paper with nothing stored reserves today's 55 mm / 20 mm letter bands", () => {
 		expect(buildPageSettings(onStationery("preprinted", null)).margins).toEqual({ top: 55, right: 18, bottom: 20, left: 18 });
 	});
 
-	it("Pre-printed paper with malformed stored JSON still reserves the default bands", () => {
+	it("pre-printed paper with malformed stored JSON still reserves the default bands", () => {
 		expect(buildPageSettings(onStationery("preprinted", "{oops")).margins).toEqual({ top: 55, right: 18, bottom: 20, left: 18 });
 	});
 
@@ -89,11 +89,11 @@ describe("Stationery mode", () => {
 });
 
 describe("page number position", () => {
-	it("Built-in keeps the number just above the footer, in the bottom band", () => {
+	it("built-in keeps the number just above the footer, in the bottom band", () => {
 		expect(buildPageSettings(onStationery("builtin")).page_number_position).toBe("footer");
 	});
 
-	it("Pre-printed paper puts the number inside the Safe area, so it never prints over the paper's own footer", () => {
+	it("pre-printed paper puts the number inside the Safe area, so it never prints over the paper's own footer", () => {
 		expect(buildPageSettings(onStationery("preprinted")).page_number_position).toBe("safe_area");
 	});
 
@@ -101,7 +101,6 @@ describe("page number position", () => {
 		expect(buildPageSettings(settings(60, 25), { preprinted: true }).page_number_position).toBe("safe_area");
 	});
 });
-
 
 describe("paper size", () => {
 	it.each(["a5", "us-letter", "us-legal"])("lays the page out on the business's paper (%s)", (paper) => {

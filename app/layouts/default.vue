@@ -722,11 +722,9 @@
 					label: "PDF",
 					icon: "i-lucide-file-text",
 					sections: [
-						{ hash: "#font", label: "Font", icon: "i-lucide-type" },
-						{ hash: "#color", label: "Colour", icon: "i-lucide-palette" },
-						{ hash: "#header-logo", label: "Header logo", icon: "i-lucide-image" },
-						{ hash: "#header-footer", label: "Header & footer", icon: "i-lucide-panel-top" },
-						{ hash: "#templates", label: "Templates", icon: "i-lucide-layout-template" }
+						{ hash: "#paper-layout", label: "Paper & layout", icon: "i-lucide-layout-template" },
+						{ hash: "#stationery", label: "Stationery", icon: "i-lucide-stamp" },
+						{ hash: "#font", label: "Font", icon: "i-lucide-type" }
 					]
 				},
 				{

@@ -301,18 +301,18 @@
 			<div class="space-y-6">
 				<div>
 					<div class="text-xs font-medium text-(--ui-text) mb-2">
-						Template
+						Layout
 					</div>
-					<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+					<div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
 						<button
-							v-for="t in PDF_TEMPLATES"
+							v-for="t in PDF_LAYOUTS"
 							:key="t.key"
 							type="button"
 							class="p-2 rounded-md border text-left transition cursor-pointer hover:border-(--ui-primary)/50"
 							:class="[
-								form.pdf_template === t.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)'
+								form.pdf_layout === t.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)'
 							]"
-							@click="form.pdf_template = t.key"
+							@click="form.pdf_layout = t.key"
 						>
 							<div class="rounded-sm overflow-hidden ring-1 ring-(--ui-border) mb-1.5">
 								<PdfTemplateThumb :template-key="t.key" :color="themeHex(form.pdf_theme_color)" />
@@ -467,7 +467,7 @@
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import CurrencyPicker from "~/components/CurrencyPicker.vue";
 	import { resetDbCache } from "~/lib/db";
-	import { PDF_TEMPLATES } from "~/lib/pdf-templates";
+	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
 	import { THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useSettingsStore } from "~/stores/settings";
@@ -519,10 +519,10 @@
 		default_vat_rate_pct: (settingsStore.settings?.default_vat_rate ?? 1800) / 100,
 		default_payment_terms_days: settingsStore.settings?.default_payment_terms_days ?? 30,
 		default_quote_validity_days: settingsStore.settings?.default_quote_validity_days ?? 30,
-		// Step 5 (Documents) — one template choice applies to both invoice
+		// Step 5 (Documents) — one Layout choice applies to both invoice
 		// and quote PDFs; accent colour is the dedicated pdf_theme_color
 		// (falls back to the UI theme colour for a sensible default).
-		pdf_template: settingsStore.settings?.pdf_template || "classic",
+		pdf_layout: resolveLayoutKey(settingsStore.settings?.pdf_layout),
 		pdf_theme_color: settingsStore.settings?.pdf_theme_color ?? settingsStore.settings?.theme_color ?? "green",
 		// Bank fields on this form aren't part of company_settings any
 		// more (migration 0023 split them into a managed business_banks
@@ -594,7 +594,7 @@
 			// Documents — one template applies to both invoice + quote PDFs;
 			// accent colour drives the header rule + highlights.
 			await settingsStore.save({
-				pdf_template: form.pdf_template,
+				pdf_layout: form.pdf_layout,
 				pdf_theme_color: form.pdf_theme_color
 			});
 		} else {

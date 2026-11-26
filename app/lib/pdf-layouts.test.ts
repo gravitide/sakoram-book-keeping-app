@@ -21,7 +21,7 @@ describe("resolveLayoutKey", () => {
 	});
 });
 
-describe("PDF_LAYOUTS", () => {
+describe("the Layout registry", () => {
 	it("offers exactly the four Layouts, Classic first — no Letterhead", () => {
 		expect(PDF_LAYOUTS.map((l) => l.key)).toEqual(["classic", "modern", "minimal", "compact"]);
 	});

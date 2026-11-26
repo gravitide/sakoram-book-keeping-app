@@ -112,9 +112,13 @@ export interface PageSettingsOverride {
 	preprinted?: boolean
 }
 
-type PageSettingsSource = Partial<Pick<CompanySettingsRow,
-	"pdf_paper_size" | "pdf_stationery_mode" | "pdf_stationery"
-	| "letter_preprinted_top_margin_mm" | "letter_preprinted_bottom_margin_mm">>;
+type PageSettingsKey
+	= | "pdf_paper_size"
+		| "pdf_stationery_mode"
+		| "pdf_stationery"
+		| "letter_preprinted_top_margin_mm"
+		| "letter_preprinted_bottom_margin_mm";
+type PageSettingsSource = Partial<Pick<CompanySettingsRow, PageSettingsKey>>;
 
 // A letter's own "pre-printed paper" switch still reads the letter columns
 // (letter_preprinted_*); #358 moves letters onto the Stationery's Pre-printed
