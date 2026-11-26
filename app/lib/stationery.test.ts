@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseStationery, resolveStationeryMode, serializeStationery, setPreprintedBands } from "./stationery";
+import { parseStationery, resolveStationeryMode, serializeStationery, setPreprintedBands, stationeryModeToSave } from "./stationery";
 
 const DEFAULT_PREPRINTED = { top: 55, right: 18, bottom: 20, left: 18 };
 
@@ -54,6 +54,26 @@ describe("setPreprintedBands", () => {
 
 	it("never saves a band the schema refuses — it falls back to the default instead", () => {
 		expect(parseStationery(setPreprintedBands(null, { top: 999, bottom: Number.NaN })).preprinted).toEqual(DEFAULT_PREPRINTED);
+	});
+});
+
+describe("stationeryModeToSave", () => {
+	it("keeps a stored mode the app can't render yet when the user didn't pick another", () => {
+		// The picker shows Full-page background as Built-in until its renderer
+		// lands; saving the page must not quietly switch the business to Built-in.
+		expect(stationeryModeToSave("background", "builtin")).toBe("background");
+		expect(stationeryModeToSave("header_footer", "builtin")).toBe("header_footer");
+	});
+
+	it("saves the mode the user picked", () => {
+		expect(stationeryModeToSave("background", "preprinted")).toBe("preprinted");
+		expect(stationeryModeToSave("builtin", "preprinted")).toBe("preprinted");
+		expect(stationeryModeToSave("preprinted", "builtin")).toBe("builtin");
+	});
+
+	it("saves the shown mode over anything the column wouldn't accept", () => {
+		expect(stationeryModeToSave(null, "builtin")).toBe("builtin");
+		expect(stationeryModeToSave("letterhead", "builtin")).toBe("builtin");
 	});
 });
 

@@ -2,7 +2,7 @@
 // blank bands the content must stay out of (GLOSSARY.md, ADR 0001).
 //
 // Two columns on company_settings hold it:
-//   pdf_stationery_mode  which mode is active (one of STORED_STATIONERY_MODES)
+//   pdf_stationery_mode  which mode is active (a StoredStationeryMode)
 //   pdf_stationery       JSON with EVERY mode's own settings, so switching modes
 //                        never loses what another mode had (only an explicit
 //                        Remove would). Parsed here with Zod; anything malformed
@@ -40,6 +40,21 @@ const MODE_KEYS = new Set<string>(STATIONERY_MODES.map((m) => m.key));
 /** The stored mode, or Built-in for anything missing, unknown or not yet renderable. */
 export function resolveStationeryMode(stored: string | null | undefined): StationeryMode {
 	return stored && MODE_KEYS.has(stored) ? stored as StationeryMode : "builtin";
+}
+
+const STORED_MODE_KEYS = new Set<string>(["builtin", "background", "header_footer", "preprinted"] satisfies StoredStationeryMode[]);
+
+/**
+ * What to write back to company_settings.pdf_stationery_mode when the settings
+ * page saves. The picker shows the resolved mode, so a stored mode the app
+ * can't render yet appears as Built-in; saving without picking another mode
+ * must keep the stored one, not overwrite it with that stand-in.
+ */
+export function stationeryModeToSave(stored: string | null | undefined, picked: StationeryMode): StoredStationeryMode {
+	if (stored && STORED_MODE_KEYS.has(stored) && resolveStationeryMode(stored) === picked) {
+		return stored as StoredStationeryMode;
+	}
+	return picked;
 }
 
 /** Four page margins in millimetres — the edges of the Safe area. */

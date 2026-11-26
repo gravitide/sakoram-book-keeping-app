@@ -613,6 +613,7 @@
 
 <script setup lang="ts">
 	import type { CropRect } from "~/lib/crop-rect";
+	import type { StationeryMode } from "~/lib/stationery";
 	import type { CompanySettingsRow, SettingsUpdate } from "~/stores/settings";
 	import { invoke } from "@tauri-apps/api/core";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
@@ -623,7 +624,7 @@
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
 	import { PDF_TOKENS } from "~/lib/pdf-tokens";
 	import { sampleInvoicePayload } from "~/lib/sample-pdf";
-	import { MAX_BAND_MM, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, setPreprintedBands, STATIONERY_MODES } from "~/lib/stationery";
+	import { MAX_BAND_MM, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, setPreprintedBands, STATIONERY_MODES, stationeryModeToSave } from "~/lib/stationery";
 	import { isHexColor, THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -640,7 +641,9 @@
 	// The Stationery JSON column is edited as plain numbers here (only
 	// Pre-printed paper's two bands are settable for now) and re-assembled on
 	// save on top of whatever else is stored, so another mode's settings survive.
-	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_theme_color" | "pdf_layout" | "pdf_paper_size" | "pdf_stationery_mode" | "pdf_logo_scale" | "pdf_header_custom" | "pdf_header_text" | "pdf_footer_custom" | "pdf_footer_text"> & {
+	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_theme_color" | "pdf_layout" | "pdf_paper_size" | "pdf_logo_scale" | "pdf_header_custom" | "pdf_header_text" | "pdf_footer_custom" | "pdf_footer_text"> & {
+		// The RESOLVED mode the picker shows; onSubmit maps it back (stationeryModeToSave).
+		pdf_stationery_mode: StationeryMode
 		preprinted_top_mm: number
 		preprinted_bottom_mm: number
 	};
@@ -884,7 +887,8 @@
 				pdf_theme_color: form.pdf_theme_color,
 				pdf_layout: form.pdf_layout,
 				pdf_paper_size: form.pdf_paper_size,
-				pdf_stationery_mode: form.pdf_stationery_mode,
+				// A stored mode the picker can't show yet survives unless another was picked.
+				pdf_stationery_mode: stationeryModeToSave(store.settings?.pdf_stationery_mode, form.pdf_stationery_mode),
 				pdf_stationery: stationeryJson(),
 				pdf_logo_scale: form.pdf_logo_scale,
 				pdf_header_custom: form.pdf_header_custom,
