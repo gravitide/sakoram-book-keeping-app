@@ -32,21 +32,17 @@
   footer: [
     #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))
     #v(4pt)
-    #grid(
-      columns: (1fr, auto),
-      align(left, text(size: 8pt, fill: rgb("#6b7280"))[
-        #if data.at("footer_blocks", default: ()).len() > 0 {
-          render-blocks(data.footer_blocks, default-align: "left", spacing: 2pt)
-        } else [
-          #if data.business_name != none [#data.business_name]
-          #if data.website != none [ | #data.website]
-          #if data.phone != none [ | #data.phone]
-        ]
-      ]),
-      align(right, text(size: 8pt, fill: rgb("#6b7280"))[
-        Page #context counter(page).display() of #context counter(page).final().first()
-      ]),
-    )
+    // "Page N of M" comes from page-setup (only past one page), like every
+    // other template — this footer used to print it on every page itself.
+    #align(left, text(size: 8pt, fill: rgb("#6b7280"))[
+      #if data.at("footer_blocks", default: ()).len() > 0 {
+        render-blocks(data.footer_blocks, default-align: "left", spacing: 2pt)
+      } else [
+        #if data.business_name != none [#data.business_name]
+        #if data.website != none [ | #data.website]
+        #if data.phone != none [ | #data.phone]
+      ]
+    ])
   ],
 ))
 
