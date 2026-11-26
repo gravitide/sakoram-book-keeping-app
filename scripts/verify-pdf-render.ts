@@ -64,7 +64,7 @@ import { CURRENCIES } from "../app/lib/money.ts";
 import { buildPayslipPdfPayload } from "../app/lib/payslip-pdf.ts";
 import { buildQuotePdfPayload } from "../app/lib/quote-pdf.ts";
 import { buildAgedReceivablesPdfPayload, buildCashFlowPdfPayload, buildPnlPdfPayload } from "../app/lib/report-pdf.ts";
-import { sampleInvoicePayload } from "../app/lib/sample-pdf.ts";
+import { sampleInvoicePayload, sampleStationeryPreviewPayload } from "../app/lib/sample-pdf.ts";
 import { buildCustomerStatementPdfPayload } from "../app/lib/statement-pdf.ts";
 import { buildVoucherPdfPayload } from "../app/lib/voucher-pdf.ts";
 import { pdfPageTexts } from "./pdf-text.ts";
@@ -494,6 +494,15 @@ interface Case {
 	 * numbered render can only ever differ from it by the numbers.
 	 */
 	multipage?: true
+	/** Must render to exactly this many pages (on top of `multipage`). */
+	pages?: number
+	/**
+	 * Only the checks run — page count, page numbers, identity, artwork — with
+	 * no stored baseline and no `~unnumbered` twin. For wide grids that guard
+	 * a property (the Stationery preview sample is always two pages) rather
+	 * than pixels.
+	 */
+	checkOnly?: true
 	/** Where Full-page background artwork is read from (default: the fixtures folder). */
 	businessFolder?: string
 	/** Must render byte-identically to this other case. */
@@ -520,6 +529,18 @@ const MULTIPAGE_ON_OTHER_PAPER = new Set([
 	"payslip-compact-a5",
 	...OTHER_PAPERS.flatMap((paper) => [`report-pnl-${paper}`, `statement-${paper}`])
 ]);
+
+const ALL_PAPERS = ["a4", ...OTHER_PAPERS] as const;
+const bands = (preprinted: object) => ({ pdf_stationery_mode: "preprinted", pdf_stationery: JSON.stringify({ preprinted }) });
+// The Stationery the preview sample must stay two pages on.
+const STATIONERY_PREVIEW_STATIONERY: [string, Partial<CompanySettingsRow>][] = [
+	["builtin", {}],
+	["background", fullPageBackground()],
+	["background-wide-sides", { pdf_stationery_mode: "background", pdf_stationery: JSON.stringify({ background: { ext: "svg", paper: "a4", crop: null, live_text: false, margins: { top: 40, right: 40, bottom: 25, left: 40 } } }) }],
+	["preprinted", preprintedPaper],
+	["preprinted-shallow", bands({ top: 5, right: 5, bottom: 5, left: 5 })],
+	["preprinted-deep", bands({ top: 60, right: 18, bottom: 30, left: 18 })]
+];
 
 const cases: Case[] = [
 	// The four Layouts, each with a real logo.
@@ -644,6 +665,21 @@ const cases: Case[] = [
 	// artwork, even while the business uses a Full-page background.
 	{ name: "letter-preprinted-on-business-background", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(true), settings: settingsFor({ ...fullPageBackground() }) }), sameAs: "letter-preprinted-on-business-preprinted" },
 
+	// The Stationery editor's "Preview sample invoice" is exactly two pages —
+	// the continuation page, repeated Stationery and "Page 2 of 2" are what it
+	// exists to show. Three with stored baselines…
+	{ ...docCase("stationery-preview-classic", sampleStationeryPreviewPayload(settingsFor(), currency, "classic")), multipage: true, pages: 2 },
+	{ ...docCase("stationery-preview-modern-background", sampleStationeryPreviewPayload(settingsFor({ ...fullPageBackground("pdf"), pdf_layout: "modern" }), currency, "modern")), multipage: true, pages: 2 },
+	{ ...docCase("stationery-preview-compact-preprinted-a5", sampleStationeryPreviewPayload(settingsFor({ ...preprintedPaper, pdf_layout: "compact", pdf_paper_size: "a5" }), currency, "compact")), multipage: true, pages: 2 },
+	// …and the property on every Layout × Paper size × Stationery, including
+	// shallow, deep and wide Safe areas (checkOnly: page count, no hash).
+	...STATIONERY_PREVIEW_STATIONERY.flatMap(([label, overrides]) => ALL_PAPERS.flatMap((paper) => LAYOUTS.map((key): Case => ({
+		...docCase(`stationery-preview-grid-${key}-${label}-${paper}`, sampleStationeryPreviewPayload(settingsFor({ ...overrides, pdf_layout: key, pdf_paper_size: paper }), currency, key)),
+		multipage: true,
+		pages: 2,
+		checkOnly: true
+	})))),
+
 	// Every template on the three non-A4 sheets. Built-in Layout margins scale
 	// with paper width; Pre-printed paper bands (letters included) do not.
 	...OTHER_PAPERS.flatMap((paper): Case[] => {
@@ -670,7 +706,14 @@ const unnumbered = (c: Case): Case => ({
 	payload: { ...c.payload, page: { ...(c.payload.page as object), page_numbers: false } }
 });
 
-const allCases = cases.flatMap((c) => (c.multipage ? [c, unnumbered(c)] : [c]));
+const allCases = cases.flatMap((c) => (c.multipage && !c.checkOnly ? [c, unnumbered(c)] : [c]));
+
+// Two cases with one name would share (and fight over) one baseline.
+const duplicateNames = allCases.map((c) => c.name).filter((name, i, all) => all.indexOf(name) !== i);
+if (duplicateNames.length) {
+	console.error(`✗ duplicate case names: ${[...new Set(duplicateNames)].join(", ")}`);
+	process.exit(1);
+}
 
 // --- render ----------------------------------------------------------------
 
@@ -780,6 +823,7 @@ const pageNumberProblem = (c: Case, r: Rendered): string | null => {
 			? `declared multipage but rendered ${pages} page — lengthen the fixture`
 			: `rendered ${pages} pages — mark the case \`multipage: true\``;
 	}
+	if (c.pages !== undefined && pages !== c.pages) return `rendered ${pages} pages, must be exactly ${c.pages}`;
 	const numbered = (c.payload.page as { page_numbers?: boolean } | undefined)?.page_numbers === true;
 	const expected = numbered && pages > 1
 		? Array.from({ length: pages }, (_, i) => ({ page: i + 1, total: pages }))
@@ -872,6 +916,12 @@ for (const c of allCases) {
 	if (problem) {
 		console.error(`✗ ${c.name} (${c.template}): ${problem}`);
 		failures++;
+		continue;
+	}
+
+	if (c.checkOnly) {
+		delete hashes[c.name];
+		console.log(`✓ ${c.name}  (checks only)`);
 		continue;
 	}
 
