@@ -527,10 +527,10 @@ sakoram_app/
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
 │  │     ├─ company.vue               ← business info, address, bank, signatures, defaults, logo
-│  │     ├─ pdf.vue                   ← Paper & layout (paper size + Layout picker) · Stationery (mode picker; Pre-printed paper bands; Built-in-only header logo + header/footer text) · Font + colour
+│  │     ├─ pdf.vue                   ← Paper & layout (paper size + Layout picker, then the Colour card) · Stationery (mode picker; Pre-printed paper bands; Built-in-only header logo + header/footer text cards) · Font. Every card has a sidebar anchor.
 │  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), light/dark/system toggle, zoom (6 discrete steps)
 │  │     ├─ payroll.vue               ← cycle template (period_start_day / period_end_day / pay_day)
-│  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + a pointer card to the Pre-printed paper margins (they live on the Stationery at /settings/pdf#stationery since 0056) + letterhead-templates placeholder. (Signatures moved to /settings/company#signatures — they're shared across letters + quote/invoice "Prepared by".)
+│  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + a pointer card to the Pre-printed paper bands (they live on the Stationery at /settings/pdf#stationery since 0056) + a "Stationery artwork" coming-soon placeholder (#artwork). (Signatures moved to /settings/company#signatures — they're shared across letters + quote/invoice "Prepared by".)
 │  │     ├─ businesses.vue            ← tenant CRUD + Export/Import (local .zip)
 │  │     ├─ backup.vue                ← Google Drive backup — hosts DriveBackupCard (moved off the Businesses page in v0.163.0 so it is findable); shows a "not available in this build" note when there are no Google credentials
 │  │     └─ developer.vue             ← per-machine developer options (localStorage via useUiState, no save bar). Currently: the breakpoint-badge switch. Everything defaults OFF in every build.
@@ -1863,7 +1863,10 @@ Business                ← per-business config (mostly exported in backups)
   ├─ Business details
   ├─ PDF
   │   ├─ Paper & layout      ← third-level in-page #anchors, shown only
-  │   ├─ Stationery             while /settings/pdf is the active route
+  │   ├─ Colour                 while /settings/pdf is the active route —
+  │   ├─ Stationery             one per card, none orphaned (Colour sits in
+  │   ├─ Header logo            the Paper & layout section, the two Built-in
+  │   ├─ Header & footer        cards in Stationery)
   │   └─ Font
   └─ Security             ← all security for this business in one place
       ├─ Database            ← #encryption — at-rest DB password (per-business vault)
@@ -2415,8 +2418,8 @@ persisted to localStorage).
   **Categories are a managed list** (`letter_categories`, migration 0041) —
   `LetterCategoryPicker` (search-or-create) on the modal + detail; managed on
   the new **`/settings/letters`** page (Business group) alongside a
-  pointer to the Pre-printed paper margins (on the Stationery, /settings/pdf,
-  since 0056) and a "coming soon" letterhead-templates placeholder.
+  pointer to the Pre-printed paper bands (on the Stationery, /settings/pdf,
+  since 0056) and a "coming soon" Stationery artwork placeholder.
   Rich text uses TipTap's official `useEditor` + `immediatelyRender: false`
   (a hand-rolled `new Editor` in `onMounted` did NOT bind to `EditorContent` —
   that was the "rich text doesn't work" bug); `@tiptap/pm` is an explicit dep.

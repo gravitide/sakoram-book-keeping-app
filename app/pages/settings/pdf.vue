@@ -39,13 +39,13 @@
 			class="max-w-5xl mx-auto"
 			@submit="onSubmit"
 		>
-			<!-- Order follows the PDF itself: the sheet and the Layout first, then
-				the Stationery around it (Built-in's logo and header/footer text only
-				appear while Built-in is selected), then the type and accent colour.
-				items-start keeps the Font + Colour row from stretching to equal
-				height. -->
+			<!-- Order follows the PDF itself: the sheet, the Layout and its accent
+				colour first, then the Stationery around it (Built-in's logo and
+				header/footer text cards sit inside its section), then the type. Every
+				section has a sidebar anchor in app/layouts/default.vue — a new card
+				goes inside one of them, never between. -->
 			<div class="space-y-6">
-				<div id="paper-layout" class="scroll-mt-6">
+				<div id="paper-layout" class="scroll-mt-6 space-y-6">
 					<SectionCard
 						icon="i-lucide-layout-template"
 						title="Paper &amp; layout"
@@ -106,9 +106,83 @@
 							</div>
 						</div>
 					</SectionCard>
+
+					<div id="color" class="scroll-mt-6">
+						<SectionCard
+							icon="i-lucide-palette"
+							title="Colour"
+							subtitle="The accent used for the header rule and highlights on your generated PDFs. Independent of the app's theme colour."
+						>
+							<!-- One row of eight, matching the Theme colour picker on
+								/settings/appearance. Capped at max-w-xl so the swatches stay a
+								compact row on a full-width card; labels truncate at the narrow
+								end ("Emerald" at text-[10px]), the full name stays in the title
+								tooltip. -->
+							<div class="grid grid-cols-8 gap-1.5 max-w-xl">
+								<button
+									v-for="c in colors"
+									:key="c.value"
+									type="button"
+									class="group flex flex-col items-center gap-1.5 min-w-0"
+									:title="c.label"
+									@click="form.pdf_theme_color = c.value"
+								>
+									<span
+										class="size-9 rounded-full border-2 transition shrink-0"
+										:class="form.pdf_theme_color === c.value ? 'border-(--ui-text) scale-110' : 'border-(--ui-border) group-hover:border-(--ui-text-muted)'"
+										:style="{ backgroundColor: c.hex }"
+									/>
+									<span
+										class="text-[10px] w-full text-center truncate"
+										:class="form.pdf_theme_color === c.value ? 'text-(--ui-text) font-medium' : 'text-(--ui-text-muted)'"
+									>
+										{{ c.label }}
+									</span>
+								</button>
+							</div>
+
+							<!-- Custom accent. Writes the same form field as the presets,
+								just as a literal hex — so dirty tracking, save and the
+								live preview all work unchanged. The native colour input
+								opens the OS picker (no dependency, works offline); the
+								hex field is for pasting an exact brand colour, which is
+								the more common case for an invoice accent. The input is
+								hidden inside the swatch label so the click target matches
+								the eight circles above — a bare colour input renders as an
+								OS-styled control that would look nothing like them. -->
+							<div class="mt-4 pt-4 border-t border-(--ui-border) flex items-center gap-3 max-w-xl">
+								<label
+									class="size-9 rounded-full border-2 shrink-0 cursor-pointer transition relative overflow-hidden"
+									:class="isCustomColor ? 'border-(--ui-text) scale-110' : 'border-(--ui-border) hover:border-(--ui-text-muted)'"
+									:style="{ backgroundColor: themeColor }"
+									title="Pick a custom colour"
+								>
+									<input
+										v-model="customColorWell"
+										type="color"
+										class="absolute inset-0 opacity-0 cursor-pointer"
+									>
+								</label>
+								<div class="min-w-0">
+									<div class="text-sm font-medium" :class="isCustomColor ? 'text-(--ui-text)' : 'text-(--ui-text-muted)'">
+										Custom
+									</div>
+									<div class="text-xs text-(--ui-text-muted)">
+										Your exact brand colour
+									</div>
+								</div>
+								<UInput
+									:model-value="customHexDraft"
+									placeholder="#1d4ed8"
+									class="w-32 ml-auto"
+									@update:model-value="onHexInput(String($event))"
+								/>
+							</div>
+						</SectionCard>
+					</div>
 				</div>
 
-				<div id="stationery" class="scroll-mt-6">
+				<div id="stationery" class="scroll-mt-6 space-y-6">
 					<SectionCard
 						icon="i-lucide-stamp"
 						title="Stationery"
@@ -163,13 +237,17 @@
 							</div>
 						</div>
 					</SectionCard>
-				</div>
 
-				<!-- Built-in stationery's own controls. Hidden (not cleared) under any
-					other mode, so switching back restores them untouched. -->
-				<template v-if="form.pdf_stationery_mode === 'builtin'">
+					<!-- Built-in stationery's own controls. Hidden (not cleared) under any
+						other mode, so switching back restores them untouched. The anchor
+						wrappers always render, so the sidebar's Header logo / Header &
+						footer links land here (on the note) whatever the mode. -->
 					<div id="header-logo" class="scroll-mt-6">
+						<p v-if="form.pdf_stationery_mode !== 'builtin'" class="text-xs text-(--ui-text-muted) px-1">
+							The header logo and header &amp; footer text belong to Built-in stationery. They're kept while another Stationery is selected — choose Built-in above to edit them.
+						</p>
 						<SectionCard
+							v-else
 							icon="i-lucide-image"
 							title="Header logo"
 							subtitle="Letterhead-style PNG, JPG, or SVG. Different from the square Company logo, which is only used in the sidebar."
@@ -348,6 +426,7 @@
 
 					<div id="header-footer" class="scroll-mt-6">
 						<SectionCard
+							v-if="form.pdf_stationery_mode === 'builtin'"
 							icon="i-lucide-panel-top"
 							title="Header &amp; footer text"
 							subtitle="Print your own details instead of the built-in header block and footer line. Use fields like {business_name} so the text follows Business details instead of going stale."
@@ -399,129 +478,52 @@
 							</div>
 						</SectionCard>
 					</div>
-				</template>
+				</div>
 
-				<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-					<div id="font" class="scroll-mt-6">
-						<SectionCard
-							icon="i-lucide-type"
-							title="Font"
-							subtitle="Used for every PDF this app generates. All fonts here are bundled with the app, so your documents look identical on any machine."
-						>
-							<UFormField label="Font family" name="pdf_font">
-								<USelectMenu
-									v-model="form.pdf_font"
-									:items="fontOptions"
-									value-key="value"
-									label-key="label"
-									icon="i-lucide-type"
-									class="w-full"
-									:search-input="{ placeholder: 'Search fonts…' }"
-								>
-									<template #item-label="{ item }">
-										<span :style="{ fontFamily: `'${item.value}', ${item.mono ? 'monospace' : 'sans-serif'}` }">
-											{{ item.label }}
-										</span>
-									</template>
-								</USelectMenu>
-							</UFormField>
-
-							<div class="p-4 border border-(--ui-border) rounded-md bg-(--ui-bg-muted)">
-								<div class="text-xs text-(--ui-text-muted) uppercase tracking-wide mb-2">
-									Preview
-								</div>
-								<!-- Heading, body prose, and a figures row — the three things a
-									document font has to get right. Figures use tabular-nums
-									because money columns have to align in the PDF. -->
-								<div :style="{ fontFamily: pdfPreviewFontStack }" class="space-y-1.5">
-									<div class="text-2xl font-semibold">
-										INVOICE INV-2026-0042
-									</div>
-									<div class="text-sm">
-										Payment is due within 30 days of the invoice date.
-									</div>
-									<div class="text-sm tabular-nums">
-										Subtotal 10,500.00 · VAT 1,845.00 · Total 12,345.00
-									</div>
-								</div>
-							</div>
-						</SectionCard>
-					</div>
-
-					<div id="color" class="scroll-mt-6">
-						<SectionCard
-							icon="i-lucide-palette"
-							title="Colour"
-							subtitle="The accent used for the header rule and highlights on your generated PDFs. Independent of the app's theme colour."
-						>
-							<!-- One row of eight, matching the Theme colour picker on
-								/settings/appearance. This column is half-width, so the
-								swatch is a notch smaller and the label truncates: at the
-								narrow end of `lg` the cells drop to ~40px, and "Emerald"
-								at text-xs would otherwise spill into its neighbour. The
-								full name stays available via the button's title tooltip. -->
-							<div class="grid grid-cols-8 gap-1.5">
-								<button
-									v-for="c in colors"
-									:key="c.value"
-									type="button"
-									class="group flex flex-col items-center gap-1.5 min-w-0"
-									:title="c.label"
-									@click="form.pdf_theme_color = c.value"
-								>
-									<span
-										class="size-9 rounded-full border-2 transition shrink-0"
-										:class="form.pdf_theme_color === c.value ? 'border-(--ui-text) scale-110' : 'border-(--ui-border) group-hover:border-(--ui-text-muted)'"
-										:style="{ backgroundColor: c.hex }"
-									/>
-									<span
-										class="text-[10px] w-full text-center truncate"
-										:class="form.pdf_theme_color === c.value ? 'text-(--ui-text) font-medium' : 'text-(--ui-text-muted)'"
-									>
-										{{ c.label }}
+				<div id="font" class="scroll-mt-6">
+					<SectionCard
+						icon="i-lucide-type"
+						title="Font"
+						subtitle="Used for every PDF this app generates. All fonts here are bundled with the app, so your documents look identical on any machine."
+					>
+						<UFormField label="Font family" name="pdf_font">
+							<USelectMenu
+								v-model="form.pdf_font"
+								:items="fontOptions"
+								value-key="value"
+								label-key="label"
+								icon="i-lucide-type"
+								class="w-full"
+								:search-input="{ placeholder: 'Search fonts…' }"
+							>
+								<template #item-label="{ item }">
+									<span :style="{ fontFamily: `'${item.value}', ${item.mono ? 'monospace' : 'sans-serif'}` }">
+										{{ item.label }}
 									</span>
-								</button>
-							</div>
+								</template>
+							</USelectMenu>
+						</UFormField>
 
-							<!-- Custom accent. Writes the same form field as the presets,
-								just as a literal hex — so dirty tracking, save and the
-								live preview all work unchanged. The native colour input
-								opens the OS picker (no dependency, works offline); the
-								hex field is for pasting an exact brand colour, which is
-								the more common case for an invoice accent. The input is
-								hidden inside the swatch label so the click target matches
-								the eight circles above — a bare colour input renders as an
-								OS-styled control that would look nothing like them. -->
-							<div class="mt-4 pt-4 border-t border-(--ui-border) flex items-center gap-3">
-								<label
-									class="size-9 rounded-full border-2 shrink-0 cursor-pointer transition relative overflow-hidden"
-									:class="isCustomColor ? 'border-(--ui-text) scale-110' : 'border-(--ui-border) hover:border-(--ui-text-muted)'"
-									:style="{ backgroundColor: themeColor }"
-									title="Pick a custom colour"
-								>
-									<input
-										v-model="customColorWell"
-										type="color"
-										class="absolute inset-0 opacity-0 cursor-pointer"
-									>
-								</label>
-								<div class="min-w-0">
-									<div class="text-sm font-medium" :class="isCustomColor ? 'text-(--ui-text)' : 'text-(--ui-text-muted)'">
-										Custom
-									</div>
-									<div class="text-xs text-(--ui-text-muted)">
-										Your exact brand colour
-									</div>
-								</div>
-								<UInput
-									:model-value="customHexDraft"
-									placeholder="#1d4ed8"
-									class="w-32 ml-auto"
-									@update:model-value="onHexInput(String($event))"
-								/>
+						<div class="p-4 border border-(--ui-border) rounded-md bg-(--ui-bg-muted)">
+							<div class="text-xs text-(--ui-text-muted) uppercase tracking-wide mb-2">
+								Preview
 							</div>
-						</SectionCard>
-					</div>
+							<!-- Heading, body prose, and a figures row — the three things a
+								document font has to get right. Figures use tabular-nums
+								because money columns have to align in the PDF. -->
+							<div :style="{ fontFamily: pdfPreviewFontStack }" class="space-y-1.5">
+								<div class="text-2xl font-semibold">
+									INVOICE INV-2026-0042
+								</div>
+								<div class="text-sm">
+									Payment is due within 30 days of the invoice date.
+								</div>
+								<div class="text-sm tabular-nums">
+									Subtotal 10,500.00 · VAT 1,845.00 · Total 12,345.00
+								</div>
+							</div>
+						</div>
+					</SectionCard>
 				</div>
 
 				<!-- Not a SectionCard: this is a signpost to the Security page, not a
