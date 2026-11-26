@@ -103,7 +103,7 @@ describe("stationery mode", () => {
 	});
 });
 
-describe("Full-page background", () => {
+describe("full-page background", () => {
 	const withArtwork = { background: { ext: "pdf", paper: "a4", margins: { top: 50, right: 15, bottom: 30, left: 17 } } };
 
 	it("draws the artwork behind every page and bounds the Safe area with the background's own margins", () => {

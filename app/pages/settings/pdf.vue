@@ -212,6 +212,9 @@
 						<p v-if="form.pdf_stationery_mode === 'builtin'" class="mt-4 text-xs text-(--ui-text-muted)">
 							Set the header logo and the header &amp; footer text below.
 						</p>
+						<p v-else-if="form.pdf_stationery_mode === 'background'" class="mt-4 text-xs text-(--ui-text-muted)">
+							Upload your artwork and set its Safe area below. Your logo, header text and footer aren't printed — the artwork is your letterhead.
+						</p>
 
 						<!-- Pre-printed paper: only the two blank bands. Each mode keeps its
 							own settings, so switching back to Built-in and here again
@@ -237,6 +240,14 @@
 							</div>
 						</div>
 					</SectionCard>
+
+					<!-- Full-page background: artwork + its own Safe-area margins. Hidden
+						(not cleared) under other modes, like Built-in's controls below. -->
+					<StationeryBackgroundCard
+						v-if="form.pdf_stationery_mode === 'background'"
+						v-model:margins="form.background_margins"
+						:paper="resolvePaperSize(form.pdf_paper_size).key"
+					/>
 
 					<!-- Built-in stationery's own controls. Hidden (not cleared) under any
 						other mode, so switching back restores them untouched. The anchor
@@ -616,7 +627,7 @@
 <script setup lang="ts">
 	import type { CropRect } from "~/lib/crop-rect";
 	import type { PdfLayoutKey } from "~/lib/pdf-layouts";
-	import type { StationeryMode } from "~/lib/stationery";
+	import type { StationeryMarginsMm, StationeryMode } from "~/lib/stationery";
 	import type { CompanySettingsRow, SettingsUpdate } from "~/stores/settings";
 	import { invoke } from "@tauri-apps/api/core";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
@@ -627,7 +638,7 @@
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
 	import { PDF_TOKENS } from "~/lib/pdf-tokens";
 	import { sampleInvoicePayload } from "~/lib/sample-pdf";
-	import { MAX_BAND_MM, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, setPreprintedBands, STATIONERY_MODES, stationeryModeToSave } from "~/lib/stationery";
+	import { BACKGROUND_DEFAULT_MARGINS, MAX_BAND_MM, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, setBackgroundMargins, setPreprintedBands, STATIONERY_MODES, stationeryModeToSave } from "~/lib/stationery";
 	import { isHexColor, THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -641,15 +652,17 @@
 	// Only the PDF-flavoured fields live on this page. Logo paths are kept on
 	// the form so dirty-tracking can spot a removal/upload that would otherwise
 	// only mutate the store. (Document protection moved to /settings/security.)
-	// The Stationery JSON column is edited as plain numbers here (only
-	// Pre-printed paper's two bands are settable for now) and re-assembled on
-	// save on top of whatever else is stored, so another mode's settings survive.
+	// The Stationery JSON column is edited as plain numbers here (Pre-printed
+	// paper's two bands and the Full-page background's four margins) and
+	// re-assembled on save on top of whatever else is stored, so another mode's
+	// settings — and the background artwork, which saves on upload — survive.
 	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_theme_color" | "pdf_paper_size" | "pdf_logo_scale" | "pdf_header_custom" | "pdf_header_text" | "pdf_footer_custom" | "pdf_footer_text"> & {
 		pdf_layout: PdfLayoutKey
 		// The RESOLVED mode the picker shows; onSubmit maps it back (stationeryModeToSave).
 		pdf_stationery_mode: StationeryMode
 		preprinted_top_mm: number
 		preprinted_bottom_mm: number
+		background_margins: StationeryMarginsMm
 	};
 
 	const form = reactive<PdfForm>({
@@ -661,6 +674,7 @@
 		pdf_stationery_mode: "builtin",
 		preprinted_top_mm: PREPRINTED_DEFAULT_MARGINS.top,
 		preprinted_bottom_mm: PREPRINTED_DEFAULT_MARGINS.bottom,
+		background_margins: { ...BACKGROUND_DEFAULT_MARGINS },
 		pdf_logo_scale: 100,
 		pdf_header_custom: 0,
 		pdf_header_text: null,
@@ -670,10 +684,10 @@
 
 	// Every mode's stored settings with this page's edits applied; anything
 	// this page doesn't edit (the side bands, later modes' geometry) is kept.
-	const stationeryJson = () => setPreprintedBands(store.settings?.pdf_stationery, {
+	const stationeryJson = () => setBackgroundMargins(setPreprintedBands(store.settings?.pdf_stationery, {
 		top: form.preprinted_top_mm,
 		bottom: form.preprinted_bottom_mm
-	});
+	}), { ...form.background_margins });
 
 	const currency = useActiveCurrency();
 	const colors = THEME_COLORS;
@@ -866,6 +880,7 @@
 		const stationery = parseStationery(s.pdf_stationery);
 		form.preprinted_top_mm = stationery.preprinted.top;
 		form.preprinted_bottom_mm = stationery.preprinted.bottom;
+		form.background_margins = { ...stationery.background.margins };
 		form.pdf_logo_scale = s.pdf_logo_scale ?? 100;
 		form.pdf_header_custom = s.pdf_header_custom ?? 0;
 		form.pdf_header_text = s.pdf_header_text ?? null;

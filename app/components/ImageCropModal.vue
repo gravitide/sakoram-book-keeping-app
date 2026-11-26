@@ -55,7 +55,9 @@
 
 <script setup lang="ts">
 	import type { CropRect } from "~/lib/crop-rect";
+	import type { PixelSize } from "~/lib/stationery-artwork";
 	import { fullRect, moveRect, resizeRect } from "~/lib/crop-rect";
+	import { downscaleSize } from "~/lib/stationery-artwork";
 
 	const props = withDefaults(defineProps<{
 		imageBlob: Blob | null
@@ -70,6 +72,13 @@
 		/** Modal copy. Defaults describe the PDF header, this modal's first caller. */
 		title?: string
 		hint?: string
+		/**
+		 * Downscale the cropped result to fit within this size (never enlarged).
+		 * Omitted = the crop at full source resolution, as the logos want.
+		 */
+		maxOutput?: PixelSize
+		/** Encoding of the result. PNG by default; a JPEG source stays JPEG for a full-page background. */
+		outputType?: "image/png" | "image/jpeg"
 	}>(), {
 		title: "Crop header logo",
 		hint: "Drag to reposition; pull a corner to resize. The crop is applied to the PDF header only — your original upload is kept."
@@ -211,12 +220,14 @@
 		applying.value = true;
 		try {
 			const r = rect.value;
+			const out = props.maxOutput ? downscaleSize(r.w, r.h, props.maxOutput) : { w: r.w, h: r.h };
 			const canvas = document.createElement("canvas");
-			canvas.width = r.w;
-			canvas.height = r.h;
+			canvas.width = out.w;
+			canvas.height = out.h;
 			const ctx = canvas.getContext("2d")!;
-			ctx.drawImage(img.value, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
-			const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+			ctx.imageSmoothingQuality = "high";
+			ctx.drawImage(img.value, r.x, r.y, r.w, r.h, 0, 0, out.w, out.h);
+			const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, props.outputType ?? "image/png", 0.92));
 			if (!blob) throw new Error("crop export failed");
 			openModel.value = false;
 			emit("cropped", { ...r }, blob);

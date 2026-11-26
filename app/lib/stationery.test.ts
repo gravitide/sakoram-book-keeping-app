@@ -92,7 +92,7 @@ describe("resolveStationeryMode", () => {
 
 const NO_BACKGROUND = { ext: null, paper: null, crop: null, live_text: false, margins: { top: 40, right: 18, bottom: 25, left: 18 } };
 
-describe("Full-page background settings", () => {
+describe("full-page background settings", () => {
 	it("has no artwork and default margins when nothing is stored", () => {
 		expect(parseStationery(null).background).toEqual(NO_BACKGROUND);
 	});
