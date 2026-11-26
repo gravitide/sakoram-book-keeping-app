@@ -20,6 +20,7 @@
 		"lint": "eslint . --fix",
 		"test": "vitest run",
 		"verify:sql": "bun run scripts/verify-derived-sql.ts",
+		"verify:pdf": "bun run scripts/verify-pdf-render.ts",
 		"test:watch": "vitest",
 		"bump": "bumpp",
 		"tauri": "tauri",
