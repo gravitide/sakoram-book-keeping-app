@@ -174,6 +174,8 @@ is no longer encoded in filenames):
   ├─ logos/logo.<ext>                    ← square identity logo (sidebar, tenant switcher, hero); the CROPPED derivative
   ├─ logos/logo-original.<ext>           ← untouched upload, source for Re-crop (local-only, not in backups)
   ├─ pdf-header.<ext>                    ← optional wide letterhead logo printed on PDFs
+  ├─ stationery/background.<ext>         ← Full-page background artwork (svg | pdf | png | jpg); fixed name, the DB stores only the ext
+  ├─ stationery/background-original.<ext> ← untouched raster upload for Re-crop (travels in BOTH backups, unlike logo originals)
   └─ business.db.enc + business.vault.json   ← only when encrypted (decrypt-on-unlock working file is business.db)
 ```
 
@@ -296,6 +298,8 @@ Off by default; unencrypted businesses are unaffected.
   actually exists at the derived location. It runs there, not in
   `open_tenant`, because an encrypted business has no db at Open time. If you
   add another path column, add it to that function — nothing else will.
+  Stationery artwork deliberately has NO path column (fixed names under
+  `stationery/`, only the extension in `pdf_stationery`), so it needs none.
 - **Any file op on a business folder goes through a Rust command, never the fs
   plugin.** The plugin's scopes are `$APPDATA` / `$APPLOCALDATA` / `$HOME`;
   business folders live on any drive. `remove()` on a `D:\` path fails, and the
@@ -336,7 +340,7 @@ Spec/plan: `docs/superpowers/{specs,plans}/2026-09-19-google-drive-backup*`.
   hand: `Sakoram Backups/<Business name>/{snapshots/<stem>.zip + .manifest.json,
   attachments/<type>/<id>/<uuid>.<ext>}`. The snapshot zip holds `business.db`
   (or `business.db.enc` + `business.vault.json`), `business.json`, `logos/*`,
-  `pdf-header*` and `backup-manifest.json` — **not** attachments, which upload
+  `stationery/*`, `pdf-header*` and `backup-manifest.json` — **not** attachments, which upload
   once each and are reused by later backups (diffed on size + Drive's native
   `md5Checksum`).
 - **Lookup is by `appProperties`, never by name or folder walk**: `skKind`
@@ -527,7 +531,7 @@ sakoram_app/
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
 │  │     ├─ company.vue               ← business info, address, bank, signatures, defaults, logo
-│  │     ├─ pdf.vue                   ← Paper & layout (paper size + Layout picker, then the Colour card) · Stationery (mode picker; Pre-printed paper bands; Built-in-only header logo + header/footer text cards) · Font. Every card has a sidebar anchor.
+│  │     ├─ pdf.vue                   ← Paper & layout (paper size + Layout picker, then the Colour card) · Stationery (mode picker; Pre-printed paper bands; `StationeryBackgroundCard` — upload / aspect-locked crop + ~300 DPI downscale / live-text SVG warning / Remove / four Safe-area margins — while Full-page background; Built-in-only header logo + header/footer text cards) · Font. Every card has a sidebar anchor.
 │  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), light/dark/system toggle, zoom (6 discrete steps)
 │  │     ├─ payroll.vue               ← cycle template (period_start_day / period_end_day / pay_day)
 │  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + a pointer card to the Pre-printed paper bands (they live on the Stationery at /settings/pdf#stationery since 0056) + a "Stationery artwork" coming-soon placeholder (#artwork). (Signatures moved to /settings/company#signatures — they're shared across letters + quote/invoice "Prepared by".)
@@ -2728,6 +2732,22 @@ surface flagged in the same audit was deleted in v0.164.1.)
   name, so a new Stationery mode needs no template edits for suppression. The Layout key travels as
   `layout` (was `template`); `pdf-layouts.test.ts` fails if `PDF_LAYOUTS` and
   `layout_template` in pdf.rs disagree.
+- **Full-page background artwork travels by FORMAT, never by path.**
+  `page.background` is `{ ext }` (or null); `render_pdf` resolves the OPEN
+  business's folder (`tenants::active_folder`), and `stage_background` copies
+  `stationery/background.<ext>` into the work dir as
+  `stationery-background.<ext>` and adds `file` — a missing file turns
+  `background` into null rather than failing. `page-setup` adds Typst's
+  `background:` key ONLY when there is artwork (so every other render stays
+  byte-identical) via `page-background`, which uses `fit: "cover"`; a PDF
+  contributes its first page only. `verify-pdf-render.ts` mirrors the staging
+  (fixtures in `scripts/fixtures/stationery/`, whose PDF has a red page 2 that
+  must never show) and fails a background case whose render doesn't change
+  when the artwork is taken out. Because no path is stored, a moved folder
+  needs no `relocate_stored_paths` entry — don't add one. All artwork file ops
+  go through `save_business_asset` / `read_business_asset` /
+  `remove_business_asset` (kinds `stationery-background[-original]`), never the
+  fs plugin. Export bundles and Drive snapshots both carry `stationery/*`.
 - **Every Typst template with a bespoke footer must read `footer_blocks`.** The
   builders always send it; `voucher.typ` / `report.typ` / `statement.typ`
   hard-coded their footer line and silently ignored the custom footer for
