@@ -39,6 +39,10 @@
 // Rust side's logo_path → logo_file copy is mirrored here), because the
 // wordmark fallback alone once hid a template that failed whenever a logo was
 // set (see the "definition order" landmine in CLAUDE.md).
+//
+// Full-page background cases render with REAL artwork in each format the app
+// accepts (SVG, PNG, PDF — scripts/fixtures/stationery/), staged the way the
+// Rust renderer stages it (stage_background in pdf.rs).
 
 import type { Buffer } from "node:buffer";
 import type { LetterRow } from "../app/stores/letters";
@@ -69,6 +73,9 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const TEMPLATES = join(REPO, "src-tauri/templates");
 const FONTS = join(REPO, "src-tauri/fonts");
 const LOGO = join(REPO, "src-tauri/icons/128x128.png");
+// Stands in for the business folder: Full-page background artwork is read from
+// <folder>/stationery/background.<ext>, exactly as the app reads it.
+const BUSINESS_FOLDER = join(REPO, "scripts/fixtures");
 const BASELINES = join(REPO, "scripts/pdf-render-baselines.json");
 const CREATION_TIMESTAMP = "1767225600"; // 2026-01-01T00:00:00Z
 
@@ -171,6 +178,16 @@ const settingsFor = (overrides: Partial<CompanySettingsRow> = {}): CompanySettin
 
 const noLogo = { pdf_header_logo_path: null };
 const preprintedPaper = { pdf_stationery_mode: "preprinted" };
+// Full-page background with artwork of the given format. Its margins (44 / 22,
+// sides 20) differ from both the defaults and the Pre-printed bands above, so
+// the cases prove the background's own margins bound the Safe area.
+const fullPageBackground = (ext: "svg" | "png" | "pdf" | null = "svg") => ({
+	pdf_stationery_mode: "background",
+	pdf_stationery: JSON.stringify({
+		preprinted: { top: 48, right: 16, bottom: 24, left: 16 },
+		background: { ext, paper: "a4", crop: null, live_text: false, margins: { top: 44, right: 20, bottom: 22, left: 20 } }
+	})
+});
 const customChrome = {
 	pdf_header_custom: 1,
 	pdf_header_text: richText("{business_name}", "{address}, {city}", "Tax ID {tax_id}"),
@@ -477,6 +494,10 @@ interface Case {
 	 * numbered render can only ever differ from it by the numbers.
 	 */
 	multipage?: true
+	/** Where Full-page background artwork is read from (default: the fixtures folder). */
+	businessFolder?: string
+	/** Must render byte-identically to this other case. */
+	sameAs?: string
 }
 
 // Mirrors layout_template() in src-tauri/src/pdf.rs: unknown keys → classic.
@@ -588,6 +609,41 @@ const cases: Case[] = [
 	// Stationery bands are never scaled with the paper.
 	{ ...docCase("invoice-classic-preprinted-a5", invoice(settingsFor({ ...preprintedPaper, pdf_paper_size: "a5" }))), multipage: true },
 
+	// Full-page background Stationery, every template, with real artwork
+	// behind every page. As on Pre-printed paper the business's logo, header
+	// text and footer are set (customChrome) and must all be dropped: the
+	// artwork IS the identity. Margins 44 / 22, sides 20.
+	// Minimal is the airiest Layout and spills onto page 2.
+	...LAYOUTS.map((key): Case => {
+		const c = docCase(`invoice-${key}-background`, invoice(settingsFor({ ...fullPageBackground(), ...customChrome, pdf_layout: key })));
+		return key === "minimal" ? { ...c, multipage: true } : c;
+	}),
+	// Each upload format. The PDF fixture's second page is solid red: a
+	// background is the first page only, so red must never appear.
+	docCase("invoice-classic-background-png", invoice(settingsFor({ ...fullPageBackground("png") }))),
+	docCase("invoice-classic-background-pdf", invoice(settingsFor({ ...fullPageBackground("pdf") }))),
+	// Repeats on every page.
+	{ ...docCase("invoice-classic-background-multipage", invoice(settingsFor({ ...fullPageBackground("pdf") }), 30)), multipage: true },
+	// Mode chosen, nothing uploaded yet: the margins still apply, no artwork.
+	docCase("invoice-classic-background-no-artwork", invoice(settingsFor({ ...fullPageBackground(null) }))),
+	// Artwork recorded but its file is gone (folder emptied by hand): renders
+	// without it rather than failing. Same output as the case above.
+	{ ...docCase("invoice-classic-background-file-missing", invoice(settingsFor({ ...fullPageBackground("svg") }))), businessFolder: join(REPO, "scripts/fixtures/no-such-folder"), sameAs: "invoice-classic-background-no-artwork" },
+	// Artwork prepared for A4 on A5 covers the smaller sheet; margins unscaled.
+	{ ...docCase("invoice-classic-background-a5", invoice(settingsFor({ ...fullPageBackground(), pdf_paper_size: "a5" }))), multipage: true },
+	docCase("quote-classic-background", buildQuotePdfPayload({ row: docRow as never, lines: docLines(3), settings: settingsFor({ ...fullPageBackground() }), currency })),
+	docCase("bill-classic-background", buildBillPdfPayload({ row: docRow as never, lines: docLines(2) as never, settings: settingsFor({ ...fullPageBackground("png") }), currency, paidCents: 2000000 })),
+	docCase("sample-classic-background", sampleInvoicePayload(settingsFor({ ...fullPageBackground() }), currency, "classic")),
+	...LAYOUTS.map((key): Case => ({ name: `payslip-${key}-background`, template: "payslip.typ", payload: payslip(settingsFor({ ...fullPageBackground(), ...customChrome, pdf_layout: key })) })),
+	{ name: "voucher-background", template: "voucher.typ", payload: voucher(settingsFor({ ...fullPageBackground(), ...customChrome })) },
+	{ name: "report-pnl-background", template: "report.typ", payload: pnl(settingsFor({ ...fullPageBackground("pdf"), ...customChrome })), multipage: true },
+	{ name: "statement-background", template: "statement.typ", payload: statement(settingsFor({ ...fullPageBackground(), ...customChrome })), multipage: true },
+	{ name: "letter-background", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false), settings: settingsFor({ ...fullPageBackground() }) }) },
+	{ name: "letter-background-multipage", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false, 20), settings: settingsFor({ ...fullPageBackground("png") }) }), multipage: true },
+	// A letter set to pre-printed paper keeps its blank bands and draws no
+	// artwork, even while the business uses a Full-page background.
+	{ name: "letter-preprinted-on-business-background", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(true), settings: settingsFor({ ...fullPageBackground() }) }), sameAs: "letter-preprinted-on-business-preprinted" },
+
 	// Every template on the three non-A4 sheets. Built-in Layout margins scale
 	// with paper width; Pre-printed paper bands (letters included) do not.
 	...OTHER_PAPERS.flatMap((paper): Case[] => {
@@ -631,6 +687,25 @@ interface Rendered {
 	pageNumbers: PageNumber[]
 }
 
+interface PageBlock {
+	background?: { ext: string, file?: string } | null
+	[key: string]: unknown
+}
+
+// Mirror stage_background() in src-tauri/src/pdf.rs: the page block names only
+// the artwork format; the file is <business folder>/stationery/background.<ext>.
+// Copy it beside the template as stationery-background.<ext> and add `file`;
+// a missing file renders without artwork (background null).
+const stageBackground = (page: PageBlock | undefined, folder: string, work: string): PageBlock | undefined => {
+	if (!page?.background) return page;
+	const { ext } = page.background;
+	const src = join(folder, "stationery", `background.${ext}`);
+	if (!/^[a-z0-9]+$/.test(ext) || !existsSync(src)) return { ...page, background: null };
+	const file = `stationery-background.${ext}`;
+	copyFileSync(src, join(work, file));
+	return { ...page, background: { ...page.background, file } };
+};
+
 const render = (c: Case): Rendered => {
 	const work = mkdtempSync(join(tmpdir(), "sakoram-pdf-"));
 	try {
@@ -645,6 +720,7 @@ const render = (c: Case): Rendered => {
 		} else {
 			data.logo_file = null;
 		}
+		data.page = stageBackground(data.page as PageBlock | undefined, c.businessFolder ?? BUSINESS_FOLDER, work);
 		writeFileSync(join(work, "data.json"), JSON.stringify(data, null, 2));
 		copyFileSync(join(TEMPLATES, "common.typ"), join(work, "common.typ"));
 		copyFileSync(join(TEMPLATES, c.template), join(work, c.template));
@@ -741,6 +817,19 @@ const identityProblem = (c: Case, r: Rendered): string | null => {
 
 const sha256 = (buf: Buffer) => createHash("sha256").update(buf).digest("hex");
 
+// A case with Full-page background artwork on disk must actually show it: the
+// same document with the artwork taken out has to render differently. (A hash
+// alone would happily bless a render where the artwork silently went missing.)
+const hasArtwork = (c: Case) => {
+	const bg = (c.payload.page as PageBlock | undefined)?.background;
+	return Boolean(bg && existsSync(join(c.businessFolder ?? BUSINESS_FOLDER, "stationery", `background.${bg.ext}`)));
+};
+const artworkProblem = (c: Case, hash: string): string | null => {
+	if (!hasArtwork(c)) return null;
+	const without = { ...c, name: `${c.name}~no-artwork`, payload: { ...c.payload, page: { ...(c.payload.page as object), background: null } } };
+	return sha256(render(without).pdf) === hash ? "the background artwork did not change the page — is page-setup drawing it?" : null;
+};
+
 interface Baselines {
 	typst: string
 	hashes: Record<string, string>
@@ -778,7 +867,8 @@ for (const c of allCases) {
 	if (KEEP_DIR) writeFileSync(join(KEEP_DIR, `${c.name}.pdf`), pdf);
 
 	// Checked in both modes: --update must not bless a wrong page count.
-	const problem = pageNumberProblem(c, rendered) ?? identityProblem(c, rendered);
+	const problem = pageNumberProblem(c, rendered) ?? identityProblem(c, rendered) ?? artworkProblem(c, hash)
+		?? (c.sameAs && hashes[c.sameAs] !== hash ? `should render exactly like ${c.sameAs}` : null);
 	if (problem) {
 		console.error(`✗ ${c.name} (${c.template}): ${problem}`);
 		failures++;

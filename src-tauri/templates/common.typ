@@ -369,37 +369,21 @@
 // puts the number's bottom on that edge. Content reflows by the strip in these
 // modes (decided after #355 — they have no byte-identity baseline).
 
-// --- page setup ----------------------------------------------------------
-// The ONE page setup every template applies, as
-//   #set page(..page-setup(data, margin: <Layout margins>, footer: [...]))
-// `data.page` is built by app/lib/page-settings.ts (the only place paper and
-// Stationery margins are decided) and sent by every PDF builder:
-//   paper         Typst paper name (the business's Paper size)
-//   margin_scale  paper width / A4 width. The Layout's `margin` is designed
-//                 for A4, so it is multiplied by this (18 mm → ~12.7 mm on
-//                 A5). Exactly 1 on A4, where `margin` passes through
-//                 untouched. Type sizes are never scaled.
-//   margins       null → the Layout's own (scaled) `margin` (Built-in
-//                 stationery), else { top, right, bottom, left } in mm owned
-//                 by the Stationery and used as-is, never scaled
-//                 (ADR 0001: the two sources are deliberate; don't merge them).
-//   page_numbers  add "Page N of M" (page-number-footer, above) to the
-//                 template's own footer; drawn only past one page.
-//   page_number_position
-//                 "footer" (Built-in) → page-number-footer; "safe_area"
-//                 (every other mode) → page-number(strip), inside the
-//                 Safe area with a strip reserved for it.
-//   chrome        false under any Stationery other than Built-in: the
-//                 template's footer (built-in or custom) is dropped here, so
-//                 no template has to gate its own footer. Templates gate their
-//                 logo / header text / business block on it themselves.
-// Returns the argument dict rather than applying `set page` itself: a set rule
-// inside a function only reaches that function's own content.
-//
-// MUST stay above every caller. Today the callers are the template files, but
-// Typst resolves names in definition order, so a common.typ helper that ever
-// calls this has to sit below it.
-#let page-setup(data, margin: none, footer: none, flipped: false) = {
+// Full-page background artwork, drawn behind the content on every page, or
+// none. `data.page.background` names the file the renderer staged beside the
+// template (pdf.rs stage_background; it is null when no artwork is uploaded or
+// the file is missing). SVG and PDF stay vector; a PDF contributes its FIRST
+// page only (image()'s default). The artwork covers the whole sheet: raster
+// uploads are already cropped to the paper's proportions, so "cover" only
+// trims artwork prepared for a different sheet (or the landscape statement).
+#let page-background(data) = {
+  let bg = data.page.at("background", default: none)
+  if bg == none or bg.at("file", default: none) == none { return none }
+  image(bg.file, width: 100%, height: 100%, fit: "cover")
+}
+
+// page-setup minus the artwork: paper, margins, footer and page number.
+#let page-geometry(data, margin, footer, flipped) = {
   let m = data.page.margins
   assert(m != none or margin != none, message: "page-setup: no margins (template passed none, data.page.margins is null)")
   let s = data.page.margin_scale
@@ -430,6 +414,47 @@
     } else { scaled },
     footer: if data.page.page_numbers { page-number-footer(foot) } else { foot },
   )
+}
+
+// --- page setup ----------------------------------------------------------
+// The ONE page setup every template applies, as
+//   #set page(..page-setup(data, margin: <Layout margins>, footer: [...]))
+// `data.page` is built by app/lib/page-settings.ts (the only place paper and
+// Stationery margins are decided) and sent by every PDF builder:
+//   paper         Typst paper name (the business's Paper size)
+//   margin_scale  paper width / A4 width. The Layout's `margin` is designed
+//                 for A4, so it is multiplied by this (18 mm → ~12.7 mm on
+//                 A5). Exactly 1 on A4, where `margin` passes through
+//                 untouched. Type sizes are never scaled.
+//   margins       null → the Layout's own (scaled) `margin` (Built-in
+//                 stationery), else { top, right, bottom, left } in mm owned
+//                 by the Stationery and used as-is, never scaled
+//                 (ADR 0001: the two sources are deliberate; don't merge them).
+//   page_numbers  add "Page N of M" (page-number-footer, above) to the
+//                 template's own footer; drawn only past one page.
+//   page_number_position
+//                 "footer" (Built-in) → page-number-footer; "safe_area"
+//                 (every other mode) → page-number(strip), inside the
+//                 Safe area with a strip reserved for it.
+//   chrome        false under any Stationery other than Built-in: the
+//                 template's footer (built-in or custom) is dropped here, so
+//                 no template has to gate its own footer. Templates gate their
+//                 logo / header text / business block on it themselves.
+//   background    Full-page background artwork (page-background, above),
+//                 drawn behind the content on every page; null otherwise.
+// Returns the argument dict rather than applying `set page` itself: a set rule
+// inside a function only reaches that function's own content.
+//
+// MUST stay above every caller. Today the callers are the template files, but
+// Typst resolves names in definition order, so a common.typ helper that ever
+// calls this has to sit below it.
+#let page-setup(data, margin: none, footer: none, flipped: false) = {
+  let out = page-geometry(data, margin, footer, flipped)
+  // Only added when there is artwork, so every other page is set up exactly
+  // as before (Built-in and Pre-printed renders stay byte-identical).
+  let art = page-background(data)
+  if art != none { out.insert("background", art) }
+  out
 }
 
 // --- notes -------------------------------------------------------------
