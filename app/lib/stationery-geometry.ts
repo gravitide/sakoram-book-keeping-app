@@ -133,6 +133,39 @@ export function dragMargin(
 	return { ...start, [edge]: clamp(snapped, marginLimits(page, start, edge)) };
 }
 
+export interface MarginGuide {
+	edge: MarginEdge
+	/** "y" = a horizontal line at that height; "x" = a vertical line at that offset. */
+	axis: "x" | "y"
+	/** Position from the page's top-left corner. */
+	mm: number
+}
+
+/** Where each of the four margin guides is drawn: on the Safe area's edges. */
+export function marginGuides(page: PageDims, margins: StationeryMarginsMm): MarginGuide[] {
+	return [
+		{ edge: "top", axis: "y", mm: margins.top },
+		{ edge: "bottom", axis: "y", mm: page.heightMm - margins.bottom },
+		{ edge: "left", axis: "x", mm: margins.left },
+		{ edge: "right", axis: "x", mm: page.widthMm - margins.right }
+	];
+}
+
+export type ArrowDirection = "up" | "down" | "left" | "right";
+
+/**
+ * A focused margin guide moved by an arrow key: `stepMm` the way the arrow
+ * points (down on the top guide deepens the top band; down on the bottom
+ * guide makes it shallower). Arrows across the guide do nothing.
+ */
+export function nudgeMargin(page: PageDims, margins: StationeryMarginsMm, edge: MarginEdge, arrow: ArrowDirection, stepMm: number): StationeryMarginsMm {
+	const along = edge === "top" || edge === "bottom" ? ["up", "down"] : ["left", "right"];
+	if (!along.includes(arrow)) return margins;
+	// +1 when the arrow points away from the guide's own page edge.
+	const inward = { top: "down", bottom: "up", left: "right", right: "left" }[edge] === arrow ? 1 : -1;
+	return setMargin(page, margins, edge, margins[edge] + inward * stepMm);
+}
+
 /**
  * Margins made to fit a sheet: each pair of opposite margins that leaves less
  * than the minimum Safe area (e.g. bands set for A4, now on A5) shrinks in

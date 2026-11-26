@@ -5,9 +5,11 @@ import {
 	fitMargins,
 	fitScale,
 	layoutMarginsMm,
+	marginGuides,
 	marginLimits,
 	MIN_SAFE_AREA_MM,
 	mmToPx,
+	nudgeMargin,
 	placeholderBars,
 	PRINTER_BAND_MM,
 	printerBandRects,
@@ -157,6 +159,34 @@ describe("dragMargin", () => {
 	it("stops at the limits however far the pointer goes", () => {
 		expect(dragMargin(A4, margins, "top", { dx: 0, dy: -500 }, scale).top).toBe(0);
 		expect(dragMargin(A5, margins, "top", { dx: 0, dy: 5000 }, scale).top).toBe(210 - 25 - MIN_SAFE_AREA_MM);
+	});
+});
+
+describe("marginGuides", () => {
+	it("puts each guide on the Safe area's edge, measured from the page's top-left", () => {
+		expect(marginGuides(A4, margins)).toEqual([
+			{ edge: "top", axis: "y", mm: 40 },
+			{ edge: "bottom", axis: "y", mm: 272 },
+			{ edge: "left", axis: "x", mm: 18 },
+			{ edge: "right", axis: "x", mm: 192 }
+		]);
+	});
+});
+
+describe("nudgeMargin", () => {
+	it("moves a guide the way the arrow points, by the step", () => {
+		expect(nudgeMargin(A4, margins, "top", "down", 1).top).toBe(41);
+		expect(nudgeMargin(A4, margins, "bottom", "down", 1).bottom).toBe(24);
+		expect(nudgeMargin(A4, margins, "left", "right", 5).left).toBe(23);
+		expect(nudgeMargin(A4, margins, "right", "right", 5).right).toBe(13);
+	});
+
+	it("ignores arrows across the guide", () => {
+		expect(nudgeMargin(A4, margins, "top", "left", 1)).toEqual(margins);
+	});
+
+	it("stays inside the limits", () => {
+		expect(nudgeMargin(A4, { ...margins, left: 0 }, "left", "left", 5).left).toBe(0);
 	});
 });
 
