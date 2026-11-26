@@ -50,8 +50,9 @@ export interface StationeryMarginsMm {
 	left: number
 }
 
-// Today's letter defaults (letter_preprinted_{top,bottom}_margin_mm were 55 / 20,
-// sides 18), so letters can move onto these bands without changing.
+// The retired letter-only defaults (letter_preprinted_{top,bottom}_margin_mm,
+// 55 / 20, sides 18 — dropped in 0056), so pre-printed letters kept their page
+// when they moved onto these bands.
 export const PREPRINTED_DEFAULT_MARGINS: Readonly<StationeryMarginsMm> = { top: 55, right: 18, bottom: 20, left: 18 };
 
 // A band deeper than this leaves too little page for content on A5 (210 mm tall).
