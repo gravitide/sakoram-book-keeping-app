@@ -41,19 +41,23 @@
 // Header slot: prefer the user's letterhead logo, fall back to the
 // business name as a typographic wordmark so the header isn't blank
 // when no logo has been uploaded.
-#align(right)[
-  #if data.logo_file != none {
-    header-logo(data, 14mm)
-  } else if data.business_name != none and data.business_name != "" {
-    box(height: 14mm)[
-      #set align(right + horizon)
-      #text(weight: "bold", size: 18pt, tracking: 0.02em)[#data.business_name]
-    ]
-  } else {
-    box(height: 14mm)
-  }
-]
-#v(-2mm)
+// Built-in stationery only: any other mode owns the page edges, so the logo
+// / wordmark goes and only the accent rule stays.
+#if data.page.chrome {
+  align(right)[
+    #if data.logo_file != none {
+      header-logo(data, 14mm)
+    } else if data.business_name != none and data.business_name != "" {
+      box(height: 14mm)[
+        #set align(right + horizon)
+        #text(weight: "bold", size: 18pt, tracking: 0.02em)[#data.business_name]
+      ]
+    } else {
+      box(height: 14mm)
+    }
+  ]
+  v(-2mm)
+}
 #line(length: 100%, stroke: 2pt + rgb(data.theme_color))
 
 // ============================================================

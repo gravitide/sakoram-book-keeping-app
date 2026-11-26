@@ -23,9 +23,9 @@ export const buildLetterPdfPayload = ({ row, settings }: LetterPdfArgs) => ({
 	subject: row.subject || null,
 	blocks: letterBodyToBlocks(row.body_json),
 	signature_blocks: letterBodyToBlocks(row.signature_json),
-	// pre_printed drives what letter.typ DRAWS (no letterhead, no footer);
-	// the blank bands it reserves come from the shared page block.
-	pre_printed: row.pre_printed === 1,
+	// A letter printed onto pre-printed paper gets the Pre-printed paper page
+	// block: page.chrome false (letter.typ draws no letterhead, page-setup
+	// drops the footer) and page.margins holds the blank bands.
 	page: buildPageSettings(settings, { preprinted: row.pre_printed === 1 }),
 	theme_color: pdfThemeHex(settings),
 	font_family: settings?.pdf_font ?? "Akt",

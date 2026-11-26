@@ -15,7 +15,7 @@ import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR } from "./money";
 import { buildPageSettings } from "./page-settings";
 import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
-import { resolveTemplateKey } from "./pdf-templates";
+import { resolveLayoutKey } from "./pdf-layouts";
 import { pdfThemeHex } from "./theme";
 
 export interface PayslipPdfPayloadArgs {
@@ -60,7 +60,7 @@ export function buildPayslipPdfPayload(args: PayslipPdfPayloadArgs): Record<stri
 
 	return {
 		number: row.number,
-		template: resolveTemplateKey(settings?.pdf_template),
+		layout: resolveLayoutKey(settings?.pdf_layout),
 		title: "PAY SLIP",
 		page: buildPageSettings(settings),
 		theme_color: pdfThemeHex(settings),

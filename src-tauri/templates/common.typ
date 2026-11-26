@@ -1,5 +1,5 @@
-// Shared building blocks for the client-facing document templates
-// (doc-classic / doc-modern / doc-minimal / doc-compact / doc-letterhead).
+// Shared building blocks for the client-facing document
+// Layouts (doc-classic / doc-modern / doc-minimal / doc-compact).
 //
 // Each template `#import "common.typ": *`, loads its own `data` from
 // data.json, sets up the page/text, renders its distinctive header, and
@@ -352,6 +352,22 @@
   footer
 }
 
+// The same number for every mode other than Built-in (Pre-printed paper and
+// pre-printed letters today): it must never print over the paper's own
+// footer or artwork, so it sits INSIDE the Safe area at its bottom edge.
+// page-setup grows the bottom margin by `strip` and sets footer-descent to 0,
+// so the footer box starts exactly `strip` above the Safe area's bottom; the
+// number is placed with its bottom on that edge. Content reflows by the strip
+// in these modes (decided after #355 — they have no byte-identity baseline).
+#let safe-area-page-number(strip) = context {
+  let total = counter(page).final().first()
+  if total > 1 {
+    let n = counter(page).get().first()
+    let num = text(size: 7pt, fill: rgb("#6b7280"), top-edge: "cap-height", bottom-edge: "descender")[Page #n of #total]
+    place(top + right, dy: strip - measure(num).height, [#num#metadata((page: n, total: total))<sakoram-page-number>])
+  }
+}
+
 // --- page setup ----------------------------------------------------------
 // The ONE page setup every template applies, as
 //   #set page(..page-setup(data, margin: <Layout margins>, footer: [...]))
@@ -368,6 +384,14 @@
 //                 (ADR 0001: the two sources are deliberate; don't merge them).
 //   page_numbers  add "Page N of M" (page-number-footer, above) to the
 //                 template's own footer; drawn only past one page.
+//   page_number_position
+//                 "footer" (Built-in) → page-number-footer; "safe_area"
+//                 (every other mode) → safe-area-page-number, inside the
+//                 Safe area with a strip reserved for it.
+//   chrome        false under any Stationery other than Built-in: the
+//                 template's footer (built-in or custom) is dropped here, so
+//                 no template has to gate its own footer. Templates gate their
+//                 logo / header text / business block on it themselves.
 // Returns the argument dict rather than applying `set page` itself: a set rule
 // inside a function only reaches that function's own content.
 //
@@ -384,13 +408,26 @@
     for (side, len) in margin { out.insert(side, len * s) }
     out
   } else { margin * s }
+  let foot = if data.page.chrome { footer } else { none }
+  if data.page.page_numbers and data.page.page_number_position == "safe_area" {
+    // The strip the number owns at the bottom of the Safe area.
+    let strip = 5mm
+    assert(m != none, message: "page-setup: a safe-area page number needs Stationery margins")
+    return (
+      paper: data.page.paper,
+      flipped: flipped,
+      margin: (top: m.top * 1mm, right: m.right * 1mm, bottom: m.bottom * 1mm + strip, left: m.left * 1mm),
+      footer-descent: 0pt,
+      footer: [#safe-area-page-number(strip)#foot],
+    )
+  }
   (
     paper: data.page.paper,
     flipped: flipped,
     margin: if m != none {
       (top: m.top * 1mm, right: m.right * 1mm, bottom: m.bottom * 1mm, left: m.left * 1mm)
     } else { scaled },
-    footer: if data.page.page_numbers { page-number-footer(footer) } else { footer },
+    footer: if data.page.page_numbers { page-number-footer(foot) } else { foot },
   )
 }
 
@@ -455,13 +492,14 @@
   }
 }
 
-// --- template config ----------------------------------------------------
-// Page-level settings per template key. Typst `set` rules inside a function
-// are scoped to that function's content, so a header function alone can't
-// carry margins / base size / footer style — the caller applies these with
-// its own `set` rules. Values transcribed verbatim from each doc-*.typ.
+// --- layout config ------------------------------------------------------
+// Page-level settings per Layout key (data.layout). Typst `set` rules inside
+// a function are scoped to that function's content, so a header function
+// alone can't carry margins / base size / footer style — the caller applies
+// these with its own `set` rules. Values transcribed verbatim from each
+// doc-*.typ.
 #let template-config(data) = {
-  let key = data.at("template", default: "classic")
+  let key = data.at("layout", default: "classic")
   let ruled-footer(gap, size) = [
     #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))
     #v(gap)
@@ -482,15 +520,6 @@
       leading: 0.5em,
       spacing: 0.5em,
       footer: ruled-footer(3pt, 7.5pt),
-    )
-  } else if key == "letterhead" {
-    // top: 45mm reserves the blank band for pre-printed stationery.
-    (
-      margin: (x: 18mm, top: 45mm, bottom: 18mm),
-      text-size: 9.5pt,
-      leading: 0.55em,
-      spacing: 0.65em,
-      footer: ruled-footer(4pt, 8pt),
     )
   } else {
     // classic + modern share the same page setup.
@@ -542,10 +571,38 @@
 }
 
 // --- shared document header --------------------------------------------
-// The five selectable header treatments. Needs data.title and data.number.
-// Shared by all five doc-*.typ templates and payslip.typ.
+// The four Layouts' header treatments. Needs data.title and data.number.
+// Shared by the four doc-*.typ templates and payslip.typ.
 #let doc-header(data) = {
-  let key = data.at("template", default: "classic")
+  let key = data.at("layout", default: "classic")
+  // Any Stationery other than Built-in owns the page around the Safe area
+  // (pre-printed paper already carries the business identity), so the Layout
+  // drops its logo / wordmark and header text and keeps only its title,
+  // number and accent rule. The number is in meta-block for every Layout but
+  // Minimal, which prints it here.
+  if not data.page.chrome {
+    return if key == "modern" [
+      #tapered-rule(rgb(data.theme_color), thickness: 3pt)
+      #v(16pt)
+    ] else if key == "minimal" [
+      #align(right)[
+        #text(size: 9pt, tracking: 0.2em, fill: rgb("#6b7280"))[#upper(data.title)]
+        #v(2pt)
+        #text(weight: "semibold", size: 13pt)[\##data.number]
+      ]
+      #v(24pt)
+    ] else if key == "compact" [
+      #line(length: 100%, stroke: 1.5pt + rgb(data.theme_color))
+      #v(6pt)
+      #align(center, text(weight: "bold", size: 12pt, tracking: 0.04em)[#data.title])
+      #v(10pt)
+    ] else [
+      #line(length: 100%, stroke: 2pt + rgb(data.theme_color))
+      #v(8pt)
+      #align(center, text(weight: "bold", size: 14pt, tracking: 0.04em)[#data.title])
+      #v(14pt)
+    ]
+  }
   let logo-or-wordmark(logo-h, name-size) = if data.logo_file != none {
     header-logo(data, logo-h)
   } else if data.business_name != none and data.business_name != "" {
@@ -562,7 +619,7 @@
   let ht = data.at("header_blocks", default: ())
 
   if key == "modern" [
-    // Left-aligned letterhead: logo, then the custom text beneath it, then a
+    // Left-aligned header: logo, then the custom text beneath it, then a
     // segmented accent rule. No document title or number here — meta-block
     // below already prints primary_label + number, so repeating them was
     // pure duplication.
@@ -618,11 +675,6 @@
     #v(6pt)
     #align(center, text(weight: "bold", size: 12pt, tracking: 0.04em)[#data.title])
     #v(10pt)
-  ] else if key == "letterhead" [
-    #align(center, text(weight: "bold", size: 14pt, tracking: 0.04em)[#data.title])
-    #v(6pt)
-    #line(length: 100%, stroke: 2pt + rgb(data.theme_color))
-    #v(14pt)
   ] else [
     #if ht.len() > 0 {
       grid(

@@ -3,11 +3,10 @@
 // The header (logo + accent rule) and footer match the client-facing document
 // templates (doc-classic.typ) — same logo size, margins, and shared
 // `footer-content` (business · website · phone · address) — so a letter looks
-// like it came from the same stationery as an invoice/quote. Two modes via
-// `data.pre_printed`:
-//   - false (default): render the app letterhead.
-//   - true: reserve blank top space + no footer, so the body prints onto
-//     physical pre-printed letterhead paper.
+// like it came from the same stationery as an invoice/quote. Under any
+// Stationery other than Built-in (`data.page.chrome` false: the business is on
+// Pre-printed paper, or this one letter is printed onto it) neither is drawn
+// and data.page.margins reserves the blank bands.
 //
 // The rich-text body arrives pre-normalised in `data.blocks` (see
 // app/lib/letter-body.ts): an array of paragraph / heading / bullet_list /
@@ -27,27 +26,24 @@
 #set text(font: (chosen-font, "Inter", "Inter Tight", "Miriam Libre"), size: 10pt, lang: "en")
 #set par(leading: 0.6em, spacing: 0.8em)
 
-#let pre-printed = data.at("pre_printed", default: false)
-
 #set page(..page-setup(
   data,
   // Same margins as doc-classic for the app-rendered letterhead. On
-  // pre-printed paper data.page.margins carries the business's blank bands
+  // pre-printed paper data.page.margins carries the blank bands
   // (app/lib/page-settings.ts) and page-setup uses those instead.
   margin: (x: 18mm, top: 16mm, bottom: 18mm),
-  footer: if pre-printed { [] } else {
-    [
-      #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))
-      #v(4pt)
-      #align(center, text(size: 8pt, fill: rgb("#6b7280"))[#footer-content(data)])
-    ]
-  },
+  // page-setup drops this under any Stationery other than Built-in.
+  footer: [
+    #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))
+    #v(4pt)
+    #align(center, text(size: 8pt, fill: rgb("#6b7280"))[#footer-content(data)])
+  ],
 ))
 
-// --- letterhead header (skipped for pre-printed paper) -------------------
+// --- letterhead header (Built-in stationery only) ------------------------
 // Matches doc-classic: logo top-right at 12mm (or business-name wordmark),
 // theme-coloured 2pt rule below.
-#if not pre-printed {
+#if data.page.chrome {
   align(right)[
     #if data.logo_file != none {
       header-logo(data, 12mm)

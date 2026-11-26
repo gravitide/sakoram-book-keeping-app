@@ -4,9 +4,9 @@ import { sampleInvoicePayload } from "./sample-pdf";
 const currency = { code: "LKR", symbol: "Rs" };
 
 describe("sampleInvoicePayload", () => {
-	it("builds a well-formed invoice payload with the given template key", () => {
+	it("builds a well-formed invoice payload with the given Layout key", () => {
 		const p = sampleInvoicePayload(null, currency, "modern");
-		expect(p.template).toBe("modern");
+		expect(p.layout).toBe("modern");
 		expect(p.primary_label).toBe("Invoice");
 		expect(p.kind).toBe("invoice");
 		expect(Array.isArray(p.lines)).toBe(true);

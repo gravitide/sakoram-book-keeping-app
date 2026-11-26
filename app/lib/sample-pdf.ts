@@ -1,7 +1,7 @@
-// Sample-document payload builders for the Settings → PDF template preview.
+// Sample-document payload builders for the Settings → PDF Layout preview.
 // They mirror the shape produced by `buildInvoicePdfPayload` /
 // `buildQuotePdfPayload` (every field the Typst templates reference) but with
-// hardcoded, realistic fake data — so the preview renders the chosen template
+// hardcoded, realistic fake data — so the preview renders the chosen Layout
 // without touching the database. Theme colour / font / logo / business contact
 // come from the live settings so the preview reflects the user's branding.
 
@@ -30,9 +30,9 @@ const SAMPLE_FORMATTED = {
 	total_no_symbol: "276,120.00"
 };
 
-function base(settings: CompanySettingsRow | null, currency: SampleCurrency, templateKey: string) {
+function base(settings: CompanySettingsRow | null, currency: SampleCurrency, layoutKey: string) {
 	return {
-		template: templateKey,
+		layout: layoutKey,
 		page: buildPageSettings(settings),
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
@@ -72,9 +72,9 @@ function base(settings: CompanySettingsRow | null, currency: SampleCurrency, tem
 	};
 }
 
-export function sampleInvoicePayload(settings: CompanySettingsRow | null, currency: SampleCurrency, templateKey: string) {
+export function sampleInvoicePayload(settings: CompanySettingsRow | null, currency: SampleCurrency, layoutKey: string) {
 	return {
-		...base(settings, currency, templateKey),
+		...base(settings, currency, layoutKey),
 		kind: "invoice",
 		number: "INV-2026-0042",
 		title: "INVOICE",

@@ -127,7 +127,11 @@ const settingsFor = (overrides: Partial<CompanySettingsRow> = {}): CompanySettin
 	currency_symbol_override: null,
 	ui_font: "Akt",
 	pdf_font: "Akt",
-	pdf_template: "classic",
+	pdf_layout: "classic",
+	pdf_stationery_mode: "builtin",
+	// Not the 55 / 20 defaults either, so Pre-printed paper cases prove the
+	// business's own Stationery bands reach the page.
+	pdf_stationery: JSON.stringify({ preprinted: { top: 48, right: 16, bottom: 24, left: 16 } }),
 	pdf_paper_size: "a4",
 	theme_color: "green",
 	pdf_theme_color: "blue",
@@ -165,6 +169,7 @@ const settingsFor = (overrides: Partial<CompanySettingsRow> = {}): CompanySettin
 });
 
 const noLogo = { pdf_header_logo_path: null };
+const preprintedPaper = { pdf_stationery_mode: "preprinted" };
 const customChrome = {
 	pdf_header_custom: 1,
 	pdf_header_text: richText("{business_name}", "{address}, {city}", "Tax ID {tax_id}"),
@@ -474,58 +479,57 @@ interface Case {
 }
 
 // Mirrors document_template() in src-tauri/src/pdf.rs: unknown keys → classic.
-const docTemplate = (payload: { template?: unknown }): string => {
-	const key = String(payload.template ?? "");
-	return ["modern", "minimal", "compact", "letterhead"].includes(key) ? `doc-${key}.typ` : "doc-classic.typ";
+const docTemplate = (payload: { layout?: unknown }): string => {
+	const key = String(payload.layout ?? "");
+	return ["modern", "minimal", "compact"].includes(key) ? `doc-${key}.typ` : "doc-classic.typ";
 };
 
 const docCase = (name: string, payload: Record<string, unknown>): Case => ({ name, template: docTemplate(payload), payload });
 
-const LAYOUTS = ["classic", "modern", "minimal", "compact", "letterhead"] as const;
+const LAYOUTS = ["classic", "modern", "minimal", "compact"] as const;
 const OTHER_PAPERS = ["a5", "us-letter", "us-legal"] as const;
 
 // The paper-size cases below that run past one page (A5 is small enough that
 // most of them spill; reports and the statement do on every sheet).
 const MULTIPAGE_ON_OTHER_PAPER = new Set([
-	...["classic", "modern", "minimal", "compact", "letterhead"].map((key) => `invoice-${key}-a5`),
+	...LAYOUTS.map((key) => `invoice-${key}-a5`),
 	"quote-classic-a5",
 	"payslip-classic-a5",
 	"payslip-compact-a5",
-	"invoice-letterhead-us-letter",
 	...OTHER_PAPERS.flatMap((paper) => [`report-pnl-${paper}`, `statement-${paper}`])
 ]);
 
 const cases: Case[] = [
-	// The four Layouts + the retiring letterhead, each with a real logo.
-	...LAYOUTS.map((key) => docCase(`invoice-${key}-logo`, invoice(settingsFor({ pdf_template: key })))),
+	// The four Layouts, each with a real logo.
+	...LAYOUTS.map((key) => docCase(`invoice-${key}-logo`, invoice(settingsFor({ pdf_layout: key })))),
 	docCase("invoice-classic-wordmark", invoice(settingsFor({ ...noLogo }))),
-	docCase("invoice-modern-wordmark", invoice(settingsFor({ ...noLogo, pdf_template: "modern" }))),
+	docCase("invoice-modern-wordmark", invoice(settingsFor({ ...noLogo, pdf_layout: "modern" }))),
 	docCase("invoice-classic-custom-chrome", invoice(settingsFor({ ...customChrome }))),
-	docCase("invoice-compact-custom-chrome", invoice(settingsFor({ ...customChrome, pdf_template: "compact" }))),
+	docCase("invoice-compact-custom-chrome", invoice(settingsFor({ ...customChrome, pdf_layout: "compact" }))),
 	// Long enough to spill onto a second page (footer on every page).
 	{ ...docCase("invoice-classic-multipage", invoice(settingsFor(), 45)), multipage: true },
 	// "Page N of M" on every Layout, every document type. Compact has the
 	// shallowest gap above its footer and carries a custom footer, so it is
 	// the case that would show a collision first.
-	{ ...docCase("invoice-modern-multipage", invoice(settingsFor({ pdf_template: "modern" }), 20)), multipage: true },
-	{ ...docCase("invoice-minimal-multipage", invoice(settingsFor({ pdf_template: "minimal" }), 20)), multipage: true },
-	{ ...docCase("invoice-compact-custom-chrome-multipage", invoice(settingsFor({ ...customChrome, pdf_template: "compact" }), 30)), multipage: true },
+	{ ...docCase("invoice-modern-multipage", invoice(settingsFor({ pdf_layout: "modern" }), 20)), multipage: true },
+	{ ...docCase("invoice-minimal-multipage", invoice(settingsFor({ pdf_layout: "minimal" }), 20)), multipage: true },
+	{ ...docCase("invoice-compact-custom-chrome-multipage", invoice(settingsFor({ ...customChrome, pdf_layout: "compact" }), 30)), multipage: true },
 	{ ...docCase("quote-classic-multipage", buildQuotePdfPayload({ row: docRow as never, lines: docLines(20), settings: settingsFor(), currency })), multipage: true },
 	{ ...docCase("bill-classic-multipage", buildBillPdfPayload({ row: docRow as never, lines: docLines(20) as never, settings: settingsFor(), currency, paidCents: 0 })), multipage: true },
 	docCase("quote-classic-logo", buildQuotePdfPayload({ row: docRow as never, lines: docLines(3), settings: settingsFor(), currency })),
-	docCase("quote-minimal-logo", buildQuotePdfPayload({ row: docRow as never, lines: docLines(3), settings: settingsFor({ pdf_template: "minimal" }), currency })),
+	docCase("quote-minimal-logo", buildQuotePdfPayload({ row: docRow as never, lines: docLines(3), settings: settingsFor({ pdf_layout: "minimal" }), currency })),
 	docCase("bill-classic-logo", buildBillPdfPayload({ row: docRow as never, lines: docLines(2) as never, settings: settingsFor(), currency, paidCents: 2000000 })),
-	docCase("bill-modern-logo", buildBillPdfPayload({ row: docRow as never, lines: docLines(2) as never, settings: settingsFor({ pdf_template: "modern" }), currency, paidCents: 0 })),
+	docCase("bill-modern-logo", buildBillPdfPayload({ row: docRow as never, lines: docLines(2) as never, settings: settingsFor({ pdf_layout: "modern" }), currency, paidCents: 0 })),
 	// Settings → PDF sample preview.
 	docCase("sample-classic-logo", sampleInvoicePayload(settingsFor(), currency, "classic")),
 	docCase("sample-modern-wordmark", sampleInvoicePayload(settingsFor({ ...noLogo }), currency, "modern")),
 
 	// Payslip follows the selected layout through template-config.
-	...LAYOUTS.map((key): Case => ({ name: `payslip-${key}-logo`, template: "payslip.typ", payload: payslip(settingsFor({ pdf_template: key })) })),
+	...LAYOUTS.map((key): Case => ({ name: `payslip-${key}-logo`, template: "payslip.typ", payload: payslip(settingsFor({ pdf_layout: key })) })),
 	{ name: "payslip-classic-wordmark", template: "payslip.typ", payload: payslip(settingsFor({ ...noLogo })) },
 	{ name: "payslip-classic-custom-chrome", template: "payslip.typ", payload: payslip(settingsFor({ ...customChrome })) },
 	{ name: "payslip-classic-multipage", template: "payslip.typ", payload: payslip(settingsFor(), 40), multipage: true },
-	{ name: "payslip-compact-multipage", template: "payslip.typ", payload: payslip(settingsFor({ pdf_template: "compact" }), 50), multipage: true },
+	{ name: "payslip-compact-multipage", template: "payslip.typ", payload: payslip(settingsFor({ pdf_layout: "compact" }), 50), multipage: true },
 
 	{ name: "voucher-logo", template: "voucher.typ", payload: voucher(settingsFor()) },
 	{ name: "voucher-wordmark", template: "voucher.typ", payload: voucher(settingsFor({ ...noLogo })) },
@@ -552,16 +556,44 @@ const cases: Case[] = [
 	{ name: "letter-multipage", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false, 20), settings: settingsFor() }), multipage: true },
 	{ name: "letter-preprinted-multipage", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(true, 20), settings: settingsFor() }), multipage: true },
 
+	// Pre-printed paper Stationery, every template. The business HAS a logo and
+	// (in the custom-chrome cases) header + footer text, so these prove all of
+	// it is dropped: Layouts keep only title, number and accent rule; the
+	// bespoke templates keep their own content. The Stationery's bands
+	// (48 / 24 mm, sides 16) bound the Safe area, and "Page N of M" sits inside
+	// it, at its bottom edge.
+	// The bands take 77 mm of A4, so Classic and Minimal spill onto page 2.
+	...LAYOUTS.map((key): Case => {
+		const c = docCase(`invoice-${key}-preprinted`, invoice(settingsFor({ ...preprintedPaper, pdf_layout: key })));
+		return key === "classic" || key === "minimal" ? { ...c, multipage: true } : c;
+	}),
+	{ ...docCase("invoice-classic-preprinted-custom-chrome", invoice(settingsFor({ ...preprintedPaper, ...customChrome }))), multipage: true },
+	{ ...docCase("invoice-classic-preprinted-multipage", invoice(settingsFor({ ...preprintedPaper }), 30)), multipage: true },
+	{ ...docCase("invoice-compact-preprinted-multipage", invoice(settingsFor({ ...preprintedPaper, ...customChrome, pdf_layout: "compact" }), 40)), multipage: true },
+	docCase("quote-classic-preprinted", buildQuotePdfPayload({ row: docRow as never, lines: docLines(3), settings: settingsFor({ ...preprintedPaper }), currency })),
+	docCase("bill-classic-preprinted", buildBillPdfPayload({ row: docRow as never, lines: docLines(2) as never, settings: settingsFor({ ...preprintedPaper }), currency, paidCents: 2000000 })),
+	docCase("sample-classic-preprinted", sampleInvoicePayload(settingsFor({ ...preprintedPaper }), currency, "classic")),
+	{ name: "payslip-classic-preprinted", template: "payslip.typ", payload: payslip(settingsFor({ ...preprintedPaper, ...customChrome })) },
+	{ name: "payslip-minimal-preprinted", template: "payslip.typ", payload: payslip(settingsFor({ ...preprintedPaper, pdf_layout: "minimal" })) },
+	{ name: "voucher-preprinted", template: "voucher.typ", payload: voucher(settingsFor({ ...preprintedPaper, ...customChrome })) },
+	{ name: "report-pnl-preprinted", template: "report.typ", payload: pnl(settingsFor({ ...preprintedPaper, ...customChrome })), multipage: true },
+	{ name: "statement-preprinted", template: "statement.typ", payload: statement(settingsFor({ ...preprintedPaper, ...customChrome })), multipage: true },
+	// A letter NOT individually set to pre-printed still follows the business.
+	{ name: "letter-business-preprinted", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false), settings: settingsFor({ ...preprintedPaper }) }) },
+	{ name: "letter-business-preprinted-multipage", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false, 20), settings: settingsFor({ ...preprintedPaper }) }), multipage: true },
+	// Stationery bands are never scaled with the paper.
+	{ ...docCase("invoice-classic-preprinted-a5", invoice(settingsFor({ ...preprintedPaper, pdf_paper_size: "a5" }))), multipage: true },
+
 	// Every template on the three non-A4 sheets. Built-in Layout margins scale
 	// with paper width; pre-printed letter bands do not.
 	...OTHER_PAPERS.flatMap((paper): Case[] => {
 		const on = (overrides: Partial<CompanySettingsRow> = {}) => settingsFor({ pdf_paper_size: paper, ...overrides });
 		return [
-			...LAYOUTS.map((key) => docCase(`invoice-${key}-${paper}`, invoice(on({ pdf_template: key })))),
+			...LAYOUTS.map((key) => docCase(`invoice-${key}-${paper}`, invoice(on({ pdf_layout: key })))),
 			docCase(`quote-classic-${paper}`, buildQuotePdfPayload({ row: docRow as never, lines: docLines(3), settings: on(), currency })),
 			docCase(`bill-classic-${paper}`, buildBillPdfPayload({ row: docRow as never, lines: docLines(2) as never, settings: on(), currency, paidCents: 2000000 })),
 			{ name: `payslip-classic-${paper}`, template: "payslip.typ", payload: payslip(on()) },
-			{ name: `payslip-compact-${paper}`, template: "payslip.typ", payload: payslip(on({ pdf_template: "compact" })) },
+			{ name: `payslip-compact-${paper}`, template: "payslip.typ", payload: payslip(on({ pdf_layout: "compact" })) },
 			{ name: `voucher-${paper}`, template: "voucher.typ", payload: voucher(on()) },
 			{ name: `report-pnl-${paper}`, template: "report.typ", payload: pnl(on()) },
 			{ name: `statement-${paper}`, template: "statement.typ", payload: statement(on()) },
