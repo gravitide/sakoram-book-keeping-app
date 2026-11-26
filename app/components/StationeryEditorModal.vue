@@ -4,17 +4,17 @@
 		fullscreen
 		:title="`Edit stationery — ${modeLabel}`"
 		:description="`${paperInfo.label} · ${paperInfo.widthMm} × ${paperInfo.heightMm} mm. Drag the dashed guides to set the Safe area the content stays inside.`"
-		:ui="{ body: 'flex-1 min-h-0 overflow-hidden flex flex-col lg:flex-row gap-4' }"
+		:ui="{ body: 'flex-1 min-h-0 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row gap-4' }"
 	>
 		<template #body>
 			<!-- The page, to scale, with mm rulers. Scrolls when zoomed in;
 				the rulers stay pinned to its top and left edges. -->
 			<div
 				ref="viewportEl"
-				class="relative flex-1 min-h-0 min-w-0 overflow-auto rounded-md bg-(--ui-bg-elevated) ring-1 ring-(--ui-border)"
+				class="relative flex flex-1 min-h-[60vh] lg:min-h-0 min-w-0 overflow-auto rounded-md bg-(--ui-bg-elevated) ring-1 ring-(--ui-border)"
 			>
 				<div
-					class="inline-grid"
+					class="grid m-auto shrink-0"
 					:style="{
 						gridTemplateColumns: `${RULER_PX}px ${pagePx.w}px`,
 						gridTemplateRows: `${RULER_PX}px ${pagePx.h}px`,
@@ -104,7 +104,7 @@
 				</div>
 			</div>
 
-			<aside class="lg:w-72 shrink-0 space-y-5 overflow-y-auto">
+			<aside class="lg:w-72 shrink-0 space-y-5 lg:overflow-y-auto">
 				<UAlert
 					v-if="paperMismatch"
 					color="warning"
