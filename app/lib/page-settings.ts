@@ -19,8 +19,35 @@
 
 import type { CompanySettingsRow } from "~/stores/settings";
 
-/** Typst paper name. Only A4 until the business can pick a Paper size. */
-export type PaperSize = "a4";
+/**
+ * The business's Paper size. The stored value (company_settings.pdf_paper_size)
+ * IS the Typst paper name, so no template has to map it.
+ */
+export type PaperSize = "a4" | "a5" | "us-letter" | "us-legal";
+
+export interface PaperSizeOption {
+	key: PaperSize
+	label: string
+	/** Portrait sheet width / height in millimetres. */
+	widthMm: number
+	heightMm: number
+}
+
+/** Every sheet a business can pick, A4 (the default) first. */
+export const PAPER_SIZES: readonly PaperSizeOption[] = [
+	{ key: "a4", label: "A4", widthMm: 210, heightMm: 297 },
+	{ key: "a5", label: "A5", widthMm: 148, heightMm: 210 },
+	{ key: "us-letter", label: "US Letter", widthMm: 215.9, heightMm: 279.4 },
+	{ key: "us-legal", label: "US Legal", widthMm: 215.9, heightMm: 355.6 }
+];
+
+const DEFAULT_PAPER: PaperSizeOption = PAPER_SIZES[0]!;
+const A4_WIDTH_MM = DEFAULT_PAPER.widthMm;
+
+/** The stored paper key, or A4 for anything missing or unknown. */
+export function resolvePaperSize(stored: string | null | undefined): PaperSizeOption {
+	return PAPER_SIZES.find((p) => p.key === stored) ?? DEFAULT_PAPER;
+}
 
 /** Page margins in millimetres. */
 export interface PageMarginsMm {
@@ -32,6 +59,13 @@ export interface PageMarginsMm {
 
 export interface PageSettings {
 	paper: PaperSize
+	/**
+	 * Factor applied to the Layout's own (A4-designed) margins: paper width /
+	 * A4 width, so 18 mm on A4 is ~12.7 mm on A5. Exactly 1 on A4. Only used
+	 * when `margins` is null — Stationery margins are never scaled. Type sizes
+	 * are never scaled either; they stay fixed in points.
+	 */
+	margin_scale: number
 	/** null = the Layout's built-in margins apply; see the header comment. */
 	margins: PageMarginsMm | null
 }
@@ -42,7 +76,7 @@ export interface PageSettingsOverride {
 	preprinted?: boolean
 }
 
-type PageSettingsSource = Pick<CompanySettingsRow, "letter_preprinted_top_margin_mm" | "letter_preprinted_bottom_margin_mm">;
+type PageSettingsSource = Pick<CompanySettingsRow, "pdf_paper_size" | "letter_preprinted_top_margin_mm" | "letter_preprinted_bottom_margin_mm">;
 
 // Pre-printed paper reserves only the top and bottom bands; the sides keep
 // the classic 18 mm the letter has always used.
@@ -51,9 +85,14 @@ const PREPRINTED_TOP_DEFAULT_MM = 55;
 const PREPRINTED_BOTTOM_DEFAULT_MM = 20;
 
 export function buildPageSettings(settings: PageSettingsSource | null, override?: PageSettingsOverride): PageSettings {
-	if (!override?.preprinted) return { paper: "a4", margins: null };
+	const paper = resolvePaperSize(settings?.pdf_paper_size);
+	// Width is the short side for every supported sheet, so this also holds
+	// for the landscape statement (decisions: margins scale on the short side).
+	const margin_scale = paper.widthMm / A4_WIDTH_MM;
+	if (!override?.preprinted) return { paper: paper.key, margin_scale, margins: null };
 	return {
-		paper: "a4",
+		paper: paper.key,
+		margin_scale,
 		margins: {
 			top: settings?.letter_preprinted_top_margin_mm ?? PREPRINTED_TOP_DEFAULT_MM,
 			right: PREPRINTED_SIDE_MM,

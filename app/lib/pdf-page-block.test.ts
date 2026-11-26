@@ -28,11 +28,15 @@ const currency = { code: LKR.code, symbol: LKR.symbol };
 const settings = {
 	business_name: "Lanka Design Studio",
 	pdf_template: "compact",
+	// Not the A4 default, so every builder proves it carries the business's
+	// Paper size rather than a hardcoded one.
+	pdf_paper_size: "a5",
 	letter_preprinted_top_margin_mm: 60,
 	letter_preprinted_bottom_margin_mm: 25
 } as CompanySettingsRow;
 
-const A4_LAYOUT_MARGINS = { paper: "a4", margins: null };
+// A5 is 148 mm wide: the Layout's A4 margins scale by 148 / 210.
+const A5_LAYOUT_MARGINS = { paper: "a5", margin_scale: 0.704762, margins: null };
 
 const docRow = {
 	number: "INV-0001",
@@ -106,11 +110,13 @@ describe("every PDF builder emits the shared page block", () => {
 		["sample preview", () => sampleInvoicePayload(settings, currency, "modern")],
 		["letter on the business stationery", () => letter(0)],
 		...Object.entries(reports).map(([name, build]) => [`${name} report`, build] as const)
-	])("%s: A4 with the Layout's own margins", (_name, build) => {
-		expect((build() as { page: unknown }).page).toEqual(A4_LAYOUT_MARGINS);
+	])("%s: the business's paper with the Layout's own (scaled) margins", (_name, build) => {
+		const { page } = build() as { page: { paper: string, margin_scale: number, margins: unknown } };
+		expect({ ...page, margin_scale: Number(page.margin_scale.toFixed(6)) }).toEqual(A5_LAYOUT_MARGINS);
 	});
 
 	it("a letter on pre-printed paper reserves the business's pre-printed bands", () => {
-		expect(letter(1).page).toEqual({ paper: "a4", margins: { top: 60, right: 18, bottom: 25, left: 18 } });
+		const { paper, margins } = letter(1).page;
+		expect({ paper, margins }).toEqual({ paper: "a5", margins: { top: 60, right: 18, bottom: 25, left: 18 } });
 	});
 });
