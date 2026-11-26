@@ -13,7 +13,8 @@
 //   - `margins: {…}` — the Stationery owns the page: these four margins
 //     bound the Safe area and the Layout only arranges content inside them.
 //     That is every mode other than Built-in (today: Pre-printed paper, for
-//     the whole business or for one letter).
+//     the whole business or for one letter — both reserve the same
+//     business-wide Pre-printed paper bands).
 //
 // `chrome` is the matching suppression rule: only Built-in stationery draws
 // the business identity (logo / wordmark, custom header text, the business
@@ -108,24 +109,17 @@ export type PageNumberPosition = "footer" | "safe_area";
 
 /** Per-document override of the business's page settings. */
 export interface PageSettingsOverride {
-	/** This document prints onto Pre-printed paper (letters only, today). */
+	/**
+	 * This document prints onto Pre-printed paper, whatever the business's
+	 * active Stationery mode (letters only, today). It reserves the business's
+	 * own Pre-printed paper bands — there are no per-letter margins. false /
+	 * absent = use the business's Stationery like every other document.
+	 */
 	preprinted?: boolean
 }
 
-type PageSettingsKey
-	= | "pdf_paper_size"
-		| "pdf_stationery_mode"
-		| "pdf_stationery"
-		| "letter_preprinted_top_margin_mm"
-		| "letter_preprinted_bottom_margin_mm";
+type PageSettingsKey = "pdf_paper_size" | "pdf_stationery_mode" | "pdf_stationery";
 type PageSettingsSource = Partial<Pick<CompanySettingsRow, PageSettingsKey>>;
-
-// A letter's own "pre-printed paper" switch still reads the letter columns
-// (letter_preprinted_*); #358 moves letters onto the Stationery's Pre-printed
-// paper bands. The sides keep the classic 18 mm the letter has always used.
-const LETTER_PREPRINTED_SIDE_MM = 18;
-const LETTER_PREPRINTED_TOP_DEFAULT_MM = 55;
-const LETTER_PREPRINTED_BOTTOM_DEFAULT_MM = 20;
 
 const marginsFor = (mode: StationeryMode, settings: PageSettingsSource | null): PageMarginsMm | null => {
 	if (mode === "builtin") return null;
@@ -137,23 +131,7 @@ export function buildPageSettings(settings: PageSettingsSource | null, override?
 	// Width is the short side for every supported sheet, so this also holds
 	// for the landscape statement (decisions: margins scale on the short side).
 	const margin_scale = paper.widthMm / A4_WIDTH_MM;
-	if (override?.preprinted) {
-		return {
-			paper: paper.key,
-			margin_scale,
-			stationery: "preprinted",
-			chrome: false,
-			margins: {
-				top: settings?.letter_preprinted_top_margin_mm ?? LETTER_PREPRINTED_TOP_DEFAULT_MM,
-				right: LETTER_PREPRINTED_SIDE_MM,
-				bottom: settings?.letter_preprinted_bottom_margin_mm ?? LETTER_PREPRINTED_BOTTOM_DEFAULT_MM,
-				left: LETTER_PREPRINTED_SIDE_MM
-			},
-			page_numbers: true,
-			page_number_position: "safe_area"
-		};
-	}
-	const stationery = resolveStationeryMode(settings?.pdf_stationery_mode);
+	const stationery = override?.preprinted ? "preprinted" : resolveStationeryMode(settings?.pdf_stationery_mode);
 	const builtin = stationery === "builtin";
 	return {
 		paper: paper.key,

@@ -2,9 +2,11 @@ import type { CompanySettingsRow } from "~/stores/settings";
 import { describe, expect, it } from "vitest";
 import { buildPageSettings, PAPER_SIZES } from "./page-settings";
 
+// A Built-in business whose stored Stationery holds Pre-printed paper bands
+// (top / bottom as given; sides 14 / 16) that only a pre-printed letter uses.
 const settings = (top: number, bottom: number, paper?: string) => ({
-	letter_preprinted_top_margin_mm: top,
-	letter_preprinted_bottom_margin_mm: bottom,
+	pdf_stationery_mode: "builtin",
+	pdf_stationery: JSON.stringify({ preprinted: { top, right: 14, bottom, left: 16 } }),
 	pdf_paper_size: paper
 }) as CompanySettingsRow;
 
@@ -32,16 +34,27 @@ describe("buildPageSettings", () => {
 		expect(buildPageSettings(null)).toEqual(BUILTIN_A4);
 	});
 
-	it("reserves the business's pre-printed bands when a document is printed onto pre-printed paper", () => {
+	it("a letter on pre-printed paper reserves the business's Pre-printed paper bands even when the active mode is Built-in", () => {
 		expect(buildPageSettings(settings(60, 25), { preprinted: true })).toEqual({
 			paper: "a4",
 			margin_scale: 1,
 			stationery: "preprinted",
 			chrome: false,
-			margins: { top: 60, right: 18, bottom: 25, left: 18 },
+			margins: { top: 60, right: 14, bottom: 25, left: 16 },
 			page_numbers: true,
 			page_number_position: "safe_area"
 		});
+	});
+
+	it("a letter on pre-printed paper uses the same bands as the business's Pre-printed paper mode", () => {
+		const business = { ...settings(40, 30), pdf_stationery_mode: "preprinted" } as CompanySettingsRow;
+		expect(buildPageSettings(business, { preprinted: true })).toEqual(buildPageSettings(business));
+	});
+
+	it("a letter that uses the stationery renders like every other document, whatever the mode", () => {
+		const business = { ...settings(40, 30), pdf_stationery_mode: "preprinted" } as CompanySettingsRow;
+		expect(buildPageSettings(business, { preprinted: false })).toEqual(buildPageSettings(business));
+		expect(buildPageSettings(settings(40, 30), { preprinted: false })).toEqual(buildPageSettings(settings(40, 30)));
 	});
 
 	it("falls back to 55 mm / 20 mm bands when settings are missing", () => {
@@ -124,7 +137,7 @@ describe("paper size", () => {
 	});
 
 	it("never scales the Stationery's own margins — pre-printed bands stay as the business set them on A5", () => {
-		expect(buildPageSettings(settings(60, 25, "a5"), { preprinted: true }).margins).toEqual({ top: 60, right: 18, bottom: 25, left: 18 });
+		expect(buildPageSettings(settings(60, 25, "a5"), { preprinted: true }).margins).toEqual({ top: 60, right: 14, bottom: 25, left: 16 });
 	});
 
 	it("offers exactly the four supported sheets, A4 first", () => {

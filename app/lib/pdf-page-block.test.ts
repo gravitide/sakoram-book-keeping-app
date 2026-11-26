@@ -33,10 +33,9 @@ const builtin = {
 	// Paper size rather than a hardcoded one.
 	pdf_paper_size: "a5",
 	pdf_stationery_mode: "builtin",
-	// Stored Pre-printed bands that Built-in must ignore.
-	pdf_stationery: JSON.stringify({ preprinted: { top: 48, right: 14, bottom: 22, left: 16 } }),
-	letter_preprinted_top_margin_mm: 60,
-	letter_preprinted_bottom_margin_mm: 25
+	// Stored Pre-printed bands that Built-in must ignore (except for a letter
+	// set to pre-printed paper).
+	pdf_stationery: JSON.stringify({ preprinted: { top: 48, right: 14, bottom: 22, left: 16 } })
 } as CompanySettingsRow;
 const preprinted = { ...builtin, pdf_stationery_mode: "preprinted" } as CompanySettingsRow;
 
@@ -135,8 +134,10 @@ describe("every PDF builder emits the shared page block", () => {
 		expect(pageOf(build)).toEqual(A5_PREPRINTED);
 	});
 
-	it("a letter on pre-printed paper reserves the business's pre-printed letter bands", () => {
-		const { paper, stationery, chrome, margins } = letter(builtin, 1).page;
-		expect({ paper, stationery, chrome, margins }).toEqual({ paper: "a5", stationery: "preprinted", chrome: false, margins: { top: 60, right: 18, bottom: 25, left: 18 } });
-	});
+	it.each([["Built-in", builtin], ["Pre-printed paper", preprinted]] as const)(
+		"a letter on pre-printed paper reserves the business's Pre-printed paper bands (active mode %s)",
+		(_mode, settings) => {
+			expect(pageOf(() => letter(settings, 1))).toEqual(A5_PREPRINTED);
+		}
+	);
 });
