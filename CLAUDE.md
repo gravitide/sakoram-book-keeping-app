@@ -2893,3 +2893,15 @@ files must stay in sync:
 `src-tauri/Cargo.lock` picks up the new version automatically the next
 time cargo runs (rust-analyzer in the editor usually does it for you);
 commit it alongside the other three.
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on the public `gravitide/sakoram-book-keeping-app` repo, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root (created lazily by `/domain-modeling`). See `docs/agents/domain.md`.
