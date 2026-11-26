@@ -527,7 +527,7 @@ sakoram_app/
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
 │  │     ├─ company.vue               ← business info, address, bank, signatures, defaults, logo
-│  │     ├─ pdf.vue                   ← PDF font + PDF header logo
+│  │     ├─ pdf.vue                   ← Paper & layout (paper size + Layout picker) · Stationery (mode picker; Pre-printed paper bands; Built-in-only header logo + header/footer text) · Font + colour
 │  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), light/dark/system toggle, zoom (6 discrete steps)
 │  │     ├─ payroll.vue               ← cycle template (period_start_day / period_end_day / pay_day)
 │  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + pre-printed top/bottom margins (letter_preprinted_top/bottom_margin_mm) with a live A4 preview + letterhead-templates placeholder. (Signatures moved to /settings/company#signatures — they're shared across letters + quote/invoice "Prepared by".)
@@ -1598,6 +1598,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0052_pdf_header_footer_text.sql         ← `company_settings.pdf_header_custom` / `pdf_header_text` / `pdf_footer_custom` / `pdf_footer_text`. Opt-in rich-text page chrome: when a flag is on, the stored TipTap JSON replaces the built-in header block (printed opposite the logo) or the footer line. Flags default 0 so existing tenants render byte-identically — proven by sha256 over all 5 doc templates before/after. `{business_name}` / `{address}` / `{city}` / `{phone}` / `{email}` / `{website}` / `{tax_id}` tokens are substituted over the BLOCK TREE by `app/lib/pdf-tokens.ts` (so a token inside a bold run stays bold); unknown tokens render literally so typos are visible. `app/lib/pdf-chrome.ts` turns settings into the `header_blocks` / `footer_blocks` payload arrays for all 9 builders and caps the footer at 3 blocks — the page footer is a FIXED region repeated on every page. `render-blocks` gained a `spacing` param (default 8pt = unchanged) and **`footer-content` MOVED below it** in common.typ (definition-order rule — it now calls render-blocks). Header text reaches the 5 doc-* templates + payslip via `doc-header`; voucher/report/statement/letter get the footer only (bespoke headers). Letterhead skips header text by design. `RichTextEditor` gained a `minimal` prop (marks + align only) and an exposed `insertText()` for the Insert-field menu. SCHEMA_VERSION → 52.
 0053_logo_crop.sql                      ← `company_settings.logo_crop` (TEXT JSON {x,y,w,h} in source px, NULL for SVG/uncropped) — the square-identity-logo mirror of `pdf_logo_crop`. Raster uploads now keep the untouched original at `logos/logo-original.<ext>` and the CROPPED derivative at `logos/logo.<ext>`; `save_business_asset`/`read_business_asset` gained a `logo-original` kind (the stale-ext sweep keys on `file_stem`, and `logo-original` != `logo`, so the pair never collide). `ImageCropModal` gained `aspect` (1 = square; omitted keeps the wide PDF letterhead free-form) plus `title`/`hint` props — its copy was hardcoded to the PDF header and leaked into the logo modal. Aspect math lives in the pure `fullRect(w,h,aspect)` / `resizeRect(...,aspect)`; clamping at an image edge shrinks BOTH axes so the ratio survives. **The sharp edge: cropping emits PNG, so a JPEG upload lands as `logo.png` — `tenants.setLogoFile` must get the extension of the file ACTUALLY written**, because welcome + Businesses read `tenants.json` directly, not the DB. The logo now renders on a WHITE PLATE (sidebar / welcome / Businesses / uploader tile) but only when a logo is set — the empty-state icon keeps the muted bg, since a white square holding a grey icon reads as a broken image in dark mode. Originals are local-only: `data_io` bundles the derivative alone (same as `pdf-header-original`), so Re-crop falls back to cropping the derivative after a backup import. SCHEMA_VERSION → 53.
 0054_pdf_paper_size.sql                 ← `company_settings.pdf_paper_size` (TEXT NOT NULL DEFAULT 'a4', CHECK a4 | a5 | us-letter | us-legal — the stored value IS the Typst paper name). Picked on /settings/pdf. `buildPageSettings` emits `page.paper` + `page.margin_scale` (paper width / 210 mm); `page-setup` multiplies the Layout's A4 margins by it (18 mm → ~12.7 mm on A5) only when `page.margins` is null — Stationery / pre-printed margins are never scaled, type sizes never change. Statement stays landscape (flipped). Payslip's 30 % amount column switches to `auto` below A4 width. `verify:pdf` renders every template at A5 / Letter / Legal; A4 hashes unchanged. SCHEMA_VERSION → 54.
+0055_pdf_layout_stationery.sql          ← Layout + Stationery replace `pdf_template` (ADR 0001). `pdf_layout` (classic | modern | minimal | compact, CHECK; `app/lib/pdf-layouts.ts` ↔ `document_template` in pdf.rs), `pdf_stationery_mode` (builtin | background | header_footer | preprinted, CHECK, default builtin — only builtin + preprinted render; `resolveStationeryMode` reads the others as builtin until they land) and `pdf_stationery` (JSON holding EVERY mode's settings so switching modes loses nothing; NULL = defaults; Zod in `app/lib/stationery.ts`, field-by-field `.catch` so malformed JSON degrades to defaults). A `letterhead` business moved to Classic + Pre-printed paper; Pre-printed paper's bands were seeded from `letter_preprinted_{top,bottom}_margin_mm` (sides 18). `doc-letterhead.typ` and the `letterhead` branches in common.typ are gone. /settings/pdf regrouped into Paper & layout · Stationery (Built-in's logo + header/footer text cards only while Built-in) · Font. SCHEMA_VERSION → 55.
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,
@@ -1857,9 +1858,9 @@ Lists                 ← group (expand/collapse only)
 Business                ← per-business config (mostly exported in backups)
   ├─ Business details
   ├─ PDF
-  │   ├─ Font                ← third-level in-page #anchors, shown only
-  │   ├─ Header logo            while /settings/pdf is the active route
-  │   └─ Footer notes
+  │   ├─ Paper & layout      ← third-level in-page #anchors, shown only
+  │   ├─ Stationery             while /settings/pdf is the active route
+  │   └─ Font
   └─ Security             ← all security for this business in one place
       ├─ Database            ← #encryption — at-rest DB password (per-business vault)
       └─ PDF protection      ← #pdf-protection — owner password on generated PDFs
@@ -1924,7 +1925,7 @@ persisted to localStorage).
 
 ### Done
 
-- ✅ DB schema + migrations 0001..0054 (`SCHEMA_VERSION` 54)
+- ✅ DB schema + migrations 0001..0055 (`SCHEMA_VERSION` 55)
 - ✅ Clients / Vendors / Employees CRUD (hero + SectionCard layout)
 - ✅ Quotes (full lifecycle, PDF, convert-to-invoice; default VAT seeded
   from settings on draft creation)
@@ -2702,6 +2703,21 @@ surface flagged in the same audit was deleted in v0.164.1.)
   prints. In `verify:pdf`, a case that runs past one page must say
   `multipage: true`; it then also renders an `~unnumbered` twin whose baseline
   is the pre-page-number output, so the number is provably the only change.
+  Under any Stationery other than Built-in (`page.page_number_position:
+  "safe_area"`) the number instead sits INSIDE the Safe area at its bottom
+  edge: `page-setup` grows the bottom margin by a 5 mm strip, sets
+  `footer-descent: 0pt` and places `safe-area-page-number` in it, so it never
+  prints over pre-printed paper or artwork. Content reflows by that strip there
+  (accepted — those modes have no byte-identity baseline).
+- **Stationery suppression is `page.chrome`, read in two places only.** It is
+  true only for Built-in. `page-setup` drops the template's footer when it is
+  false (no template gates its own footer); `doc-header` returns a title +
+  number + accent-rule-only header per Layout, and voucher/report/statement
+  gate their logo/wordmark box (keeping the accent rule) and letter its whole
+  letterhead on it. Read `chrome`, not the mode name, so a new Stationery mode
+  needs no template edits for suppression. The Layout key travels as
+  `layout` (was `template`); `pdf-layouts.test.ts` fails if `PDF_LAYOUTS` and
+  `document_template` in pdf.rs disagree.
 - **Every Typst template with a bespoke footer must read `footer_blocks`.** The
   builders always send it; `voucher.typ` / `report.typ` / `statement.typ`
   hard-coded their footer line and silently ignored the custom footer for
