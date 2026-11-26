@@ -615,7 +615,7 @@
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
 	import { PDF_TOKENS } from "~/lib/pdf-tokens";
 	import { sampleInvoicePayload } from "~/lib/sample-pdf";
-	import { MAX_BAND_MM, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, serializeStationery, STATIONERY_MODES } from "~/lib/stationery";
+	import { MAX_BAND_MM, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, setPreprintedBands, STATIONERY_MODES } from "~/lib/stationery";
 	import { isHexColor, THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -653,17 +653,12 @@
 		pdf_footer_text: null
 	});
 
-	// Every mode's stored settings with this page's edits applied. Parsing the
-	// stored JSON first keeps anything this page doesn't edit (the side bands,
-	// later modes' geometry); the Zod schema then clamps a bad number to its
-	// default rather than saving it.
-	const stationeryJson = () => {
-		const stored = parseStationery(store.settings?.pdf_stationery);
-		return serializeStationery(parseStationery(JSON.stringify({
-			...stored,
-			preprinted: { ...stored.preprinted, top: form.preprinted_top_mm, bottom: form.preprinted_bottom_mm }
-		})));
-	};
+	// Every mode's stored settings with this page's edits applied; anything
+	// this page doesn't edit (the side bands, later modes' geometry) is kept.
+	const stationeryJson = () => setPreprintedBands(store.settings?.pdf_stationery, {
+		top: form.preprinted_top_mm,
+		bottom: form.preprinted_bottom_mm
+	});
 
 	const currency = useActiveCurrency();
 	const colors = THEME_COLORS;

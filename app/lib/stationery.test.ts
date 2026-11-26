@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseStationery, resolveStationeryMode, serializeStationery } from "./stationery";
+import { parseStationery, resolveStationeryMode, serializeStationery, setPreprintedBands } from "./stationery";
 
 const DEFAULT_PREPRINTED = { top: 55, right: 18, bottom: 20, left: 18 };
 
@@ -39,6 +39,21 @@ describe("parseStationery", () => {
 	it("round-trips through serializeStationery", () => {
 		const s = parseStationery(JSON.stringify({ preprinted: { top: 61.5, right: 12, bottom: 22, left: 12 } }));
 		expect(parseStationery(serializeStationery(s))).toEqual(s);
+	});
+});
+
+describe("setPreprintedBands", () => {
+	it("changes only the top and bottom bands, keeping the stored sides", () => {
+		const stored = JSON.stringify({ preprinted: { top: 55, right: 12, bottom: 20, left: 14 } });
+		expect(parseStationery(setPreprintedBands(stored, { top: 40, bottom: 25 })).preprinted).toEqual({ top: 40, right: 12, bottom: 25, left: 14 });
+	});
+
+	it("starts from the defaults when nothing is stored yet", () => {
+		expect(parseStationery(setPreprintedBands(null, { top: 40, bottom: 25 })).preprinted).toEqual({ top: 40, right: 18, bottom: 25, left: 18 });
+	});
+
+	it("never saves a band the schema refuses — it falls back to the default instead", () => {
+		expect(parseStationery(setPreprintedBands(null, { top: 999, bottom: Number.NaN })).preprinted).toEqual(DEFAULT_PREPRINTED);
 	});
 });
 

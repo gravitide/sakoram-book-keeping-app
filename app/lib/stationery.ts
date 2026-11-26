@@ -89,3 +89,17 @@ export function parseStationery(stored: string | null | undefined): Stationery {
 export function serializeStationery(stationery: Stationery): string {
 	return JSON.stringify(stationery);
 }
+
+/**
+ * The stored JSON with Pre-printed paper's top and bottom bands replaced —
+ * the two the settings page edits. Everything else stored (the side bands,
+ * other modes' settings) is kept, and a refused value falls back to its
+ * default through the schema rather than being saved.
+ */
+export function setPreprintedBands(stored: string | null | undefined, bands: { top: number, bottom: number }): string {
+	const current = parseStationery(stored);
+	return serializeStationery(stationerySchema.parse({
+		...current,
+		preprinted: { ...current.preprinted, top: bands.top, bottom: bands.bottom }
+	}));
+}
