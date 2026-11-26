@@ -8,13 +8,13 @@
 // render-blocks is for the opt-in custom footer (settings → PDF → Header &
 // footer): the builders always sent `footer_blocks`, but this template
 // hard-coded its footer line, so the custom text was silently ignored here.
-#import "common.typ": header-logo, render-blocks
+#import "common.typ": header-logo, page-setup, render-blocks
 
 #let data = json("data.json")
 
 #set document(title: data.number, author: if data.business_name != none { data.business_name } else { () })
-#set page(
-  paper: "a4",
+#set page(..page-setup(
+  data,
   margin: (x: 22mm, top: 18mm, bottom: 22mm),
   footer: [
     #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))
@@ -29,7 +29,7 @@
       ]
     ])
   ],
-)
+))
 #let chosen-font = if "font_family" in data and data.font_family != none { data.font_family } else { "Akt" }
 // Tabular figures so the receipt/payment amount and any totals stay aligned.
 #set text(font: (chosen-font, "Inter", "Inter Tight", "Miriam Libre"), size: 10pt, lang: "en", number-width: "tabular")

@@ -8,11 +8,11 @@
 #let data = json("data.json")
 
 #set document(title: data.number, author: if data.business_name != none { data.business_name } else { () })
-#set page(
-  paper: "a4",
+#set page(..page-setup(
+  data,
   margin: (x: 22mm, top: 22mm, bottom: 22mm),
   footer: align(center, text(size: 8pt, fill: rgb("#9ca3af"))[#footer-content(data)]),
-)
+))
 #set text(font: resolve-font(data), size: 9pt, lang: "en", number-width: "tabular")
 #set par(leading: 0.62em, spacing: 0.72em)
 

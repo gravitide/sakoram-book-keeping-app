@@ -6,6 +6,7 @@
 import type { LetterRow } from "~/stores/letters";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { letterBodyToBlocks } from "./letter-body";
+import { buildPageSettings } from "./page-settings";
 import { buildFooterBlocks } from "./pdf-chrome";
 import { pdfThemeHex } from "./theme";
 
@@ -22,9 +23,10 @@ export const buildLetterPdfPayload = ({ row, settings }: LetterPdfArgs) => ({
 	subject: row.subject || null,
 	blocks: letterBodyToBlocks(row.body_json),
 	signature_blocks: letterBodyToBlocks(row.signature_json),
+	// pre_printed drives what letter.typ DRAWS (no letterhead, no footer);
+	// the blank bands it reserves come from the shared page block.
 	pre_printed: row.pre_printed === 1,
-	preprinted_top_margin_mm: settings?.letter_preprinted_top_margin_mm ?? 55,
-	preprinted_bottom_margin_mm: settings?.letter_preprinted_bottom_margin_mm ?? 20,
+	page: buildPageSettings(settings, { preprinted: row.pre_printed === 1 }),
 	theme_color: pdfThemeHex(settings),
 	font_family: settings?.pdf_font ?? "Akt",
 	business_name: settings?.business_name ?? null,

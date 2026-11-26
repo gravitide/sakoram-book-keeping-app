@@ -10,6 +10,7 @@
 import type { BillLineRow, BillRow, VendorSnapshot } from "~/stores/bills";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR, formatQty, formatRate } from "./money";
+import { buildPageSettings } from "./page-settings";
 import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
 import { resolveTemplateKey } from "./pdf-templates";
 import { richTextToBlocks } from "./rich-text";
@@ -65,6 +66,7 @@ export const buildBillPdfPayload = ({ row: b, lines, settings, currency, paidCen
 		number: b.number,
 		title,
 		template: resolveTemplateKey(settings?.pdf_template),
+		page: buildPageSettings(settings),
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,

@@ -12,6 +12,7 @@
 import type { CompanySettingsRow } from "~/stores/settings";
 import type { VoucherMethod, VoucherRow } from "~/stores/vouchers";
 import { formatLKR } from "./money";
+import { buildPageSettings } from "./page-settings";
 import { buildFooterBlocks } from "./pdf-chrome";
 import { pdfThemeHex } from "./theme";
 
@@ -56,6 +57,7 @@ export const buildVoucherPdfPayload = ({ row: v, settings, currency, relatedLabe
 	return {
 		number: v.number,
 		title: isReceiptDoc ? "Receipt voucher" : "Payment voucher",
+		page: buildPageSettings(settings),
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,

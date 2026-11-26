@@ -8,6 +8,7 @@
 import type { BankSnapshot, ClientSnapshot, QuoteLineRow, QuoteRow } from "~/stores/quotes";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR, formatQty, formatRate } from "./money";
+import { buildPageSettings } from "./page-settings";
 import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
 import { resolveTemplateKey } from "./pdf-templates";
 import { richTextToBlocks } from "./rich-text";
@@ -53,6 +54,7 @@ export const buildQuotePdfPayload = ({ row: q, lines, settings, currency }: Quot
 		number: q.number,
 		template: resolveTemplateKey(settings?.pdf_template),
 		title,
+		page: buildPageSettings(settings),
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,

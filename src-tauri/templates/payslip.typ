@@ -12,7 +12,7 @@
 #let cfg = template-config(data)
 
 #set document(title: data.number, author: if data.business_name != none { data.business_name } else { () })
-#set page(paper: "a4", margin: cfg.margin, footer: cfg.footer)
+#set page(..page-setup(data, margin: cfg.margin, footer: cfg.footer))
 #set text(font: resolve-font(data), size: cfg.text-size, lang: "en", number-width: "tabular")
 #set par(leading: cfg.leading, spacing: cfg.spacing)
 

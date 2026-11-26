@@ -325,6 +325,34 @@
   ]
 }
 
+// --- page setup ----------------------------------------------------------
+// The ONE page setup every template applies, as
+//   #set page(..page-setup(data, margin: <Layout margins>, footer: [...]))
+// `data.page` is built by app/lib/page-settings.ts (the only place paper and
+// Stationery margins are decided) and sent by every PDF builder:
+//   paper    Typst paper name
+//   margins  null → the Layout's own `margin` (Built-in stationery), else
+//            { top, right, bottom, left } in mm owned by the Stationery
+//            (ADR 0001: the two sources are deliberate; don't merge them).
+// Returns the argument dict rather than applying `set page` itself: a set rule
+// inside a function only reaches that function's own content.
+//
+// MUST stay above every caller. Today the callers are the template files, but
+// Typst resolves names in definition order, so a common.typ helper that ever
+// calls this has to sit below it.
+#let page-setup(data, margin: none, footer: none, flipped: false) = {
+  let m = data.page.margins
+  assert(m != none or margin != none, message: "page-setup: no margins (template passed none, data.page.margins is null)")
+  (
+    paper: data.page.paper,
+    flipped: flipped,
+    margin: if m != none {
+      (top: m.top * 1mm, right: m.right * 1mm, bottom: m.bottom * 1mm, left: m.left * 1mm)
+    } else { margin },
+    footer: footer,
+  )
+}
+
 // --- notes -------------------------------------------------------------
 // Rich-text notes. `notes_blocks` is the normalised block tree; `notes` is the
 // raw stored string, kept only so we can cheaply skip the whole block when the

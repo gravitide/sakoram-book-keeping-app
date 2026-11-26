@@ -18,13 +18,13 @@
 // render-blocks is for the opt-in custom footer (settings → PDF → Header &
 // footer): the builders always sent `footer_blocks`, but this template
 // hard-coded its footer line, so the custom text was silently ignored here.
-#import "common.typ": header-logo, render-blocks
+#import "common.typ": header-logo, page-setup, render-blocks
 
 #let data = json("data.json")
 
 #set document(title: data.title, author: if data.business_name != none { data.business_name } else { () })
-#set page(
-  paper: "a4",
+#set page(..page-setup(
+  data,
   margin: (x: 18mm, top: 16mm, bottom: 20mm),
   footer: [
     #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))
@@ -45,7 +45,7 @@
       ]),
     )
   ],
-)
+))
 
 // Font cascade same as document.typ — user pick first, bundled
 // fallbacks after.

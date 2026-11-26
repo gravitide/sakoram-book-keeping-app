@@ -14,7 +14,7 @@
 // render-blocks is for the opt-in custom footer (settings → PDF → Header &
 // footer): the builders always sent `footer_blocks`, but this template
 // hard-coded its footer line, so the custom text was silently ignored here.
-#import "common.typ": header-logo, render-blocks
+#import "common.typ": header-logo, page-setup, render-blocks
 
 #let data = json("data.json")
 
@@ -25,8 +25,8 @@
 // amount onto two lines; landscape gives every column its natural
 // width and leaves the aging tiles / party blocks better proportioned
 // to the page edge.
-#set page(
-  paper: "a4",
+#set page(..page-setup(
+  data,
   flipped: true,
   margin: (x: 18mm, top: 16mm, bottom: 20mm),
   footer: [
@@ -48,7 +48,7 @@
       ]),
     )
   ],
-)
+))
 
 // Font cascade same as document.typ — user pick first, bundled
 // fallbacks after.

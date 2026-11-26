@@ -6,6 +6,7 @@
 // come from the live settings so the preview reflects the user's branding.
 
 import type { CompanySettingsRow } from "~/stores/settings";
+import { buildPageSettings } from "./page-settings";
 import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
 import { pdfThemeHex } from "./theme";
 
@@ -32,6 +33,7 @@ const SAMPLE_FORMATTED = {
 function base(settings: CompanySettingsRow | null, currency: SampleCurrency, templateKey: string) {
 	return {
 		template: templateKey,
+		page: buildPageSettings(settings),
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,

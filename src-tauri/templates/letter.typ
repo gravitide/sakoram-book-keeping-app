@@ -14,7 +14,7 @@
 // ordered_list blocks whose inline runs carry bold/italic/underline flags.
 // Text is always plain JSON string values — never interpreted as Typst markup.
 
-#import "common.typ": caption, footer-content, header-logo, render-blocks
+#import "common.typ": caption, footer-content, header-logo, page-setup, render-blocks
 
 #let data = json("data.json")
 
@@ -28,15 +28,13 @@
 #set par(leading: 0.6em, spacing: 0.8em)
 
 #let pre-printed = data.at("pre_printed", default: false)
-#let preprinted-top = data.at("preprinted_top_margin_mm", default: 55) * 1mm
-#let preprinted-bottom = data.at("preprinted_bottom_margin_mm", default: 20) * 1mm
 
-#set page(
-  paper: "a4",
-  // Same margins as doc-classic (x: 18mm, top: 16mm, bottom: 18mm) for the
-  // app-rendered letterhead; pre-printed mode reserves its own blank top +
-  // bottom space to clear the physical letterhead + footer.
-  margin: if pre-printed { (x: 18mm, top: preprinted-top, bottom: preprinted-bottom) } else { (x: 18mm, top: 16mm, bottom: 18mm) },
+#set page(..page-setup(
+  data,
+  // Same margins as doc-classic for the app-rendered letterhead. On
+  // pre-printed paper data.page.margins carries the business's blank bands
+  // (app/lib/page-settings.ts) and page-setup uses those instead.
+  margin: (x: 18mm, top: 16mm, bottom: 18mm),
   footer: if pre-printed { [] } else {
     [
       #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))
@@ -44,7 +42,7 @@
       #align(center, text(size: 8pt, fill: rgb("#6b7280"))[#footer-content(data)])
     ]
   },
-)
+))
 
 // --- letterhead header (skipped for pre-printed paper) -------------------
 // Matches doc-classic: logo top-right at 12mm (or business-name wordmark),
