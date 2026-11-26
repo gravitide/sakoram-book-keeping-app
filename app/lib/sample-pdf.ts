@@ -5,9 +5,11 @@
 // without touching the database. Theme colour / font / logo / business contact
 // come from the live settings so the preview reflects the user's branding.
 
+import type { PageSettings } from "./page-settings";
 import type { PdfLayoutKey } from "./pdf-layouts";
 import type { CompanySettingsRow } from "~/stores/settings";
-import { buildPageSettings } from "./page-settings";
+import { computeLineTotals, formatMoney, formatQty } from "./money";
+import { buildPageSettings, resolvePaperSize } from "./page-settings";
 import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
 import { pdfThemeHex } from "./theme";
 
@@ -88,5 +90,109 @@ export function sampleInvoicePayload(settings: CompanySettingsRow | null, curren
 		paid_cents: 5000000,
 		paid_display: "50,000.00",
 		balance_display: "226,120.00"
+	};
+}
+
+// ---- Stationery preview sample ----------------------------------------
+// The Stationery editor's "Preview sample invoice": a made-up invoice long
+// enough to run onto a SECOND page — and no further — so the user sees the
+// continuation page, the artwork / bands repeated on it and "Page 2 of 2".
+//
+// A fixed line count can't do that: the same 25 lines are one page on US
+// Legal with shallow bands and three on A5 with a deep letterhead band. So the
+// count follows the Safe area's height, aiming the document at about one and
+// a half pages — half a page of slack either way before it would drop to one
+// page or spill onto a third. scripts/verify-pdf-render.ts renders it on every
+// Layout × Paper size × Stationery mode and fails unless it is exactly two
+// pages; recalibrate the constants below if that check fails.
+
+// Height (mm) the invoice takes besides its lines — title, party and details
+// block, totals, bank details, notes, sign-off — and the height of one line
+// (an average: every third line carries a description under its label).
+// Measured from real renders, not derived.
+const SAMPLE_FIXED_MM = 175;
+const SAMPLE_LINE_MM = 9;
+const SAMPLE_MAX_LINES = 80;
+
+// Vertical page margins (top + bottom, mm on A4) of each Layout under Built-in
+// stationery — layout-config in src-tauri/templates/common.typ, scaled with
+// the paper's width as page-geometry does there. Every other mode uses the
+// Stationery's own margins instead.
+const LAYOUT_VERTICAL_MARGINS_MM: Record<PdfLayoutKey, number> = { classic: 34, modern: 34, minimal: 44, compact: 24 };
+
+/** How tall the Safe area is on one page of the business's paper (mm). */
+function safeAreaHeightMm(page: PageSettings, layoutKey: PdfLayoutKey): number {
+	const vertical = page.margins
+		? page.margins.top + page.margins.bottom
+		: LAYOUT_VERTICAL_MARGINS_MM[layoutKey] * page.margin_scale;
+	return resolvePaperSize(page.paper).heightMm - vertical;
+}
+
+/** Lines that put the sample at about one and a half pages. */
+function previewLineCount(page: PageSettings, layoutKey: PdfLayoutKey): number {
+	const n = Math.round((1.5 * safeAreaHeightMm(page, layoutKey) - SAMPLE_FIXED_MM) / SAMPLE_LINE_MM);
+	return Math.min(SAMPLE_MAX_LINES, Math.max(1, n));
+}
+
+const PREVIEW_ITEMS = ["Brand workshop", "Logo refinement", "Website design", "Frontend build", "CMS setup", "Copywriting", "Product photography", "Hosting (1 month)", "SEO audit", "Support retainer"];
+
+const previewLines = (count: number) => Array.from({ length: count }, (_, i) => {
+	const qtyMilli = 1000 + (i % 4) * 500;
+	const unitCents = 750000 + (i % 5) * 250000;
+	const t = computeLineTotals(qtyMilli, unitCents, 1800);
+	return {
+		label: `${PREVIEW_ITEMS[i % PREVIEW_ITEMS.length]} ${Math.floor(i / PREVIEW_ITEMS.length) + 1}`,
+		description: i % 3 === 0 ? "Includes one round of revisions" : "",
+		qtyMilli,
+		unitCents,
+		subtotal: t.line_subtotal_cents,
+		tax: t.line_tax_cents,
+		total: t.line_total_cents
+	};
+});
+
+/**
+ * The Stationery editor's sample: an itemised invoice on the business's own
+ * paper, Stationery and branding, always exactly two pages long (see above).
+ */
+export function sampleStationeryPreviewPayload(settings: CompanySettingsRow | null, currency: SampleCurrency, layoutKey: PdfLayoutKey) {
+	const common = base(settings, currency, layoutKey);
+	const lines = previewLines(previewLineCount(common.page, layoutKey));
+	const noSym = (c: number) => formatMoney(c, { code: currency.code, withSymbol: false });
+	const sym = (c: number) => `${currency.symbol} ${noSym(c)}`;
+	const subtotal = lines.reduce((s, l) => s + l.subtotal, 0);
+	const tax = lines.reduce((s, l) => s + l.tax, 0);
+	const total = subtotal + tax;
+	const paid = Math.min(5000000, total);
+	return {
+		...common,
+		kind: "invoice",
+		number: "INV-0042",
+		title: "INVOICE",
+		primary_label: "Invoice",
+		date_label: "Date",
+		date_value: "2026-06-22",
+		secondary_label: "Due date",
+		secondary_value: "2026-07-22",
+		project_title: "Website redesign",
+		lines: lines.map((l) => ({
+			item_label: l.label,
+			description: l.description,
+			qty_display: formatQty(l.qtyMilli),
+			unit_price_display: noSym(l.unitCents),
+			vat_display: "18%",
+			total_display: noSym(l.total)
+		})),
+		formatted: {
+			subtotal: sym(subtotal),
+			subtotal_no_symbol: noSym(subtotal),
+			tax: sym(tax),
+			tax_no_symbol: noSym(tax),
+			total: sym(total),
+			total_no_symbol: noSym(total)
+		},
+		paid_cents: paid,
+		paid_display: noSym(paid),
+		balance_display: noSym(total - paid)
 	};
 }
