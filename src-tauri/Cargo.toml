@@ -3,7 +3,7 @@ name = "sakoram_billing"
 # Pin the app binary so `cargo run` (which `tauri dev` invokes) stays
 # unambiguous if a helper binary is ever added under src/bin/.
 default-run = "sakoram_billing"
-version = "0.164.3"
+version = "0.165.0"
 description = "Sakoram — desktop bookkeeper for quotes, invoices, bills and vouchers"
 authors = [ "Gravitide <hello@gravitide.com>" ]
 repository = "https://github.com/gravitide/sakoram-book-keeping-app"
