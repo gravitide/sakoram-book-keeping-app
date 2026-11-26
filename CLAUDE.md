@@ -766,6 +766,13 @@ bun run verify:sql                       # applies all migrations to an in-memor
                                          # query strings (see scripts/verify-derived-sql.ts).
                                          # Guards the derived-balance copies — vitest
                                          # can't, it only sees query strings.
+bun run verify:pdf                       # renders every PDF template through the
+                                         # bundled Typst sidecar with payloads from the
+                                         # REAL builders and compares sha256 against
+                                         # scripts/pdf-render-baselines.json. --update
+                                         # re-captures (only after looking: --keep <dir>
+                                         # writes the PDFs). Needs the sidecar in
+                                         # src-tauri/binaries or SAKORAM_TYPST_BIN.
 
 # Production build
 bun run tauri:build                      # outputs MSI + NSIS installers under
@@ -2673,6 +2680,14 @@ surface flagged in the same audit was deleted in v0.164.1.)
   the note into an UNAPPLIED client credit that nets off unrelated invoices;
   cancelling it would leave the note reversing income + VAT that was never
   recognised. Cancel or un-issue the credit note first.
+- **Page setup has ONE source on each side.** Paper and Stationery margins are
+  decided only by `buildPageSettings` (`app/lib/page-settings.ts`), which every
+  PDF builder emits as `page`; every template applies it with
+  `#set page(..page-setup(data, margin: <Layout margins>, footer: [...]))`
+  from common.typ. `page.margins: null` means the Layout's own margins apply
+  (ADR 0001). Don't hand-write `paper:` / Stationery margins in a template or a
+  builder, and add `page-setup` to the SELECTIVE import list of
+  voucher/report/statement/letter. `bun run verify:pdf` proves byte identity.
 - **Every Typst template with a bespoke footer must read `footer_blocks`.** The
   builders always send it; `voucher.typ` / `report.typ` / `statement.typ`
   hard-coded their footer line and silently ignored the custom footer for
