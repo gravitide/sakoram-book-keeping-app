@@ -135,12 +135,23 @@
 							</button>
 						</div>
 
+						<p v-if="form.pdf_stationery_mode === 'builtin'" class="mt-4 text-xs text-(--ui-text-muted)">
+							Set the header logo and the header &amp; footer text below.
+						</p>
+
 						<!-- Pre-printed paper: only the two blank bands. Each mode keeps its
 							own settings, so switching back to Built-in and here again
-							finds the same numbers. -->
-						<div v-if="form.pdf_stationery_mode === 'preprinted'" class="mt-5 pt-5 border-t border-(--ui-border) space-y-4">
-							<p class="text-xs text-(--ui-text-muted)">
+							finds the same numbers. Shown under every mode: a letter set to
+							"Pre-printed paper" reserves these bands whatever the active mode. -->
+						<div class="mt-5 pt-5 border-t border-(--ui-border) space-y-4">
+							<div class="text-sm font-medium">
+								Pre-printed paper margins
+							</div>
+							<p v-if="form.pdf_stationery_mode === 'preprinted'" class="text-xs text-(--ui-text-muted)">
 								Your paper already carries your letterhead, so nothing is printed in these bands — no logo, header text or footer. The document's title, number and accent rule stay, and page numbers sit just above the bottom band.
+							</p>
+							<p v-else class="text-xs text-(--ui-text-muted)">
+								Used by letters set to print on pre-printed paper, and by every document if you switch to Pre-printed paper.
 							</p>
 							<div class="flex flex-wrap gap-6">
 								<UFormField label="Top band (mm)" help="Clears your printed letterhead. Typically 40–60 mm.">
@@ -151,9 +162,6 @@
 								</UFormField>
 							</div>
 						</div>
-						<p v-else class="mt-4 text-xs text-(--ui-text-muted)">
-							Set the header logo and the header &amp; footer text below.
-						</p>
 					</SectionCard>
 				</div>
 

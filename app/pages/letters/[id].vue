@@ -74,19 +74,14 @@
 					</div>
 				</SectionCard>
 
-				<SectionCard title="Letterhead" subtitle="How the top of the printed page is handled." icon="i-lucide-file-text">
-					<div class="flex items-start justify-between gap-4">
-						<div class="min-w-0">
-							<div class="text-sm font-medium">
-								Pre-printed letterhead paper
-							</div>
-							<p class="text-xs text-(--ui-text-muted) mt-1 leading-relaxed">
-								<span class="font-medium text-(--ui-text)">On</span> — reserve blank space at the top for physical stationery.
-								<span class="font-medium text-(--ui-text)">Off</span> — the app prints your letterhead header + footer.
-							</p>
-						</div>
-						<USwitch v-model="prePrintedBool" class="shrink-0 mt-0.5" />
-					</div>
+				<SectionCard title="Paper" subtitle="What this letter is printed on." icon="i-lucide-file-text">
+					<URadioGroup v-model="paperChoice" :items="paperChoices" />
+					<p class="text-xs text-(--ui-text-muted) mt-3">
+						Stationery, paper size and the pre-printed paper margins are set in
+						<NuxtLink to="/settings/pdf#stationery" class="text-(--ui-primary) hover:underline">
+							PDF settings
+						</NuxtLink>.
+					</p>
 				</SectionCard>
 			</div>
 
@@ -218,10 +213,17 @@
 		void load();
 	});
 
-	const prePrintedBool = computed({
-		get: () => form.pre_printed === 1,
-		set: (v: boolean) => {
-			form.pre_printed = v ? 1 : 0;
+	// "Use stationery" follows the business's Stationery + Paper size like every
+	// other document; "Pre-printed paper" reserves the business's Pre-printed
+	// paper margins whatever the active Stationery mode (app/lib/page-settings.ts).
+	const paperChoices = [
+		{ value: "stationery", label: "Use stationery", description: "Your business stationery and paper size, like every other document." },
+		{ value: "preprinted", label: "Pre-printed paper", description: "Nothing printed around the letter — blank margins clear the letterhead already on your paper." }
+	];
+	const paperChoice = computed({
+		get: () => (form.pre_printed === 1 ? "preprinted" : "stationery"),
+		set: (v: string) => {
+			form.pre_printed = v === "preprinted" ? 1 : 0;
 		}
 	});
 
