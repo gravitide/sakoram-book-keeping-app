@@ -343,9 +343,11 @@
   let total = counter(page).final().first()
   if total > 1 {
     let n = counter(page).get().first()
-    // Full glyph box (ascender to descender) so the 'g' clears the footer.
-    let num = text(size: 7pt, fill: rgb("#6b7280"), top-edge: "ascender", bottom-edge: "descender")[Page #n of #total]
-    place(top + right, dy: -measure(num).height - 1pt, [#num#metadata((page: n, total: total))<sakoram-page-number>])
+    // Measured cap-height to descender, so the 'g' clears the footer rule.
+    // The tightest gap is Compact on A5 (12 mm × 148/210 × 30% ≈ 7.2pt);
+    // this box (6.65pt in Akt) + the 0.5pt lift still fits inside it.
+    let num = text(size: 7pt, fill: rgb("#6b7280"), top-edge: "cap-height", bottom-edge: "descender")[Page #n of #total]
+    place(top + right, dy: -measure(num).height - 0.5pt, [#num#metadata((page: n, total: total))<sakoram-page-number>])
   }
   footer
 }
@@ -355,12 +357,17 @@
 //   #set page(..page-setup(data, margin: <Layout margins>, footer: [...]))
 // `data.page` is built by app/lib/page-settings.ts (the only place paper and
 // Stationery margins are decided) and sent by every PDF builder:
-//   paper    Typst paper name
-//   margins  null → the Layout's own `margin` (Built-in stationery), else
-//            { top, right, bottom, left } in mm owned by the Stationery
-//            (ADR 0001: the two sources are deliberate; don't merge them).
+//   paper         Typst paper name (the business's Paper size)
+//   margin_scale  paper width / A4 width. The Layout's `margin` is designed
+//                 for A4, so it is multiplied by this (18 mm → ~12.7 mm on
+//                 A5). Exactly 1 on A4, where `margin` passes through
+//                 untouched. Type sizes are never scaled.
+//   margins       null → the Layout's own (scaled) `margin` (Built-in
+//                 stationery), else { top, right, bottom, left } in mm owned
+//                 by the Stationery and used as-is, never scaled
+//                 (ADR 0001: the two sources are deliberate; don't merge them).
 //   page_numbers  add "Page N of M" (page-number-footer, above) to the
-//            template's own footer; drawn only past one page.
+//                 template's own footer; drawn only past one page.
 // Returns the argument dict rather than applying `set page` itself: a set rule
 // inside a function only reaches that function's own content.
 //
@@ -370,12 +377,19 @@
 #let page-setup(data, margin: none, footer: none, flipped: false) = {
   let m = data.page.margins
   assert(m != none or margin != none, message: "page-setup: no margins (template passed none, data.page.margins is null)")
+  let s = data.page.margin_scale
+  // `margin` is a length or a dict of lengths (x / top / bottom …).
+  let scaled = if s == 1 { margin } else if type(margin) == dictionary {
+    let out = (:)
+    for (side, len) in margin { out.insert(side, len * s) }
+    out
+  } else { margin * s }
   (
     paper: data.page.paper,
     flipped: flipped,
     margin: if m != none {
       (top: m.top * 1mm, right: m.right * 1mm, bottom: m.bottom * 1mm, left: m.left * 1mm)
-    } else { margin },
+    } else { scaled },
     footer: if data.page.page_numbers { page-number-footer(footer) } else { footer },
   )
 }

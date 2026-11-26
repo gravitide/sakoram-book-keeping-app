@@ -406,6 +406,34 @@
 						title="Templates"
 						subtitle="Pick one layout for your quote, invoice, bill, and payslip PDFs. Your theme colour, font, and header logo apply to every template — only the layout changes."
 					>
+						<div class="mb-5">
+							<div class="text-sm font-medium mb-1">
+								Paper size
+							</div>
+							<p class="text-xs text-(--ui-text-muted) mb-2">
+								The sheet every PDF is laid out on. Margins follow the paper's width; text stays the same size.
+							</p>
+							<div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+								<button
+									v-for="p in PAPER_SIZES"
+									:key="p.key"
+									type="button"
+									class="px-3 py-2 rounded-md border text-left transition cursor-pointer hover:border-(--ui-primary)/50"
+									:class="[
+										form.pdf_paper_size === p.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)'
+									]"
+									:aria-pressed="form.pdf_paper_size === p.key"
+									@click="form.pdf_paper_size = p.key"
+								>
+									<div class="text-xs font-medium">
+										{{ p.label }}
+									</div>
+									<div class="text-xs text-(--ui-text-muted)">
+										{{ p.widthMm }} × {{ p.heightMm }} mm
+									</div>
+								</button>
+							</div>
+						</div>
 						<div>
 							<div class="text-sm font-medium mb-2">
 								PDF template
@@ -528,6 +556,7 @@
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
+	import { PAPER_SIZES, resolvePaperSize } from "~/lib/page-settings";
 	import { blocksToPlainLines, buildHeaderBlocks } from "~/lib/pdf-chrome";
 	import { PDF_TEMPLATES } from "~/lib/pdf-templates";
 	import { PDF_TOKENS } from "~/lib/pdf-tokens";
@@ -545,13 +574,14 @@
 	// Only the PDF-flavoured fields live on this page. Logo paths are kept on
 	// the form so dirty-tracking can spot a removal/upload that would otherwise
 	// only mutate the store. (Document protection moved to /settings/security.)
-	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_theme_color" | "pdf_template" | "pdf_logo_scale" | "pdf_header_custom" | "pdf_header_text" | "pdf_footer_custom" | "pdf_footer_text">;
+	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_theme_color" | "pdf_template" | "pdf_paper_size" | "pdf_logo_scale" | "pdf_header_custom" | "pdf_header_text" | "pdf_footer_custom" | "pdf_footer_text">;
 
 	const form = reactive<PdfForm>({
 		pdf_header_logo_path: null,
 		pdf_font: "Akt",
 		pdf_theme_color: "green",
 		pdf_template: "classic",
+		pdf_paper_size: "a4",
 		pdf_logo_scale: 100,
 		pdf_header_custom: 0,
 		pdf_header_text: null,
@@ -640,6 +670,7 @@
 			...store.settings,
 			pdf_font: form.pdf_font,
 			pdf_theme_color: form.pdf_theme_color,
+			pdf_paper_size: form.pdf_paper_size,
 			pdf_logo_scale: form.pdf_logo_scale,
 			pdf_header_custom: form.pdf_header_custom,
 			pdf_header_text: form.pdf_header_text,
@@ -742,6 +773,7 @@
 		// split (0039 seeds it, but a defensive fallback keeps a null safe).
 		form.pdf_theme_color = s.pdf_theme_color ?? s.theme_color ?? "green";
 		form.pdf_template = s.pdf_template || "classic";
+		form.pdf_paper_size = resolvePaperSize(s.pdf_paper_size).key;
 		form.pdf_logo_scale = s.pdf_logo_scale ?? 100;
 		form.pdf_header_custom = s.pdf_header_custom ?? 0;
 		form.pdf_header_text = s.pdf_header_text ?? null;
@@ -766,6 +798,7 @@
 				pdf_font: form.pdf_font.trim() || "Akt",
 				pdf_theme_color: form.pdf_theme_color,
 				pdf_template: form.pdf_template,
+				pdf_paper_size: form.pdf_paper_size,
 				pdf_logo_scale: form.pdf_logo_scale,
 				pdf_header_custom: form.pdf_header_custom,
 				pdf_header_text: form.pdf_header_text,

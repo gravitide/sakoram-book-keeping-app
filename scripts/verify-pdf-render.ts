@@ -128,6 +128,7 @@ const settingsFor = (overrides: Partial<CompanySettingsRow> = {}): CompanySettin
 	ui_font: "Akt",
 	pdf_font: "Akt",
 	pdf_template: "classic",
+	pdf_paper_size: "a4",
 	theme_color: "green",
 	pdf_theme_color: "blue",
 	payroll_period_start_day: 1,
@@ -481,6 +482,18 @@ const docTemplate = (payload: { template?: unknown }): string => {
 const docCase = (name: string, payload: Record<string, unknown>): Case => ({ name, template: docTemplate(payload), payload });
 
 const LAYOUTS = ["classic", "modern", "minimal", "compact", "letterhead"] as const;
+const OTHER_PAPERS = ["a5", "us-letter", "us-legal"] as const;
+
+// The paper-size cases below that run past one page (A5 is small enough that
+// most of them spill; reports and the statement do on every sheet).
+const MULTIPAGE_ON_OTHER_PAPER = new Set([
+	...["classic", "modern", "minimal", "compact", "letterhead"].map((key) => `invoice-${key}-a5`),
+	"quote-classic-a5",
+	"payslip-classic-a5",
+	"payslip-compact-a5",
+	"invoice-letterhead-us-letter",
+	...OTHER_PAPERS.flatMap((paper) => [`report-pnl-${paper}`, `statement-${paper}`])
+]);
 
 const cases: Case[] = [
 	// The four Layouts + the retiring letterhead, each with a real logo.
@@ -537,7 +550,25 @@ const cases: Case[] = [
 	{ name: "letter-preprinted", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(true), settings: settingsFor() }) },
 	{ name: "letter-preprinted-default-margins", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(true), settings: null }) },
 	{ name: "letter-multipage", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false, 20), settings: settingsFor() }), multipage: true },
-	{ name: "letter-preprinted-multipage", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(true, 20), settings: settingsFor() }), multipage: true }
+	{ name: "letter-preprinted-multipage", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(true, 20), settings: settingsFor() }), multipage: true },
+
+	// Every template on the three non-A4 sheets. Built-in Layout margins scale
+	// with paper width; pre-printed letter bands do not.
+	...OTHER_PAPERS.flatMap((paper): Case[] => {
+		const on = (overrides: Partial<CompanySettingsRow> = {}) => settingsFor({ pdf_paper_size: paper, ...overrides });
+		return [
+			...LAYOUTS.map((key) => docCase(`invoice-${key}-${paper}`, invoice(on({ pdf_template: key })))),
+			docCase(`quote-classic-${paper}`, buildQuotePdfPayload({ row: docRow as never, lines: docLines(3), settings: on(), currency })),
+			docCase(`bill-classic-${paper}`, buildBillPdfPayload({ row: docRow as never, lines: docLines(2) as never, settings: on(), currency, paidCents: 2000000 })),
+			{ name: `payslip-classic-${paper}`, template: "payslip.typ", payload: payslip(on()) },
+			{ name: `payslip-compact-${paper}`, template: "payslip.typ", payload: payslip(on({ pdf_template: "compact" })) },
+			{ name: `voucher-${paper}`, template: "voucher.typ", payload: voucher(on()) },
+			{ name: `report-pnl-${paper}`, template: "report.typ", payload: pnl(on()) },
+			{ name: `statement-${paper}`, template: "statement.typ", payload: statement(on()) },
+			{ name: `letter-${paper}`, template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false), settings: on() }) },
+			{ name: `letter-preprinted-${paper}`, template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(true), settings: on() }) }
+		].map((c): Case => (MULTIPAGE_ON_OTHER_PAPER.has(c.name) ? { ...c, multipage: true } : c));
+	})
 ];
 
 // Each multi-page case also renders with page numbers switched off.
