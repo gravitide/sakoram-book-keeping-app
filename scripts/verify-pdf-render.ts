@@ -129,8 +129,8 @@ const settingsFor = (overrides: Partial<CompanySettingsRow> = {}): CompanySettin
 	pdf_font: "Akt",
 	pdf_layout: "classic",
 	pdf_stationery_mode: "builtin",
-	// Not the 55 / 20 defaults either, so Pre-printed paper cases prove the
-	// business's own Stationery bands reach the page.
+	// Not the 55 / 20 defaults, so Pre-printed paper cases (and letters set to
+	// pre-printed paper) prove the business's own Stationery bands reach the page.
 	pdf_stationery: JSON.stringify({ preprinted: { top: 48, right: 16, bottom: 24, left: 16 } }),
 	pdf_paper_size: "a4",
 	theme_color: "green",
@@ -152,10 +152,6 @@ const settingsFor = (overrides: Partial<CompanySettingsRow> = {}): CompanySettin
 	pdf_protect_bill: 0,
 	pdf_protect_voucher: 0,
 	pdf_protect_payslip: 0,
-	// Deliberately NOT the 55 / 20 defaults, so the pre-printed letter proves
-	// the business's own values reach the page.
-	letter_preprinted_top_margin_mm: 60,
-	letter_preprinted_bottom_margin_mm: 25,
 	payslip_show_signatures: 1,
 	pdf_logo_scale: 100,
 	pdf_logo_crop: null,
@@ -580,12 +576,15 @@ const cases: Case[] = [
 	{ name: "statement-preprinted", template: "statement.typ", payload: statement(settingsFor({ ...preprintedPaper, ...customChrome })), multipage: true },
 	// A letter NOT individually set to pre-printed still follows the business.
 	{ name: "letter-business-preprinted", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false), settings: settingsFor({ ...preprintedPaper }) }) },
+	// …and one set to pre-printed reserves those same bands (same hash as the
+	// case above; "letter-preprinted" proves it under Built-in too).
+	{ name: "letter-preprinted-on-business-preprinted", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(true), settings: settingsFor({ ...preprintedPaper }) }) },
 	{ name: "letter-business-preprinted-multipage", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false, 20), settings: settingsFor({ ...preprintedPaper }) }), multipage: true },
 	// Stationery bands are never scaled with the paper.
 	{ ...docCase("invoice-classic-preprinted-a5", invoice(settingsFor({ ...preprintedPaper, pdf_paper_size: "a5" }))), multipage: true },
 
 	// Every template on the three non-A4 sheets. Built-in Layout margins scale
-	// with paper width; pre-printed letter bands do not.
+	// with paper width; Pre-printed paper bands (letters included) do not.
 	...OTHER_PAPERS.flatMap((paper): Case[] => {
 		const on = (overrides: Partial<CompanySettingsRow> = {}) => settingsFor({ pdf_paper_size: paper, ...overrides });
 		return [
