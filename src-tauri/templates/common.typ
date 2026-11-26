@@ -325,6 +325,33 @@
   ]
 }
 
+// --- page numbers --------------------------------------------------------
+// "Page N of M", small and right-aligned at the bottom edge of the Safe area —
+// only once the document runs past one page, so a single-page PDF is exactly
+// what it was before page numbers existed.
+//
+// It is PLACED, not laid out: it floats just above the top of the footer, in
+// the gap Typst leaves between the content and the footer (`footer-descent`,
+// 30% of the bottom margin). So it takes no room from the content (a
+// multi-page document breaks on exactly the same lines as without it), and it
+// never touches the footer rule or footer text below it, however wide a
+// custom footer is.
+//
+// The metadata marker is what `bun run verify:pdf` queries to prove every page
+// of a multi-page document is numbered and no single-page one is.
+#let page-number-footer(footer) = context {
+  let total = counter(page).final().first()
+  if total > 1 {
+    let n = counter(page).get().first()
+    // Measured cap-height to descender, so the 'g' clears the footer rule.
+    // The tightest gap is Compact on A5 (12 mm × 148/210 × 30% ≈ 7.2pt);
+    // this box (6.65pt in Akt) + the 0.5pt lift still fits inside it.
+    let num = text(size: 7pt, fill: rgb("#6b7280"), top-edge: "cap-height", bottom-edge: "descender")[Page #n of #total]
+    place(top + right, dy: -measure(num).height - 0.5pt, [#num#metadata((page: n, total: total))<sakoram-page-number>])
+  }
+  footer
+}
+
 // --- page setup ----------------------------------------------------------
 // The ONE page setup every template applies, as
 //   #set page(..page-setup(data, margin: <Layout margins>, footer: [...]))
@@ -339,6 +366,8 @@
 //                 stationery), else { top, right, bottom, left } in mm owned
 //                 by the Stationery and used as-is, never scaled
 //                 (ADR 0001: the two sources are deliberate; don't merge them).
+//   page_numbers  add "Page N of M" (page-number-footer, above) to the
+//                 template's own footer; drawn only past one page.
 // Returns the argument dict rather than applying `set page` itself: a set rule
 // inside a function only reaches that function's own content.
 //
@@ -361,7 +390,7 @@
     margin: if m != none {
       (top: m.top * 1mm, right: m.right * 1mm, bottom: m.bottom * 1mm, left: m.left * 1mm)
     } else { scaled },
-    footer: footer,
+    footer: if data.page.page_numbers { page-number-footer(footer) } else { footer },
   )
 }
 

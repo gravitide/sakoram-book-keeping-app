@@ -771,7 +771,9 @@ bun run verify:pdf                       # renders every PDF template through th
                                          # REAL builders and compares sha256 against
                                          # scripts/pdf-render-baselines.json. --update
                                          # re-captures (only after looking: --keep <dir>
-                                         # writes the PDFs). Needs the sidecar in
+                                         # writes the PDFs + a PNG per page). Also
+                                         # checks "Page N of M" on every multi-page
+                                         # case. Needs the sidecar in
                                          # src-tauri/binaries or SAKORAM_TYPST_BIN.
 
 # Production build
@@ -2691,6 +2693,15 @@ surface flagged in the same audit was deleted in v0.164.1.)
   widths, the 55 mm logo clamp) is NOT scaled, so check the A5 render. Don't hand-write `paper:` / Stationery margins in a template or a
   builder, and add `page-setup` to the SELECTIVE import list of
   voucher/report/statement/letter. `bun run verify:pdf` proves byte identity.
+- **"Page N of M" belongs to `page-setup`, never to a template's footer.**
+  `page.page_numbers` (always true today) makes `page-setup` wrap the
+  template's footer with `page-number-footer`, which PLACES the number just
+  above the footer only once the document has more than one page — so it
+  takes no room from the content and single-page PDFs are untouched. A
+  template that prints its own page number (report/statement used to) double-
+  prints. In `verify:pdf`, a case that runs past one page must say
+  `multipage: true`; it then also renders an `~unnumbered` twin whose baseline
+  is the pre-page-number output, so the number is provably the only change.
 - **Every Typst template with a bespoke footer must read `footer_blocks`.** The
   builders always send it; `voucher.typ` / `report.typ` / `statement.typ`
   hard-coded their footer line and silently ignored the custom footer for

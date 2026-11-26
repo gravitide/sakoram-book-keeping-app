@@ -86,7 +86,25 @@ export interface PageSettings {
 	chrome: boolean
 	/** null = the Layout's built-in margins apply; see the header comment. */
 	margins: PageMarginsMm | null
+	/**
+	 * Print "Page N of M". Every document, every Stationery mode; `page-setup`
+	 * only draws it once the document runs past one page, so single-page PDFs
+	 * stay clean. A switch rather than a constant so the render check can
+	 * prove the number is the only thing it adds.
+	 */
+	page_numbers: boolean
+	/**
+	 * Where "Page N of M" sits.
+	 *   "footer"    — Built-in: just above the footer, in the top of the bottom
+	 *                 band. Takes no flow space, so it changes nothing else.
+	 *   "safe_area" — every other mode: INSIDE the Safe area at its bottom edge,
+	 *                 with room reserved for it, so it can never print over
+	 *                 pre-printed paper or artwork. Content reflows by that strip.
+	 */
+	page_number_position: PageNumberPosition
 }
+
+export type PageNumberPosition = "footer" | "safe_area";
 
 /** Per-document override of the business's page settings. */
 export interface PageSettingsOverride {
@@ -126,15 +144,20 @@ export function buildPageSettings(settings: PageSettingsSource | null, override?
 				right: LETTER_PREPRINTED_SIDE_MM,
 				bottom: settings?.letter_preprinted_bottom_margin_mm ?? LETTER_PREPRINTED_BOTTOM_DEFAULT_MM,
 				left: LETTER_PREPRINTED_SIDE_MM
-			}
+			},
+			page_numbers: true,
+			page_number_position: "safe_area"
 		};
 	}
 	const stationery = resolveStationeryMode(settings?.pdf_stationery_mode);
+	const builtin = stationery === "builtin";
 	return {
 		paper: paper.key,
 		margin_scale,
 		stationery,
-		chrome: stationery === "builtin",
-		margins: marginsFor(stationery, settings)
+		chrome: builtin,
+		margins: marginsFor(stationery, settings),
+		page_numbers: true,
+		page_number_position: builtin ? "footer" : "safe_area"
 	};
 }

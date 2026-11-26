@@ -10,7 +10,15 @@
 // Run:     bun run verify:pdf
 // Update:  bun run verify:pdf --update     (re-captures every baseline; only
 //          after you have LOOKED at the new output and meant the change)
-// Inspect: bun run verify:pdf --keep <dir> (also writes each PDF to <dir>)
+// Inspect: bun run verify:pdf --keep <dir> (also writes each PDF, and a PNG
+//          of every page, to <dir>)
+//
+// Page numbers: besides the hash, every case is checked for "Page N of M" —
+// on every page of a multi-page document, on none of a single-page one. A
+// case that runs past one page must say `multipage: true` (checked against
+// the real page count), and gets an `~unnumbered` twin rendered with page
+// numbers switched off: its baseline is the document as it was before page
+// numbers, so the numbered render can only differ by the numbers.
 //
 // The Typst binary is the sidecar the app bundles:
 // src-tauri/binaries/typst-<target-triple>[.exe] (gitignored — copy it in, see
@@ -259,11 +267,14 @@ const payslipRow = {
 	etf_cents: 450000
 } as unknown as PayslipRow;
 
-const payslip = (settings: CompanySettingsRow) => buildPayslipPdfPayload({
+// `extraEarnings` pads the earnings column until the payslip spills onto a
+// second page.
+const payslip = (settings: CompanySettingsRow, extraEarnings = 0) => buildPayslipPdfPayload({
 	row: payslipRow,
 	lines: [
 		{ kind: "earning", label: "Basic", amount_cents: 15000000 },
 		{ kind: "earning", label: "Transport allowance", amount_cents: 1000000 },
+		...Array.from({ length: extraEarnings }, (_, i) => ({ kind: "earning" as const, label: `Project allowance ${i + 1}`, amount_cents: 100000 })),
 		{ kind: "deduction", label: "EPF (8%)", amount_cents: 1200000 },
 		{ kind: "deduction", label: "Salary advance", amount_cents: 500000 }
 	],
@@ -291,10 +302,14 @@ const voucherRow = {
 	created_at: "2026-06-25 00:00:00"
 } as unknown as VoucherRow;
 
-const voucher = (settings: CompanySettingsRow) =>
-	buildVoucherPdfPayload({ row: voucherRow, settings, currency, relatedLabel: "Invoice INV-0042" });
+const voucher = (settings: CompanySettingsRow, description = voucherRow.description) =>
+	buildVoucherPdfPayload({ row: { ...voucherRow, description }, settings, currency, relatedLabel: "Invoice INV-0042" });
 
-const letterRow = (prePrinted: boolean): LetterRow => ({
+// A description long enough to push a voucher onto a second page.
+const longDescription = Array.from({ length: 60 }, (_, i) => `Instalment ${i + 1} of the website redesign retainer, received by bank transfer.`).join("\n");
+
+// `extraParagraphs` lengthens the body until the letter runs past one page.
+const letterRow = (prePrinted: boolean, extraParagraphs = 0): LetterRow => ({
 	id: 1,
 	number: "LET-0003",
 	letter_date: "2026-06-20",
@@ -304,7 +319,8 @@ const letterRow = (prePrinted: boolean): LetterRow => ({
 	subject: "Confirmation of employment",
 	body_json: richText(
 		"This is to confirm that Kamala Jayasinghe has been employed with us since 2021.",
-		"She holds the position of Senior Designer."
+		"She holds the position of Senior Designer.",
+		...Array.from({ length: extraParagraphs }, (_, i) => `Paragraph ${i + 1}: during her time with us she has led client projects from brief to handover, mentored junior designers, and represented the studio at industry events with distinction.`)
 	),
 	signature_json: richText("Nimal Perera", "Director"),
 	pre_printed: prePrinted ? 1 : 0,
@@ -312,7 +328,9 @@ const letterRow = (prePrinted: boolean): LetterRow => ({
 	updated_at: "2026-06-20 00:00:00"
 });
 
-const statement = (settings: CompanySettingsRow) => ({
+// The landscape statement spills its payment-details block onto page 2;
+// without a bank it fits on one page.
+const statement = (settings: CompanySettingsRow, withBank = true) => ({
 	...buildCustomerStatementPdfPayload({
 		settings,
 		currency: LKR,
@@ -335,13 +353,15 @@ const statement = (settings: CompanySettingsRow) => ({
 		creditedCentsFor: (id) => (id === 3 ? 1000000 : 0),
 		unappliedCreditCents: 200000,
 		asOfDate: new Date(2026, 5, 30),
-		bank: {
-			label: "Main account",
-			bank_name: "Sampath Bank",
-			bank_branch: "Colombo",
-			bank_account_number: "0011 2233 4455",
-			bank_account_name: "Lanka Design Studio (Pvt) Ltd"
-		} as never
+		bank: withBank
+			? {
+				label: "Main account",
+				bank_name: "Sampath Bank",
+				bank_branch: "Colombo",
+				bank_account_number: "0011 2233 4455",
+				bank_account_name: "Lanka Design Studio (Pvt) Ltd"
+			} as never
+			: null
 	}),
 	// Locale-formatted in the builder; pinned so the hash doesn't follow the
 	// machine's locale.
@@ -443,6 +463,14 @@ interface Case {
 	name: string
 	template: string
 	payload: Record<string, unknown>
+	/**
+	 * The fixture runs past one page. Checked, not trusted: a multi-page case
+	 * that shrinks to one page would stop exercising "Page N of M". Each one
+	 * also renders an `~unnumbered` twin with page numbers switched off, whose
+	 * baseline is the document as it was before page numbers existed — so a
+	 * numbered render can only ever differ from it by the numbers.
+	 */
+	multipage?: true
 }
 
 // Mirrors document_template() in src-tauri/src/pdf.rs: unknown keys → classic.
@@ -456,6 +484,17 @@ const docCase = (name: string, payload: Record<string, unknown>): Case => ({ nam
 const LAYOUTS = ["classic", "modern", "minimal", "compact", "letterhead"] as const;
 const OTHER_PAPERS = ["a5", "us-letter", "us-legal"] as const;
 
+// The paper-size cases below that run past one page (A5 is small enough that
+// most of them spill; reports and the statement do on every sheet).
+const MULTIPAGE_ON_OTHER_PAPER = new Set([
+	...["classic", "modern", "minimal", "compact", "letterhead"].map((key) => `invoice-${key}-a5`),
+	"quote-classic-a5",
+	"payslip-classic-a5",
+	"payslip-compact-a5",
+	"invoice-letterhead-us-letter",
+	...OTHER_PAPERS.flatMap((paper) => [`report-pnl-${paper}`, `statement-${paper}`])
+]);
+
 const cases: Case[] = [
 	// The four Layouts + the retiring letterhead, each with a real logo.
 	...LAYOUTS.map((key) => docCase(`invoice-${key}-logo`, invoice(settingsFor({ pdf_template: key })))),
@@ -464,7 +503,15 @@ const cases: Case[] = [
 	docCase("invoice-classic-custom-chrome", invoice(settingsFor({ ...customChrome }))),
 	docCase("invoice-compact-custom-chrome", invoice(settingsFor({ ...customChrome, pdf_template: "compact" }))),
 	// Long enough to spill onto a second page (footer on every page).
-	docCase("invoice-classic-multipage", invoice(settingsFor(), 45)),
+	{ ...docCase("invoice-classic-multipage", invoice(settingsFor(), 45)), multipage: true },
+	// "Page N of M" on every Layout, every document type. Compact has the
+	// shallowest gap above its footer and carries a custom footer, so it is
+	// the case that would show a collision first.
+	{ ...docCase("invoice-modern-multipage", invoice(settingsFor({ pdf_template: "modern" }), 20)), multipage: true },
+	{ ...docCase("invoice-minimal-multipage", invoice(settingsFor({ pdf_template: "minimal" }), 20)), multipage: true },
+	{ ...docCase("invoice-compact-custom-chrome-multipage", invoice(settingsFor({ ...customChrome, pdf_template: "compact" }), 30)), multipage: true },
+	{ ...docCase("quote-classic-multipage", buildQuotePdfPayload({ row: docRow as never, lines: docLines(20), settings: settingsFor(), currency })), multipage: true },
+	{ ...docCase("bill-classic-multipage", buildBillPdfPayload({ row: docRow as never, lines: docLines(20) as never, settings: settingsFor(), currency, paidCents: 0 })), multipage: true },
 	docCase("quote-classic-logo", buildQuotePdfPayload({ row: docRow as never, lines: docLines(3), settings: settingsFor(), currency })),
 	docCase("quote-minimal-logo", buildQuotePdfPayload({ row: docRow as never, lines: docLines(3), settings: settingsFor({ pdf_template: "minimal" }), currency })),
 	docCase("bill-classic-logo", buildBillPdfPayload({ row: docRow as never, lines: docLines(2) as never, settings: settingsFor(), currency, paidCents: 2000000 })),
@@ -477,24 +524,33 @@ const cases: Case[] = [
 	...LAYOUTS.map((key): Case => ({ name: `payslip-${key}-logo`, template: "payslip.typ", payload: payslip(settingsFor({ pdf_template: key })) })),
 	{ name: "payslip-classic-wordmark", template: "payslip.typ", payload: payslip(settingsFor({ ...noLogo })) },
 	{ name: "payslip-classic-custom-chrome", template: "payslip.typ", payload: payslip(settingsFor({ ...customChrome })) },
+	{ name: "payslip-classic-multipage", template: "payslip.typ", payload: payslip(settingsFor(), 40), multipage: true },
+	{ name: "payslip-compact-multipage", template: "payslip.typ", payload: payslip(settingsFor({ pdf_template: "compact" }), 50), multipage: true },
 
 	{ name: "voucher-logo", template: "voucher.typ", payload: voucher(settingsFor()) },
 	{ name: "voucher-wordmark", template: "voucher.typ", payload: voucher(settingsFor({ ...noLogo })) },
 	{ name: "voucher-custom-footer", template: "voucher.typ", payload: voucher(settingsFor({ ...customChrome })) },
+	{ name: "voucher-multipage", template: "voucher.typ", payload: voucher(settingsFor(), longDescription), multipage: true },
 
-	{ name: "report-pnl-logo", template: "report.typ", payload: pnl(settingsFor()) },
-	{ name: "report-pnl-wordmark", template: "report.typ", payload: pnl(settingsFor({ ...noLogo })) },
-	{ name: "report-aged-receivables-logo", template: "report.typ", payload: agedReceivables(settingsFor()) },
-	{ name: "report-cash-flow-custom-footer", template: "report.typ", payload: cashFlow(settingsFor({ ...customChrome })) },
+	// Reports put each drill-down section on its own page, so every fixture
+	// here runs past one page.
+	{ name: "report-pnl-logo", template: "report.typ", payload: pnl(settingsFor()), multipage: true },
+	{ name: "report-pnl-wordmark", template: "report.typ", payload: pnl(settingsFor({ ...noLogo })), multipage: true },
+	{ name: "report-aged-receivables-logo", template: "report.typ", payload: agedReceivables(settingsFor()), multipage: true },
+	{ name: "report-cash-flow-custom-footer", template: "report.typ", payload: cashFlow(settingsFor({ ...customChrome })), multipage: true },
 
-	{ name: "statement-logo", template: "statement.typ", payload: statement(settingsFor()) },
-	{ name: "statement-wordmark", template: "statement.typ", payload: statement(settingsFor({ ...noLogo })) },
-	{ name: "statement-custom-footer", template: "statement.typ", payload: statement(settingsFor({ ...customChrome })) },
+	{ name: "statement-logo", template: "statement.typ", payload: statement(settingsFor()), multipage: true },
+	{ name: "statement-wordmark", template: "statement.typ", payload: statement(settingsFor({ ...noLogo })), multipage: true },
+	{ name: "statement-custom-footer", template: "statement.typ", payload: statement(settingsFor({ ...customChrome })), multipage: true },
+	// Statements used to print "Page 1 of 1"; a single page now carries none.
+	{ name: "statement-single-page", template: "statement.typ", payload: statement(settingsFor(), false) },
 
 	{ name: "letter-logo", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false), settings: settingsFor() }) },
 	{ name: "letter-wordmark", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false), settings: settingsFor({ ...noLogo }) }) },
 	{ name: "letter-preprinted", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(true), settings: settingsFor() }) },
 	{ name: "letter-preprinted-default-margins", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(true), settings: null }) },
+	{ name: "letter-multipage", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false, 20), settings: settingsFor() }), multipage: true },
+	{ name: "letter-preprinted-multipage", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(true, 20), settings: settingsFor() }), multipage: true },
 
 	// Every template on the three non-A4 sheets. Built-in Layout margins scale
 	// with paper width; pre-printed letter bands do not.
@@ -511,13 +567,35 @@ const cases: Case[] = [
 			{ name: `statement-${paper}`, template: "statement.typ", payload: statement(on()) },
 			{ name: `letter-${paper}`, template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false), settings: on() }) },
 			{ name: `letter-preprinted-${paper}`, template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(true), settings: on() }) }
-		];
+		].map((c): Case => (MULTIPAGE_ON_OTHER_PAPER.has(c.name) ? { ...c, multipage: true } : c));
 	})
 ];
 
+// Each multi-page case also renders with page numbers switched off.
+const unnumbered = (c: Case): Case => ({
+	...c,
+	name: `${c.name}~unnumbered`,
+	payload: { ...c.payload, page: { ...(c.payload.page as object), page_numbers: false } }
+});
+
+const allCases = cases.flatMap((c) => (c.multipage ? [c, unnumbered(c)] : [c]));
+
 // --- render ----------------------------------------------------------------
 
-const render = (c: Case): Buffer => {
+// Must match the label page-setup in common.typ puts on its page numbers.
+const PAGE_NUMBER_LABEL = "<sakoram-page-number>";
+
+interface PageNumber {
+	page: number
+	total: number
+}
+
+interface Rendered {
+	pdf: Buffer
+	pageNumbers: PageNumber[]
+}
+
+const render = (c: Case): Rendered => {
 	const work = mkdtempSync(join(tmpdir(), "sakoram-pdf-"));
 	try {
 		// Mirror render_pdf() in src-tauri/src/pdf.rs: logo_path (absolute) →
@@ -549,10 +627,53 @@ const render = (c: Case): Buffer => {
 			out
 		], { encoding: "utf8" });
 		if (res.status !== 0) throw new Error(`typst failed for ${c.name} (${c.template}):\n${res.stderr}`);
-		return readFileSync(out);
+
+		// --keep also writes one PNG per page: an image is what you can
+		// actually look at without a PDF renderer.
+		if (KEEP_DIR) {
+			spawnSync(TYPST, ["compile", "--root", work, "--font-path", FONTS, "--ignore-system-fonts", "--format", "png", "--ppi", "110", join(work, c.template), join(KEEP_DIR, `${c.name}-{p}.png`)]);
+		}
+
+		// Every "Page N of M" page-setup draws carries a metadata marker; ask
+		// Typst for them rather than parsing glyphs out of the PDF.
+		const q = spawnSync(TYPST, [
+			"query",
+			"--root",
+			work,
+			"--font-path",
+			FONTS,
+			"--ignore-system-fonts",
+			join(work, c.template),
+			PAGE_NUMBER_LABEL,
+			"--field",
+			"value"
+		], { encoding: "utf8" });
+		if (q.status !== 0) throw new Error(`typst query failed for ${c.name} (${c.template}):\n${q.stderr}`);
+		return { pdf: readFileSync(out), pageNumbers: JSON.parse(q.stdout) as PageNumber[] };
 	} finally {
 		rmSync(work, { recursive: true, force: true });
 	}
+};
+
+// Page objects in the PDF itself — an independent count, not Typst's opinion.
+const pageCount = (pdf: Buffer) => pdf.toString("latin1").match(/\/Type\s*\/Page(?![a-z])/gi)?.length ?? 0;
+
+// What a reader must see: "Page N of M" on every page of a document that runs
+// past one page (when the page settings ask for numbers), and nothing at all
+// on a single page.
+const pageNumberProblem = (c: Case, r: Rendered): string | null => {
+	const pages = pageCount(r.pdf);
+	if ((pages > 1) !== Boolean(c.multipage)) {
+		return c.multipage
+			? `declared multipage but rendered ${pages} page — lengthen the fixture`
+			: `rendered ${pages} pages — mark the case \`multipage: true\``;
+	}
+	const numbered = (c.payload.page as { page_numbers?: boolean } | undefined)?.page_numbers === true;
+	const expected = numbered && pages > 1
+		? Array.from({ length: pages }, (_, i) => ({ page: i + 1, total: pages }))
+		: [];
+	const actual = JSON.stringify(r.pageNumbers);
+	return actual === JSON.stringify(expected) ? null : `page numbers ${actual}, expected ${JSON.stringify(expected)}`;
 };
 
 const sha256 = (buf: Buffer) => createHash("sha256").update(buf).digest("hex");
@@ -579,22 +700,31 @@ if (KEEP_DIR) mkdirSync(KEEP_DIR, { recursive: true });
 
 let failures = 0;
 const hashes: Record<string, string> = {};
-for (const c of cases) {
-	let pdf: Buffer;
+for (const c of allCases) {
+	let rendered: Rendered;
 	try {
-		pdf = render(c);
+		rendered = render(c);
 	} catch (e) {
 		console.error(`✗ ${c.name}: ${(e as Error).message}`);
 		failures++;
 		continue;
 	}
+	const { pdf } = rendered;
 	const hash = sha256(pdf);
 	hashes[c.name] = hash;
 	if (KEEP_DIR) writeFileSync(join(KEEP_DIR, `${c.name}.pdf`), pdf);
 
+	// Checked in both modes: --update must not bless a wrong page count.
+	const problem = pageNumberProblem(c, rendered);
+	if (problem) {
+		console.error(`✗ ${c.name} (${c.template}): ${problem}`);
+		failures++;
+		continue;
+	}
+
 	if (UPDATE) {
 		// A baseline is only worth storing if the render is reproducible.
-		const again = sha256(render(c));
+		const again = sha256(render(c).pdf);
 		if (again !== hash) {
 			console.error(`✗ ${c.name}: two renders differ — output is not deterministic`);
 			failures++;
@@ -618,7 +748,7 @@ for (const c of cases) {
 
 if (!UPDATE) {
 	for (const name of Object.keys(stored!.hashes)) {
-		if (!(name in hashes) && !cases.some((c) => c.name === name)) {
+		if (!(name in hashes) && !allCases.some((c) => c.name === name)) {
 			console.error(`✗ stale baseline with no matching case: ${name}`);
 			failures++;
 		}
@@ -630,5 +760,5 @@ if (UPDATE && failures === 0) {
 	console.log(`\nwrote ${Object.keys(hashes).length} baselines → ${BASELINES}`);
 }
 
-console.log(`\n${failures === 0 ? `ALL ${cases.length} RENDERS MATCH` : `${failures} RENDER CHECK(S) FAILED`}`);
+console.log(`\n${failures === 0 ? `ALL ${allCases.length} RENDERS MATCH` : `${failures} RENDER CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

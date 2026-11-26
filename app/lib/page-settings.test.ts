@@ -8,7 +8,15 @@ const settings = (top: number, bottom: number, paper?: string) => ({
 	pdf_paper_size: paper
 }) as CompanySettingsRow;
 
-const BUILTIN_A4 = { paper: "a4", margin_scale: 1, stationery: "builtin", chrome: true, margins: null };
+const BUILTIN_A4 = {
+	paper: "a4",
+	margin_scale: 1,
+	stationery: "builtin",
+	chrome: true,
+	margins: null,
+	page_numbers: true,
+	page_number_position: "footer"
+};
 
 const onStationery = (mode: string, stationery: object | string | null = null) => ({
 	pdf_stationery_mode: mode,
@@ -30,7 +38,9 @@ describe("buildPageSettings", () => {
 			margin_scale: 1,
 			stationery: "preprinted",
 			chrome: false,
-			margins: { top: 60, right: 18, bottom: 25, left: 18 }
+			margins: { top: 60, right: 18, bottom: 25, left: 18 },
+			page_numbers: true,
+			page_number_position: "safe_area"
 		});
 	});
 
@@ -40,6 +50,12 @@ describe("buildPageSettings", () => {
 
 	it("ignores the business's pre-printed bands when the document is not on pre-printed paper", () => {
 		expect(buildPageSettings(settings(60, 25), { preprinted: false })).toEqual(BUILTIN_A4);
+	});
+
+	it("numbers the pages of every document, pre-printed paper included (templates print them only past one page)", () => {
+		expect(buildPageSettings(null).page_numbers).toBe(true);
+		expect(buildPageSettings(settings(60, 25), { preprinted: true }).page_numbers).toBe(true);
+		expect(buildPageSettings(onStationery("preprinted")).page_numbers).toBe(true);
 	});
 });
 
@@ -71,6 +87,21 @@ describe("Stationery mode", () => {
 		expect(buildPageSettings(onStationery("background"))).toMatchObject({ stationery: "builtin", chrome: true, margins: null });
 	});
 });
+
+describe("page number position", () => {
+	it("Built-in keeps the number just above the footer, in the bottom band", () => {
+		expect(buildPageSettings(onStationery("builtin")).page_number_position).toBe("footer");
+	});
+
+	it("Pre-printed paper puts the number inside the Safe area, so it never prints over the paper's own footer", () => {
+		expect(buildPageSettings(onStationery("preprinted")).page_number_position).toBe("safe_area");
+	});
+
+	it("a letter on pre-printed paper also keeps its number inside the Safe area", () => {
+		expect(buildPageSettings(settings(60, 25), { preprinted: true }).page_number_position).toBe("safe_area");
+	});
+});
+
 
 describe("paper size", () => {
 	it.each(["a5", "us-letter", "us-legal"])("lays the page out on the business's paper (%s)", (paper) => {
