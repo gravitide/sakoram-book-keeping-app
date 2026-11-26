@@ -32,7 +32,7 @@ const settings = {
 	letter_preprinted_bottom_margin_mm: 25
 } as CompanySettingsRow;
 
-const A4_LAYOUT_MARGINS = { paper: "a4", margins: null };
+const A4_LAYOUT_MARGINS = { paper: "a4", margins: null, page_numbers: true };
 
 const docRow = {
 	number: "INV-0001",
@@ -111,6 +111,6 @@ describe("every PDF builder emits the shared page block", () => {
 	});
 
 	it("a letter on pre-printed paper reserves the business's pre-printed bands", () => {
-		expect(letter(1).page).toEqual({ paper: "a4", margins: { top: 60, right: 18, bottom: 25, left: 18 } });
+		expect(letter(1).page).toEqual({ paper: "a4", margins: { top: 60, right: 18, bottom: 25, left: 18 }, page_numbers: true });
 	});
 });

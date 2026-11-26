@@ -34,6 +34,13 @@ export interface PageSettings {
 	paper: PaperSize
 	/** null = the Layout's built-in margins apply; see the header comment. */
 	margins: PageMarginsMm | null
+	/**
+	 * Print "Page N of M". Every document, every Stationery mode; `page-setup`
+	 * only draws it once the document runs past one page, so single-page PDFs
+	 * stay clean. A switch rather than a constant so the render check can
+	 * prove the number is the only thing it adds.
+	 */
+	page_numbers: boolean
 }
 
 /** Per-document override of the business's page settings. */
@@ -51,7 +58,7 @@ const PREPRINTED_TOP_DEFAULT_MM = 55;
 const PREPRINTED_BOTTOM_DEFAULT_MM = 20;
 
 export function buildPageSettings(settings: PageSettingsSource | null, override?: PageSettingsOverride): PageSettings {
-	if (!override?.preprinted) return { paper: "a4", margins: null };
+	if (!override?.preprinted) return { paper: "a4", margins: null, page_numbers: true };
 	return {
 		paper: "a4",
 		margins: {
@@ -59,6 +66,7 @@ export function buildPageSettings(settings: PageSettingsSource | null, override?
 			right: PREPRINTED_SIDE_MM,
 			bottom: settings?.letter_preprinted_bottom_margin_mm ?? PREPRINTED_BOTTOM_DEFAULT_MM,
 			left: PREPRINTED_SIDE_MM
-		}
+		},
+		page_numbers: true
 	};
 }
