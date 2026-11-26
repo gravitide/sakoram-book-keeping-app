@@ -129,7 +129,7 @@ fn add_file(zip: &mut zip::ZipWriter<std::fs::File>, name: &str, src: &Path) -> 
 	zip.write_all(&bytes).map_err(|e| e.to_string())
 }
 
-/// Snapshot zip = db entries + `business.json` + `logos/*` + root `pdf-header*`
+/// Snapshot zip = db entries + `business.json` + `logos/*` + `stationery/*` + root `pdf-header*`
 /// + the manifest. Attachments are NOT included; they upload individually.
 pub fn build_zip(folder: &Path, db_entries: &[(String, PathBuf)], manifest: &Manifest, out: &Path) -> Result<(), String> {
 	let file = std::fs::File::create(out).map_err(|e| format!("create snapshot zip: {e}"))?;
@@ -140,10 +140,13 @@ pub fn build_zip(folder: &Path, db_entries: &[(String, PathBuf)], manifest: &Man
 	}
 	add_file(&mut zip, "business.json", &folder.join("business.json"))?;
 
-	if let Ok(entries) = std::fs::read_dir(folder.join("logos")) {
-		for entry in entries.flatten().filter(|e| e.path().is_file()) {
-			let name = format!("logos/{}", entry.file_name().to_string_lossy());
-			add_file(&mut zip, &name, &entry.path())?;
+	// Logos, and Stationery artwork with its untouched original (ADR 0001).
+	for dir in ["logos", crate::tenants::STATIONERY_DIR] {
+		if let Ok(entries) = std::fs::read_dir(folder.join(dir)) {
+			for entry in entries.flatten().filter(|e| e.path().is_file()) {
+				let name = format!("{dir}/{}", entry.file_name().to_string_lossy());
+				add_file(&mut zip, &name, &entry.path())?;
+			}
 		}
 	}
 	if let Ok(entries) = std::fs::read_dir(folder) {
@@ -331,6 +334,41 @@ pub(crate) mod tests {
 			assert!(dest.join(MANIFEST_NAME).exists());
 			// Attachments are NOT in the zip — they are uploaded individually.
 			assert!(!dest.join("attachments").exists());
+		});
+	}
+
+	// ADR 0001: Stationery artwork AND its untouched original travel with the
+	// business, so a restore re-renders every PDF on its own letterhead and
+	// Re-crop still works. The DB stores no path, so nothing needs rewriting.
+	#[test]
+	fn snapshot_carries_stationery_artwork_and_originals() {
+		tauri::async_runtime::block_on(async {
+			let folder = make_business_folder("stationeryzip").await;
+			std::fs::create_dir_all(folder.join("stationery")).unwrap();
+			std::fs::write(folder.join("stationery").join("background.png"), b"ART").unwrap();
+			std::fs::write(folder.join("stationery").join("background-original.jpg"), b"ORIGINAL").unwrap();
+			let work = temp_dir("stationeryzip-work");
+			let db_entries = prepare_db(&folder, &work, None).await.unwrap();
+			let zip = work.join("snap.zip");
+			build_zip(&folder, &db_entries, &manifest_for(vec![], false), &zip).unwrap();
+
+			let dest = temp_dir("stationeryzip-dest");
+			extract_zip(&zip, &dest).unwrap();
+			assert_eq!(std::fs::read(dest.join("stationery").join("background.png")).unwrap(), b"ART");
+			assert_eq!(std::fs::read(dest.join("stationery").join("background-original.jpg")).unwrap(), b"ORIGINAL");
+		});
+	}
+
+	#[test]
+	fn snapshot_of_a_business_without_stationery_has_no_stationery_entries() {
+		tauri::async_runtime::block_on(async {
+			let folder = make_business_folder("nostationery").await;
+			let work = temp_dir("nostationery-work");
+			let db_entries = prepare_db(&folder, &work, None).await.unwrap();
+			let zip = work.join("snap.zip");
+			build_zip(&folder, &db_entries, &manifest_for(vec![], false), &zip).unwrap();
+			let archive = zip::ZipArchive::new(std::fs::File::open(&zip).unwrap()).unwrap();
+			assert!(!archive.file_names().any(|n| n.starts_with("stationery")));
 		});
 	}
 

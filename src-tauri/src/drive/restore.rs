@@ -130,7 +130,10 @@ mod tests {
 	fn quiet(_: Progress) {}
 
 	async fn backed_up(store: &MemoryStore, tag: &str, created_at: &str) -> PathBuf {
-		let folder = make_business_folder(tag).await;
+		back_up_folder(store, make_business_folder(tag).await, created_at).await
+	}
+
+	async fn back_up_folder(store: &MemoryStore, folder: PathBuf, created_at: &str) -> PathBuf {
 		let input = BackupInput {
 			key: "k".into(),
 			tenant_id: "acme".into(),
@@ -173,6 +176,29 @@ mod tests {
 				let b = std::fs::read(dest.join("attachments").join(rel)).unwrap();
 				assert_eq!(a, b);
 			}
+		});
+	}
+
+	// A restore lands in whatever folder the user picks — a different place
+	// from the original. Stationery artwork is found by fixed name inside the
+	// folder (the DB stores no path), so it renders there as-is.
+	#[test]
+	fn a_restore_into_another_folder_brings_the_stationery_artwork_and_original() {
+		tauri::async_runtime::block_on(async {
+			let store = MemoryStore::default();
+			let folder = make_business_folder("rt-stationery").await;
+			std::fs::create_dir_all(folder.join("stationery")).unwrap();
+			std::fs::write(folder.join("stationery").join("background.svg"), b"<svg/>").unwrap();
+			std::fs::write(folder.join("stationery").join("background-original.svg"), b"<svg>orig</svg>").unwrap();
+			back_up_folder(&store, folder, "2026-09-19T09:02:11Z").await;
+
+			let snaps = list_snapshots(&store, "k").await.unwrap();
+			let work = temp_dir("rt-stationery-work");
+			let (zip, manifest) = fetch_snapshot(&store, "k", &snaps[0].stem, &work).await.unwrap();
+			let dest = temp_dir("rt-stationery-elsewhere");
+			materialise(&store, "k", &zip, &manifest, &dest, &quiet, &AtomicBool::new(false)).await.unwrap();
+			assert_eq!(std::fs::read(dest.join("stationery").join("background.svg")).unwrap(), b"<svg/>");
+			assert_eq!(std::fs::read(dest.join("stationery").join("background-original.svg")).unwrap(), b"<svg>orig</svg>");
 		});
 	}
 
