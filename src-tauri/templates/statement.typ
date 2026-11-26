@@ -108,13 +108,15 @@
 #v(14pt)
 
 // ============================================================
-// Two-column party block: business (left), client (right)
+// Two-column party block: business (left, Built-in only), client (right)
 // ============================================================
 #grid(
   columns: (1fr, 1fr),
   column-gutter: 14pt,
-  // FROM block
-  block(
+  // FROM block — the business's own identity, so Built-in stationery only:
+  // any other mode's paper or artwork already carries it, and STATEMENT FOR
+  // then takes the left column at the same width.
+  ..if data.page.chrome { (block(
     fill: rgb("#f9fafb"),
     stroke: 0.5pt + line-color,
     radius: 4pt,
@@ -136,7 +138,7 @@
       #v(2pt)
       #text(size: 8.5pt, fill: muted)[Phone: #data.business_phone]
     ]
-  ],
+  ],) } else { () },
   // TO block
   block(
     fill: theme.lighten(92%),

@@ -20,6 +20,10 @@
 // numbers switched off: its baseline is the document as it was before page
 // numbers, so the numbered render can only differ by the numbers.
 //
+// Business identity: every case on Stationery that owns the page edges
+// (`page.chrome` false) is read back as text (scripts/pdf-text.ts) and must not
+// print the business's address, phone or website.
+//
 // The Typst binary is the sidecar the app bundles:
 // src-tauri/binaries/typst-<target-triple>[.exe] (gitignored — copy it in, see
 // .gitignore), or point SAKORAM_TYPST_BIN at one. Hashes are only meaningful
@@ -59,6 +63,7 @@ import { buildAgedReceivablesPdfPayload, buildCashFlowPdfPayload, buildPnlPdfPay
 import { sampleInvoicePayload } from "../app/lib/sample-pdf.ts";
 import { buildCustomerStatementPdfPayload } from "../app/lib/statement-pdf.ts";
 import { buildVoucherPdfPayload } from "../app/lib/voucher-pdf.ts";
+import { pdfPageTexts } from "./pdf-text.ts";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const TEMPLATES = join(REPO, "src-tauri/templates");
@@ -707,6 +712,33 @@ const pageNumberProblem = (c: Case, r: Rendered): string | null => {
 	return actual === JSON.stringify(expected) ? null : `page numbers ${actual}, expected ${JSON.stringify(expected)}`;
 };
 
+// What only the business's own identity prints: its address, phone and
+// website (the header text, footer line and business blocks). Its NAME is not
+// here on purpose — it is legitimately the account name in a payment-details
+// block — and nor is its tax ID, which the sample payload reuses for its client.
+const fixture = settingsFor();
+const BUSINESS_IDENTITY = [fixture.address_line1!, fixture.phone!, fixture.website!];
+
+// Under any Stationery other than Built-in (`page.chrome` false — Pre-printed
+// paper, or a letter printed onto it) the paper already carries the business
+// identity, so the PDF must not print any of it. Built-in renders of the cases
+// in IDENTITY_SHOWN must print all of it: that proves the text extraction
+// itself still works, so a silent "found nothing" can't pass the rule above.
+const IDENTITY_SHOWN = new Set(["statement-logo", "letter-logo"]);
+const identityProblem = (c: Case, r: Rendered): string | null => {
+	const text = pdfPageTexts(r.pdf).join("\n");
+	const chrome = (c.payload.page as { chrome?: boolean } | undefined)?.chrome !== false;
+	if (!chrome) {
+		const printed = BUSINESS_IDENTITY.filter((s) => text.includes(s));
+		return printed.length ? `prints the business identity on Stationery that owns it: ${printed.join(", ")}` : null;
+	}
+	if (IDENTITY_SHOWN.has(c.name)) {
+		const missing = BUSINESS_IDENTITY.filter((s) => !text.includes(s));
+		return missing.length ? `text extraction found no ${missing.join(", ")} on a Built-in render — is scripts/pdf-text.ts still reading this Typst's output?` : null;
+	}
+	return null;
+};
+
 const sha256 = (buf: Buffer) => createHash("sha256").update(buf).digest("hex");
 
 interface Baselines {
@@ -746,7 +778,7 @@ for (const c of allCases) {
 	if (KEEP_DIR) writeFileSync(join(KEEP_DIR, `${c.name}.pdf`), pdf);
 
 	// Checked in both modes: --update must not bless a wrong page count.
-	const problem = pageNumberProblem(c, rendered);
+	const problem = pageNumberProblem(c, rendered) ?? identityProblem(c, rendered);
 	if (problem) {
 		console.error(`✗ ${c.name} (${c.template}): ${problem}`);
 		failures++;
