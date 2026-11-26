@@ -460,9 +460,68 @@ pub fn open_path(path: String) -> Result<(), String> {
 	Ok(())
 }
 
+/// The Typst file that draws a PDF background's first page as an image, on a
+/// page exactly its size (written by `stage_artwork_preview`).
+const ARTWORK_PREVIEW_TYP: &str = "artwork-preview.typ";
+const ARTWORK_PREVIEW_SRC: &str = "#set page(width: auto, height: auto, margin: 0pt)\n#image(\"artwork.pdf\")\n";
+
+/// Stage the OPEN business's PDF background (`stationery/background.pdf`) for
+/// a PNG preview: copy it into `work_dir` as `artwork.pdf` beside a template
+/// that draws its first page at its own size. Returns the template's path, or
+/// None when there is no business or no PDF background.
+pub(crate) fn stage_artwork_preview(business_folder: Option<&Path>, work_dir: &Path) -> std::io::Result<Option<PathBuf>> {
+	let Some(src) = business_folder
+		.map(|f| f.join(crate::tenants::STATIONERY_DIR).join("background.pdf"))
+		.filter(|p| p.is_file())
+	else {
+		return Ok(None);
+	};
+	std::fs::create_dir_all(work_dir)?;
+	std::fs::copy(&src, work_dir.join("artwork.pdf"))?;
+	let template = work_dir.join(ARTWORK_PREVIEW_TYP);
+	std::fs::write(&template, ARTWORK_PREVIEW_SRC)?;
+	Ok(Some(template))
+}
+
+/// PNG bytes of the open business's PDF background (its first page) — the
+/// webview can't draw a PDF in an <img>, so the Stationery thumbnail and
+/// editor show this instead. Rendered by the bundled Typst at `ppi`
+/// (clamped to 20–150, plenty for a screen preview).
+#[tauri::command]
+pub async fn render_stationery_artwork_png(app: AppHandle, ppi: u32) -> Result<Vec<u8>, PdfError> {
+	let work_dir = app.path().app_local_data_dir()?.join("pdf-work").join("artwork-preview");
+	let folder = crate::tenants::active_folder(&app).ok().flatten();
+	let template = stage_artwork_preview(folder.as_deref(), &work_dir)?
+		.ok_or_else(|| PdfError::Typst("This business has no PDF background.".into()))?;
+	let output = work_dir.join("artwork.png");
+	let path_str = |p: &Path| p.to_str().map(str::to_string).ok_or_else(|| PdfError::Typst("non-UTF-8 path in app data dir".into()));
+	let out = app
+		.shell()
+		.sidecar("typst")?
+		.args([
+			"compile".to_string(),
+			"--root".to_string(),
+			path_str(&work_dir)?,
+			"--format".to_string(),
+			"png".to_string(),
+			"--ppi".to_string(),
+			ppi.clamp(20, 150).to_string(),
+			path_str(&template)?,
+			path_str(&output)?,
+		])
+		.output()
+		.await
+		.map_err(|e| PdfError::Typst(format!("spawn failed: {e}")))?;
+	if !out.status.success() {
+		let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+		return Err(PdfError::Typst(extract_typst_errors(&stderr).unwrap_or(stderr)));
+	}
+	Ok(std::fs::read(&output)?)
+}
+
 #[cfg(test)]
 mod tests {
-	use super::{layout_template, stage_background};
+	use super::{layout_template, stage_artwork_preview, stage_background};
 	use serde_json::json;
 	use std::path::PathBuf;
 
@@ -543,5 +602,25 @@ mod tests {
 		for key in [Some("letterhead"), Some("bogus"), None] {
 			assert_eq!(layout_template(key).0, "doc-classic.typ");
 		}
+	}
+
+	#[test]
+	fn a_pdf_background_is_staged_beside_a_template_that_draws_it() {
+		let folder = folder_with_background("artwork-preview", "pdf", b"%PDF-1.7 fake");
+		let work = temp_dir("artwork-preview-work").join("nested");
+		let template = stage_artwork_preview(Some(&folder), &work).unwrap().expect("staged");
+		assert_eq!(std::fs::read(work.join("artwork.pdf")).unwrap(), b"%PDF-1.7 fake");
+		let src = std::fs::read_to_string(&template).unwrap();
+		assert!(template.starts_with(&work));
+		assert!(src.contains("image(\"artwork.pdf\")"));
+	}
+
+	#[test]
+	fn no_pdf_background_means_nothing_to_preview() {
+		let svg = folder_with_background("artwork-preview-svg", "svg", b"<svg/>");
+		let work = temp_dir("artwork-preview-none");
+		assert!(stage_artwork_preview(Some(&svg), &work).unwrap().is_none());
+		assert!(stage_artwork_preview(None, &work).unwrap().is_none());
+		assert!(!work.join("artwork.pdf").exists());
 	}
 }
