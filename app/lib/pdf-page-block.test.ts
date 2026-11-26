@@ -107,7 +107,7 @@ const builders = (settings: CompanySettingsRow): [string, () => unknown][] => [
 	["voucher", () => buildVoucherPdfPayload({ row: { voucher_type: "receipt", amount_cents: 1000 } as never, settings, currency, relatedLabel: null })],
 	["statement", () => buildCustomerStatementPdfPayload({
 		settings,
-		currency: LKR,
+		currency: { ...LKR, decimals: 2 },
 		client: { name: "Acme" } as never,
 		openInvoices: [],
 		paidCentsFor: () => 0,

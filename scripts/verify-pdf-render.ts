@@ -339,7 +339,7 @@ const letterRow = (prePrinted: boolean, extraParagraphs = 0): LetterRow => ({
 const statement = (settings: CompanySettingsRow, withBank = true) => ({
 	...buildCustomerStatementPdfPayload({
 		settings,
-		currency: LKR,
+		currency: { ...LKR, decimals: 2 },
 		client: {
 			id: 1,
 			name: "Acme (Pvt) Ltd",
@@ -376,7 +376,7 @@ const statement = (settings: CompanySettingsRow, withBank = true) => ({
 
 // Reports stamp `generated_at` with today's date and format their period with
 // the machine's locale — both pinned.
-const pinReport = <T extends object>(payload: T) => ({ ...payload, generated_at: "2026-06-30", period_label: "Apr 1, 2026 → Jun 30, 2026" });
+const pinReport = (payload: object): Record<string, unknown> => ({ ...payload, generated_at: "2026-06-30", period_label: "Apr 1, 2026 → Jun 30, 2026" });
 
 const pnl = (settings: CompanySettingsRow) => pinReport(buildPnlPdfPayload({
 	settings,
