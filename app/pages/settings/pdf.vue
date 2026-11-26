@@ -209,12 +209,46 @@
 							</button>
 						</div>
 
-						<p v-if="form.pdf_stationery_mode === 'builtin'" class="mt-4 text-xs text-(--ui-text-muted)">
-							Set the header logo and the header &amp; footer text below.
-						</p>
-						<p v-else-if="form.pdf_stationery_mode === 'background'" class="mt-4 text-xs text-(--ui-text-muted)">
-							Upload your artwork and set its Safe area below. Your logo, header text and footer aren't printed — the artwork is your letterhead.
-						</p>
+						<!-- The current page, to scale, from the live (unsaved) form. -->
+						<div class="mt-5 flex flex-col sm:flex-row items-start gap-5">
+							<StationeryPage
+								class="shrink-0 rounded-sm ring-1 ring-(--ui-border) shadow-sm"
+								:paper="paperKey"
+								:mode="form.pdf_stationery_mode"
+								:layout="form.pdf_layout"
+								:margins="activeStationeryMargins"
+								:scale="scaleForWidth(resolvePaperSize(paperKey), 150)"
+								:artwork-url="artwork.url.value"
+								:artwork-ext="artwork.ext.value"
+								compact
+							/>
+							<div class="space-y-3 min-w-0">
+								<p v-if="form.pdf_stationery_mode === 'builtin'" class="text-xs text-(--ui-text-muted)">
+									Your Layout's own margins frame the page. Set the header logo and the header &amp; footer text below.
+								</p>
+								<p v-else-if="form.pdf_stationery_mode === 'background'" class="text-xs text-(--ui-text-muted)">
+									Upload your artwork below, then set the Safe area in the editor. Your logo, header text and footer aren't printed — the artwork is your letterhead.
+								</p>
+								<p v-else class="text-xs text-(--ui-text-muted)">
+									Set the blank bands for your printed letterhead in the editor, or type the top and bottom bands below.
+								</p>
+								<UButton
+									v-if="form.pdf_stationery_mode !== 'builtin'"
+									icon="i-lucide-pencil-ruler"
+									variant="soft"
+									size="sm"
+									@click="openEditor"
+								>
+									Edit stationery
+								</UButton>
+								<div class="text-xs text-(--ui-text-muted) tabular-nums">
+									{{ resolvePaperSize(paperKey).label }}
+									<template v-if="form.pdf_stationery_mode !== 'builtin'">
+										· margins {{ activeStationeryMargins.top }} / {{ activeStationeryMargins.right }} / {{ activeStationeryMargins.bottom }} / {{ activeStationeryMargins.left }} mm (top / right / bottom / left)
+									</template>
+								</div>
+							</div>
+						</div>
 
 						<!-- Pre-printed paper: only the two blank bands. Each mode keeps its
 							own settings, so switching back to Built-in and here again
@@ -232,10 +266,10 @@
 							</p>
 							<div class="flex flex-wrap gap-6">
 								<UFormField label="Top band (mm)" help="Clears your printed letterhead. Typically 40–60 mm.">
-									<UInputNumber v-model="form.preprinted_top_mm" :min="0" :max="MAX_BAND_MM" :step="1" class="w-40" />
+									<UInputNumber v-model="form.preprinted_margins.top" :min="0" :max="MAX_BAND_MM" :step="1" class="w-40" />
 								</UFormField>
 								<UFormField label="Bottom band (mm)" help="Clears a printed footer, if any. Typically 15–30 mm.">
-									<UInputNumber v-model="form.preprinted_bottom_mm" :min="0" :max="MAX_BAND_MM" :step="1" class="w-40" />
+									<UInputNumber v-model="form.preprinted_margins.bottom" :min="0" :max="MAX_BAND_MM" :step="1" class="w-40" />
 								</UFormField>
 							</div>
 						</div>
@@ -245,8 +279,16 @@
 						(not cleared) under other modes, like Built-in's controls below. -->
 					<StationeryBackgroundCard
 						v-if="form.pdf_stationery_mode === 'background'"
-						v-model:margins="form.background_margins"
-						:paper="resolvePaperSize(form.pdf_paper_size).key"
+						:paper="paperKey"
+					/>
+					<StationeryEditorModal
+						v-if="form.pdf_stationery_mode !== 'builtin'"
+						v-model:open="editorOpen"
+						v-model:margins="activeStationeryMargins"
+						:mode="form.pdf_stationery_mode"
+						:paper="paperKey"
+						:layout="form.pdf_layout"
+						:settings="previewSettings"
 					/>
 
 					<!-- Built-in stationery's own controls. Hidden (not cleared) under any
@@ -632,13 +674,15 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
+	import { useStationeryArtwork } from "~/composables/useStationeryArtwork";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
 	import { PAPER_SIZES, resolvePaperSize } from "~/lib/page-settings";
 	import { blocksToPlainLines, buildHeaderBlocks } from "~/lib/pdf-chrome";
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
 	import { PDF_TOKENS } from "~/lib/pdf-tokens";
 	import { sampleInvoicePayload } from "~/lib/sample-pdf";
-	import { BACKGROUND_DEFAULT_MARGINS, MAX_BAND_MM, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, setBackgroundMargins, setPreprintedBands, STATIONERY_MODES, stationeryModeToSave } from "~/lib/stationery";
+	import { BACKGROUND_DEFAULT_MARGINS, MAX_BAND_MM, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, setBackgroundMargins, setPreprintedMargins, STATIONERY_MODES, stationeryModeToSave } from "~/lib/stationery";
+	import { scaleForWidth } from "~/lib/stationery-geometry";
 	import { isHexColor, THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -660,8 +704,7 @@
 		pdf_layout: PdfLayoutKey
 		// The RESOLVED mode the picker shows; onSubmit maps it back (stationeryModeToSave).
 		pdf_stationery_mode: StationeryMode
-		preprinted_top_mm: number
-		preprinted_bottom_mm: number
+		preprinted_margins: StationeryMarginsMm
 		background_margins: StationeryMarginsMm
 	};
 
@@ -672,8 +715,7 @@
 		pdf_layout: "classic",
 		pdf_paper_size: "a4",
 		pdf_stationery_mode: "builtin",
-		preprinted_top_mm: PREPRINTED_DEFAULT_MARGINS.top,
-		preprinted_bottom_mm: PREPRINTED_DEFAULT_MARGINS.bottom,
+		preprinted_margins: { ...PREPRINTED_DEFAULT_MARGINS },
 		background_margins: { ...BACKGROUND_DEFAULT_MARGINS },
 		pdf_logo_scale: 100,
 		pdf_header_custom: 0,
@@ -684,10 +726,34 @@
 
 	// Every mode's stored settings with this page's edits applied; anything
 	// this page doesn't edit (the side bands, later modes' geometry) is kept.
-	const stationeryJson = () => setBackgroundMargins(setPreprintedBands(store.settings?.pdf_stationery, {
-		top: form.preprinted_top_mm,
-		bottom: form.preprinted_bottom_mm
-	}), { ...form.background_margins });
+	const stationeryJson = () => setBackgroundMargins(
+		setPreprintedMargins(store.settings?.pdf_stationery, { ...form.preprinted_margins }),
+		{ ...form.background_margins }
+	);
+
+	const paperKey = computed(() => resolvePaperSize(form.pdf_paper_size).key);
+
+	// The margins of the mode being edited — what the thumbnail frames and the
+	// Stationery editor drags. Each mode keeps its own (Built-in has none of
+	// its own; it reads the Pre-printed ones harmlessly and never writes).
+	const activeStationeryMargins = computed<StationeryMarginsMm>({
+		get: () => (form.pdf_stationery_mode === "background" ? form.background_margins : form.preprinted_margins),
+		set: (m) => {
+			if (form.pdf_stationery_mode === "background") form.background_margins = { ...m };
+			else if (form.pdf_stationery_mode === "preprinted") form.preprinted_margins = { ...m };
+		}
+	});
+
+	// Shared with StationeryBackgroundCard and the editor (one read / render).
+	const artwork = useStationeryArtwork();
+	const editorOpen = ref(false);
+	const openEditor = () => {
+		editorOpen.value = true;
+	};
+	// Kept-alive page: never come back to a stale open editor.
+	onDeactivated(() => {
+		editorOpen.value = false;
+	});
 
 	const currency = useActiveCurrency();
 	const colors = THEME_COLORS;
@@ -878,8 +944,7 @@
 		form.pdf_paper_size = resolvePaperSize(s.pdf_paper_size).key;
 		form.pdf_stationery_mode = resolveStationeryMode(s.pdf_stationery_mode);
 		const stationery = parseStationery(s.pdf_stationery);
-		form.preprinted_top_mm = stationery.preprinted.top;
-		form.preprinted_bottom_mm = stationery.preprinted.bottom;
+		form.preprinted_margins = { ...stationery.preprinted };
 		form.background_margins = { ...stationery.background.margins };
 		form.pdf_logo_scale = s.pdf_logo_scale ?? 100;
 		form.pdf_header_custom = s.pdf_header_custom ?? 0;

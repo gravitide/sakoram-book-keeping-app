@@ -5,8 +5,9 @@
 		subtitle="Your letterhead as one page-sized artwork, drawn behind the content of every page. SVG or PDF stay sharp at any size; PNG and JPEG are cropped to the paper and kept at print resolution."
 	>
 		<div class="grid grid-cols-1 md:grid-cols-[auto_minmax(0,1fr)] gap-6 items-start">
-			<!-- The page, to scale, with the Safe area the margins leave. White
-				in both themes: it previews against the paper. -->
+			<!-- The artwork, to scale on the paper. White in both themes: it
+				previews against the paper. The Safe area is set in the
+				Stationery editor (Stationery section above). -->
 			<div class="flex flex-col items-center gap-2">
 				<div
 					class="relative w-44 rounded-md border-2 border-dashed overflow-hidden bg-white transition cursor-pointer"
@@ -31,8 +32,8 @@
 						@change="onFileChange"
 					>
 					<img
-						v-if="previewUrl"
-						:src="previewUrl"
+						v-if="artworkPreview.url.value"
+						:src="artworkPreview.url.value"
 						alt="Full-page background"
 						class="absolute inset-0 w-full h-full object-cover"
 					>
@@ -50,17 +51,12 @@
 						<UIcon name="i-lucide-upload" class="size-6" />
 						<span class="text-[11px]">Drop an SVG, PDF, PNG or JPEG, or click to choose</span>
 					</div>
-					<!-- Safe area -->
-					<div
-						class="absolute border border-dashed border-(--ui-primary) pointer-events-none"
-						:style="safeAreaStyle"
-					/>
 					<div v-if="busy" class="absolute inset-0 bg-white/70 flex items-center justify-center">
 						<UIcon name="i-lucide-loader-circle" class="size-6 animate-spin text-zinc-500" />
 					</div>
 				</div>
 				<div class="text-[11px] text-(--ui-text-muted)">
-					{{ paperInfo.label }} · dashed line = Safe area
+					{{ paperInfo.label }}
 				</div>
 			</div>
 
@@ -114,29 +110,6 @@
 					title="Convert the text to outlines"
 					description="This SVG still contains live text. The PDF uses only Sakoram's bundled fonts, so your letterhead's lettering may come out in a different typeface. In your design app, convert text to outlines (paths) and upload it again."
 				/>
-
-				<div>
-					<div class="text-sm font-medium mb-1">
-						Safe area margins
-					</div>
-					<p class="text-xs text-(--ui-text-muted) mb-3">
-						How far the content stays from each edge, so it never prints over your artwork. Page numbers sit just inside the bottom margin.
-					</p>
-					<div class="grid grid-cols-2 gap-4 max-w-md">
-						<UFormField label="Top (mm)">
-							<UInputNumber v-model="margins.top" :min="0" :max="MAX_BAND_MM" :step="1" />
-						</UFormField>
-						<UFormField label="Bottom (mm)">
-							<UInputNumber v-model="margins.bottom" :min="0" :max="MAX_BAND_MM" :step="1" />
-						</UFormField>
-						<UFormField label="Left (mm)">
-							<UInputNumber v-model="margins.left" :min="0" :max="MAX_BAND_MM" :step="1" />
-						</UFormField>
-						<UFormField label="Right (mm)">
-							<UInputNumber v-model="margins.right" :min="0" :max="MAX_BAND_MM" :step="1" />
-						</UFormField>
-					</div>
-				</div>
 			</div>
 		</div>
 
@@ -156,8 +129,8 @@
 
 <script setup lang="ts">
 	// Full-page background Stationery: upload / crop / downscale / remove the
-	// artwork, and the four Safe-area margins (number inputs; the visual editor
-	// is a follow-up).
+	// artwork. Its four Safe-area margins are set in the Stationery editor
+	// (StationeryEditorModal, opened from the Stationery section).
 	//
 	// Files go through Rust commands only (a business folder can live on any
 	// drive — see CLAUDE.md): stationery/background.<ext> is what PDFs render;
@@ -165,14 +138,14 @@
 	// Re-crop. company_settings.pdf_stationery records only the format, the
 	// paper it was prepared for, the crop and the live-text flag — never a path.
 	//
-	// Artwork changes save immediately (like the header logo); the margins are
-	// part of the page's form and save with Save changes.
+	// Artwork changes save immediately (like the header logo).
 	import type { CropRect } from "~/lib/crop-rect";
 	import type { PaperSize } from "~/lib/page-settings";
-	import type { BackgroundArtwork, BackgroundExt, StationeryMarginsMm } from "~/lib/stationery";
+	import type { BackgroundArtwork, BackgroundExt } from "~/lib/stationery";
 	import { invoke } from "@tauri-apps/api/core";
+	import { useStationeryArtwork } from "~/composables/useStationeryArtwork";
 	import { resolvePaperSize } from "~/lib/page-settings";
-	import { clearBackgroundArtwork, MAX_BAND_MM, parseStationery, setBackgroundArtwork } from "~/lib/stationery";
+	import { clearBackgroundArtwork, parseStationery, setBackgroundArtwork } from "~/lib/stationery";
 	import { backgroundFormatOf, backgroundPixelSize, downscaleSize, isRasterBackground, matchesPaperAspect, svgHasLiveText } from "~/lib/stationery-artwork";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -181,7 +154,6 @@
 		/** The business's Paper size as currently picked on the page (maybe unsaved). */
 		paper: PaperSize
 	}>();
-	const margins = defineModel<StationeryMarginsMm>("margins", { required: true });
 
 	const store = useSettingsStore();
 	const tenants = useTenantsStore();
@@ -191,14 +163,6 @@
 	const paperLabel = (key: PaperSize) => resolvePaperSize(key).label;
 	const artwork = computed(() => parseStationery(store.settings?.pdf_stationery).background);
 	const canRecrop = computed(() => artwork.value.ext !== null && isRasterBackground(artwork.value.ext));
-
-	const pct = (mm: number, of: number) => `${Math.min(100, Math.max(0, (mm / of) * 100))}%`;
-	const safeAreaStyle = computed(() => ({
-		top: pct(margins.value.top, paperInfo.value.heightMm),
-		bottom: pct(margins.value.bottom, paperInfo.value.heightMm),
-		left: pct(margins.value.left, paperInfo.value.widthMm),
-		right: pct(margins.value.right, paperInfo.value.widthMm)
-	}));
 
 	const fileInput = useTemplateRef<HTMLInputElement>("fileInput");
 	const dragOver = ref(false);
@@ -215,27 +179,9 @@
 	});
 
 	// ---- preview -------------------------------------------------------
-	// Bytes via Rust → blob URL (asset:// URLs can't reach a folder on any
-	// drive). A PDF has no <img> preview; the tile says so instead.
-	const previewUrl = ref<string | null>(null);
-	const setPreview = (url: string | null) => {
-		if (previewUrl.value) URL.revokeObjectURL(previewUrl.value);
-		previewUrl.value = url;
-	};
-	const loadPreview = async () => {
-		const tenantId = tenants.activeTenantId;
-		const ext = artwork.value.ext;
-		if (!tenantId || !ext || ext === "pdf") return setPreview(null);
-		try {
-			const [readExt, bytes] = await invoke<[string, number[]]>("read_business_asset", { id: tenantId, kind: "stationery-background" });
-			setPreview(URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: mimeOf(readExt) })));
-		} catch {
-			setPreview(null);
-		}
-	};
-	watch(() => store.settings?.pdf_stationery, loadPreview, { immediate: true });
-	onActivated(loadPreview);
-	onBeforeUnmount(() => setPreview(null));
+	// Shared with the Stationery thumbnail and editor: the file itself, or for
+	// a PDF its first page rendered to PNG by Typst.
+	const artworkPreview = useStationeryArtwork();
 
 	// ---- saving --------------------------------------------------------
 	const saveAsset = (kind: string, ext: string, bytes: Uint8Array) =>
@@ -243,6 +189,7 @@
 
 	const recordArtwork = async (next: BackgroundArtwork) => {
 		await store.save({ pdf_stationery: setBackgroundArtwork(store.settings?.pdf_stationery, next) });
+		await artworkPreview.reload();
 	};
 
 	const loadImage = (blob: Blob) => new Promise<HTMLImageElement>((resolve, reject) => {
