@@ -58,6 +58,7 @@ import { dirname, join } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { buildBillPdfPayload } from "../app/lib/bill-pdf.ts";
+import { DEMO_LETTERHEAD_ACCENT, demoLetterheadSettings } from "../app/lib/demo-letterhead.ts";
 import { buildInvoicePdfPayload } from "../app/lib/invoice-pdf.ts";
 import { buildLetterPdfPayload } from "../app/lib/letter-pdf.ts";
 import { CURRENCIES } from "../app/lib/money.ts";
@@ -76,6 +77,12 @@ const LOGO = join(REPO, "src-tauri/icons/128x128.png");
 // Stands in for the business folder: Full-page background artwork is read from
 // <folder>/stationery/background.<ext>, exactly as the app reads it.
 const BUSINESS_FOLDER = join(REPO, "scripts/fixtures");
+// The demo business's bundled letterhead, staged into a throwaway business
+// folder exactly where the demo seed writes it (stationery/background.svg).
+const DEMO_FOLDER = mkdtempSync(join(tmpdir(), "sakoram-demo-folder-"));
+mkdirSync(join(DEMO_FOLDER, "stationery"));
+copyFileSync(join(REPO, "app/assets/stationery/demo-letterhead.svg"), join(DEMO_FOLDER, "stationery/background.svg"));
+process.on("exit", () => rmSync(DEMO_FOLDER, { recursive: true, force: true }));
 const BASELINES = join(REPO, "scripts/pdf-render-baselines.json");
 const CREATION_TIMESTAMP = "1767225600"; // 2026-01-01T00:00:00Z
 
@@ -177,6 +184,8 @@ const settingsFor = (overrides: Partial<CompanySettingsRow> = {}): CompanySettin
 });
 
 const noLogo = { pdf_header_logo_path: null };
+// The demo business: its bundled letterhead, Safe area and PDF accent.
+const demoSettings = () => settingsFor({ ...demoLetterheadSettings(null), pdf_theme_color: DEMO_LETTERHEAD_ACCENT });
 const preprintedPaper = { pdf_stationery_mode: "preprinted" };
 // Full-page background with artwork of the given format. Its margins (44 / 22,
 // sides 20) differ from both the defaults and the Pre-printed bands above, so
@@ -643,6 +652,11 @@ const cases: Case[] = [
 	// A letter set to pre-printed paper keeps its blank bands and draws no
 	// artwork, even while the business uses a Full-page background.
 	{ name: "letter-preprinted-on-business-background", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(true), settings: settingsFor({ ...fullPageBackground() }) }), sameAs: "letter-preprinted-on-business-preprinted" },
+
+	// The demo business's PDFs: an invoice on the bundled sample letterhead
+	// with the demo's own Safe area (one page, and one that runs on).
+	{ ...docCase("invoice-classic-demo-letterhead", invoice(demoSettings())), businessFolder: DEMO_FOLDER },
+	{ ...docCase("invoice-classic-demo-letterhead-multipage", invoice(demoSettings(), 30)), businessFolder: DEMO_FOLDER, multipage: true },
 
 	// Every template on the three non-A4 sheets. Built-in Layout margins scale
 	// with paper width; Pre-printed paper bands (letters included) do not.
