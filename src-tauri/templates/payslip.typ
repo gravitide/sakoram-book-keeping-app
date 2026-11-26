@@ -90,13 +90,18 @@
   content
 )
 
+// A fixed 30% amount column is too narrow on paper smaller than A4 (A5:
+// "150,000.00" overran its cell), so there it sizes to its content instead.
+// Kept at 30% on A4 and wider so A4 output is unchanged.
+#let amount-col = if data.page.margin_scale < 1 { auto } else { 30% }
+
 #grid(
   columns: (1fr, 1fr),
   column-gutter: 14pt,
   // ===== Earnings =====
   [
     #table(
-      columns: (1fr, 30%),
+      columns: (1fr, amount-col),
       stroke: 0.5pt + rgb("#e5e7eb"),
       align: (left + top, right + top),
 
@@ -120,7 +125,7 @@
   // ===== Deductions =====
   [
     #table(
-      columns: (1fr, 30%),
+      columns: (1fr, amount-col),
       stroke: 0.5pt + rgb("#e5e7eb"),
       align: (left + top, right + top),
 
