@@ -530,7 +530,7 @@ sakoram_app/
 │  │     ├─ pdf.vue                   ← Paper & layout (paper size + Layout picker) · Stationery (mode picker; Pre-printed paper bands; Built-in-only header logo + header/footer text) · Font + colour
 │  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), light/dark/system toggle, zoom (6 discrete steps)
 │  │     ├─ payroll.vue               ← cycle template (period_start_day / period_end_day / pay_day)
-│  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + pre-printed top/bottom margins (letter_preprinted_top/bottom_margin_mm) with a live A4 preview + letterhead-templates placeholder. (Signatures moved to /settings/company#signatures — they're shared across letters + quote/invoice "Prepared by".)
+│  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + a pointer card to the Pre-printed paper margins (they live on the Stationery at /settings/pdf#stationery since 0056) + letterhead-templates placeholder. (Signatures moved to /settings/company#signatures — they're shared across letters + quote/invoice "Prepared by".)
 │  │     ├─ businesses.vue            ← tenant CRUD + Export/Import (local .zip)
 │  │     ├─ backup.vue                ← Google Drive backup — hosts DriveBackupCard (moved off the Businesses page in v0.163.0 so it is findable); shows a "not available in this build" note when there are no Google credentials
 │  │     └─ developer.vue             ← per-machine developer options (localStorage via useUiState, no save bar). Currently: the breakpoint-badge switch. Everything defaults OFF in every build.
@@ -1422,8 +1422,11 @@ See `src-tauri/migrations/` for the source of truth. High-level:
   not apply). `number` is a NON-UNIQUE, editable, clearable reference —
   letters are deliberately not gapless-numbered. `body_json` and
   `signature_json` hold TipTap ProseMirror documents; `pre_printed`
-  (0/1) swaps app-rendered letterhead for reserved blank top/bottom
-  space sized by `company_settings.letter_preprinted_{top,bottom}_margin_mm`.
+  (0/1) is the per-letter paper choice: 0 = use the business's Stationery
+  + Paper size like every other document, 1 = pre-printed paper, which
+  reserves the business's Pre-printed paper bands (`pdf_stationery` →
+  `preprinted`) WHATEVER the active Stationery mode
+  (`buildPageSettings(settings, { preprinted })`). No per-letter margins.
 - `letter_categories` — name-only managed lookup (migration 0041) behind
   the letter Category picker. The letter stores `category` as plain
   text, so archiving or deleting a category never rewrites past letters.
@@ -1599,6 +1602,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0053_logo_crop.sql                      ← `company_settings.logo_crop` (TEXT JSON {x,y,w,h} in source px, NULL for SVG/uncropped) — the square-identity-logo mirror of `pdf_logo_crop`. Raster uploads now keep the untouched original at `logos/logo-original.<ext>` and the CROPPED derivative at `logos/logo.<ext>`; `save_business_asset`/`read_business_asset` gained a `logo-original` kind (the stale-ext sweep keys on `file_stem`, and `logo-original` != `logo`, so the pair never collide). `ImageCropModal` gained `aspect` (1 = square; omitted keeps the wide PDF letterhead free-form) plus `title`/`hint` props — its copy was hardcoded to the PDF header and leaked into the logo modal. Aspect math lives in the pure `fullRect(w,h,aspect)` / `resizeRect(...,aspect)`; clamping at an image edge shrinks BOTH axes so the ratio survives. **The sharp edge: cropping emits PNG, so a JPEG upload lands as `logo.png` — `tenants.setLogoFile` must get the extension of the file ACTUALLY written**, because welcome + Businesses read `tenants.json` directly, not the DB. The logo now renders on a WHITE PLATE (sidebar / welcome / Businesses / uploader tile) but only when a logo is set — the empty-state icon keeps the muted bg, since a white square holding a grey icon reads as a broken image in dark mode. Originals are local-only: `data_io` bundles the derivative alone (same as `pdf-header-original`), so Re-crop falls back to cropping the derivative after a backup import. SCHEMA_VERSION → 53.
 0054_pdf_paper_size.sql                 ← `company_settings.pdf_paper_size` (TEXT NOT NULL DEFAULT 'a4', CHECK a4 | a5 | us-letter | us-legal — the stored value IS the Typst paper name). Picked on /settings/pdf. `buildPageSettings` emits `page.paper` + `page.margin_scale` (paper width / 210 mm); `page-setup` multiplies the Layout's A4 margins by it (18 mm → ~12.7 mm on A5) only when `page.margins` is null — Stationery / pre-printed margins are never scaled, type sizes never change. Statement stays landscape (flipped). Payslip's 30 % amount column switches to `auto` below A4 width. `verify:pdf` renders every template at A5 / Letter / Legal; A4 hashes unchanged. SCHEMA_VERSION → 54.
 0055_pdf_layout_stationery.sql          ← Layout + Stationery replace `pdf_template` (ADR 0001). `pdf_layout` (classic | modern | minimal | compact, CHECK; `app/lib/pdf-layouts.ts` ↔ `document_template` in pdf.rs), `pdf_stationery_mode` (builtin | background | header_footer | preprinted, CHECK, default builtin — only builtin + preprinted render; `resolveStationeryMode` reads the others as builtin until they land) and `pdf_stationery` (JSON holding EVERY mode's settings so switching modes loses nothing; NULL = defaults; Zod in `app/lib/stationery.ts`, field-by-field `.catch` so malformed JSON degrades to defaults). A `letterhead` business moved to Classic + Pre-printed paper; Pre-printed paper's bands were seeded from `letter_preprinted_{top,bottom}_margin_mm` (sides 18). `doc-letterhead.typ` and the `letterhead` branches in common.typ are gone. /settings/pdf regrouped into Paper & layout · Stationery (Built-in's logo + header/footer text cards only while Built-in) · Font. SCHEMA_VERSION → 55.
+0056_drop_letter_preprinted_margins.sql ← drops `company_settings.letter_preprinted_{top,bottom}_margin_mm`. A letter's paper choice is now "use stationery" (business Stationery + Paper size) or "pre-printed paper", and the latter reserves the business-wide Pre-printed paper bands (`pdf_stationery` → `preprinted`, seeded from these columns by 0055) even while the active mode is Built-in; its "Page N of M" sits inside the Safe area. /settings/letters lost its margin inputs (pointer card to /settings/pdf#stationery); /settings/pdf shows the Pre-printed bands under every mode. SCHEMA_VERSION → 56.
 ```
 
 **Adding a migration**: drop the SQL into `src-tauri/migrations/`,
@@ -1925,7 +1929,7 @@ persisted to localStorage).
 
 ### Done
 
-- ✅ DB schema + migrations 0001..0055 (`SCHEMA_VERSION` 55)
+- ✅ DB schema + migrations 0001..0056 (`SCHEMA_VERSION` 56)
 - ✅ Clients / Vendors / Employees CRUD (hero + SectionCard layout)
 - ✅ Quotes (full lifecycle, PDF, convert-to-invoice; default VAT seeded
   from settings on draft creation)
@@ -2410,9 +2414,9 @@ persisted to localStorage).
   side by side); duplicate-to-clone. Sidebar "Correspondence" group.
   **Categories are a managed list** (`letter_categories`, migration 0041) —
   `LetterCategoryPicker` (search-or-create) on the modal + detail; managed on
-  the new **`/settings/letters`** page (Business group) alongside the
-  **pre-printed top margin** (`company_settings.letter_preprinted_top_margin_mm`,
-  read by `letter.typ`) and a "coming soon" letterhead-templates placeholder.
+  the new **`/settings/letters`** page (Business group) alongside a
+  pointer to the Pre-printed paper margins (on the Stationery, /settings/pdf,
+  since 0056) and a "coming soon" letterhead-templates placeholder.
   Rich text uses TipTap's official `useEditor` + `immediatelyRender: false`
   (a hand-rolled `new Editor` in `onMounted` did NOT bind to `EditorContent` —
   that was the "rich text doesn't work" bug); `@tiptap/pm` is an explicit dep.
