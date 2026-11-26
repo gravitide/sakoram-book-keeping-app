@@ -11,17 +11,18 @@
 //
 // Pure, store-free, relative imports only (vitest + the render-check script).
 
+import type { PaperSize } from "./page-settings";
 import { z } from "zod";
 
 /** Every value the DB column accepts (CHECK in migration 0055). */
 export type StoredStationeryMode = "builtin" | "background" | "header_footer" | "preprinted";
 
 /**
- * The modes the app can render today. Full-page background and Header &
- * footer images are stored-but-not-built: resolveStationeryMode reads them as
- * Built-in until their renderers land.
+ * The modes the app can render today. Header & footer images is
+ * stored-but-not-built: resolveStationeryMode reads it as Built-in until its
+ * renderer lands.
  */
-export type StationeryMode = "builtin" | "preprinted";
+export type StationeryMode = "builtin" | "background" | "preprinted";
 
 export interface StationeryModeOption {
 	key: StationeryMode
@@ -32,6 +33,7 @@ export interface StationeryModeOption {
 /** The Stationery picker, Built-in (the default) first. */
 export const STATIONERY_MODES: readonly StationeryModeOption[] = [
 	{ key: "builtin", label: "Built-in", description: "The app draws your logo, header text and footer on every page." },
+	{ key: "background", label: "Full-page background", description: "Your own page-sized artwork (SVG, PDF, PNG or JPEG) is drawn behind the content on every page." },
 	{ key: "preprinted", label: "Pre-printed paper", description: "Nothing is printed around the content — blank bands are left for paper that already carries your letterhead." }
 ];
 
@@ -82,9 +84,48 @@ const marginsSchema = (d: Readonly<StationeryMarginsMm>) => z.object({
 	left: band(d.left)
 }).catch({ ...d });
 
-export const stationerySchema = z.object({
-	preprinted: marginsSchema(PREPRINTED_DEFAULT_MARGINS)
+// A Full-page background's Safe area until the business sets its own: a
+// letterhead's header usually needs more room than its footer.
+export const BACKGROUND_DEFAULT_MARGINS: Readonly<StationeryMarginsMm> = { top: 40, right: 18, bottom: 25, left: 18 };
+
+/**
+ * The file formats a Full-page background can be stored as (the extension of
+ * `stationery/background.<ext>` in the business folder). Raster uploads are
+ * re-encoded on import, so a JPEG always lands as `jpg`.
+ */
+export const BACKGROUND_EXTS = ["svg", "pdf", "png", "jpg"] as const;
+export type BackgroundExt = typeof BACKGROUND_EXTS[number];
+
+// The four Paper sizes (page-settings.ts PAPER_SIZES), repeated as a literal so
+// this module doesn't import page-settings at runtime (it imports us).
+const PAPER_KEYS = ["a4", "a5", "us-letter", "us-legal"] as const satisfies readonly PaperSize[];
+
+const cropSchema = z.object({
+	x: z.number().finite().min(0),
+	y: z.number().finite().min(0),
+	w: z.number().finite().positive(),
+	h: z.number().finite().positive()
 });
+
+const backgroundSchema = z.object({
+	/** null = no artwork uploaded (or it was removed). */
+	ext: z.enum(BACKGROUND_EXTS).nullable().catch(null),
+	/** The sheet the artwork was prepared for (a raster is cropped to its proportions). */
+	paper: z.enum(PAPER_KEYS).nullable().catch(null),
+	/** Raster crop in source pixels of the untouched original, for Re-crop. null = uncropped. */
+	crop: cropSchema.nullable().catch(null),
+	/** An SVG that still holds live text — the settings page warns to outline it. */
+	live_text: z.boolean().catch(false),
+	margins: marginsSchema(BACKGROUND_DEFAULT_MARGINS)
+}).catch({ ext: null, paper: null, crop: null, live_text: false, margins: { ...BACKGROUND_DEFAULT_MARGINS } });
+
+export const stationerySchema = z.object({
+	preprinted: marginsSchema(PREPRINTED_DEFAULT_MARGINS),
+	background: backgroundSchema
+});
+
+export type BackgroundStationery = z.infer<typeof backgroundSchema>;
+export type BackgroundArtwork = Pick<BackgroundStationery, "ext" | "paper" | "crop" | "live_text">;
 
 export type Stationery = z.infer<typeof stationerySchema>;
 
@@ -118,4 +159,25 @@ export function setPreprintedBands(stored: string | null | undefined, bands: { t
 		...current,
 		preprinted: { ...current.preprinted, top: bands.top, bottom: bands.bottom }
 	}));
+}
+
+/**
+ * The stored JSON after a Full-page background upload: the new artwork's
+ * format, the sheet it was prepared for, its crop and live-text flag. The
+ * background's margins and every other mode's settings are kept.
+ */
+export function setBackgroundArtwork(stored: string | null | undefined, artwork: BackgroundArtwork): string {
+	const current = parseStationery(stored);
+	return serializeStationery(stationerySchema.parse({ ...current, background: { ...current.background, ...artwork } }));
+}
+
+/** The stored JSON after Remove: no artwork, the background's margins kept. */
+export function clearBackgroundArtwork(stored: string | null | undefined): string {
+	return setBackgroundArtwork(stored, { ext: null, paper: null, crop: null, live_text: false });
+}
+
+/** The stored JSON with the Full-page background's four margins replaced (refused values fall back to defaults). */
+export function setBackgroundMargins(stored: string | null | undefined, margins: StationeryMarginsMm): string {
+	const current = parseStationery(stored);
+	return serializeStationery(stationerySchema.parse({ ...current, background: { ...current.background, margins } }));
 }

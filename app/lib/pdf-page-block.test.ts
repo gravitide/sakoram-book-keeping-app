@@ -38,11 +38,19 @@ const builtin = {
 	pdf_stationery: JSON.stringify({ preprinted: { top: 48, right: 14, bottom: 22, left: 16 } })
 } as CompanySettingsRow;
 const preprinted = { ...builtin, pdf_stationery_mode: "preprinted" } as CompanySettingsRow;
+const background = {
+	...builtin,
+	pdf_stationery_mode: "background",
+	pdf_stationery: JSON.stringify({
+		preprinted: { top: 48, right: 14, bottom: 22, left: 16 },
+		background: { ext: "svg", paper: "a5", margins: { top: 36, right: 12, bottom: 20, left: 12 } }
+	})
+} as CompanySettingsRow;
 
 // A5 is 148 mm wide: the Layout's A4 margins scale by 148 / 210.
-const A5_LAYOUT_MARGINS = { paper: "a5", margin_scale: 0.704762, stationery: "builtin", chrome: true, margins: null, page_numbers: true, page_number_position: "footer" };
+const A5_LAYOUT_MARGINS = { paper: "a5", margin_scale: 0.704762, stationery: "builtin", chrome: true, margins: null, page_numbers: true, page_number_position: "footer", background: null };
 // The Stationery's own bands, never scaled.
-const A5_PREPRINTED = { paper: "a5", margin_scale: 0.704762, stationery: "preprinted", chrome: false, margins: { top: 48, right: 14, bottom: 22, left: 16 }, page_numbers: true, page_number_position: "safe_area" };
+const A5_PREPRINTED = { paper: "a5", margin_scale: 0.704762, stationery: "preprinted", chrome: false, margins: { top: 48, right: 14, bottom: 22, left: 16 }, page_numbers: true, page_number_position: "safe_area", background: null };
 
 const docRow = {
 	number: "INV-0001",
@@ -134,7 +142,16 @@ describe("every PDF builder emits the shared page block", () => {
 		expect(pageOf(build)).toEqual(A5_PREPRINTED);
 	});
 
-	it.each([["Built-in", builtin], ["Pre-printed paper", preprinted]] as const)(
+	it.each(builders(background))("%s on a Full-page background: the artwork behind every page, the background's own margins", (_name, build) => {
+		expect(pageOf(build)).toEqual({
+			...A5_PREPRINTED,
+			stationery: "background",
+			margins: { top: 36, right: 12, bottom: 20, left: 12 },
+			background: { ext: "svg" }
+		});
+	});
+
+	it.each([["Built-in", builtin], ["Pre-printed paper", preprinted], ["Full-page background", background]] as const)(
 		"a letter on pre-printed paper reserves the business's Pre-printed paper bands (active mode %s)",
 		(_mode, settings) => {
 			expect(pageOf(() => letter(settings, 1))).toEqual(A5_PREPRINTED);
