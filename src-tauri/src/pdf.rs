@@ -274,7 +274,7 @@ fn extract_typst_errors(stderr: &str) -> Option<String> {
 // Unknown / missing keys (including the retired `letterhead`, migration 0055)
 // fall back to Classic. New Layouts add an arm here AND to PDF_LAYOUTS in
 // app/lib/pdf-layouts.ts — pdf-layouts.test.ts fails if the two disagree.
-fn document_template(key: Option<&str>) -> (&'static str, &'static str) {
+fn layout_template(key: Option<&str>) -> (&'static str, &'static str) {
 	match key {
 		Some("modern") => ("doc-modern.typ", DOC_MODERN),
 		Some("minimal") => ("doc-minimal.typ", DOC_MINIMAL),
@@ -290,7 +290,7 @@ pub async fn export_quote_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	let (name, src) = document_template(data.get("layout").and_then(|v| v.as_str()));
+	let (name, src) = layout_template(data.get("layout").and_then(|v| v.as_str()));
 	render_pdf(&app, name, src, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
 }
 
@@ -301,7 +301,7 @@ pub async fn export_invoice_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	let (name, src) = document_template(data.get("layout").and_then(|v| v.as_str()));
+	let (name, src) = layout_template(data.get("layout").and_then(|v| v.as_str()));
 	render_pdf(&app, name, src, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
 }
 
@@ -312,7 +312,7 @@ pub async fn export_bill_pdf(
 	output_path: String,
 	protect_password: Option<String>,
 ) -> Result<(), PdfError> {
-	let (name, src) = document_template(data.get("layout").and_then(|v| v.as_str()));
+	let (name, src) = layout_template(data.get("layout").and_then(|v| v.as_str()));
 	render_pdf(&app, name, src, data, PathBuf::from(output_path), protect_password, &[("common.typ", COMMON_TEMPLATE)]).await
 }
 
@@ -423,20 +423,20 @@ pub fn open_path(path: String) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-	use super::document_template;
+	use super::layout_template;
 
 	#[test]
 	fn each_layout_renders_its_own_template() {
 		for key in ["modern", "minimal", "compact"] {
-			assert_eq!(document_template(Some(key)).0, format!("doc-{key}.typ"));
+			assert_eq!(layout_template(Some(key)).0, format!("doc-{key}.typ"));
 		}
-		assert_eq!(document_template(Some("classic")).0, "doc-classic.typ");
+		assert_eq!(layout_template(Some("classic")).0, "doc-classic.typ");
 	}
 
 	#[test]
 	fn retired_letterhead_and_unknown_keys_render_classic() {
 		for key in [Some("letterhead"), Some("bogus"), None] {
-			assert_eq!(document_template(key).0, "doc-classic.typ");
+			assert_eq!(layout_template(key).0, "doc-classic.typ");
 		}
 	}
 }

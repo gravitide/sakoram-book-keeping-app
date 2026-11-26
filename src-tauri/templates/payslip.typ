@@ -4,12 +4,12 @@
 //
 // Driven by data.json fields produced by app/lib/payslip-pdf.ts. Page setup
 // and the header come from common.typ so the payslip honours the user's
-// selected PDF template (migration 0050) exactly as quotes/invoices do.
+// selected Layout (migration 0055) exactly as quotes/invoices do.
 
 #import "common.typ": *
 
 #let data = json("data.json")
-#let cfg = template-config(data)
+#let cfg = layout-config(data)
 
 #set document(title: data.number, author: if data.business_name != none { data.business_name } else { () })
 #set page(..page-setup(data, margin: cfg.margin, footer: cfg.footer))

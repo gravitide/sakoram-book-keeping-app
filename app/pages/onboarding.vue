@@ -287,7 +287,7 @@
 			</div>
 		</UCard>
 
-		<!-- Step 5 — Documents (PDF template + accent colour) -->
+		<!-- Step 5 — Documents (PDF Layout + accent colour) -->
 		<UCard v-if="currentStep === 5">
 			<template #header>
 				<div class="font-medium">
@@ -315,7 +315,7 @@
 							@click="form.pdf_layout = t.key"
 						>
 							<div class="rounded-sm overflow-hidden ring-1 ring-(--ui-border) mb-1.5">
-								<PdfTemplateThumb :template-key="t.key" :color="themeHex(form.pdf_theme_color)" />
+								<PdfLayoutThumb :layout-key="t.key" :color="themeHex(form.pdf_theme_color)" />
 							</div>
 							<div class="text-xs font-medium flex items-center gap-1">
 								{{ t.label }}
@@ -591,7 +591,7 @@
 				default_quote_validity_days: form.default_quote_validity_days
 			});
 		} else if (step === 5) {
-			// Documents — one template applies to both invoice + quote PDFs;
+			// Documents — one Layout applies to every document PDF;
 			// accent colour drives the header rule + highlights.
 			await settingsStore.save({
 				pdf_layout: form.pdf_layout,

@@ -7,7 +7,7 @@
 // Classic + Pre-printed paper Stationery.
 //
 // Pure (no Vue/Tauri) so it's unit-testable in node. The Rust registry
-// (`document_template` in src-tauri/src/pdf.rs) is the actual render-time
+// (`layout_template` in src-tauri/src/pdf.rs) is the actual render-time
 // validator (unknown key → classic); pdf-layouts.test.ts keeps the two in step.
 
 export type PdfLayoutKey = "classic" | "modern" | "minimal" | "compact";

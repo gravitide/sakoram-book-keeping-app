@@ -4,7 +4,7 @@
 			selectable; form fields stay selectable via the input rule
 			in main.css. -->
 		<!-- Floating Preview. Page-level because header logo, header/footer text
-			and templates all want it, and all render through the same sample
+			and the Layout all want it, and all render through the same sample
 			invoice — one control beats a button on every card.
 			`h-0` keeps the wrapper out of the layout (the button overflows it) and
 			pointer-events are re-enabled only on the button, so it never blocks
@@ -97,7 +97,7 @@
 									@click="form.pdf_layout = l.key"
 								>
 									<div class="rounded-sm overflow-hidden ring-1 ring-(--ui-border) mb-1.5">
-										<PdfTemplateThumb :template-key="l.key" :color="themeColor" />
+										<PdfLayoutThumb :layout-key="l.key" :color="themeColor" />
 									</div>
 									<div class="text-xs font-medium flex items-center gap-1">
 										{{ l.label }}
@@ -145,7 +145,7 @@
 							"Pre-printed paper" reserves these bands whatever the active mode. -->
 						<div class="mt-5 pt-5 border-t border-(--ui-border) space-y-4">
 							<div class="text-sm font-medium">
-								Pre-printed paper margins
+								Pre-printed paper bands
 							</div>
 							<p v-if="form.pdf_stationery_mode === 'preprinted'" class="text-xs text-(--ui-text-muted)">
 								Your paper already carries your letterhead, so nothing is printed in these bands — no logo, header text or footer. The document's title, number and accent rule stay, and page numbers sit just above the bottom band.
@@ -287,7 +287,7 @@
 									>
 										<div :style="{ padding: `${mmPx(16)}px ${mmPx(18)}px 0` }">
 											<div class="flex justify-between items-end gap-2" :style="{ minHeight: `${mmPx(18)}px` }">
-												<!-- 3.35mm ≈ 9.5pt, the classic template's base text size, so
+												<!-- 3.35mm ≈ 9.5pt, the Classic Layout's base text size, so
 													the block occupies true-to-scale space on the sheet.
 													The previous 2.6mm rendered SMALLER than the real PDF. -->
 												<div v-if="previewHeaderLines.length" class="text-left leading-tight min-w-0" :style="{ fontSize: `${mmPx(3.35)}px` }">
@@ -596,7 +596,7 @@
 			:temp-path="invoicePreview.state.tempPath"
 			:suggested-file-name="invoicePreview.state.suggestedFileName"
 			:saving="invoicePreview.state.saving"
-			title="Invoice template preview"
+			title="Invoice layout preview"
 			@save="invoicePreview.onSave"
 			@cancel="invoicePreview.onCancel"
 		/>
@@ -739,12 +739,12 @@
 	}));
 	const previewClamped = computed(() => 12 * (form.pdf_logo_scale / 100) * logoAspect.value > 55);
 
-	// Live preview: render a sample invoice / quote with the currently-selected
-	// template through the real Typst pipeline (PdfPreviewModal).
+	// Live preview: render a sample invoice with the currently-selected Layout
+	// and Stationery through the real Typst pipeline (PdfPreviewModal).
 	// The whole point of a preview is to see edits BEFORE saving them. The
 	// sample*Payload builders read font / colour / logo scale off the settings
 	// row, which only updates on save — so overlay the live form values on top.
-	// (The template key is already passed separately, which is why it was the
+	// (The Layout key is also passed separately, which is why it was once the
 	// one control that appeared to work.)
 	const previewSettings = computed<CompanySettingsRow | null>(() => (store.settings
 		? {
@@ -807,7 +807,7 @@
 		command: "export_invoice_pdf",
 		buildPayload: () => sampleInvoicePayload(previewSettings.value, currency.value, form.pdf_layout),
 		fileName: () => "sample-invoice.pdf",
-		title: "Invoice template preview"
+		title: "Invoice layout preview"
 	});
 
 	// Same curated list the Appearance page used. The Typst template falls

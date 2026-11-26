@@ -5,8 +5,8 @@
 				Letters
 			</h1>
 			<p class="text-sm text-(--ui-text-muted)">
-				Manage the categories you tag letters with, and (soon) reusable
-				letterhead templates.
+				Manage the categories you tag letters with, and find where the
+				Stationery your letters print on is set.
 			</p>
 		</header>
 
@@ -78,16 +78,16 @@
 				</div>
 			</UCard>
 
-			<!-- Pre-printed paper: the margins live with the Stationery now -->
+			<!-- Pre-printed paper: the bands live with the Stationery now -->
 			<UCard id="preprinted" class="scroll-mt-6">
 				<template #header>
 					<div class="font-medium">
 						Pre-printed paper
 					</div>
 					<div class="text-xs text-(--ui-text-muted) mt-1">
-						A letter set to "Pre-printed paper" reserves your business's
-						pre-printed paper margins — the same ones every document uses on
-						that stationery, set once in PDF settings.
+						A letter set to "Pre-printed paper" leaves your business's blank
+						bands — the same Pre-printed paper bands every document uses on
+						that Stationery, set once in PDF settings.
 					</div>
 				</template>
 
@@ -96,26 +96,27 @@
 				</UButton>
 			</UCard>
 
-			<!-- Letterhead templates (future) -->
-			<UCard id="templates" class="scroll-mt-6">
+			<!-- Stationery artwork (future: Full-page background / Header & footer images) -->
+			<UCard id="artwork" class="scroll-mt-6">
 				<template #header>
 					<div class="flex items-center justify-between">
 						<div class="font-medium">
-							Letterhead templates
+							Stationery artwork
 						</div>
 						<UBadge size="xs" color="neutral" variant="subtle">
 							Coming soon
 						</UBadge>
 					</div>
 					<div class="text-xs text-(--ui-text-muted) mt-1">
-						Save reusable letterhead layouts (logo placement, fonts, footer) and
-						pick one per letter. Planned for a future update.
+						Print letters — and every other document — on your own artwork: a
+						full-page background, or separate header and footer images. Set up
+						with the rest of your Stationery in PDF settings.
 					</div>
 				</template>
 
 				<div class="text-sm text-(--ui-text-muted) py-2 flex items-center gap-2">
-					<UIcon name="i-lucide-layout-template" class="size-4" />
-					Not available yet — letters currently use your PDF header logo + footer.
+					<UIcon name="i-lucide-image" class="size-4" />
+					Not available yet — letters use your business Stationery: Built-in or Pre-printed paper.
 				</div>
 			</UCard>
 		</div>
@@ -124,8 +125,8 @@
 
 <script setup lang="ts">
 // Per-business Letters settings: managed category list (immediate persistence),
-// a pointer to the Pre-printed paper margins (they live on the Stationery, in
-// PDF settings), and a placeholder for future letterhead templates.
+// a pointer to the Pre-printed paper bands (they live on the Stationery, in
+// PDF settings), and a placeholder for the future Stationery artwork modes.
 	import type { LetterCategoryRow } from "~/stores/letter_categories";
 	import { useLetterCategoriesStore } from "~/stores/letter_categories";
 

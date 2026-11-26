@@ -498,7 +498,7 @@
 // alone can't carry margins / base size / footer style — the caller applies
 // these with its own `set` rules. Values transcribed verbatim from each
 // doc-*.typ.
-#let template-config(data) = {
+#let layout-config(data) = {
   let key = data.at("layout", default: "classic")
   let ruled-footer(gap, size) = [
     #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))

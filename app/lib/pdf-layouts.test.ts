@@ -26,13 +26,13 @@ describe("the Layout registry", () => {
 		expect(PDF_LAYOUTS.map((l) => l.key)).toEqual(["classic", "modern", "minimal", "compact"]);
 	});
 
-	// The Rust render-time validator (document_template in src-tauri/src/pdf.rs)
+	// The Rust render-time validator (layout_template in src-tauri/src/pdf.rs)
 	// maps each key to its doc-*.typ, and everything else to Classic. The two
 	// registries must name the same Layouts or a picked Layout silently renders
 	// as Classic.
 	it("agrees with the Rust render-time validator", () => {
 		const rust = readFileSync(join(__dirname, "../../src-tauri/src/pdf.rs"), "utf8");
-		const fn = rust.slice(rust.indexOf("fn document_template"));
+		const fn = rust.slice(rust.indexOf("fn layout_template"));
 		const body = fn.slice(0, fn.indexOf("\n}\n"));
 		const arms = [...body.matchAll(/Some\("([a-z]+)"\) => \("doc-([a-z]+)\.typ"/g)].map((m) => [m[1], m[2]]);
 		for (const [key, file] of arms) expect(file).toBe(key);

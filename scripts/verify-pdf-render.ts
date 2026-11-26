@@ -479,7 +479,7 @@ interface Case {
 	multipage?: true
 }
 
-// Mirrors document_template() in src-tauri/src/pdf.rs: unknown keys → classic.
+// Mirrors layout_template() in src-tauri/src/pdf.rs: unknown keys → classic.
 const docTemplate = (payload: { layout?: unknown }): string => {
 	const key = String(payload.layout ?? "");
 	return ["modern", "minimal", "compact"].includes(key) ? `doc-${key}.typ` : "doc-classic.typ";
@@ -525,7 +525,7 @@ const cases: Case[] = [
 	docCase("sample-classic-logo", sampleInvoicePayload(settingsFor(), currency, "classic")),
 	docCase("sample-modern-wordmark", sampleInvoicePayload(settingsFor({ ...noLogo }), currency, "modern")),
 
-	// Payslip follows the selected layout through template-config.
+	// Payslip follows the selected layout through layout-config.
 	...LAYOUTS.map((key): Case => ({ name: `payslip-${key}-logo`, template: "payslip.typ", payload: payslip(settingsFor({ pdf_layout: key })) })),
 	{ name: "payslip-classic-wordmark", template: "payslip.typ", payload: payslip(settingsFor({ ...noLogo })) },
 	{ name: "payslip-classic-custom-chrome", template: "payslip.typ", payload: payslip(settingsFor({ ...customChrome })) },

@@ -5,7 +5,7 @@
 		preserveAspectRatio="xMidYMid meet"
 		xmlns="http://www.w3.org/2000/svg"
 		role="img"
-		:aria-label="`${templateKey} layout preview`"
+		:aria-label="`${layoutKey} layout preview`"
 	>
 		<!-- paper -->
 		<rect x="0.5" y="0.5" width="55" height="78" rx="2.5" fill="#ffffff" stroke="#e2e8f0" stroke-width="0.75" />
@@ -33,7 +33,7 @@
 	interface Rect { x: number, y: number, w: number, h: number, rx?: number, fill: string, opacity?: number }
 
 	const props = withDefaults(defineProps<{
-		templateKey: string
+		layoutKey: string
 		/** Theme accent colour (hex). */
 		color?: string
 	}>(), {
@@ -60,7 +60,7 @@
 
 	const marks = computed<Rect[]>(() => {
 		const c = props.color;
-		switch (props.templateKey) {
+		switch (props.layoutKey) {
 		case "modern":
 			// Left-aligned letterhead: logo and header text SIDE BY SIDE, the
 			// text vertically centred on the logo, then the tapered accent rule

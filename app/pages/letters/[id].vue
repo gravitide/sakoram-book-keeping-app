@@ -77,7 +77,7 @@
 				<SectionCard title="Paper" subtitle="What this letter is printed on." icon="i-lucide-file-text">
 					<URadioGroup v-model="paperChoice" :items="paperChoices" />
 					<p class="text-xs text-(--ui-text-muted) mt-3">
-						Stationery, paper size and the pre-printed paper margins are set in
+						Stationery, paper size and the Pre-printed paper bands are set in
 						<NuxtLink to="/settings/pdf#stationery" class="text-(--ui-primary) hover:underline">
 							PDF settings
 						</NuxtLink>.
@@ -215,10 +215,10 @@
 
 	// "Use stationery" follows the business's Stationery + Paper size like every
 	// other document; "Pre-printed paper" reserves the business's Pre-printed
-	// paper margins whatever the active Stationery mode (app/lib/page-settings.ts).
+	// paper bands whatever the active Stationery mode (app/lib/page-settings.ts).
 	const paperChoices = [
 		{ value: "stationery", label: "Use stationery", description: "Your business stationery and paper size, like every other document." },
-		{ value: "preprinted", label: "Pre-printed paper", description: "Nothing printed around the letter — blank margins clear the letterhead already on your paper." }
+		{ value: "preprinted", label: "Pre-printed paper", description: "Nothing printed around the letter — blank bands clear the letterhead already on your paper." }
 	];
 	const paperChoice = computed({
 		get: () => (form.pre_printed === 1 ? "preprinted" : "stationery"),
