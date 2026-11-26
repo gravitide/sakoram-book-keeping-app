@@ -38,13 +38,18 @@ export interface CompanySettingsRow {
 	currency_symbol_override: string | null
 	ui_font: string
 	pdf_font: string
-	// Per-document-type client-facing PDF template keys (classic | modern |
-	// minimal | compact | letterhead). See app/lib/pdf-templates.ts. A Plus
-	// feature — rendering forces 'classic' when not entitled.
-	// One selectable layout for every doc-family PDF (quote / invoice / bill /
-	// payslip). One of the keys in app/lib/pdf-templates.ts; unknown values
-	// fall back to "classic" in both the JS resolver and the Rust registry.
-	pdf_template: string
+	// The Layout every doc-family PDF uses (quote / invoice / bill / payslip):
+	// classic | modern | minimal | compact (migration 0055 — it replaced the
+	// old pdf_template, whose "letterhead" became Classic + Pre-printed paper).
+	// See app/lib/pdf-layouts.ts; unknown values fall back to "classic" in
+	// both the JS resolver and the Rust registry.
+	pdf_layout: string
+	// Stationery (migration 0055, ADR 0001): which mode is active —
+	// builtin | background | header_footer | preprinted — and a JSON blob with
+	// every mode's own settings (margins, later artwork geometry). NULL JSON =
+	// all defaults. Parsed by app/lib/stationery.ts.
+	pdf_stationery_mode: string
+	pdf_stationery: string | null
 	// Paper size (migration 0054): the sheet every PDF of the business is laid
 	// out on — a4 | a5 | us-letter | us-legal (the Typst paper names). Unknown
 	// values fall back to a4. See app/lib/page-settings.ts.
@@ -138,7 +143,9 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"currency_symbol_override",
 	"ui_font",
 	"pdf_font",
-	"pdf_template",
+	"pdf_layout",
+	"pdf_stationery_mode",
+	"pdf_stationery",
 	"pdf_paper_size",
 	"theme_color",
 	"pdf_theme_color",

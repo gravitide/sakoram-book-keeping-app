@@ -12,12 +12,22 @@
 //     its margins to `page-setup` and the helper uses them.
 //   - `margins: {…}` — the Stationery owns the page: these four margins
 //     bound the Safe area and the Layout only arranges content inside them.
-//     Today that is only a letter printed onto Pre-printed paper.
+//     That is every mode other than Built-in (today: Pre-printed paper, for
+//     the whole business or for one letter).
+//
+// `chrome` is the matching suppression rule: only Built-in stationery draws
+// the business identity (logo / wordmark, custom header text, the business
+// block, the built-in or custom footer). Under any other mode the Stationery
+// owns the page edges, so Layouts keep only their title, number and accent
+// rule. Templates read `data.page.chrome` rather than the mode, so a new mode
+// doesn't have to touch every template.
 //
 // Pure, store-free, relative imports only: vitest and the render-check script
 // (scripts/verify-pdf-render.ts) both import it.
 
+import type { StationeryMode } from "./stationery";
 import type { CompanySettingsRow } from "~/stores/settings";
+import { parseStationery, resolveStationeryMode } from "./stationery";
 
 /**
  * The business's Paper size. The stored value (company_settings.pdf_paper_size)
@@ -66,6 +76,14 @@ export interface PageSettings {
 	 * are never scaled either; they stay fixed in points.
 	 */
 	margin_scale: number
+	/** The Stationery mode this document renders with. */
+	stationery: StationeryMode
+	/**
+	 * true only for Built-in stationery: the app draws the business identity
+	 * (logo / wordmark, header text, business block, footer). See the header
+	 * comment.
+	 */
+	chrome: boolean
 	/** null = the Layout's built-in margins apply; see the header comment. */
 	margins: PageMarginsMm | null
 }
@@ -76,28 +94,47 @@ export interface PageSettingsOverride {
 	preprinted?: boolean
 }
 
-type PageSettingsSource = Pick<CompanySettingsRow, "pdf_paper_size" | "letter_preprinted_top_margin_mm" | "letter_preprinted_bottom_margin_mm">;
+type PageSettingsSource = Partial<Pick<CompanySettingsRow,
+	"pdf_paper_size" | "pdf_stationery_mode" | "pdf_stationery"
+	| "letter_preprinted_top_margin_mm" | "letter_preprinted_bottom_margin_mm">>;
 
-// Pre-printed paper reserves only the top and bottom bands; the sides keep
-// the classic 18 mm the letter has always used.
-const PREPRINTED_SIDE_MM = 18;
-const PREPRINTED_TOP_DEFAULT_MM = 55;
-const PREPRINTED_BOTTOM_DEFAULT_MM = 20;
+// A letter's own "pre-printed paper" switch still reads the letter columns
+// (letter_preprinted_*); #358 moves letters onto the Stationery's Pre-printed
+// paper bands. The sides keep the classic 18 mm the letter has always used.
+const LETTER_PREPRINTED_SIDE_MM = 18;
+const LETTER_PREPRINTED_TOP_DEFAULT_MM = 55;
+const LETTER_PREPRINTED_BOTTOM_DEFAULT_MM = 20;
+
+const marginsFor = (mode: StationeryMode, settings: PageSettingsSource | null): PageMarginsMm | null => {
+	if (mode === "builtin") return null;
+	return { ...parseStationery(settings?.pdf_stationery).preprinted };
+};
 
 export function buildPageSettings(settings: PageSettingsSource | null, override?: PageSettingsOverride): PageSettings {
 	const paper = resolvePaperSize(settings?.pdf_paper_size);
 	// Width is the short side for every supported sheet, so this also holds
 	// for the landscape statement (decisions: margins scale on the short side).
 	const margin_scale = paper.widthMm / A4_WIDTH_MM;
-	if (!override?.preprinted) return { paper: paper.key, margin_scale, margins: null };
+	if (override?.preprinted) {
+		return {
+			paper: paper.key,
+			margin_scale,
+			stationery: "preprinted",
+			chrome: false,
+			margins: {
+				top: settings?.letter_preprinted_top_margin_mm ?? LETTER_PREPRINTED_TOP_DEFAULT_MM,
+				right: LETTER_PREPRINTED_SIDE_MM,
+				bottom: settings?.letter_preprinted_bottom_margin_mm ?? LETTER_PREPRINTED_BOTTOM_DEFAULT_MM,
+				left: LETTER_PREPRINTED_SIDE_MM
+			}
+		};
+	}
+	const stationery = resolveStationeryMode(settings?.pdf_stationery_mode);
 	return {
 		paper: paper.key,
 		margin_scale,
-		margins: {
-			top: settings?.letter_preprinted_top_margin_mm ?? PREPRINTED_TOP_DEFAULT_MM,
-			right: PREPRINTED_SIDE_MM,
-			bottom: settings?.letter_preprinted_bottom_margin_mm ?? PREPRINTED_BOTTOM_DEFAULT_MM,
-			left: PREPRINTED_SIDE_MM
-		}
+		stationery,
+		chrome: stationery === "builtin",
+		margins: marginsFor(stationery, settings)
 	};
 }
