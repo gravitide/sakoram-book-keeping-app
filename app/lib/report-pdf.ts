@@ -7,7 +7,6 @@
 // optional detail tables. The shape below mirrors that contract.
 
 import type { PageSettings } from "./page-settings";
-import type { LetterBlock } from "~/lib/letter-body";
 import type { CurrencyMeta } from "~/lib/money";
 import type { BillRow } from "~/stores/bills";
 import type { CreditNoteRow } from "~/stores/credit_notes";
@@ -16,7 +15,6 @@ import type { PayslipRow } from "~/stores/payslips";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatMoney } from "./money";
 import { buildPageSettings } from "./page-settings";
-import { buildFooterBlocks } from "./pdf-chrome";
 import { pdfThemeHex } from "./theme";
 
 /// Generic report payload shape consumed by `report.typ`. Optional
@@ -28,8 +26,6 @@ interface ReportPdfPayload {
 	phone: string | null
 	website: string | null
 	tax_id: string | null
-	logo_scale: number
-	footer_blocks: LetterBlock[]
 	logo_path: string | null
 	page: PageSettings
 	theme_color: string
@@ -79,16 +75,14 @@ interface ReportDetailSection {
 const businessHeader = (
 	settings: CompanySettingsRow | null
 ): Pick<ReportPdfPayload,	"business_name" | "address_line1" | "city" | "phone" | "website"
-| "tax_id" | "logo_scale" | "footer_blocks" | "logo_path" | "page" | "theme_color" | "font_family"> => ({
+| "tax_id" | "logo_path" | "page" | "theme_color" | "font_family"> => ({
 	business_name: settings?.business_name ?? null,
 	address_line1: settings?.address_line1 ?? null,
 	city: settings?.city ?? null,
 	phone: settings?.phone ?? null,
 	website: settings?.website ?? null,
 	tax_id: settings?.tax_id ?? null,
-	logo_scale: settings?.pdf_logo_scale ?? 100,
-	footer_blocks: buildFooterBlocks(settings),
-	logo_path: settings?.pdf_header_logo_path ?? null,
+	logo_path: settings?.logo_path ?? null,
 	page: buildPageSettings(settings),
 	theme_color: pdfThemeHex(settings),
 	font_family: settings?.pdf_font ?? null

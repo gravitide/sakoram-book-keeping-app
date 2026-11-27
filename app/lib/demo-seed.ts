@@ -19,9 +19,9 @@
 // (one already due), two bank accounts, a statement import to
 // reconcile, letters with signatures, and a few attachments — all dated
 // within the last ~6 months so the dashboard, calendar and report
-// presets light up. Its PDFs print on a bundled sample letterhead (Full-page
-// background; the same letterhead is also stored as Header & footer images,
-// one mode switch away). It seeds in seconds. (The earlier 200-client /
+// presets light up. Its PDFs print on a bundled sample letterhead (the
+// Full-page background template with the artwork in its slot). It seeds in
+// seconds. (The earlier 200-client /
 // 800-invoice bulk fill that exercised list paging was retired in
 // v0.164.0; if a stress fixture is ever wanted again, build it as a
 // separate script, not into the demo.)
@@ -32,11 +32,9 @@ import type { VendorRow } from "~/stores/vendors";
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir, appLocalDataDir, join } from "@tauri-apps/api/path";
 import { BaseDirectory, writeFile } from "@tauri-apps/plugin-fs";
-import demoFooterSvg from "~/assets/stationery/demo-footer.svg?raw";
-import demoHeaderSvg from "~/assets/stationery/demo-header.svg?raw";
 import demoLetterheadSvg from "~/assets/stationery/demo-letterhead.svg?raw";
-import { saveBusinessAsset } from "~/lib/business-assets";
-import { DEMO_LETTERHEAD_ACCENT, demoLetterheadSettings } from "~/lib/demo-letterhead";
+import { itemAssetKind, saveBusinessAsset } from "~/lib/business-assets";
+import { DEMO_LETTERHEAD_ACCENT, demoDesign } from "~/lib/demo-design";
 import { peekNextSequence } from "~/lib/numbering";
 import { useBankStatementsStore } from "~/stores/bank_statements";
 import { buildCategorySnapshot, useBillCategoriesStore } from "~/stores/bill_categories";
@@ -149,20 +147,15 @@ const seedSettings = async () => {
 	});
 };
 
-// The demo's PDFs print on a sample letterhead (Full-page background) so the
-// Stationery feature is visible out of the box; the same letterhead is stored
-// as Header & footer images too (not active), so switching the mode shows a
-// finished setup. The artwork goes into the business folder first; the
-// settings only switch over once it is all there, so a failed write leaves the
-// demo on Built-in stationery rather than pointing at a missing file.
+// The demo's PDFs print on a sample letterhead so the page design is visible
+// out of the box. The artwork goes into the business folder first; the design
+// is only saved once it is there, so a failed write leaves the demo on the
+// default Classic design rather than pointing at a missing file.
 const seedLetterhead = async (tenantId: string) => {
 	try {
-		const svg = (text: string) => Array.from(new TextEncoder().encode(text));
-		await saveBusinessAsset(tenantId, "stationery-background", "svg", svg(demoLetterheadSvg));
-		await saveBusinessAsset(tenantId, "stationery-header", "svg", svg(demoHeaderSvg));
-		await saveBusinessAsset(tenantId, "stationery-footer", "svg", svg(demoFooterSvg));
-		const store = useSettingsStore();
-		await store.save(demoLetterheadSettings(store.settings?.pdf_stationery));
+		const { design, artworkId } = demoDesign();
+		await saveBusinessAsset(tenantId, itemAssetKind(artworkId), "svg", Array.from(new TextEncoder().encode(demoLetterheadSvg)));
+		await useSettingsStore().save({ pdf_design: JSON.stringify(design) });
 	} catch (e) {
 		// A missing letterhead shouldn't sink the whole demo.
 		console.warn("seed: demo letterhead failed", e);

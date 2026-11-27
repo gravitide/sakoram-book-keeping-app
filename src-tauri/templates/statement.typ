@@ -11,41 +11,16 @@
 // sets to that working dir.
 
 // SELECTIVE import (a wildcard would shadow this file's local label/faint).
-// render-blocks is for the opt-in custom footer (settings → PDF → Header &
-// footer): the builders always sent `footer_blocks`, but this template
-// hard-coded its footer line, so the custom text was silently ignored here.
-#import "common.typ": builtin-logo, page-setup, render-blocks
+// The letterhead, footer and page number are the business's page design,
+// drawn behind the content by page-setup (common.typ design-items).
+#import "common.typ": page-setup
 
 #let data = json("data.json")
 
 #set document(title: data.title, author: if data.business_name != none { data.business_name } else { () })
-// Landscape on Built-in stationery — statements lean on a wide 7-column
-// invoice table (number / issued / due / total / paid / balance / status),
-// and landscape gives every column its natural width and leaves the aging
-// tiles / party blocks better proportioned to the page edge. Under any
-// other Stationery (pre-printed paper, a full-page background) page-setup
-// keeps the sheet PORTRAIT (data.page.allow_landscape), because the paper
-// or artwork is portrait; the table is sized to still fit there.
-#set page(..page-setup(
-  data,
-  flipped: true,
-  margin: (x: 18mm, top: 16mm, bottom: 20mm),
-  footer: [
-    #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))
-    #v(4pt)
-    // "Page N of M" comes from page-setup (only past one page), like every
-    // other template — this footer used to print it on every page itself.
-    #align(left, text(size: 8pt, fill: rgb("#6b7280"))[
-      #if data.at("footer_blocks", default: ()).len() > 0 {
-        render-blocks(data.footer_blocks, default-align: "left", spacing: 2pt)
-      } else [
-        #if data.business_name != none [#data.business_name]
-        #if data.website != none [ | #data.website]
-        #if data.phone != none [ | #data.phone]
-      ]
-    ])
-  ],
-))
+// Portrait, like every document: the page design is laid out on a portrait
+// sheet. The 7-column invoice table is sized to fit it.
+#set page(..page-setup(data))
 
 // Font cascade same as document.typ — user pick first, bundled
 // fallbacks after.
@@ -65,10 +40,7 @@
 // ============================================================
 // Header: logo (or wordmark) + theme rule
 // ============================================================
-// Logo or wordmark and the accent rule — Built-in stationery only (see
-// builtin-logo); any other Stationery draws its own lines.
-#builtin-logo(data, 12mm, 16pt, below: -2mm)
-#if data.page.chrome { line(length: 100%, stroke: 2pt + theme) }
+// The logo and letterhead rule are the page design's (common.typ design-items).
 
 // ============================================================
 // Title row
@@ -100,32 +72,7 @@
 #grid(
   columns: (1fr, 1fr),
   column-gutter: 14pt,
-  // FROM block — the business's own identity, so Built-in stationery only:
-  // any other mode's paper or artwork already carries it, and STATEMENT FOR
-  // then takes the left column at the same width.
-  ..if data.page.chrome { (block(
-    fill: rgb("#f9fafb"),
-    stroke: 0.5pt + line-color,
-    radius: 4pt,
-    inset: (x: 10pt, y: 10pt),
-    width: 100%,
-  )[
-    #text(size: 8pt, fill: muted, tracking: 0.05em)[FROM]
-    #v(4pt)
-    #text(weight: "bold", size: 10.5pt)[#data.business_name]
-    #if data.business_address != none [
-      #v(2pt)
-      #text(size: 9pt, fill: muted)[#data.business_address]
-    ]
-    #if data.business_tax_id != none [
-      #v(2pt)
-      #text(size: 8.5pt, fill: muted)[Tax ID: #data.business_tax_id]
-    ]
-    #if data.business_phone != none [
-      #v(2pt)
-      #text(size: 8.5pt, fill: muted)[Phone: #data.business_phone]
-    ]
-  ],) } else { () },
+  // No FROM block: the business's identity is the page design's.
   // TO block
   block(
     fill: theme.lighten(92%),
@@ -182,12 +129,9 @@
 // The Safe area's width from the sheet in context and the Stationery's own
 // side margins (every portrait statement has them). Not layout(): its
 // content can't break across pages, so the table would jump to page 2.
-#let adaptive(body) = if data.page.allow_landscape { body(false) } else {
-  context {
-    let m = data.page.margins
-    let width = page.width - if m != none { (m.left + m.right) * 1mm } else { 0mm }
-    body(width < narrow-below)
-  }
+#let adaptive(body) = context {
+  let m = data.page.margins
+  body(page.width - (m.left + m.right) * 1mm < narrow-below)
 }
 
 // Narrow: three tiles a row, so a six-figure bucket still fits its tile.
@@ -206,15 +150,9 @@
 
 #let label(t) = text(weight: "bold", size: 8pt, tracking: 0.04em)[#upper(t)]
 
-// Portrait: the heading travels with the table (sticky), so a table pushed
-// onto the next page doesn't leave it stranded at the foot of this one.
-// Landscape keeps its original, unwrapped heading (byte-identical output).
-#if data.page.allow_landscape [
-  #text(weight: "bold", size: 11pt)[Outstanding invoices]
-  #v(4pt)
-] else {
-  block(sticky: true, below: 4pt + 0.65em)[#text(weight: "bold", size: 11pt)[Outstanding invoices]]
-}
+// The heading travels with the table (sticky), so a table pushed onto the
+// next page doesn't leave it stranded at the foot of this one.
+#block(sticky: true, below: 4pt + 0.65em)[#text(weight: "bold", size: 11pt)[Outstanding invoices]]
 
 #let wide-table() = table(
     columns: (auto, auto, auto, 1fr, 1fr, 1fr, auto),

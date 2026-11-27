@@ -7,15 +7,7 @@
 #let data = json("data.json")
 
 #set document(title: data.number, author: if data.business_name != none { data.business_name } else { () })
-#set page(..page-setup(
-  data,
-  margin: (x: 14mm, top: 12mm, bottom: 12mm),
-  footer: [
-    #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))
-    #v(3pt)
-    #align(center, text(size: 7.5pt, fill: rgb("#6b7280"))[#footer-content(data)])
-  ],
-))
+#set page(..page-setup(data))
 #set text(font: resolve-font(data), size: 8.5pt, lang: "en", number-width: "tabular")
 #set par(leading: 0.5em, spacing: 0.5em)
 

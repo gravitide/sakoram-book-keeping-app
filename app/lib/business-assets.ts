@@ -8,16 +8,13 @@ import { invoke } from "@tauri-apps/api/core";
 // Where each kind lives in the business folder:
 //   logo                            logos/logo.<ext> — the cropped square identity logo
 //   logo-original                   logos/logo-original.<ext> — its untouched upload, for Re-crop
-//   pdf-header                      pdf-header.<ext> — the wide Built-in header logo
-//   pdf-header-original             pdf-header-original.<ext> — its untouched upload
-//   stationery-background           stationery/background.<ext> — the Full-page background PDFs render
-//   stationery-background-original  stationery/background-original.<ext> — its untouched raster upload
-//   stationery-header               stationery/header.<ext> — the Header & footer images header PDFs render
-//   stationery-header-original      stationery/header-original.<ext> — its untouched raster upload
-//   stationery-footer               stationery/footer.<ext> — the footer image
-//   stationery-footer-original      stationery/footer-original.<ext> — its untouched raster upload
-export type BusinessAssetKind = "logo" | "logo-original" | "pdf-header" | "pdf-header-original" | "stationery-background" | "stationery-background-original"
-	| "stationery-header" | "stationery-header-original" | "stationery-footer" | "stationery-footer-original";
+//   stationery-item-<id>            stationery/item-<id>.<ext> — a page-design image (app/lib/page-design.ts)
+export type BusinessAssetKind = "logo" | "logo-original" | `stationery-item-${string}`;
+
+/** The asset kind of a page-design image item. */
+export function itemAssetKind(itemId: string): BusinessAssetKind {
+	return `stationery-item-${itemId}`;
+}
 
 /** Write an asset (replacing any copy in another format); resolves to the absolute path written. */
 export function saveBusinessAsset(id: string, kind: BusinessAssetKind, ext: string, bytes: Uint8Array | number[]): Promise<string> {

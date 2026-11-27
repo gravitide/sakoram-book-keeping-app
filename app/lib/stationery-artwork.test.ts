@@ -1,6 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { isRasterArtwork } from "./stationery";
-import { artworkFormatOf, artworkMimeOf, artworkPaperLock, artworkPixelSize, downscaleSize, matchesPaperAspect, svgAspect, svgHasLiveText } from "./stationery-artwork";
+import { artworkFormatOf, artworkMimeOf, artworkPaperLock, artworkPixelSize, downscaleSize, isRasterArtwork, logoSpotPlan, matchesPaperAspect, svgAspect, svgHasLiveText } from "./stationery-artwork";
+
+describe("logoSpotPlan", () => {
+	it("copies a logo the design can hold as an image", () => {
+		expect(logoSpotPlan("png")).toEqual({ copyAs: "png" });
+		expect(logoSpotPlan("JPEG")).toEqual({ copyAs: "jpg" });
+		expect(logoSpotPlan("svg")).toEqual({ copyAs: "svg" });
+	});
+
+	it("keeps the spot following the company logo when its format can't be copied", () => {
+		expect(logoSpotPlan("webp")).toBe("link");
+		expect(logoSpotPlan("gif")).toBe("link");
+	});
+
+	it("leaves an empty slot when there is no readable logo", () => {
+		expect(logoSpotPlan(null)).toBe("empty");
+	});
+});
 
 describe("artworkPixelSize", () => {
 	// About 300 DPI at the paper size — the spec's 2480 × 3508 for A4.

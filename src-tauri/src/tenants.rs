@@ -11,7 +11,7 @@
 //   business.db                  ← the SQLite file (FIXED name)
 //   attachments/<type>/<id>/…    ← document scans / photos
 //   logos/logo.<ext>             ← square identity logo
-//   pdf-header.<ext>             ← optional wide letterhead image
+//   stationery/item-<id>.<ext>   ← page-design images (company_settings.pdf_design)
 //   business.db.enc + business.vault.json   ← only when encrypted
 //
 // `id` is the stable business identity — used by the registry, marker,
@@ -110,6 +110,7 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
 	(54, "pdf paper size", include_str!("../migrations/0054_pdf_paper_size.sql")),
 	(55, "pdf layout + stationery", include_str!("../migrations/0055_pdf_layout_stationery.sql")),
 	(56, "drop letter preprinted margins", include_str!("../migrations/0056_drop_letter_preprinted_margins.sql")),
+	(57, "page design", include_str!("../migrations/0057_page_design.sql")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -120,7 +121,7 @@ pub struct Tenant {
 	/// Display name. Mutable; doesn't affect the folder path.
 	pub name: String,
 	/// Absolute path to this business's folder — the source of truth for all
-	/// of its files (business.db, attachments/, logos/, pdf-header.<ext>).
+	/// of its files (business.db, attachments/, logos/, stationery/).
 	pub path: String,
 	/// Relative logo filename under `<path>/logos/` (e.g. "logo.png"), or None.
 	pub logo_file: Option<String>,
@@ -296,9 +297,9 @@ fn now_iso() -> String {
 
 // ---------- Portable paths --------------------------------------------------
 //
-// A business folder is a portable "document" — but three columns store
-// ABSOLUTE paths: `document_attachments.file_path`, and
-// `company_settings.pdf_header_logo_path` / `logo_path`. Move the folder (or
+// A business folder is a portable "document" — but two columns store
+// ABSOLUTE paths: `document_attachments.file_path` and
+// `company_settings.logo_path`. Move the folder (or
 // open it on another machine) and the letterhead vanished from PDFs, every
 // attachment 404'd, and an export made afterwards silently contained none of
 // the files. Import already rewrote these; Open never did.
@@ -326,7 +327,7 @@ async fn relocate_stored_paths(db: &Path, folder: &Path) -> Result<(), String> {
 	let pool = SqlitePool::connect_with(opts).await.map_err(|e| e.to_string())?;
 
 	let result = async {
-		for (column, dir) in [("pdf_header_logo_path", folder.to_path_buf()), ("logo_path", folder.join("logos"))] {
+		for (column, dir) in [("logo_path", folder.join("logos"))] {
 			let row: Option<(Option<String>,)> =
 				sqlx::query_as(&format!("SELECT {column} FROM company_settings WHERE id = 1"))
 					.fetch_optional(&pool)
@@ -910,34 +911,34 @@ pub async fn tenant_logo_path(
 }
 
 /// Where each business-asset kind lives inside a business folder:
-/// (sub-directory, fixed file stem). The extension follows the upload.
+/// (sub-directory, file stem). The extension follows the upload.
 ///
-/// The "-original" kinds hold the untouched upload that Re-crop reopens; the
-/// un-suffixed file is the derivative every render path actually uses. Stale-
-/// extension sweeps key on `file_stem`, and "logo-original" != "logo" (and
-/// "background-original" != "background"), so a pair never collide.
-///
-/// Logo originals stay LOCAL-ONLY (`data_io` bundles the derivative alone).
-/// Stationery artwork AND its original travel in both the export bundle and
-/// the Drive snapshot (ADR 0001): the whole `stationery/` folder is copied —
-/// the Full-page background and the two Header & footer images alike.
-fn asset_slot(kind: &str) -> Option<(&'static str, &'static str)> {
-	Some(match kind {
-		"logo" => ("logos", "logo"),
-		"logo-original" => ("logos", "logo-original"),
-		"pdf-header" => ("", "pdf-header"),
-		"pdf-header-original" => ("", "pdf-header-original"),
-		"stationery-background" => (STATIONERY_DIR, "background"),
-		"stationery-background-original" => (STATIONERY_DIR, "background-original"),
-		"stationery-header" => (STATIONERY_DIR, "header"),
-		"stationery-header-original" => (STATIONERY_DIR, "header-original"),
-		"stationery-footer" => (STATIONERY_DIR, "footer"),
-		"stationery-footer-original" => (STATIONERY_DIR, "footer-original"),
-		_ => return None,
-	})
+/// - "logo" / "logo-original": the company logo and the untouched upload that
+///   Re-crop reopens. Logo originals stay LOCAL-ONLY (`data_io` bundles the
+///   derivative alone).
+/// - "stationery-item-<id>": a page-design image, `stationery/item-<id>`. The
+///   id is checked (`is_item_id`) because it becomes part of a file name. The
+///   whole `stationery/` folder travels in the export bundle and the Drive
+///   snapshot.
+fn asset_slot(kind: &str) -> Option<(&'static str, String)> {
+	match kind {
+		"logo" => Some(("logos", "logo".to_string())),
+		"logo-original" => Some(("logos", "logo-original".to_string())),
+		_ => {
+			let id = kind.strip_prefix("stationery-item-")?;
+			is_item_id(id).then(|| (STATIONERY_DIR, format!("item-{id}")))
+		}
+	}
 }
 
-fn asset_dir_and_stem(folder: &Path, kind: &str) -> Result<(PathBuf, &'static str), String> {
+/// A page-design item id (app/lib/page-design.ts ITEM_ID_PATTERN): 6–32
+/// lowercase ASCII letters or digits. It names a file, so it is checked here
+/// rather than trusting the frontend or a PDF payload.
+pub(crate) fn is_item_id(id: &str) -> bool {
+	(6..=32).contains(&id.len()) && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+}
+
+fn asset_dir_and_stem(folder: &Path, kind: &str) -> Result<(PathBuf, String), String> {
 	let (sub, stem) = asset_slot(kind).ok_or_else(|| format!("unknown asset kind: {kind}"))?;
 	Ok((if sub.is_empty() { folder.to_path_buf() } else { folder.join(sub) }, stem))
 }
@@ -974,7 +975,7 @@ pub(crate) fn write_asset(folder: &Path, kind: &str, ext: &str, bytes: &[u8]) ->
 	let (dir, stem) = asset_dir_and_stem(folder, kind)?;
 	std::fs::create_dir_all(&dir).map_err(|e| format!("create asset dir: {e}"))?;
 	// Drop any stale <stem>.<other-ext> so a format change doesn't orphan a file.
-	for stale in files_with_stem(&dir, stem) {
+	for stale in files_with_stem(&dir, &stem) {
 		let same_ext = stale.extension().and_then(|s| s.to_str()).map(|e| e.to_lowercase()) == Some(ext.clone());
 		if !same_ext {
 			let _ = std::fs::remove_file(&stale);
@@ -988,7 +989,7 @@ pub(crate) fn write_asset(folder: &Path, kind: &str, ext: &str, bytes: &[u8]) ->
 /// Read an asset as (extension, bytes); an error when there is none.
 pub(crate) fn read_asset(folder: &Path, kind: &str) -> Result<(String, Vec<u8>), String> {
 	let (dir, stem) = asset_dir_and_stem(folder, kind)?;
-	let p = files_with_stem(&dir, stem).into_iter().next().ok_or_else(|| format!("no {kind} asset found"))?;
+	let p = files_with_stem(&dir, &stem).into_iter().next().ok_or_else(|| format!("no {kind} asset found"))?;
 	let ext = p.extension().and_then(|s| s.to_str()).unwrap_or("png").to_lowercase();
 	let bytes = std::fs::read(&p).map_err(|e| format!("read asset: {e}"))?;
 	Ok((ext, bytes))
@@ -997,13 +998,13 @@ pub(crate) fn read_asset(folder: &Path, kind: &str) -> Result<(String, Vec<u8>),
 /// Delete every format of an asset. Nothing to delete is not an error.
 pub(crate) fn remove_asset(folder: &Path, kind: &str) -> Result<(), String> {
 	let (dir, stem) = asset_dir_and_stem(folder, kind)?;
-	for p in files_with_stem(&dir, stem) {
+	for p in files_with_stem(&dir, &stem) {
 		std::fs::remove_file(&p).map_err(|e| format!("remove {}: {e}", p.display()))?;
 	}
 	Ok(())
 }
 
-/// Write a logo / PDF-header / stationery image into the business folder from
+/// Write a logo or page-design image into the business folder from
 /// the frontend.
 ///
 /// Done in Rust (std::fs, which is NOT gated by Tauri's capability scope)
@@ -1011,12 +1012,11 @@ pub(crate) fn remove_asset(folder: &Path, kind: &str) -> Result<(), String> {
 /// drive (e.g. D:\Sakoram\…) — outside the fs plugin's allow-list, which can't
 /// cleanly glob arbitrary drive roots. The path is derived from the registry
 /// (never caller-controlled), so this stays safe. Returns the absolute path of
-/// the written file (stored on company_settings.{logo_path,pdf_header_logo_path};
-/// stationery artwork stores only its extension, never this path).
+/// the written file (stored on company_settings.logo_path; a page-design image
+/// stores only its extension, never this path).
 ///
 /// `kind` is one of the `asset_slot` kinds, e.g. "logo" (→ logos/logo.<ext>),
-/// "pdf-header" (→ pdf-header.<ext>) or "stationery-background"
-/// (→ stationery/background.<ext>). Any stale same-stem file of a different
+/// or "stationery-item-<id>" (→ stationery/item-<id>.<ext>, a page-design image). Any stale same-stem file of a different
 /// extension is removed so there's never two.
 #[tauri::command]
 pub fn save_business_asset(
@@ -1216,7 +1216,7 @@ mod tests {
 		std::fs::remove_dir_all(&parent).ok();
 	}
 
-	// A business folder is meant to be portable, but three columns store
+	// A business folder is meant to be portable, but two columns store
 	// ABSOLUTE paths. Move the folder and the letterhead vanished from PDFs,
 	// every attachment 404'd, and exports silently skipped the files.
 	#[test]
@@ -1235,14 +1235,15 @@ mod tests {
 		let att_dir = folder.join("attachments").join("invoice").join("7");
 		std::fs::create_dir_all(&att_dir).unwrap();
 		std::fs::write(att_dir.join("scan.png"), b"img").unwrap();
-		std::fs::write(folder.join("pdf-header.png"), b"img").unwrap();
+		std::fs::create_dir_all(folder.join("logos")).unwrap();
+		std::fs::write(folder.join("logos").join("logo.png"), b"img").unwrap();
 
 		tauri::async_runtime::block_on(async {
 			run_migrations(&db).await.unwrap();
 			seed_fresh_tenant(&db, "Acme").await.unwrap();
 			let pool = SqlitePool::connect(&format!("sqlite:{}", db.to_string_lossy())).await.unwrap();
-			sqlx::query("UPDATE company_settings SET pdf_header_logo_path = ? WHERE id = 1")
-				.bind(r"D:\Old\Acme\pdf-header.png")
+			sqlx::query("UPDATE company_settings SET logo_path = ? WHERE id = 1")
+				.bind(r"D:\Old\Acme\logos\logo.png")
 				.execute(&pool)
 				.await
 				.unwrap();
@@ -1263,9 +1264,9 @@ mod tests {
 			relocate_stored_paths(&db, &folder).await.unwrap();
 
 			let pool = SqlitePool::connect(&format!("sqlite:{}", db.to_string_lossy())).await.unwrap();
-			let header: (Option<String>,) =
-				sqlx::query_as("SELECT pdf_header_logo_path FROM company_settings WHERE id = 1").fetch_one(&pool).await.unwrap();
-			assert_eq!(header.0.as_deref(), Some(folder.join("pdf-header.png").to_string_lossy().as_ref()));
+			let logo: (Option<String>,) =
+				sqlx::query_as("SELECT logo_path FROM company_settings WHERE id = 1").fetch_one(&pool).await.unwrap();
+			assert_eq!(logo.0.as_deref(), Some(folder.join("logos").join("logo.png").to_string_lossy().as_ref()));
 
 			let moved: (String,) =
 				sqlx::query_as("SELECT file_path FROM document_attachments WHERE document_id = 7").fetch_one(&pool).await.unwrap();
@@ -1366,85 +1367,70 @@ mod tests {
 		assert_eq!(back.schema_version, SCHEMA_VERSION);
 	}
 
-	// ---- business assets (logo / PDF header / stationery artwork) ----------
+	// ---- business assets (company logo / page-design images) ---------------
 
 	#[test]
-	fn background_artwork_and_its_original_live_under_stationery_with_fixed_names() {
-		let folder = temp_folder("asset-bg");
-		let art = write_asset(&folder, "stationery-background", "svg", b"<svg/>").unwrap();
-		let orig = write_asset(&folder, "stationery-background-original", "png", b"PNG").unwrap();
-		assert_eq!(art, folder.join("stationery").join("background.svg"));
-		assert_eq!(orig, folder.join("stationery").join("background-original.png"));
-		assert_eq!(read_asset(&folder, "stationery-background").unwrap(), ("svg".to_string(), b"<svg/>".to_vec()));
-		assert_eq!(read_asset(&folder, "stationery-background-original").unwrap(), ("png".to_string(), b"PNG".to_vec()));
+	fn a_design_image_lives_under_stationery_named_for_its_item() {
+		let folder = temp_folder("asset-item");
+		let path = write_asset(&folder, "stationery-item-abc123def456", "svg", b"<svg/>").unwrap();
+		assert_eq!(path, folder.join("stationery").join("item-abc123def456.svg"));
+		assert_eq!(read_asset(&folder, "stationery-item-abc123def456").unwrap(), ("svg".to_string(), b"<svg/>".to_vec()));
 	}
 
 	#[test]
-	fn replacing_artwork_with_another_format_leaves_no_stale_file_but_keeps_the_original() {
-		let folder = temp_folder("asset-replace");
-		write_asset(&folder, "stationery-background", "png", b"old").unwrap();
-		write_asset(&folder, "stationery-background-original", "jpg", b"orig").unwrap();
-		write_asset(&folder, "stationery-background", "pdf", b"new").unwrap();
-		let mut names: Vec<String> = std::fs::read_dir(folder.join("stationery")).unwrap()
+	fn replacing_a_design_image_with_another_format_leaves_no_stale_file() {
+		let folder = temp_folder("asset-item-replace");
+		write_asset(&folder, "stationery-item-abc123def456", "png", b"old").unwrap();
+		write_asset(&folder, "stationery-item-abc123def456", "pdf", b"new").unwrap();
+		let names: Vec<String> = std::fs::read_dir(folder.join("stationery")).unwrap()
 			.flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
-		names.sort();
-		assert_eq!(names, vec!["background-original.jpg", "background.pdf"]);
+		assert_eq!(names, vec!["item-abc123def456.pdf"]);
 	}
 
 	#[test]
-	fn remove_deletes_every_format_of_that_asset_only() {
-		let folder = temp_folder("asset-remove");
-		write_asset(&folder, "stationery-background", "svg", b"art").unwrap();
-		write_asset(&folder, "stationery-background-original", "png", b"orig").unwrap();
-		remove_asset(&folder, "stationery-background").unwrap();
-		assert!(read_asset(&folder, "stationery-background").is_err());
-		assert!(read_asset(&folder, "stationery-background-original").is_ok());
-		// Removing what isn't there is not an error (Remove twice, or never uploaded).
-		remove_asset(&folder, "stationery-background").unwrap();
-		remove_asset(&folder, "stationery-background-original").unwrap();
-		assert!(read_asset(&folder, "stationery-background-original").is_err());
+	fn removing_one_design_image_leaves_the_others() {
+		let folder = temp_folder("asset-item-remove");
+		write_asset(&folder, "stationery-item-aaaaaa111111", "svg", b"A").unwrap();
+		write_asset(&folder, "stationery-item-bbbbbb222222", "png", b"B").unwrap();
+		remove_asset(&folder, "stationery-item-aaaaaa111111").unwrap();
+		assert!(read_asset(&folder, "stationery-item-aaaaaa111111").is_err());
+		assert_eq!(read_asset(&folder, "stationery-item-bbbbbb222222").unwrap(), ("png".to_string(), b"B".to_vec()));
+		// Removing what isn't there is not an error.
+		remove_asset(&folder, "stationery-item-aaaaaa111111").unwrap();
 	}
 
 	#[test]
-	fn header_and_footer_images_and_their_originals_live_under_stationery_with_fixed_names() {
-		let folder = temp_folder("asset-hf");
-		assert_eq!(write_asset(&folder, "stationery-header", "svg", b"H").unwrap(), folder.join("stationery").join("header.svg"));
-		assert_eq!(write_asset(&folder, "stationery-header-original", "png", b"HO").unwrap(), folder.join("stationery").join("header-original.png"));
-		assert_eq!(write_asset(&folder, "stationery-footer", "pdf", b"F").unwrap(), folder.join("stationery").join("footer.pdf"));
-		assert_eq!(write_asset(&folder, "stationery-footer-original", "jpg", b"FO").unwrap(), folder.join("stationery").join("footer-original.jpg"));
-		assert_eq!(read_asset(&folder, "stationery-header").unwrap(), ("svg".to_string(), b"H".to_vec()));
-		assert_eq!(read_asset(&folder, "stationery-footer").unwrap(), ("pdf".to_string(), b"F".to_vec()));
-	}
-
-	#[test]
-	fn removing_one_header_footer_image_leaves_the_other_and_the_background() {
-		let folder = temp_folder("asset-hf-remove");
-		write_asset(&folder, "stationery-background", "svg", b"BG").unwrap();
-		write_asset(&folder, "stationery-header", "png", b"H").unwrap();
-		write_asset(&folder, "stationery-header-original", "jpg", b"HO").unwrap();
-		write_asset(&folder, "stationery-footer", "svg", b"F").unwrap();
-		remove_asset(&folder, "stationery-header").unwrap();
-		remove_asset(&folder, "stationery-header-original").unwrap();
-		assert!(read_asset(&folder, "stationery-header").is_err());
-		assert_eq!(read_asset(&folder, "stationery-footer").unwrap(), ("svg".to_string(), b"F".to_vec()));
-		assert_eq!(read_asset(&folder, "stationery-background").unwrap(), ("svg".to_string(), b"BG".to_vec()));
-	}
-
-	#[test]
-	fn existing_asset_kinds_keep_their_places() {
+	fn the_company_logo_keeps_its_place() {
 		let folder = temp_folder("asset-legacy");
 		assert_eq!(write_asset(&folder, "logo", "png", b"l").unwrap(), folder.join("logos").join("logo.png"));
 		assert_eq!(write_asset(&folder, "logo-original", "jpg", b"o").unwrap(), folder.join("logos").join("logo-original.jpg"));
-		assert_eq!(write_asset(&folder, "pdf-header", "svg", b"h").unwrap(), folder.join("pdf-header.svg"));
-		assert_eq!(write_asset(&folder, "pdf-header-original", "png", b"o").unwrap(), folder.join("pdf-header-original.png"));
+	}
+
+	#[test]
+	fn item_kinds_are_checked_and_retired_kinds_refused() {
+		assert_eq!(asset_slot("stationery-item-abc123def456"), Some(("stationery", "item-abc123def456".to_string())));
+		for bad in [
+			"stationery-item-",
+			"stationery-item-../x",
+			"stationery-item-ABC123DEF456",
+			"stationery-item-abc",
+			"stationery-background",
+			"stationery-header-original",
+			"pdf-header",
+			"business-db",
+		] {
+			assert_eq!(asset_slot(bad), None, "{bad}");
+		}
+		assert!(is_item_id("abc123def456"));
+		assert!(!is_item_id("../x"));
 	}
 
 	#[test]
 	fn an_unknown_kind_or_an_extension_that_is_not_a_plain_word_is_refused() {
 		let folder = temp_folder("asset-refuse");
 		assert!(write_asset(&folder, "business-db", "db", b"x").is_err());
-		assert!(write_asset(&folder, "stationery-background", "svg/../../evil", b"x").is_err());
-		assert!(write_asset(&folder, "stationery-background", "../x", b"x").is_err());
+		assert!(write_asset(&folder, "stationery-item-abc123def456", "svg/../../evil", b"x").is_err());
+		assert!(write_asset(&folder, "stationery-item-abc123def456", "../x", b"x").is_err());
 		assert!(remove_asset(&folder, "business-db").is_err());
 	}
 

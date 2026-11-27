@@ -166,7 +166,7 @@ fn fonts_dir(app: &AppHandle) -> Result<String, PdfError> {
 	path_str(&app.path().resource_dir()?.join("fonts"))
 }
 
-/// Stage one render in `work_dir`: the logo, the Stationery artwork from
+/// Stage one render in `work_dir`: the logo, the page design's images from
 /// `business_folder`, `data.json`, any companion files (common.typ) and the
 /// template itself. Returns the template's path. Shared by every PDF render
 /// and the Settings page's live page preview, so both see the same inputs.
@@ -208,13 +208,10 @@ pub(crate) fn stage_render(
 		obj.insert("logo_file".into(), Value::Null);
 	}
 
-	// 2b. Full-page background artwork (if the page block asks for one) from
-	//     the OPEN business's folder. The DB stores only its format, never a
-	//     path, so a moved folder needs no rewrite.
-	stage_background(&mut data, business_folder, work_dir)?;
-	// 2c. Header & footer images, the same way (stationery/header.<ext>,
-	//     stationery/footer.<ext>).
-	stage_header_footer(&mut data, business_folder, work_dir)?;
+	// 2b. The page design's images, from the OPEN business's folder (after the
+	//     logo: the company-logo item reuses logo_file). The DB stores only
+	//     each image's format, never a path, so a moved folder needs no rewrite.
+	stage_page_items(&mut data, business_folder, work_dir)?;
 
 	// 3. Write data.json
 	std::fs::write(work_dir.join("data.json"), serde_json::to_vec_pretty(&data)?)?;
@@ -229,79 +226,59 @@ pub(crate) fn stage_render(
 	Ok(template_path)
 }
 
-/// Stage a Full-page background for Typst. The payload's `page.background` is
-/// `{ ext }` (app/lib/page-settings.ts) — the artwork always lives at
-/// `<business folder>/stationery/background.<ext>`. Copy it into the work dir
-/// as `stationery-background.<ext>` and add `file` (what common.typ's
-/// page-background reads). No business folder, an extension that isn't a
-/// plain word, or a missing file all turn `background` into null: the page
-/// renders without artwork rather than failing. Pages without a background
-/// (every other Stationery mode) are left untouched.
+/// Stage the page design's images for Typst. Each image item in
+/// `page.items` (app/lib/page-settings.ts) arrives as
+/// `{ type: "image", src: "item", id, ext, … }` — the file is
+/// `<business folder>/stationery/item-<id>.<ext>` — or `src: "company_logo"`,
+/// which reuses the already-staged `logo_file`. A staged image gains `file`
+/// (what common.typ's design-items reads). An image that can't be staged — no
+/// business folder, an id or extension that isn't safe in a file name, a
+/// missing file, no company logo, an unknown `src` — is REMOVED, so the page
+/// renders without it rather than failing. Other items pass through untouched.
 /// scripts/verify-pdf-render.ts mirrors this — keep the two in step.
-pub(crate) fn stage_background(data: &mut Value, business_folder: Option<&Path>, work_dir: &Path) -> std::io::Result<()> {
-	let Some(bg) = data.pointer_mut("/page/background") else { return Ok(()) };
-	if bg.is_null() {
-		return Ok(());
-	}
-	let ext = bg.get("ext").and_then(|v| v.as_str()).unwrap_or("").to_string();
-	match stage_stationery_file("background", &ext, business_folder, work_dir)? {
-		Some(name) => {
-			if let Some(obj) = bg.as_object_mut() {
-				obj.insert("file".into(), Value::String(name));
-			}
+pub(crate) fn stage_page_items(data: &mut Value, business_folder: Option<&Path>, work_dir: &Path) -> std::io::Result<()> {
+	let logo_file = data.get("logo_file").and_then(|v| v.as_str()).map(str::to_string);
+	let Some(Value::Array(items)) = data.pointer_mut("/page/items") else { return Ok(()) };
+	let mut kept = Vec::with_capacity(items.len());
+	for mut item in std::mem::take(items) {
+		if item.get("type").and_then(|v| v.as_str()) != Some("image") {
+			kept.push(item);
+			continue;
 		}
-		None => *bg = Value::Null,
+		let file = match item.get("src").and_then(|v| v.as_str()) {
+			Some("company_logo") => logo_file.clone(),
+			Some("item") => {
+				let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
+				let ext = item.get("ext").and_then(|v| v.as_str()).unwrap_or("");
+				stage_item_file(id, ext, business_folder, work_dir)?
+			}
+			_ => None,
+		};
+		if let (Some(name), Some(obj)) = (file, item.as_object_mut()) {
+			obj.insert("file".into(), Value::String(name));
+			kept.push(item);
+		}
 	}
+	*items = kept;
 	Ok(())
 }
 
-/// Copy `<business folder>/stationery/<stem>.<ext>` into the work dir as
-/// `stationery-<stem>.<ext>` and return that name — or None when there is no
-/// business folder, the extension isn't a plain word, or the file is missing.
-fn stage_stationery_file(stem: &str, ext: &str, business_folder: Option<&Path>, work_dir: &Path) -> std::io::Result<Option<String>> {
-	if !crate::tenants::is_plain_ext(ext) {
+/// Copy `<business folder>/stationery/item-<id>.<ext>` into the work dir under
+/// the same name and return it — or None when there is no business folder, the
+/// id or extension isn't safe in a file name, or the file is missing.
+fn stage_item_file(id: &str, ext: &str, business_folder: Option<&Path>, work_dir: &Path) -> std::io::Result<Option<String>> {
+	if !crate::tenants::is_item_id(id) || !crate::tenants::is_plain_ext(ext) {
 		return Ok(None);
 	}
+	let name = format!("item-{id}.{ext}");
 	let Some(src) = business_folder
-		.map(|f| f.join(crate::tenants::STATIONERY_DIR).join(format!("{stem}.{ext}")))
+		.map(|f| f.join(crate::tenants::STATIONERY_DIR).join(&name))
 		.filter(|p| p.is_file())
 	else {
 		return Ok(None);
 	};
-	let name = format!("stationery-{stem}.{ext}");
 	std::fs::copy(&src, work_dir.join(&name))?;
 	Ok(Some(name))
-}
-
-/// Stage Header & footer images for Typst. The payload's `page.header_footer`
-/// is `{ header, footer }`, each null or `{ ext, x, y, w, h }`
-/// (app/lib/page-settings.ts) — the files always live at
-/// `<business folder>/stationery/header.<ext>` and `footer.<ext>`. Each one is
-/// copied beside the template and gains `file` (what common.typ's
-/// page-header-footer reads); one that can't be staged becomes null on its
-/// own, so a missing header still leaves the footer. Pages without images are
-/// left untouched. scripts/verify-pdf-render.ts mirrors this.
-pub(crate) fn stage_header_footer(data: &mut Value, business_folder: Option<&Path>, work_dir: &Path) -> std::io::Result<()> {
-	let Some(hf) = data.pointer_mut("/page/header_footer") else { return Ok(()) };
-	if hf.is_null() {
-		return Ok(());
-	}
-	for slot in ["header", "footer"] {
-		let Some(image) = hf.get_mut(slot) else { continue };
-		if image.is_null() {
-			continue;
-		}
-		let ext = image.get("ext").and_then(|v| v.as_str()).unwrap_or("").to_string();
-		match stage_stationery_file(slot, &ext, business_folder, work_dir)? {
-			Some(name) => {
-				if let Some(obj) = image.as_object_mut() {
-					obj.insert("file".into(), Value::String(name));
-				}
-			}
-			None => *image = Value::Null,
-		}
-	}
-	Ok(())
 }
 
 /// Run the bundled Typst sidecar with `args`. On failure, surface only the
@@ -521,16 +498,13 @@ pub fn open_path(path: String) -> Result<(), String> {
 const ARTWORK_PREVIEW_TYP: &str = "artwork-preview.typ";
 const ARTWORK_PREVIEW_SRC: &str = "#set page(width: auto, height: auto, margin: 0pt)\n#image(\"artwork.pdf\")\n";
 
-/// The Stationery artwork a PNG preview may be asked for (the file stem under
-/// `stationery/`): the Full-page background or a Header & footer image.
-const ARTWORK_PREVIEW_STEMS: [&str; 3] = ["background", "header", "footer"];
-
 /// Stage the OPEN business's PDF artwork (`stationery/<stem>.pdf`) for a PNG
 /// preview: copy it into `work_dir` as `artwork.pdf` beside a template that
 /// draws its first page at its own size. Returns the template's path, or None
-/// when there is no business, no such PDF, or `stem` isn't artwork.
+/// when there is no business, no such PDF, or `stem` isn't a design image.
 pub(crate) fn stage_artwork_preview(business_folder: Option<&Path>, stem: &str, work_dir: &Path) -> std::io::Result<Option<PathBuf>> {
-	if !ARTWORK_PREVIEW_STEMS.contains(&stem) {
+	// Only a page-design image (`item-<id>`) — the stem names a file.
+	if !stem.strip_prefix("item-").is_some_and(crate::tenants::is_item_id) {
 		return Ok(None);
 	}
 	let Some(src) = business_folder
@@ -548,16 +522,16 @@ pub(crate) fn stage_artwork_preview(business_folder: Option<&Path>, stem: &str, 
 
 /// PNG bytes of the open business's PDF artwork (its first page) — the
 /// webview can't draw a PDF in an <img>, so the Stationery thumbnail and
-/// editor show this instead. `artwork` is "background" (the default),
-/// "header" or "footer". Rendered by the bundled Typst at `ppi` (clamped to
+/// editor show this instead. `artwork` is the image's file stem,
+/// "item-<id>". Rendered by the bundled Typst at `ppi` (clamped to
 /// 20–150, plenty for a screen preview).
 #[tauri::command]
 pub async fn render_stationery_artwork_png(app: AppHandle, ppi: u32, artwork: Option<String>) -> Result<Vec<u8>, PdfError> {
-	let stem = artwork.as_deref().unwrap_or("background");
+	let stem = artwork.as_deref().unwrap_or("");
 	let work_dir = app.path().app_local_data_dir()?.join("pdf-work").join("artwork-preview");
 	let folder = crate::tenants::active_folder(&app).ok().flatten();
 	let template = stage_artwork_preview(folder.as_deref(), stem, &work_dir)?
-		.ok_or_else(|| PdfError::Typst(format!("This business has no PDF {stem} artwork.")))?;
+		.ok_or_else(|| PdfError::Typst(format!("This business has no PDF image {stem}.")))?;
 	let output = work_dir.join("artwork.png");
 	let path_str = |p: &Path| p.to_str().map(str::to_string).ok_or_else(|| PdfError::Typst("non-UTF-8 path in app data dir".into()));
 	let (root, template, out) = (path_str(&work_dir)?, path_str(&template)?, path_str(&output)?);
@@ -596,7 +570,7 @@ pub async fn render_document_page_png(app: AppHandle, data: Value, ppi: u32) -> 
 
 #[cfg(test)]
 mod tests {
-	use super::{layout_template, page_preview_dir, stage_artwork_preview, stage_background, stage_header_footer, stage_render};
+	use super::{layout_template, page_preview_dir, stage_artwork_preview, stage_page_items, stage_render};
 	use serde_json::json;
 	use std::path::PathBuf;
 
@@ -606,62 +580,70 @@ mod tests {
 		d
 	}
 
-	/// A business folder holding `stationery/background.<ext>`.
-	fn folder_with_background(tag: &str, ext: &str, bytes: &[u8]) -> PathBuf {
+	/// A business folder holding `stationery/<name>` for each (name, bytes).
+	fn folder_with_files(tag: &str, files: &[(&str, &[u8])]) -> PathBuf {
 		let folder = temp_dir(tag);
 		std::fs::create_dir_all(folder.join("stationery")).unwrap();
-		std::fs::write(folder.join("stationery").join(format!("background.{ext}")), bytes).unwrap();
+		for (name, bytes) in files {
+			std::fs::write(folder.join("stationery").join(name), bytes).unwrap();
+		}
 		folder
 	}
 
-	#[test]
-	fn background_artwork_is_copied_beside_the_template_and_named_for_typst() {
-		let folder = folder_with_background("stage", "svg", b"<svg/>");
-		let work = temp_dir("stage-work");
-		let mut data = json!({ "page": { "stationery": "background", "background": { "ext": "svg" } } });
-		stage_background(&mut data, Some(&folder), &work).unwrap();
-		assert_eq!(data["page"]["background"], json!({ "ext": "svg", "file": "stationery-background.svg" }));
-		assert_eq!(std::fs::read(work.join("stationery-background.svg")).unwrap(), b"<svg/>");
+	fn image(id: &str, src: &str, ext: Option<&str>) -> serde_json::Value {
+		json!({ "type": "image", "id": id, "src": src, "ext": ext, "x": 0, "y": 0, "w": 10, "h": 10, "pages": "every" })
 	}
 
 	#[test]
-	fn a_missing_artwork_file_renders_without_a_background() {
-		let folder = temp_dir("stage-missing");
-		let work = temp_dir("stage-missing-work");
-		let mut data = json!({ "page": { "background": { "ext": "pdf" } } });
-		stage_background(&mut data, Some(&folder), &work).unwrap();
-		assert!(data["page"]["background"].is_null());
+	fn design_images_are_copied_beside_the_template_and_missing_or_unsafe_ones_dropped() {
+		let folder = folder_with_files("items", &[("item-abc123def456.png", b"PNG")]);
+		let work = temp_dir("items-work");
+		let text = json!({ "type": "text", "id": "text00000001", "lines": ["Hi"] });
+		let line = json!({ "type": "line", "id": "line00000001", "length": 10 });
+		let mut data = json!({
+			"logo_file": "logo.png",
+			"page": { "items": [
+				image("abc123def456", "item", Some("png")),
+				image("missing00001", "item", Some("png")),
+				image("../x", "item", Some("png")),
+				image("abc123def456", "item", Some("p/ng")),
+				image("logo00000001", "company_logo", None),
+				image("weird0000001", "elsewhere", Some("png")),
+				text.clone(),
+				line.clone()
+			] }
+		});
+		stage_page_items(&mut data, Some(&folder), &work).unwrap();
+		let items = data["page"]["items"].as_array().unwrap();
+		assert_eq!(items.len(), 4);
+		assert_eq!(items[0]["file"], "item-abc123def456.png");
+		assert_eq!(std::fs::read(work.join("item-abc123def456.png")).unwrap(), b"PNG");
+		assert_eq!(items[1]["id"], "logo00000001");
+		assert_eq!(items[1]["file"], "logo.png");
+		assert_eq!(items[2], text);
+		assert_eq!(items[3], line);
 	}
 
 	#[test]
-	fn no_open_business_renders_without_a_background() {
-		let work = temp_dir("stage-nofolder-work");
-		let mut data = json!({ "page": { "background": { "ext": "png" } } });
-		stage_background(&mut data, None, &work).unwrap();
-		assert!(data["page"]["background"].is_null());
+	fn the_company_logo_item_is_dropped_when_there_is_no_logo() {
+		let mut data = json!({ "logo_file": null, "page": { "items": [image("logo00000001", "company_logo", None)] } });
+		stage_page_items(&mut data, None, &temp_dir("items-nologo")).unwrap();
+		assert_eq!(data["page"]["items"], json!([]));
 	}
 
 	#[test]
-	fn pages_without_a_background_are_left_alone() {
-		let folder = folder_with_background("stage-none", "svg", b"<svg/>");
-		let work = temp_dir("stage-none-work");
-		for page in [json!({ "stationery": "builtin", "background": null }), json!({ "stationery": "builtin" })] {
-			let mut data = json!({ "page": page.clone() });
-			stage_background(&mut data, Some(&folder), &work).unwrap();
-			assert_eq!(data["page"], page);
-		}
-		let mut no_page = json!({ "title": "x" });
-		stage_background(&mut no_page, Some(&folder), &work).unwrap();
-		assert_eq!(no_page, json!({ "title": "x" }));
+	fn no_open_business_drops_file_images_only() {
+		let line = json!({ "type": "line", "id": "line00000001" });
+		let mut data = json!({ "page": { "items": [image("abc123def456", "item", Some("png")), line.clone()] } });
+		stage_page_items(&mut data, None, &temp_dir("items-nofolder")).unwrap();
+		assert_eq!(data["page"]["items"], json!([line]));
 	}
 
 	#[test]
-	fn an_extension_that_is_not_a_plain_word_is_refused() {
-		let folder = folder_with_background("stage-ext", "svg", b"<svg/>");
-		let work = temp_dir("stage-ext-work");
-		let mut data = json!({ "page": { "background": { "ext": "svg/../../business.db" } } });
-		stage_background(&mut data, Some(&folder), &work).unwrap();
-		assert!(data["page"]["background"].is_null());
+	fn pages_without_items_are_left_alone() {
+		let mut data = json!({ "page": { "paper": "a4" } });
+		stage_page_items(&mut data, None, &temp_dir("items-none")).unwrap();
+		assert_eq!(data, json!({ "page": { "paper": "a4" } }));
 	}
 
 	#[test]
@@ -680,101 +662,47 @@ mod tests {
 	}
 
 	#[test]
-	fn a_pdf_background_is_staged_beside_a_template_that_draws_it() {
-		let folder = folder_with_background("artwork-preview", "pdf", b"%PDF-1.7 fake");
+	fn a_pdf_design_image_is_staged_beside_a_template_that_draws_it() {
+		let folder = folder_with_files("artwork-preview", &[("item-abc123def456.pdf", b"%PDF-1.7 fake")]);
 		let work = temp_dir("artwork-preview-work").join("nested");
-		let template = stage_artwork_preview(Some(&folder), "background", &work).unwrap().expect("staged");
+		let template = stage_artwork_preview(Some(&folder), "item-abc123def456", &work).unwrap().expect("staged");
 		assert_eq!(std::fs::read(work.join("artwork.pdf")).unwrap(), b"%PDF-1.7 fake");
-		let src = std::fs::read_to_string(&template).unwrap();
 		assert!(template.starts_with(&work));
-		assert!(src.contains("image(\"artwork.pdf\")"));
+		assert!(std::fs::read_to_string(&template).unwrap().contains("image(\"artwork.pdf\")"));
 	}
 
 	#[test]
-	fn no_pdf_background_means_nothing_to_preview() {
-		let svg = folder_with_background("artwork-preview-svg", "svg", b"<svg/>");
+	fn only_design_image_stems_can_be_previewed() {
+		let folder = folder_with_files("artwork-preview-bad", &[("item-abc123def456.svg", b"<svg/>"), ("background.pdf", b"%PDF")]);
 		let work = temp_dir("artwork-preview-none");
-		assert!(stage_artwork_preview(Some(&svg), "background", &work).unwrap().is_none());
-		assert!(stage_artwork_preview(None, "background", &work).unwrap().is_none());
+		assert!(stage_artwork_preview(Some(&folder), "item-abc123def456", &work).unwrap().is_none());
+		assert!(stage_artwork_preview(Some(&folder), "background", &work).unwrap().is_none());
+		assert!(stage_artwork_preview(Some(&folder), "item-../business", &work).unwrap().is_none());
+		assert!(stage_artwork_preview(None, "item-abc123def456", &work).unwrap().is_none());
 		assert!(!work.join("artwork.pdf").exists());
 	}
 
-	/// A business folder holding `stationery/<name>` for each (name, bytes).
-	fn folder_with_files(tag: &str, files: &[(&str, &[u8])]) -> PathBuf {
-		let folder = temp_dir(tag);
-		std::fs::create_dir_all(folder.join("stationery")).unwrap();
-		for (name, bytes) in files {
-			std::fs::write(folder.join("stationery").join(name), bytes).unwrap();
-		}
-		folder
-	}
-
 	#[test]
-	fn header_and_footer_images_are_copied_beside_the_template_and_named_for_typst() {
-		let folder = folder_with_files("hf", &[("header.svg", b"<svg/>"), ("footer.png", b"PNG")]);
-		let work = temp_dir("hf-work");
-		let mut data = json!({ "page": { "header_footer": {
-			"header": { "ext": "svg", "x": 0, "y": 0, "w": 210, "h": 30 },
-			"footer": { "ext": "png", "x": 0, "y": 282, "w": 210, "h": 15 }
-		} } });
-		stage_header_footer(&mut data, Some(&folder), &work).unwrap();
-		assert_eq!(data["page"]["header_footer"]["header"]["file"], "stationery-header.svg");
-		assert_eq!(data["page"]["header_footer"]["footer"]["file"], "stationery-footer.png");
-		assert_eq!(data["page"]["header_footer"]["footer"]["y"], 282);
-		assert_eq!(std::fs::read(work.join("stationery-header.svg")).unwrap(), b"<svg/>");
-		assert_eq!(std::fs::read(work.join("stationery-footer.png")).unwrap(), b"PNG");
-	}
-
-	#[test]
-	fn a_missing_image_file_drops_that_image_only() {
-		let folder = folder_with_files("hf-missing", &[("footer.svg", b"<svg/>")]);
-		let work = temp_dir("hf-missing-work");
-		let mut data = json!({ "page": { "header_footer": {
-			"header": { "ext": "png", "x": 0, "y": 0, "w": 210, "h": 30 },
-			"footer": { "ext": "svg", "x": 0, "y": 282, "w": 210, "h": 15 }
-		} } });
-		stage_header_footer(&mut data, Some(&folder), &work).unwrap();
-		assert!(data["page"]["header_footer"]["header"].is_null());
-		assert_eq!(data["page"]["header_footer"]["footer"]["file"], "stationery-footer.svg");
-	}
-
-	#[test]
-	fn header_footer_staging_refuses_odd_extensions_and_ignores_pages_without_images() {
-		let folder = folder_with_files("hf-odd", &[("header.svg", b"<svg/>")]);
-		let work = temp_dir("hf-odd-work");
-		let mut data = json!({ "page": { "header_footer": { "header": { "ext": "svg/../../business.db" }, "footer": null } } });
-		stage_header_footer(&mut data, Some(&folder), &work).unwrap();
-		assert!(data["page"]["header_footer"]["header"].is_null());
-		for page in [json!({ "header_footer": null }), json!({ "stationery": "builtin" })] {
-			let mut d = json!({ "page": page.clone() });
-			stage_header_footer(&mut d, Some(&folder), &work).unwrap();
-			assert_eq!(d["page"], page);
-		}
-		let mut none = json!({ "page": { "header_footer": { "header": { "ext": "svg" }, "footer": null } } });
-		stage_header_footer(&mut none, None, &work).unwrap();
-		assert!(none["page"]["header_footer"]["header"].is_null());
-	}
-
-	#[test]
-	fn a_render_is_staged_with_its_logo_artwork_data_and_companions() {
-		let folder = folder_with_background("render", "svg", b"<svg/>");
-		let logo = folder.join("pdf-header.png");
+	fn a_render_is_staged_with_its_logo_design_images_data_and_companions() {
+		let folder = folder_with_files("render", &[("item-abc123def456.svg", b"<svg/>")]);
+		let logo = folder.join("logo.png");
 		std::fs::write(&logo, b"PNG").unwrap();
 		let work = temp_dir("render-work").join("nested");
 		let data = json!({
 			"layout": "classic",
 			"logo_path": logo.to_str().unwrap(),
-			"page": { "stationery": "background", "background": { "ext": "svg" } }
+			"page": { "items": [image("abc123def456", "item", Some("svg")), image("logo00000001", "company_logo", None)] }
 		});
 		let template = stage_render(&work, Some(&folder), "doc-classic.typ", "// doc", data, &[("common.typ", "// common")]).unwrap();
 		assert_eq!(template, work.join("doc-classic.typ"));
 		assert_eq!(std::fs::read_to_string(&template).unwrap(), "// doc");
 		assert_eq!(std::fs::read_to_string(work.join("common.typ")).unwrap(), "// common");
 		assert_eq!(std::fs::read(work.join("logo.png")).unwrap(), b"PNG");
-		assert_eq!(std::fs::read(work.join("stationery-background.svg")).unwrap(), b"<svg/>");
+		assert_eq!(std::fs::read(work.join("item-abc123def456.svg")).unwrap(), b"<svg/>");
 		let staged: serde_json::Value = serde_json::from_slice(&std::fs::read(work.join("data.json")).unwrap()).unwrap();
 		assert_eq!(staged["logo_file"], "logo.png");
-		assert_eq!(staged["page"]["background"]["file"], "stationery-background.svg");
+		assert_eq!(staged["page"]["items"][0]["file"], "item-abc123def456.svg");
+		assert_eq!(staged["page"]["items"][1]["file"], "logo.png");
 	}
 
 	#[test]
@@ -791,15 +719,5 @@ mod tests {
 		let (a, b) = (page_preview_dir(&base), page_preview_dir(&base));
 		assert_ne!(a, b);
 		assert!(a.starts_with(base.join("pdf-work").join("page-preview")));
-	}
-
-	#[test]
-	fn a_pdf_header_or_footer_can_be_previewed_and_nothing_else_outside_stationery() {
-		let folder = folder_with_files("hf-preview", &[("footer.pdf", b"%PDF-footer")]);
-		let work = temp_dir("hf-preview-work");
-		assert!(stage_artwork_preview(Some(&folder), "footer", &work).unwrap().is_some());
-		assert_eq!(std::fs::read(work.join("artwork.pdf")).unwrap(), b"%PDF-footer");
-		assert!(stage_artwork_preview(Some(&folder), "header", &temp_dir("hf-preview-none")).unwrap().is_none());
-		assert!(stage_artwork_preview(Some(&folder), "../business", &temp_dir("hf-preview-bad")).unwrap().is_none());
 	}
 }

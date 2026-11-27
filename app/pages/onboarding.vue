@@ -102,7 +102,7 @@
 							Identity logo
 						</div>
 						<div class="text-xs text-(--ui-text-muted) mb-2">
-							Square mark for the sidebar.
+							Square mark for the sidebar, and the logo your PDF letterhead starts with.
 						</div>
 						<button
 							type="button"
@@ -114,7 +114,7 @@
 							@dragover.prevent="identityDragOver = true"
 							@dragenter.prevent="identityDragOver = true"
 							@dragleave.prevent="identityDragOver = false"
-							@drop.prevent="onLogoDrop($event, 'identity')"
+							@drop.prevent="onLogoDrop($event)"
 						>
 							<img
 								v-if="identityLogoPreview"
@@ -133,44 +133,6 @@
 							accept="image/*"
 							class="hidden"
 							@change="onIdentityLogoChange"
-						>
-					</div>
-					<div>
-						<div class="text-xs font-medium text-(--ui-text) mb-1">
-							PDF header logo
-						</div>
-						<div class="text-xs text-(--ui-text-muted) mb-2">
-							Wide letterhead-style image printed on documents.
-						</div>
-						<button
-							type="button"
-							class="w-full h-[140px] rounded-md border-2 border-dashed flex items-center justify-center overflow-hidden transition"
-							:class="pdfDragOver
-								? 'border-(--ui-primary) bg-(--ui-primary)/5'
-								: 'border-(--ui-border-accented) hover:border-(--ui-primary) bg-(--ui-bg-muted)'"
-							@click="pdfLogoInput?.click()"
-							@dragover.prevent="pdfDragOver = true"
-							@dragenter.prevent="pdfDragOver = true"
-							@dragleave.prevent="pdfDragOver = false"
-							@drop.prevent="onLogoDrop($event, 'pdf-header')"
-						>
-							<img
-								v-if="pdfLogoPreview"
-								:src="pdfLogoPreview"
-								class="max-w-full max-h-full object-contain"
-								alt="PDF header logo"
-							>
-							<div v-else class="text-xs text-(--ui-text-muted) text-center px-2">
-								<UIcon name="i-lucide-upload" class="size-5 mx-auto mb-1" />
-								Click or drop
-							</div>
-						</button>
-						<input
-							ref="pdfLogoInput"
-							type="file"
-							accept="image/*"
-							class="hidden"
-							@change="onPdfLogoChange"
 						>
 					</div>
 				</div>
@@ -466,6 +428,7 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import CurrencyPicker from "~/components/CurrencyPicker.vue";
+	import { usePageDesign } from "~/composables/usePageDesign";
 	import { saveBusinessAsset } from "~/lib/business-assets";
 	import { resetDbCache } from "~/lib/db";
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
@@ -550,17 +513,14 @@
 		{ label: "December", value: 12 }
 	];
 
-	// Logo upload state. The actual files live in app_data_dir/{logos,
-	// pdf-headers}/{tenant_id}.{ext} on disk; the previews here are object
-	// URLs while the user is mid-upload, replaced with convertFileSrc()
-	// once persisted. Keeping it loose since we save to disk immediately
-	// on selection (matches /settings/company / /settings/pdf flow).
+	// Logo upload state. The file lives in <business folder>/logos/logo.<ext>;
+	// the preview here is an object URL while the user is mid-upload. Saved to
+	// disk immediately on selection (matches /settings/company).
 	const identityLogoInput = useTemplateRef<HTMLInputElement>("identityLogoInput");
-	const pdfLogoInput = useTemplateRef<HTMLInputElement>("pdfLogoInput");
 	const identityLogoPreview = ref<string | null>(null);
-	const pdfLogoPreview = ref<string | null>(null);
 
 	const saving = ref(false);
+	const pageDesign = usePageDesign();
 
 	// Persist the step's fields. Each step saves only the columns it
 	// owns — keeps the SQL UPDATE list tight and avoids accidentally
@@ -594,10 +554,10 @@
 		} else if (step === 5) {
 			// Documents — one Layout applies to every document PDF;
 			// accent colour drives the header rule + highlights.
-			await settingsStore.save({
-				pdf_layout: form.pdf_layout,
-				pdf_theme_color: form.pdf_theme_color
-			});
+			await settingsStore.save({ pdf_theme_color: form.pdf_theme_color });
+			// The matching starter design (it sets the Layout too), with the
+			// logo from step 1 copied into its logo spot.
+			await pageDesign.applyTemplate(form.pdf_layout);
 		} else {
 			// Banking lives in business_banks now. Only create a row if
 			// the user filled anything in — empty step 4 means "skip,
@@ -738,8 +698,8 @@
 	// format (png → jpg) doesn't orphan the previous file.
 	// Write into the portable business folder via the Rust `save_business_asset`
 	// command (std::fs, unscoped) so it works on any drive the folder lives on —
-	// identity → <folder>/logos/logo.<ext>; PDF header → <folder>/pdf-header.<ext>.
-	const uploadLogo = async (file: File, kind: "identity" | "pdf-header") => {
+	// → <folder>/logos/logo.<ext>.
+	const uploadLogo = async (file: File) => {
 		const tenantId = tenants.activeTenantId;
 		if (!tenantId) {
 			toast.add({ title: "No active business", color: "error", icon: "i-lucide-circle-alert" });
@@ -748,16 +708,10 @@
 		try {
 			const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
 			const ext = (file.name.split(".").pop() ?? "png").toLowerCase();
-			const target = await saveBusinessAsset(tenantId, kind === "identity" ? "logo" : "pdf-header", ext, bytes);
-
-			if (kind === "identity") {
-				await settingsStore.save({ logo_path: target });
-				await tenants.setLogoFile(tenantId, `logo.${ext}`);
-				identityLogoPreview.value = URL.createObjectURL(file);
-			} else {
-				await settingsStore.save({ pdf_header_logo_path: target });
-				pdfLogoPreview.value = URL.createObjectURL(file);
-			}
+			const target = await saveBusinessAsset(tenantId, "logo", ext, bytes);
+			await settingsStore.save({ logo_path: target });
+			await tenants.setLogoFile(tenantId, `logo.${ext}`);
+			identityLogoPreview.value = URL.createObjectURL(file);
 		} catch (err) {
 			toast.add({
 				title: "Logo upload failed",
@@ -772,32 +726,23 @@
 		const input = event.target as HTMLInputElement;
 		const file = input.files?.[0];
 		input.value = "";
-		if (file) await uploadLogo(file, "identity");
+		if (file) await uploadLogo(file);
 	};
 
-	const onPdfLogoChange = async (event: Event) => {
-		const input = event.target as HTMLInputElement;
-		const file = input.files?.[0];
-		input.value = "";
-		if (file) await uploadLogo(file, "pdf-header");
-	};
-
-	// Drag-and-drop onto the logo zones. The window sets dragDropEnabled:false
+	// Drag-and-drop onto the logo zone. The window sets dragDropEnabled:false
 	// and disable-file-drop-nav.client.ts prevents the document from navigating
 	// on a stray drop, so a zone's own drop handler runs first and reads the
-	// file — same pattern as /settings/pdf.vue's header-logo drop zone.
+	// file.
 	const identityDragOver = ref(false);
-	const pdfDragOver = ref(false);
 
-	const onLogoDrop = async (event: DragEvent, kind: "identity" | "pdf-header") => {
-		if (kind === "identity") identityDragOver.value = false;
-		else pdfDragOver.value = false;
+	const onLogoDrop = async (event: DragEvent) => {
+		identityDragOver.value = false;
 		const file = event.dataTransfer?.files?.[0];
 		if (!file) return;
 		if (!file.type.startsWith("image/")) {
 			toast.add({ title: "Only image files are accepted", color: "error", icon: "i-lucide-circle-alert" });
 			return;
 		}
-		await uploadLogo(file, kind);
+		await uploadLogo(file);
 	};
 </script>

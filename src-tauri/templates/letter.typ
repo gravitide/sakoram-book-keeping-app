@@ -1,19 +1,16 @@
 // Letter — free-form correspondence on the business letterhead.
 //
-// The header (logo + accent rule) and footer match the client-facing document
-// templates (doc-classic.typ) — same logo size, margins, and shared
-// `footer-content` (business · website · phone · address) — so a letter looks
-// like it came from the same stationery as an invoice/quote. Under any
-// Stationery other than Built-in (`data.page.chrome` false: the business is on
-// Pre-printed paper, or this one letter is printed onto it) neither is drawn
-// and data.page.margins reserves the blank bands.
+// The letterhead, footer and page number are the business's page design,
+// drawn behind the content by page-setup (common.typ design-items). A letter
+// printed onto pre-printed paper gets no design items (page-settings.ts
+// omitItems), only the design's safe area.
 //
 // The rich-text body arrives pre-normalised in `data.blocks` (see
 // app/lib/letter-body.ts): an array of paragraph / heading / bullet_list /
 // ordered_list blocks whose inline runs carry bold/italic/underline flags.
 // Text is always plain JSON string values — never interpreted as Typst markup.
 
-#import "common.typ": builtin-logo, caption, footer-content, page-setup, render-blocks
+#import "common.typ": caption, page-setup, render-blocks
 
 #let data = json("data.json")
 
@@ -26,29 +23,8 @@
 #set text(font: (chosen-font, "Inter", "Inter Tight", "Miriam Libre"), size: 10pt, lang: "en")
 #set par(leading: 0.6em, spacing: 0.8em)
 
-#set page(..page-setup(
-  data,
-  // Same margins as doc-classic for the app-rendered letterhead. On
-  // pre-printed paper data.page.margins carries the blank bands
-  // (app/lib/page-settings.ts) and page-setup uses those instead.
-  margin: (x: 18mm, top: 16mm, bottom: 18mm),
-  // page-setup drops this under any Stationery other than Built-in.
-  footer: [
-    #line(length: 100%, stroke: 0.5pt + rgb("#e5e7eb"))
-    #v(4pt)
-    #align(center, text(size: 8pt, fill: rgb("#6b7280"))[#footer-content(data)])
-  ],
-))
+#set page(..page-setup(data))
 
-// --- letterhead header (Built-in stationery only) ------------------------
-// Matches doc-classic: logo top-right at 12mm (or business-name wordmark),
-// theme-coloured 2pt rule below. Unlike the other bespoke templates, a letter
-// drops its rule too under any other Stationery.
-#builtin-logo(data, 12mm, 16pt, below: 2mm)
-#if data.page.chrome {
-  line(length: 100%, stroke: 2pt + rgb(data.theme_color))
-  v(12pt)
-}
 
 // --- date + reference row ------------------------------------------------
 // Muted caption over a strong value, matching the quote / invoice meta block:

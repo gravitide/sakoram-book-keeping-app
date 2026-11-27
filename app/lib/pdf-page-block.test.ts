@@ -1,6 +1,6 @@
-// Every PDF builder carries the same `page` block (see page-settings.ts), so
-// no template has to decide paper, Stationery margins or what to suppress for
-// itself.
+// Every PDF builder carries the same `page` block (see page-settings.ts) — the
+// paper, the design's safe area and its printable items — and the company
+// logo as `logo_path`, so no template decides any of it for itself.
 
 import type { CompanySettingsRow } from "~/stores/settings";
 import { describe, expect, it } from "vitest";
@@ -8,6 +8,7 @@ import { buildBillPdfPayload } from "./bill-pdf";
 import { buildInvoicePdfPayload } from "./invoice-pdf";
 import { buildLetterPdfPayload } from "./letter-pdf";
 import { CURRENCIES } from "./money";
+import { buildPageSettings } from "./page-settings";
 import { buildPayslipPdfPayload } from "./payslip-pdf";
 import { buildQuotePdfPayload } from "./quote-pdf";
 import {
@@ -26,31 +27,26 @@ import { buildVoucherPdfPayload } from "./voucher-pdf";
 
 const LKR = CURRENCIES.LKR!;
 const currency = { code: LKR.code, symbol: LKR.symbol };
-const builtin = {
+const DESIGN = {
+	version: 1,
+	paper: "a4",
+	margins: { top: 40, right: 18, bottom: 25, left: 18 },
+	items: [
+		{ type: "image", id: "artwork00001", x: 0, y: 0, w: 210, h: 297, pages: "every", src: { kind: "file", ext: "svg" }, guide: false },
+		{ type: "text", id: "name00000001", x: 18, y: 12, w: 120, pages: "first", text: "{business_name}", style: { font: "Akt", size: 12, bold: true, italic: false, color: "accent", align: "left" } },
+		{ type: "page_number", id: "pageno000001", x: 142, y: 289, w: 50, pages: "every", format: "page_of_total", hide_single: true, style: { font: "Akt", size: 7, bold: false, italic: false, color: "#6b7280", align: "right" } }
+	]
+};
+const business = {
 	business_name: "Lanka Design Studio",
 	pdf_layout: "compact",
-	// Not the A4 default, so every builder proves it carries the business's
-	// Paper size rather than a hardcoded one.
+	// Not the A4 the design was made on, so every builder proves it carries
+	// the business's Paper size (and the design scaled to it).
 	pdf_paper_size: "a5",
-	pdf_stationery_mode: "builtin",
-	// Stored Pre-printed bands that Built-in must ignore (except for a letter
-	// set to pre-printed paper).
-	pdf_stationery: JSON.stringify({ preprinted: { top: 48, right: 14, bottom: 22, left: 16 } })
+	pdf_theme_color: "blue",
+	logo_path: "D:/Biz/logos/logo.png",
+	pdf_design: JSON.stringify(DESIGN)
 } as CompanySettingsRow;
-const preprinted = { ...builtin, pdf_stationery_mode: "preprinted" } as CompanySettingsRow;
-const background = {
-	...builtin,
-	pdf_stationery_mode: "background",
-	pdf_stationery: JSON.stringify({
-		preprinted: { top: 48, right: 14, bottom: 22, left: 16 },
-		background: { ext: "svg", paper: "a5", margins: { top: 36, right: 12, bottom: 20, left: 12 } }
-	})
-} as CompanySettingsRow;
-
-// A5 is 148 mm wide: the Layout's A4 margins scale by 148 / 210.
-const A5_LAYOUT_MARGINS = { paper: "a5", margin_scale: 0.704762, stationery: "builtin", chrome: true, margins: null, page_numbers: true, page_number_position: "footer", allow_landscape: true, background: null, header_footer: null };
-// The Stationery's own bands, never scaled.
-const A5_PREPRINTED = { paper: "a5", margin_scale: 0.704762, stationery: "preprinted", chrome: false, margins: { top: 48, right: 14, bottom: 22, left: 16 }, page_numbers: true, page_number_position: "safe_area", allow_landscape: false, background: null, header_footer: null };
 
 const docRow = {
 	number: "INV-0001",
@@ -127,34 +123,18 @@ const builders = (settings: CompanySettingsRow): [string, () => unknown][] => [
 	...Object.entries(reports(settings)).map(([name, build]) => [`${name} report`, build] as [string, () => unknown])
 ];
 
-type Page = { margin_scale: number } & Record<string, unknown>;
-const pageOf = (build: () => unknown) => {
-	const { page } = build() as { page: Page };
-	return { ...page, margin_scale: Number(page.margin_scale.toFixed(6)) };
-};
-
 describe("every PDF builder emits the shared page block", () => {
-	it.each(builders(builtin))("%s: the business's paper with the Layout's own (scaled) margins", (_name, build) => {
-		expect(pageOf(build)).toEqual(A5_LAYOUT_MARGINS);
+	it.each(builders(business))("%s: the paper, the design's safe area and items, the company logo", (_name, build) => {
+		const payload = build() as { page: unknown, logo_path: unknown };
+		expect(payload.page).toEqual(buildPageSettings(business));
+		expect((payload.page as { paper: string }).paper).toBe("a5");
+		expect((payload.page as { items: unknown[] }).items).toHaveLength(3);
+		expect(payload.logo_path).toBe("D:/Biz/logos/logo.png");
 	});
 
-	it.each(builders(preprinted))("%s on Pre-printed paper: the Stationery's bands, nothing of the built-in identity", (_name, build) => {
-		expect(pageOf(build)).toEqual(A5_PREPRINTED);
+	it("a letter on pre-printed paper prints none of the design but keeps its safe area", () => {
+		const { page } = letter(business, 1) as { page: { items: unknown[], margins: unknown } };
+		expect(page.items).toEqual([]);
+		expect(page.margins).toEqual(buildPageSettings(business).margins);
 	});
-
-	it.each(builders(background))("%s on a Full-page background: the artwork behind every page, the background's own margins", (_name, build) => {
-		expect(pageOf(build)).toEqual({
-			...A5_PREPRINTED,
-			stationery: "background",
-			margins: { top: 36, right: 12, bottom: 20, left: 12 },
-			background: { ext: "svg" }
-		});
-	});
-
-	it.each([["Built-in", builtin], ["Pre-printed paper", preprinted], ["Full-page background", background]] as const)(
-		"a letter on pre-printed paper reserves the business's Pre-printed paper bands (active mode %s)",
-		(_mode, settings) => {
-			expect(pageOf(() => letter(settings, 1))).toEqual(A5_PREPRINTED);
-		}
-	);
 });

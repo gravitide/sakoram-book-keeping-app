@@ -77,12 +77,9 @@
 				<SectionCard title="Paper" subtitle="What this letter is printed on." icon="i-lucide-file-text">
 					<URadioGroup v-model="paperChoice" :items="paperChoices" />
 					<p class="text-xs text-(--ui-text-muted) mt-3">
-						Stationery and paper size are set in
-						<NuxtLink to="/settings/pdf#page" class="text-(--ui-primary) hover:underline">
+						The page design, its safe area and the paper size are set in
+						<NuxtLink to="/settings/pdf#design" class="text-(--ui-primary) hover:underline">
 							PDF settings
-						</NuxtLink>, and the Pre-printed paper bands in
-						<NuxtLink to="/settings/letters#preprinted" class="text-(--ui-primary) hover:underline">
-							Letter settings
 						</NuxtLink>.
 					</p>
 				</SectionCard>
@@ -216,13 +213,13 @@
 		void load();
 	});
 
-	// "Use stationery" follows the business's Stationery + Paper size like every
-	// other document; "Pre-printed paper" reserves the business's Pre-printed
-	// paper bands whatever the active Stationery mode (app/lib/page-settings.ts).
+	// "Use stationery" prints on the business's page design like every other
+	// document; "Pre-printed paper" leaves the design's items off and keeps its
+	// safe area (app/lib/page-settings.ts omitItems).
 	type PaperChoice = "stationery" | "preprinted";
 	const paperChoices: { value: PaperChoice, label: string, description: string }[] = [
-		{ value: "stationery", label: "Use stationery", description: "Your business stationery and paper size, like every other document." },
-		{ value: "preprinted", label: "Pre-printed paper", description: "Nothing printed around the letter — blank bands clear the letterhead already on your paper." }
+		{ value: "stationery", label: "Use stationery", description: "Your page design and paper size, like every other document." },
+		{ value: "preprinted", label: "Pre-printed paper", description: "Nothing from your design is printed — only the letter, inside the safe area." }
 	];
 	const paperChoice = computed({
 		get: (): PaperChoice => (form.pre_printed === 1 ? "preprinted" : "stationery"),

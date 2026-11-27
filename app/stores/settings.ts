@@ -21,7 +21,6 @@ export interface CompanySettingsRow {
 	phone: string | null
 	website: string | null
 	logo_path: string | null
-	pdf_header_logo_path: string | null
 	default_vat_rate: number
 	default_payment_terms_days: number
 	default_quote_validity_days: number
@@ -44,12 +43,10 @@ export interface CompanySettingsRow {
 	// See app/lib/pdf-layouts.ts; unknown values fall back to "classic" in
 	// both the JS resolver and the Rust registry.
 	pdf_layout: string
-	// Stationery (migration 0055, ADR 0001): which mode is active —
-	// builtin | background | header_footer | preprinted — and a JSON blob with
-	// every mode's own settings (margins, later artwork geometry). NULL JSON =
-	// all defaults. Parsed by app/lib/stationery.ts.
-	pdf_stationery_mode: string
-	pdf_stationery: string | null
+	// The page design (migration 0057): safe area + canvas items, JSON parsed
+	// by app/lib/page-design.ts. NULL = never chosen — renders the Classic
+	// starter template (page-settings.ts effectiveDesign).
+	pdf_design: string | null
 	// Paper size (migration 0054): the sheet every PDF of the business is laid
 	// out on — a4 | a5 | us-letter | us-legal (the Typst paper names). Unknown
 	// values fall back to a4. See app/lib/page-settings.ts.
@@ -95,21 +92,9 @@ export interface CompanySettingsRow {
 	// by (employee)"). 0/1, defaults 0. Read by app/lib/payslip-pdf.ts and
 	// rendered by src-tauri/templates/payslip.typ.
 	payslip_show_signatures: number
-	// Header-logo controls (migration 0051). Scale is integer percent
-	// (50..150) applied to each template's baseline logo height; crop is the
-	// last crop rect JSON {x,y,w,h} in source px, null for SVG / uncropped.
-	pdf_logo_scale: number
-	pdf_logo_crop: string | null
-	// Square identity-logo crop rect (migration 0053). Same shape as
-	// pdf_logo_crop; null for SVG or a logo uploaded before the cropper.
+	// Square identity-logo crop rect (migration 0053): JSON {x,y,w,h} in
+	// source px; null for SVG or a logo uploaded before the cropper.
 	logo_crop: string | null
-	// Customizable page chrome (migration 0052). The *_custom flags are the
-	// opt-in; the *_text columns hold TipTap JSON that may contain {token}
-	// fields resolved at render time. Flags default 0 = hardcoded chrome.
-	pdf_header_custom: number
-	pdf_header_text: string | null
-	pdf_footer_custom: number
-	pdf_footer_text: string | null
 	updated_at: string
 }
 
@@ -127,7 +112,6 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"phone",
 	"website",
 	"logo_path",
-	"pdf_header_logo_path",
 	"default_vat_rate",
 	"default_payment_terms_days",
 	"default_quote_validity_days",
@@ -140,8 +124,7 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"ui_font",
 	"pdf_font",
 	"pdf_layout",
-	"pdf_stationery_mode",
-	"pdf_stationery",
+	"pdf_design",
 	"pdf_paper_size",
 	"theme_color",
 	"pdf_theme_color",
@@ -163,13 +146,7 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof SettingsUpdate> = [
 	"pdf_protect_voucher",
 	"pdf_protect_payslip",
 	"payslip_show_signatures",
-	"pdf_logo_scale",
-	"pdf_logo_crop",
-	"logo_crop",
-	"pdf_header_custom",
-	"pdf_header_text",
-	"pdf_footer_custom",
-	"pdf_footer_text"
+	"logo_crop"
 ];
 
 export const useSettingsStore = defineStore("settings", () => {
@@ -197,19 +174,6 @@ export const useSettingsStore = defineStore("settings", () => {
 
 	const logoSrc = computed(() => {
 		const p = settings.value?.logo_path;
-		if (!p) return null;
-		try {
-			return bustCache(convertFileSrc(p));
-		} catch {
-			return null;
-		}
-	});
-
-	// Webview-safe URL for the wide PDF header logo. Distinct asset from
-	// the identity logo so users can keep a square mark for the sidebar
-	// and a letterhead-style image for printed documents.
-	const pdfHeaderLogoSrc = computed(() => {
-		const p = settings.value?.pdf_header_logo_path;
 		if (!p) return null;
 		try {
 			return bustCache(convertFileSrc(p));
@@ -293,7 +257,6 @@ export const useSettingsStore = defineStore("settings", () => {
 		error,
 		businessName,
 		logoSrc,
-		pdfHeaderLogoSrc,
 		load,
 		ensureLoaded,
 		save

@@ -22,7 +22,6 @@ import type { InvoiceRow } from "~/stores/invoices";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatMoney } from "./money";
 import { buildPageSettings } from "./page-settings";
-import { buildFooterBlocks } from "./pdf-chrome";
 import { pdfThemeHex } from "./theme";
 
 // One row in the statement's invoice table.
@@ -294,9 +293,7 @@ export const buildCustomerStatementPdfPayload = (
 		business_phone: input.settings?.phone ?? null,
 		website: input.settings?.website ?? null,
 		phone: input.settings?.phone ?? null,
-		logo_scale: input.settings?.pdf_logo_scale ?? 100,
-		footer_blocks: buildFooterBlocks(input.settings),
-		logo_path: input.settings?.pdf_header_logo_path ?? null,
+		logo_path: input.settings?.logo_path ?? null,
 		page: buildPageSettings(input.settings),
 		theme_color: pdfThemeHex(input.settings),
 		font_family: input.settings?.pdf_font ?? null,
