@@ -85,10 +85,13 @@ const LOGO = join(REPO, "src-tauri/icons/128x128.png");
 // <folder>/stationery/background.<ext>, exactly as the app reads it.
 const BUSINESS_FOLDER = join(REPO, "scripts/fixtures");
 // The demo business's bundled letterhead, staged into a throwaway business
-// folder exactly where the demo seed writes it (stationery/background.svg).
+// folder exactly where the demo seed writes it: stationery/background.svg, and
+// its Header & footer images as stationery/header.svg + footer.svg.
 const DEMO_FOLDER = mkdtempSync(join(tmpdir(), "sakoram-demo-folder-"));
 mkdirSync(join(DEMO_FOLDER, "stationery"));
 copyFileSync(join(REPO, "app/assets/stationery/demo-letterhead.svg"), join(DEMO_FOLDER, "stationery/background.svg"));
+copyFileSync(join(REPO, "app/assets/stationery/demo-header.svg"), join(DEMO_FOLDER, "stationery/header.svg"));
+copyFileSync(join(REPO, "app/assets/stationery/demo-footer.svg"), join(DEMO_FOLDER, "stationery/footer.svg"));
 process.on("exit", () => rmSync(DEMO_FOLDER, { recursive: true, force: true }));
 const BASELINES = join(REPO, "scripts/pdf-render-baselines.json");
 const CREATION_TIMESTAMP = "1767225600"; // 2026-01-01T00:00:00Z
@@ -202,6 +205,8 @@ const settingsFor = (overrides: Partial<CompanySettingsRow> = {}): CompanySettin
 const noLogo = { pdf_header_logo_path: null };
 // The demo business: its bundled letterhead, Safe area and PDF accent.
 const demoSettings = () => settingsFor({ ...demoLetterheadSettings(null), pdf_theme_color: DEMO_LETTERHEAD_ACCENT });
+// The demo business switched to its stored Header & footer images.
+const demoHeaderFooterSettings = () => settingsFor({ ...demoLetterheadSettings(null), pdf_stationery_mode: "header_footer", pdf_theme_color: DEMO_LETTERHEAD_ACCENT });
 const preprintedPaper = { pdf_stationery_mode: "preprinted" };
 // Full-page background with artwork of the given format. Its margins (44 / 22,
 // sides 20) differ from both the defaults and the Pre-printed bands above, so
@@ -828,6 +833,9 @@ const cases: Case[] = [
 	// with the demo's own Safe area (one page, and one that runs on).
 	{ ...docCase("invoice-classic-demo-letterhead", invoice(demoSettings())), businessFolder: DEMO_FOLDER },
 	{ ...docCase("invoice-classic-demo-letterhead-multipage", invoice(demoSettings(), 30)), businessFolder: DEMO_FOLDER, multipage: true },
+	// ...and the same letterhead as the demo's stored Header & footer images.
+	{ ...docCase("invoice-classic-demo-header-footer", invoice(demoHeaderFooterSettings())), businessFolder: DEMO_FOLDER },
+	{ ...docCase("invoice-classic-demo-header-footer-multipage", invoice(demoHeaderFooterSettings(), 30)), businessFolder: DEMO_FOLDER, multipage: true },
 
 	// Every template on the three non-A4 sheets. Built-in Layout margins scale
 	// with paper width; Pre-printed paper bands (letters included) do not.
