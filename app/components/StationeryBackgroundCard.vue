@@ -2,16 +2,22 @@
 	<SectionCard
 		icon="i-lucide-file-image"
 		title="Full-page background"
-		subtitle="Your letterhead as one page-sized artwork, drawn behind the content of every page. SVG or PDF stay sharp at any size; PNG and JPEG are cropped to the paper and kept at print resolution."
+		subtitle="One page-sized artwork drawn behind every page. SVG and PDF stay sharp at any size; PNG and JPEG are cropped to the paper at print resolution."
 	>
-		<div class="grid grid-cols-1 md:grid-cols-[auto_minmax(0,1fr)] gap-6 items-start">
+		<!-- Two columns: the artwork on the paper (left), and everything you do
+			with it on the right — the file, then the Safe area and the colour
+			(the page's slot), as three labelled groups. Below md they stack. -->
+		<div class="grid grid-cols-1 md:grid-cols-[auto_minmax(0,1fr)] gap-x-8 gap-y-6 items-start">
 			<!-- The artwork, to scale on the paper. White in both themes: it
-				previews against the paper. The Safe area is set in the
-				Stationery editor (the page's slot below). -->
-			<div class="flex flex-col items-center gap-2">
+				previews against the paper. Dashed only while it is an empty drop
+				target; with artwork in place it is just the sheet. -->
+			<div class="flex flex-col items-center gap-2 justify-self-center md:justify-self-start">
 				<div
-					class="relative w-44 rounded-md border-2 border-dashed overflow-hidden bg-white transition"
-					:class="locked ? 'border-(--ui-border-accented) cursor-not-allowed opacity-60' : dragOver ? 'border-(--ui-primary) scale-[1.01] cursor-pointer' : 'border-(--ui-border-accented) hover:border-(--ui-primary)/60 cursor-pointer'"
+					class="relative w-44 rounded-md overflow-hidden bg-white transition"
+					:class="[
+						artwork.ext ? 'border' : 'border-2 border-dashed',
+						locked ? 'border-(--ui-border-accented) cursor-not-allowed opacity-60' : dragOver ? 'border-(--ui-primary) scale-[1.01] cursor-pointer' : 'border-(--ui-border-accented) hover:border-(--ui-primary)/60 cursor-pointer'
+					]"
 					:aria-disabled="locked ? true : undefined"
 					:style="{ aspectRatio: `${paperInfo.widthMm} / ${paperInfo.heightMm}` }"
 					role="button"
@@ -61,75 +67,79 @@
 				</div>
 			</div>
 
-			<div class="space-y-4">
-				<div class="flex flex-wrap gap-2">
-					<UButton
-						icon="i-lucide-upload"
-						size="sm"
-						variant="soft"
-						:loading="busy"
-						:disabled="!!locked"
-						@click="pick"
-					>
-						{{ artwork.ext ? "Replace" : "Upload" }}
-					</UButton>
-					<UButton
-						v-if="canRecrop"
+			<div class="flex flex-col gap-6 min-w-0">
+				<div class="space-y-3">
+					<div class="text-sm font-medium">
+						Artwork
+					</div>
+					<div class="flex flex-wrap gap-2">
+						<UButton
+							icon="i-lucide-upload"
+							size="sm"
+							variant="soft"
+							:loading="busy"
+							:disabled="!!locked"
+							@click="pick"
+						>
+							{{ artwork.ext ? "Replace" : "Upload" }}
+						</UButton>
+						<UButton
+							v-if="canRecrop"
+							icon="i-lucide-crop"
+							size="sm"
+							variant="soft"
+							:color="review?.recrop ? 'warning' : 'neutral'"
+							:disabled="busy || !!locked"
+							@click="openRecrop"
+						>
+							Re-crop
+						</UButton>
+						<UButton
+							v-if="artwork.ext"
+							icon="i-lucide-trash-2"
+							size="sm"
+							variant="soft"
+							color="error"
+							:disabled="busy || !!locked"
+							@click="remove"
+						>
+							Remove
+						</UButton>
+					</div>
+
+					<p v-if="locked" class="text-xs text-(--ui-warning)">
+						{{ locked }} The background saves the moment it changes, for the paper it was made for.
+					</p>
+					<p v-if="!artwork.ext" class="text-xs text-(--ui-text-muted)">
+						No background yet — documents print with blank margins until you upload one.
+					</p>
+					<UAlert
+						v-else-if="review?.recrop"
+						color="warning"
+						variant="subtle"
 						icon="i-lucide-crop"
-						size="sm"
-						variant="soft"
-						:color="review?.recrop ? 'warning' : 'neutral'"
-						:disabled="busy || !!locked"
-						@click="openRecrop"
-					>
-						Re-crop
-					</UButton>
-					<UButton
-						v-if="artwork.ext"
-						icon="i-lucide-trash-2"
-						size="sm"
-						variant="soft"
-						color="error"
-						:disabled="busy || !!locked"
-						@click="remove"
-					>
-						Remove
-					</UButton>
+						:title="`Re-crop for ${paperInfo.label}`"
+						:description="`This image was cropped to ${paperLabel(review.preparedFor)}'s shape, so on ${paperInfo.label} it is scaled to cover the page and its edges are cut off. Re-crop starts from your original upload.`"
+					/>
+					<p v-else-if="review" class="text-xs text-(--ui-warning)">
+						This artwork was prepared for {{ paperLabel(review.preparedFor) }} — it is scaled to cover {{ paperInfo.label }}, so its edges may be cut off. Check it in the Stationery editor (Apply keeps it), or upload artwork made for {{ paperInfo.label }}.
+					</p>
+
+					<UAlert
+						v-if="artwork.ext === 'svg' && artwork.live_text"
+						color="warning"
+						variant="subtle"
+						icon="i-lucide-type"
+						title="Convert the text to outlines"
+						description="This SVG still contains live text. The PDF uses only Sakoram's bundled fonts, so your letterhead's lettering may come out in a different typeface. In your design app, convert text to outlines (paths) and upload it again."
+					/>
 				</div>
 
-				<p v-if="locked" class="text-xs text-(--ui-warning)">
-					{{ locked }} The background saves the moment it changes, for the paper it was made for.
-				</p>
-				<p v-if="!artwork.ext" class="text-xs text-(--ui-text-muted)">
-					No background yet — documents print with blank margins until you upload one.
-				</p>
-				<UAlert
-					v-else-if="review?.recrop"
-					color="warning"
-					variant="subtle"
-					icon="i-lucide-crop"
-					:title="`Re-crop for ${paperInfo.label}`"
-					:description="`This image was cropped to ${paperLabel(review.preparedFor)}'s shape, so on ${paperInfo.label} it is scaled to cover the page and its edges are cut off. Re-crop starts from your original upload.`"
-				/>
-				<p v-else-if="review" class="text-xs text-(--ui-warning)">
-					This artwork was prepared for {{ paperLabel(review.preparedFor) }} — it is scaled to cover {{ paperInfo.label }}, so its edges may be cut off. Check it in the Stationery editor (Apply keeps it), or upload artwork made for {{ paperInfo.label }}.
-				</p>
-
-				<UAlert
-					v-if="artwork.ext === 'svg' && artwork.live_text"
-					color="warning"
-					variant="subtle"
-					icon="i-lucide-type"
-					title="Convert the text to outlines"
-					description="This SVG still contains live text. The PDF uses only Sakoram's bundled fonts, so your letterhead's lettering may come out in a different typeface. In your design app, convert text to outlines (paths) and upload it again."
-				/>
+				<!-- The page's own controls for this mode, beside the artwork they
+					frame: the way into the Stationery editor (the Safe area) and
+					the PDF colour. -->
+				<slot />
 			</div>
-		</div>
-
-		<!-- The page's own controls for this mode: the way into the Stationery
-			editor (the Safe area) and the PDF colour. -->
-		<div v-if="$slots.default" class="pt-4 border-t border-(--ui-border) space-y-4">
-			<slot />
 		</div>
 
 		<ImageCropModal
