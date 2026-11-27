@@ -1,4 +1,4 @@
-// A live PNG of page 1 of a document payload, re-rendered by the real Typst
+// A live PNG of one page (page 1 unless asked) of a document payload, re-rendered by the real Typst
 // pipeline (`render_document_page_png`) ~500 ms after the payload stops
 // changing. Used by /settings/pdf, whose payload is the sample invoice built
 // from the UNSAVED form, so every edit shows before it is saved.
@@ -20,6 +20,10 @@ export interface LivePagePreviewOptions {
 	ppi?: number
 	delayMs?: number
 	deps?: () => unknown
+	/** Which page to render (1-based, default 1) — the page designer's Page 1 / Page 2 switch. */
+	page?: () => number
+	/** The raster resolution, when it follows something reactive (the designer's zoom). Wins over `ppi`. */
+	ppiFn?: () => number
 }
 
 export function useLivePagePreview(payload: () => Record<string, unknown> | null, opts: LivePagePreviewOptions = {}) {
@@ -34,7 +38,7 @@ export function useLivePagePreview(payload: () => Record<string, unknown> | null
 
 	const runner = createLatestDebounced({
 		delayMs: opts.delayMs ?? 500,
-		run: (data: Record<string, unknown>) => invoke<number[]>("render_document_page_png", { data, ppi: opts.ppi ?? 72 }),
+		run: (args: { data: Record<string, unknown>, ppi: number, page: number }) => invoke<number[]>("render_document_page_png", args),
 		onResult: (png) => {
 			error.value = null;
 			setUrl(URL.createObjectURL(new Blob([new Uint8Array(png)], { type: "image/png" })));
@@ -49,13 +53,16 @@ export function useLivePagePreview(payload: () => Record<string, unknown> | null
 		}
 	});
 
-	const key = () => JSON.stringify([payload(), opts.deps?.() ?? null]);
+	const ppi = () => opts.ppiFn?.() ?? opts.ppi ?? 72;
+	const page = () => opts.page?.() ?? 1;
+	const key = () => JSON.stringify([payload(), opts.deps?.() ?? null, ppi(), page()]);
 	let active = true;
 	const render = (now: boolean) => {
 		const data = payload();
 		if (!data || !active) return;
-		if (now) runner.runNow(data);
-		else runner.schedule(data);
+		const args = { data, ppi: ppi(), page: page() };
+		if (now) runner.runNow(args);
+		else runner.schedule(args);
 	};
 
 	watch(key, (_, prev) => render(prev === undefined), { immediate: true });
