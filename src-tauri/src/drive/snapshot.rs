@@ -347,6 +347,9 @@ pub(crate) mod tests {
 			std::fs::create_dir_all(folder.join("stationery")).unwrap();
 			std::fs::write(folder.join("stationery").join("background.png"), b"ART").unwrap();
 			std::fs::write(folder.join("stationery").join("background-original.jpg"), b"ORIGINAL").unwrap();
+			std::fs::write(folder.join("stationery").join("header.svg"), b"HEADER").unwrap();
+			std::fs::write(folder.join("stationery").join("footer.png"), b"FOOTER").unwrap();
+			std::fs::write(folder.join("stationery").join("footer-original.jpg"), b"FOOTER-ORIGINAL").unwrap();
 			let work = temp_dir("stationeryzip-work");
 			let db_entries = prepare_db(&folder, &work, None).await.unwrap();
 			let zip = work.join("snap.zip");
@@ -356,6 +359,9 @@ pub(crate) mod tests {
 			extract_zip(&zip, &dest).unwrap();
 			assert_eq!(std::fs::read(dest.join("stationery").join("background.png")).unwrap(), b"ART");
 			assert_eq!(std::fs::read(dest.join("stationery").join("background-original.jpg")).unwrap(), b"ORIGINAL");
+			assert_eq!(std::fs::read(dest.join("stationery").join("header.svg")).unwrap(), b"HEADER");
+			assert_eq!(std::fs::read(dest.join("stationery").join("footer.png")).unwrap(), b"FOOTER");
+			assert_eq!(std::fs::read(dest.join("stationery").join("footer-original.jpg")).unwrap(), b"FOOTER-ORIGINAL");
 		});
 	}
 
