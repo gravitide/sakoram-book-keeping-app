@@ -1,6 +1,6 @@
 import type { DesignItem, PageDesign } from "./page-design";
 import { describe, expect, it } from "vitest";
-import { formatMm, imageFileIds, ITEM_ID_PATTERN, itemOnPage, newItemId, parsePageDesign, scaleDesign, withLogoSlots } from "./page-design";
+import { formatMm, imageFileIds, ITEM_ID_PATTERN, itemOnPage, newItemId, parsePageDesign, sameMargins, scaleDesign, withLogoSlots, withMargins } from "./page-design";
 import { PAPER_SIZES, resolvePaperSize } from "./paper-sizes";
 
 const STYLE = { font: "Akt", size: 10, bold: false, italic: false, color: "#111827", align: "left" } as const;
@@ -128,5 +128,33 @@ describe("imageFileIds", () => {
 
 	it("is empty without a design", () => {
 		expect(imageFileIds(null)).toEqual([]);
+	});
+});
+
+describe("withMargins", () => {
+	it("stores a safe area edited on another sheet back in the design's own coordinates, items untouched", () => {
+		const onA5 = scaleDesign(A4_DESIGN, "a5").margins;
+		const saved = withMargins(A4_DESIGN, { ...onA5, top: onA5.top + 10 }, "a5");
+		expect(saved.paper).toBe("a4");
+		expect(saved.items).toEqual(A4_DESIGN.items);
+		expect(saved.margins.top).toBeCloseTo(48 + 10 * (297 / 210));
+		expect(saved.margins.left).toBeCloseTo(18);
+		expect(saved.margins.bottom).toBeCloseTo(26);
+	});
+
+	it("survives any number of paper switches without the design drifting", () => {
+		let design = A4_DESIGN;
+		for (const paper of ["us-letter", "a4", "a5", "us-legal", "a4"] as const) {
+			design = withMargins(design, scaleDesign(design, paper).margins, paper);
+		}
+		expect(design.items).toEqual(A4_DESIGN.items);
+		expect(sameMargins(design.margins, A4_DESIGN.margins)).toBe(true);
+	});
+});
+
+describe("sameMargins", () => {
+	it("ignores float noise below a hundredth of a millimetre", () => {
+		expect(sameMargins({ top: 48, right: 18, bottom: 26, left: 18 }, { top: 48.000000001, right: 18, bottom: 26, left: 17.9999999 })).toBe(true);
+		expect(sameMargins({ top: 48, right: 18, bottom: 26, left: 18 }, { top: 48.5, right: 18, bottom: 26, left: 18 })).toBe(false);
 	});
 });

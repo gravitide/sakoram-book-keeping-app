@@ -80,7 +80,7 @@
 
 			<!-- A pointer: letters print on the business's page design, like every
 				other document; a pre-printed letter leaves the design off. -->
-			<UCard id="preprinted" class="scroll-mt-6">
+			<UCard id="page-design" class="scroll-mt-6">
 				<template #header>
 					<div class="font-medium">
 						Page design

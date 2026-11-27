@@ -92,6 +92,21 @@ export function artworkFormatOf(fileName: string): ArtworkExt | null {
 	return formatOfExt(fileName.slice(dot + 1));
 }
 
+/**
+ * What a template's logo spot becomes, given the extension of the business's
+ * company logo file (null = no logo, or one that can't be read):
+ *   { copyAs } — copied in as an ordinary image of that format (the spec);
+ *   "link"     — a format a design image can't be (WebP, GIF from onboarding,
+ *                which uploads as-is): the spot keeps following the company
+ *                logo, which every PDF already prints as-is;
+ *   "empty"    — an empty slot, nothing printed.
+ */
+export function logoSpotPlan(logoExt: string | null): { copyAs: ArtworkExt } | "link" | "empty" {
+	if (logoExt === null) return "empty";
+	const format = formatOfExt(logoExt);
+	return format ? { copyAs: format } : "link";
+}
+
 /** The MIME type for an artwork extension (any spelling), or a generic binary type. */
 export function artworkMimeOf(ext: string): string {
 	const format = formatOfExt(ext);

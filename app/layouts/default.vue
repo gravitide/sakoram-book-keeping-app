@@ -733,8 +733,7 @@
 					icon: "i-lucide-mail",
 					sections: [
 						{ hash: "#categories", label: "Categories", icon: "i-lucide-tags" },
-						{ hash: "#preprinted", label: "Pre-printed", icon: "i-lucide-file-text" },
-						{ hash: "#artwork", label: "Artwork", icon: "i-lucide-image" }
+						{ hash: "#page-design", label: "Page design", icon: "i-lucide-layout-template" }
 					]
 				},
 				{

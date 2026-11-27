@@ -342,7 +342,7 @@
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { DESIGN_TEMPLATES } from "~/lib/design-templates";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
-	import { parsePageDesign, scaleDesign } from "~/lib/page-design";
+	import { parsePageDesign, sameMargins, scaleDesign } from "~/lib/page-design";
 	import { effectiveDesign, PAPER_SIZES, resolvePaperSize } from "~/lib/page-settings";
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
 	import { PDF_SECTION_IDS } from "~/lib/pdf-settings-sections";
@@ -402,7 +402,13 @@
 	const refreshBaseline = () => {
 		baseline.value = formSnapshot.value;
 	};
-	const savedMargins = () => (JSON.parse(baseline.value) as PdfForm).margins;
+	// The saved safe area on the sheet picked now: a paper switch alone scales
+	// form.margins, and must not count as editing them (saving them would be a
+	// needless write, and float noise would follow).
+	const savedMarginsOnPaper = () => {
+		const saved = JSON.parse(baseline.value) as PdfForm;
+		return scaleDesign({ version: 1, paper: saved.pdf_paper_size, margins: saved.margins, items: [] }, form.pdf_paper_size).margins;
+	};
 
 	// Kept-alive page: the design can change elsewhere (onboarding, a demo
 	// seed). Re-read on the way back in, unless something here is unsaved.
@@ -531,7 +537,7 @@
 	const onSubmit = async () => {
 		saving.value = true;
 		try {
-			const marginsChanged = JSON.stringify(form.margins) !== JSON.stringify(savedMargins());
+			const marginsChanged = !sameMargins(form.margins, savedMarginsOnPaper());
 			await store.save({
 				pdf_font: form.pdf_font.trim() || "Akt",
 				pdf_theme_color: form.pdf_theme_color,

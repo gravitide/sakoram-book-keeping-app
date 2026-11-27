@@ -141,6 +141,23 @@ export function scaleDesign(design: PageDesign, to: PaperSize): PageDesign {
 	};
 }
 
+/**
+ * The stored design with a new safe area that was edited on `onPaper` (the
+ * business's current sheet). The margins are scaled back to the design's own
+ * sheet — per axis, so exactly — and the items and `paper` are left alone:
+ * saving on another sheet never rescales (and so never shrinks) the design.
+ */
+export function withMargins(design: PageDesign, margins: MarginsMm, onPaper: PaperSize): PageDesign {
+	const back = scaleDesign({ version: 1, paper: onPaper, margins, items: [] }, design.paper).margins;
+	return { ...design, margins: back };
+}
+
+/** Two safe areas match to a hundredth of a millimetre (paper switches leave float noise). */
+export function sameMargins(a: MarginsMm, b: MarginsMm): boolean {
+	const r = (n: number) => Math.round(n * 100);
+	return r(a.top) === r(b.top) && r(a.right) === r(b.right) && r(a.bottom) === r(b.bottom) && r(a.left) === r(b.left);
+}
+
 /** Whether an item with this pages rule is drawn on `page` (1-based). Mirrored in common.typ design-items. */
 export function itemOnPage(rule: PagesRule, page: number): boolean {
 	if (rule === "first") return page === 1;
