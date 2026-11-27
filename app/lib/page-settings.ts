@@ -100,6 +100,14 @@ export interface PageSettings {
 	 */
 	page_number_position: PageNumberPosition
 	/**
+	 * A template that asks for a landscape sheet (the customer statement, for
+	 * its wide invoice table) gets one. true only for Built-in: under every
+	 * other mode the Stationery is printed or drawn PORTRAIT, and turning the
+	 * sheet would print across pre-printed paper or crop the artwork to a
+	 * landscape band. `page-setup` applies it, so templates never check the mode.
+	 */
+	allow_landscape: boolean
+	/**
 	 * The Full-page background artwork drawn behind every page, or null (any
 	 * other mode, or no artwork uploaded yet). Only the format travels: the
 	 * file is always `stationery/background.<ext>` in the business folder.
@@ -157,6 +165,7 @@ export function buildPageSettings(settings: PageSettingsSource | null, override?
 		margins: marginsFor(stationery, settings),
 		page_numbers: true,
 		page_number_position: builtin ? "footer" : "safe_area",
+		allow_landscape: builtin,
 		background: backgroundFor(stationery, settings)
 	};
 }

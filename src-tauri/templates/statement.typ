@@ -19,12 +19,13 @@
 #let data = json("data.json")
 
 #set document(title: data.title, author: if data.business_name != none { data.business_name } else { () })
-// Landscape A4 — statements lean on a wide 7-column invoice table
-// (number / issued / due / total / paid / balance / status). Portrait
-// squeezed the Balance column hard enough to wrap the totals-row
-// amount onto two lines; landscape gives every column its natural
-// width and leaves the aging tiles / party blocks better proportioned
-// to the page edge.
+// Landscape on Built-in stationery — statements lean on a wide 7-column
+// invoice table (number / issued / due / total / paid / balance / status),
+// and landscape gives every column its natural width and leaves the aging
+// tiles / party blocks better proportioned to the page edge. Under any
+// other Stationery (pre-printed paper, a full-page background) page-setup
+// keeps the sheet PORTRAIT (data.page.allow_landscape), because the paper
+// or artwork is portrait; the table is sized to still fit there.
 #set page(..page-setup(
   data,
   flipped: true,
@@ -172,11 +173,30 @@
   #text(size: 7.5pt, fill: muted)[#b.count inv]
 ]
 
-#grid(
-  columns: (1fr, 1fr, 1fr, 1fr, 1fr),
+// Width-adaptive parts (tiles + invoice table) only exist off landscape: a
+// landscape page (Built-in) is always wide, and keeping it on the original
+// code path keeps its output byte-identical. A portrait page (any other
+// Stationery) checks its own Safe area: A4 / Letter / Legal still get the
+// wide forms; an A5 Safe area (~110 mm) gets the narrow ones.
+#let narrow-below = 140mm
+// The Safe area's width from the sheet in context and the Stationery's own
+// side margins (every portrait statement has them). Not layout(): its
+// content can't break across pages, so the table would jump to page 2.
+#let adaptive(body) = if data.page.allow_landscape { body(false) } else {
+  context {
+    let m = data.page.margins
+    let width = page.width - if m != none { (m.left + m.right) * 1mm } else { 0mm }
+    body(width < narrow-below)
+  }
+}
+
+// Narrow: three tiles a row, so a six-figure bucket still fits its tile.
+#adaptive(narrow => grid(
+  columns: if narrow { (1fr, 1fr, 1fr) } else { (1fr, 1fr, 1fr, 1fr, 1fr) },
   column-gutter: 6pt,
+  row-gutter: 6pt,
   ..data.aging_buckets.map(bucket-tile)
-)
+))
 
 #v(14pt)
 
@@ -186,43 +206,92 @@
 
 #let label(t) = text(weight: "bold", size: 8pt, tracking: 0.04em)[#upper(t)]
 
-#text(weight: "bold", size: 11pt)[Outstanding invoices]
-#v(4pt)
+// Portrait: the heading travels with the table (sticky), so a table pushed
+// onto the next page doesn't leave it stranded at the foot of this one.
+// Landscape keeps its original, unwrapped heading (byte-identical output).
+#if data.page.allow_landscape [
+  #text(weight: "bold", size: 11pt)[Outstanding invoices]
+  #v(4pt)
+] else {
+  block(sticky: true, below: 4pt + 0.65em)[#text(weight: "bold", size: 11pt)[Outstanding invoices]]
+}
 
-#table(
-  columns: (auto, auto, auto, 1fr, 1fr, 1fr, auto),
-  align: (left, left, left, right, right, right, right),
+#let wide-table() = table(
+    columns: (auto, auto, auto, 1fr, 1fr, 1fr, auto),
+    align: (left, left, left, right, right, right, right),
+    stroke: 0.4pt + line-color,
+    inset: (x: 4pt, y: 5pt),
+    table.header(
+      table.cell(fill: rgb("#f3f4f6"))[#label("Invoice")],
+      table.cell(fill: rgb("#f3f4f6"))[#label("Issued")],
+      table.cell(fill: rgb("#f3f4f6"))[#label("Due")],
+      table.cell(fill: rgb("#f3f4f6"))[#label("Total")],
+      table.cell(fill: rgb("#f3f4f6"))[#label("Paid")],
+      table.cell(fill: rgb("#f3f4f6"))[#label("Balance")],
+      table.cell(fill: rgb("#f3f4f6"))[#label("Status")],
+    ),
+    ..data.rows.enumerate().map(((i, row)) => {
+      let bg = if calc.rem(i, 2) == 0 { white } else { row-alt }
+      let status-color = if row.tone == "error" { error-color } else if row.tone == "warning" { warning-color } else { muted }
+      (
+        table.cell(fill: bg)[#text(size: 8.5pt, weight: "medium")[#row.number]],
+        table.cell(fill: bg)[#text(size: 8.5pt)[#row.issue_date]],
+        table.cell(fill: bg)[#text(size: 8.5pt)[#row.due_date]],
+        table.cell(fill: bg)[#text(size: 8.5pt)[#row.total]],
+        table.cell(fill: bg)[#text(size: 8.5pt, fill: muted)[#row.paid]],
+        table.cell(fill: bg)[#text(size: 9pt, weight: "medium")[#row.balance]],
+        table.cell(fill: bg)[#text(size: 8pt, fill: status-color)[#row.status]],
+      )
+    }).flatten(),
+    // Totals row in primary tone.
+    table.cell(fill: theme.lighten(85%), colspan: 3)[#text(weight: "bold", size: 9.5pt)[Total outstanding]],
+    table.cell(fill: theme.lighten(85%))[#text(weight: "bold", size: 9pt)[#data.totals_row.total]],
+    table.cell(fill: theme.lighten(85%))[#text(weight: "bold", size: 9pt)[#data.totals_row.paid]],
+    table.cell(fill: theme.lighten(85%))[#text(weight: "bold", size: 10pt, fill: error-color)[#data.totals_row.balance]],
+    table.cell(fill: theme.lighten(85%))[],
+  )
+
+// Narrow (an A5 portrait Safe area): seven columns don't fit, so each row
+// folds into four — the invoice number carries its status beneath it, the
+// due date its issue date — and the amounts keep their natural width.
+#let narrow-table() = table(
+  columns: (1fr, auto, auto, auto, auto),
+  align: (left, left, right, right, right),
   stroke: 0.4pt + line-color,
   inset: (x: 4pt, y: 5pt),
   table.header(
     table.cell(fill: rgb("#f3f4f6"))[#label("Invoice")],
-    table.cell(fill: rgb("#f3f4f6"))[#label("Issued")],
     table.cell(fill: rgb("#f3f4f6"))[#label("Due")],
     table.cell(fill: rgb("#f3f4f6"))[#label("Total")],
     table.cell(fill: rgb("#f3f4f6"))[#label("Paid")],
     table.cell(fill: rgb("#f3f4f6"))[#label("Balance")],
-    table.cell(fill: rgb("#f3f4f6"))[#label("Status")],
   ),
   ..data.rows.enumerate().map(((i, row)) => {
     let bg = if calc.rem(i, 2) == 0 { white } else { row-alt }
     let status-color = if row.tone == "error" { error-color } else if row.tone == "warning" { warning-color } else { muted }
     (
-      table.cell(fill: bg)[#text(size: 8.5pt, weight: "medium")[#row.number]],
-      table.cell(fill: bg)[#text(size: 8.5pt)[#row.issue_date]],
-      table.cell(fill: bg)[#text(size: 8.5pt)[#row.due_date]],
+      table.cell(fill: bg)[
+        #text(size: 8.5pt, weight: "medium")[#row.number]
+        #linebreak()
+        #text(size: 7.5pt, fill: status-color)[#row.status]
+      ],
+      table.cell(fill: bg)[
+        #text(size: 8.5pt)[#row.due_date]
+        #linebreak()
+        #text(size: 7.5pt, fill: muted)[Issued #row.issue_date]
+      ],
       table.cell(fill: bg)[#text(size: 8.5pt)[#row.total]],
       table.cell(fill: bg)[#text(size: 8.5pt, fill: muted)[#row.paid]],
       table.cell(fill: bg)[#text(size: 9pt, weight: "medium")[#row.balance]],
-      table.cell(fill: bg)[#text(size: 8pt, fill: status-color)[#row.status]],
     )
   }).flatten(),
-  // Totals row in primary tone.
-  table.cell(fill: theme.lighten(85%), colspan: 3)[#text(weight: "bold", size: 9.5pt)[Total outstanding]],
+  table.cell(fill: theme.lighten(85%), colspan: 2)[#text(weight: "bold", size: 9.5pt)[Total outstanding]],
   table.cell(fill: theme.lighten(85%))[#text(weight: "bold", size: 9pt)[#data.totals_row.total]],
   table.cell(fill: theme.lighten(85%))[#text(weight: "bold", size: 9pt)[#data.totals_row.paid]],
   table.cell(fill: theme.lighten(85%))[#text(weight: "bold", size: 10pt, fill: error-color)[#data.totals_row.balance]],
-  table.cell(fill: theme.lighten(85%))[],
 )
+
+#adaptive(narrow => if narrow { narrow-table() } else { wide-table() })
 
 // Unapplied credit notes — credits issued to this client that aren't
 // tied to any invoice above. Deducted below the table rather than

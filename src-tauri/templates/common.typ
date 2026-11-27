@@ -375,7 +375,8 @@
 // the file is missing). SVG and PDF stay vector; a PDF contributes its FIRST
 // page only (image()'s default). The artwork covers the whole sheet: raster
 // uploads are already cropped to the paper's proportions, so "cover" only
-// trims artwork prepared for a different sheet (or the landscape statement).
+// trims artwork prepared for a different sheet. (No document is landscape
+// under a background: page-geometry only flips the sheet for Built-in.)
 #let page-background(data) = {
   let bg = data.page.at("background", default: none)
   if bg == none or bg.at("file", default: none) == none { return none }
@@ -394,6 +395,9 @@
     out
   } else { margin * s }
   let foot = if data.page.chrome { footer } else { none }
+  // A template asks for landscape (the statement); only Built-in grants it —
+  // every other Stationery is printed or drawn portrait (page-settings.ts).
+  let flipped = flipped and data.page.allow_landscape
   if data.page.page_numbers and data.page.page_number_position == "safe_area" {
     // The strip the number owns at the bottom of the Safe area.
     let strip = 5mm
@@ -440,6 +444,10 @@
 //                 template's footer (built-in or custom) is dropped here, so
 //                 no template has to gate its own footer. Templates gate their
 //                 logo / header text / business block on it themselves.
+//   allow_landscape
+//                 true only for Built-in. A template passing `flipped: true`
+//                 (the statement) gets landscape only when this is true;
+//                 under every other Stationery the sheet stays portrait.
 //   background    Full-page background artwork (page-background, above),
 //                 drawn behind the content on every page; null otherwise.
 // Returns the argument dict rather than applying `set page` itself: a set rule

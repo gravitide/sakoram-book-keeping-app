@@ -90,6 +90,15 @@ const args = process.argv.slice(2);
 const UPDATE = args.includes("--update");
 const keepIdx = args.indexOf("--keep");
 const KEEP_DIR = keepIdx >= 0 ? args[keepIdx + 1] : undefined;
+// --only <text>: render just the cases whose name contains <text> (for
+// iterating on one template). Never with --update — that would drop every
+// other baseline.
+const onlyIdx = args.indexOf("--only");
+const ONLY = onlyIdx >= 0 ? args[onlyIdx + 1] : undefined;
+if (ONLY !== undefined && UPDATE) {
+	console.error("✗ --only can't be combined with --update (it would drop every other baseline)");
+	process.exit(1);
+}
 
 // --- typst binary ----------------------------------------------------------
 
@@ -629,7 +638,12 @@ const cases: Case[] = [
 	{ name: "payslip-minimal-preprinted", template: "payslip.typ", payload: payslip(settingsFor({ ...preprintedPaper, pdf_layout: "minimal" })) },
 	{ name: "voucher-preprinted", template: "voucher.typ", payload: voucher(settingsFor({ ...preprintedPaper, ...customChrome })) },
 	{ name: "report-pnl-preprinted", template: "report.typ", payload: pnl(settingsFor({ ...preprintedPaper, ...customChrome })), multipage: true },
-	{ name: "statement-preprinted", template: "statement.typ", payload: statement(settingsFor({ ...preprintedPaper, ...customChrome })), multipage: true },
+	// Statements turn landscape on Built-in only; on pre-printed paper (and a
+	// full-page background, below) the sheet stays portrait — and the taller
+	// sheet fits on one page what landscape A4 spills onto two.
+	{ name: "statement-preprinted", template: "statement.typ", payload: statement(settingsFor({ ...preprintedPaper, ...customChrome })) },
+	// The narrowest portrait Safe area a statement meets: the 7-column table must still fit.
+	{ name: "statement-preprinted-a5", template: "statement.typ", payload: statement(settingsFor({ ...preprintedPaper, pdf_paper_size: "a5" })), multipage: true },
 	// A letter NOT individually set to pre-printed still follows the business.
 	{ name: "letter-business-preprinted", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false), settings: settingsFor({ ...preprintedPaper }) }) },
 	// …and one set to pre-printed reserves those same bands (same hash as the
@@ -667,7 +681,8 @@ const cases: Case[] = [
 	...LAYOUTS.map((key): Case => ({ name: `payslip-${key}-background`, template: "payslip.typ", payload: payslip(settingsFor({ ...fullPageBackground(), ...customChrome, pdf_layout: key })) })),
 	{ name: "voucher-background", template: "voucher.typ", payload: voucher(settingsFor({ ...fullPageBackground(), ...customChrome })) },
 	{ name: "report-pnl-background", template: "report.typ", payload: pnl(settingsFor({ ...fullPageBackground("pdf"), ...customChrome })), multipage: true },
-	{ name: "statement-background", template: "statement.typ", payload: statement(settingsFor({ ...fullPageBackground(), ...customChrome })), multipage: true },
+	{ name: "statement-background", template: "statement.typ", payload: statement(settingsFor({ ...fullPageBackground(), ...customChrome })) },
+	{ name: "statement-background-a5", template: "statement.typ", payload: statement(settingsFor({ ...fullPageBackground("png"), pdf_paper_size: "a5" })), multipage: true },
 	{ name: "letter-background", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false), settings: settingsFor({ ...fullPageBackground() }) }) },
 	{ name: "letter-background-multipage", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false, 20), settings: settingsFor({ ...fullPageBackground("png") }) }), multipage: true },
 	// A letter set to pre-printed paper keeps its blank bands and draws no
@@ -720,7 +735,8 @@ const unnumbered = (c: Case): Case => ({
 	payload: { ...c.payload, page: { ...(c.payload.page as object), page_numbers: false } }
 });
 
-const allCases = cases.flatMap((c) => (c.multipage && !c.checkOnly ? [c, unnumbered(c)] : [c]));
+const allCases = cases.flatMap((c) => (c.multipage && !c.checkOnly ? [c, unnumbered(c)] : [c]))
+	.filter((c) => ONLY === undefined || c.name.includes(ONLY));
 
 // Two cases with one name would share (and fight over) one baseline.
 const duplicateNames = allCases.map((c) => c.name).filter((name, i, all) => all.indexOf(name) !== i);
@@ -873,6 +889,18 @@ const identityProblem = (c: Case, r: Rendered): string | null => {
 	return null;
 };
 
+// The statement asks for a landscape sheet; page-setup grants it on Built-in
+// only (page.allow_landscape). Under any other Stationery the paper or artwork
+// is portrait, so every page must be too. Read from the PDF's own MediaBoxes.
+const orientationProblem = (c: Case, r: Rendered): string | null => {
+	if (c.template !== "statement.typ") return null;
+	const landscape = (c.payload.page as { allow_landscape?: boolean } | undefined)?.allow_landscape === true;
+	const boxes = [...r.pdf.toString("latin1").matchAll(/\/MediaBox\s*\[\s*[\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)\s*\]/g)];
+	if (!boxes.length) return "no /MediaBox found — can't check the orientation";
+	const wrong = boxes.filter(([, w, h]) => (Number(w) > Number(h)) !== landscape);
+	return wrong.length ? `${wrong.length} page(s) are ${landscape ? "portrait" : "landscape"}; this Stationery wants ${landscape ? "landscape" : "portrait"}` : null;
+};
+
 const sha256 = (buf: Buffer) => createHash("sha256").update(buf).digest("hex");
 
 // A case with Full-page background artwork on disk must actually show it: the
@@ -925,7 +953,7 @@ for (const c of allCases) {
 	if (KEEP_DIR) writeFileSync(join(KEEP_DIR, `${c.name}.pdf`), pdf);
 
 	// Checked in both modes: --update must not bless a wrong page count.
-	const problem = pageNumberProblem(c, rendered) ?? identityProblem(c, rendered) ?? artworkProblem(c, hash)
+	const problem = pageNumberProblem(c, rendered) ?? identityProblem(c, rendered) ?? orientationProblem(c, rendered) ?? artworkProblem(c, hash)
 		?? (c.sameAs && hashes[c.sameAs] !== hash ? `should render exactly like ${c.sameAs}` : null);
 	if (problem) {
 		console.error(`✗ ${c.name} (${c.template}): ${problem}`);
@@ -963,7 +991,7 @@ for (const c of allCases) {
 	}
 }
 
-if (!UPDATE) {
+if (!UPDATE && ONLY === undefined) {
 	for (const name of Object.keys(stored!.hashes)) {
 		if (!(name in hashes) && !allCases.some((c) => c.name === name)) {
 			console.error(`✗ stale baseline with no matching case: ${name}`);

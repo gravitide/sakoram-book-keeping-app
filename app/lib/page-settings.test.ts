@@ -18,6 +18,7 @@ const BUILTIN_A4 = {
 	margins: null,
 	page_numbers: true,
 	page_number_position: "footer",
+	allow_landscape: true,
 	background: null
 };
 
@@ -44,6 +45,7 @@ describe("buildPageSettings", () => {
 			margins: { top: 60, right: 14, bottom: 25, left: 16 },
 			page_numbers: true,
 			page_number_position: "safe_area",
+			allow_landscape: false,
 			background: null
 		});
 	});
@@ -115,6 +117,7 @@ describe("full-page background", () => {
 			margins: { top: 50, right: 15, bottom: 30, left: 17 },
 			page_numbers: true,
 			page_number_position: "safe_area",
+			allow_landscape: false,
 			background: { ext: "pdf" }
 		});
 	});
@@ -187,5 +190,23 @@ describe("paper size", () => {
 
 	it("offers exactly the four supported sheets, A4 first", () => {
 		expect(PAPER_SIZES.map((p) => p.key)).toEqual(["a4", "a5", "us-letter", "us-legal"]);
+	});
+});
+
+describe("orientation", () => {
+	it("built-in lets a wide document (the statement) turn its sheet landscape", () => {
+		expect(buildPageSettings(onStationery("builtin")).allow_landscape).toBe(true);
+	});
+
+	it("pre-printed paper keeps every document portrait: the paper is printed portrait", () => {
+		expect(buildPageSettings(onStationery("preprinted")).allow_landscape).toBe(false);
+	});
+
+	it("a full-page background keeps every document portrait, so the artwork isn't cropped to a landscape band", () => {
+		expect(buildPageSettings(onStationery("background", { background: { ext: "svg" } })).allow_landscape).toBe(false);
+	});
+
+	it("a letter on pre-printed paper stays portrait under a Built-in business", () => {
+		expect(buildPageSettings(settings(60, 25), { preprinted: true }).allow_landscape).toBe(false);
 	});
 });

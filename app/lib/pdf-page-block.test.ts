@@ -48,9 +48,9 @@ const background = {
 } as CompanySettingsRow;
 
 // A5 is 148 mm wide: the Layout's A4 margins scale by 148 / 210.
-const A5_LAYOUT_MARGINS = { paper: "a5", margin_scale: 0.704762, stationery: "builtin", chrome: true, margins: null, page_numbers: true, page_number_position: "footer", background: null };
+const A5_LAYOUT_MARGINS = { paper: "a5", margin_scale: 0.704762, stationery: "builtin", chrome: true, margins: null, page_numbers: true, page_number_position: "footer", allow_landscape: true, background: null };
 // The Stationery's own bands, never scaled.
-const A5_PREPRINTED = { paper: "a5", margin_scale: 0.704762, stationery: "preprinted", chrome: false, margins: { top: 48, right: 14, bottom: 22, left: 16 }, page_numbers: true, page_number_position: "safe_area", background: null };
+const A5_PREPRINTED = { paper: "a5", margin_scale: 0.704762, stationery: "preprinted", chrome: false, margins: { top: 48, right: 14, bottom: 22, left: 16 }, page_numbers: true, page_number_position: "safe_area", allow_landscape: false, background: null };
 
 const docRow = {
 	number: "INV-0001",
