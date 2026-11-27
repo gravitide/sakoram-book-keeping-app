@@ -152,6 +152,25 @@ function snapShift(features: number[], targets: number[], threshold: number): nu
 	return best;
 }
 
+/**
+ * An item with a typed position or size put back on the page: an image or text
+ * box no larger than the page (images keep their proportions), then moved so
+ * all of it is on the page.
+ */
+export function clampItem<T extends DesignItem>(item: T, design: PageDesign): T {
+	const page = resolvePaperSize(design.paper);
+	let next: DesignItem = item;
+	if (next.type === "image") {
+		const s = Math.min(1, page.widthMm / next.w, page.heightMm / next.h);
+		next = { ...next, w: Math.max(MIN_ITEM_MM, next.w * s), h: Math.max(MIN_ITEM_MM, next.h * s) };
+	} else if (next.type === "text" || next.type === "page_number") {
+		next = { ...next, w: clamp(next.w, MIN_ITEM_MM, page.widthMm - Math.min(next.x, page.widthMm - MIN_ITEM_MM)) };
+	} else {
+		next = { ...next, length: clamp(next.length, MIN_ITEM_MM, next.vertical ? page.heightMm : page.widthMm) };
+	}
+	return keepOnPage(next as T, page);
+}
+
 function keepOnPage<T extends DesignItem>(item: T, page: PageDims): T {
 	const r = reach(item);
 	return { ...item, x: clamp(item.x, 0, page.widthMm - r.w), y: clamp(item.y, 0, page.heightMm - r.h) };
@@ -240,4 +259,11 @@ export function dragMargin(margins: MarginsMm, side: keyof MarginsMm, deltaMm: n
 	const raw = margins[side] + inward;
 	const snapped = snapValue(raw, { step: 1, targets: [opposite], threshold: thresholdMm });
 	return { ...margins, [side]: clamp(snapped, 0, extent - opposite - MIN_SAFE_AREA_MM) };
+}
+
+/** A margin typed into its box: never negative, and the safe area keeps MIN_SAFE_AREA_MM. */
+export function setMarginValue(margins: MarginsMm, side: keyof MarginsMm, value: number, paper: PaperSize): MarginsMm {
+	const page = resolvePaperSize(paper);
+	const extent = side === "top" || side === "bottom" ? page.heightMm : page.widthMm;
+	return { ...margins, [side]: clamp(value, 0, extent - margins[OPPOSITE[side]] - MIN_SAFE_AREA_MM) };
 }

@@ -1,6 +1,7 @@
 import type { DesignItem, PageDesign } from "./page-design";
 import { describe, expect, it } from "vitest";
 import {
+	clampItem,
 	CSS_PX_PER_MM,
 	dragMargin,
 	fitScale,
@@ -13,6 +14,7 @@ import {
 	pxToMm,
 	resizeItem,
 	rulerTicks,
+	setMarginValue,
 	snapTargets,
 	snapValue,
 	stepZoom
@@ -178,5 +180,20 @@ describe("dragMargin", () => {
 
 	it("snaps a side margin onto the opposite one", () => {
 		expect(dragMargin(m, "left", 0.6, "a4", 1).left).toBe(18);
+	});
+});
+
+describe("typed values (review fixes)", () => {
+	it("clampItem keeps a typed position or width on the page", () => {
+		expect(clampItem(image({ x: 500, y: 500 }), design())).toMatchObject({ x: 190, y: 277 });
+		expect(clampItem(text({ w: 500 }), design())).toMatchObject({ x: 18, w: 192 });
+		expect(clampItem(image({ w: 300, h: 150 }), design())).toMatchObject({ x: 0, w: 210 });
+	});
+
+	it("setMarginValue keeps 40 mm of safe area and never goes negative", () => {
+		const m = { top: 20, right: 18, bottom: 20, left: 18 };
+		expect(setMarginValue(m, "top", 500, "a4").top).toBe(297 - 20 - 40);
+		expect(setMarginValue(m, "left", -3, "a4").left).toBe(0);
+		expect(setMarginValue(m, "right", 25.5, "a4").right).toBe(25.5);
 	});
 });

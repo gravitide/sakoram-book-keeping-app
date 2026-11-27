@@ -16,7 +16,7 @@ import type { CropRect } from "~/lib/crop-rect";
 import type { ImageExt } from "~/lib/page-design";
 import type { PaperSize } from "~/lib/paper-sizes";
 import { invoke } from "@tauri-apps/api/core";
-import { itemAssetKind, readBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
+import { itemAssetKind, readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
 import { uploadPlan } from "~/lib/design-image";
 import { newItemId } from "~/lib/page-design";
 import { artworkMimeOf, artworkPixelSize, svgAspect, svgHasLiveText } from "~/lib/stationery-artwork";
@@ -90,11 +90,16 @@ export function useDesignImageUpload() {
 				});
 			}
 		} else {
+			// Measuring renders page 1: a PDF that can't be rendered here would make
+			// every document PDF fail, so it is refused (and its file removed).
 			try {
 				const png = await invoke<number[]>("render_stationery_artwork_png", { ppi: 20, artwork: `item-${id}` });
 				aspect = await aspectOf(new Blob([new Uint8Array(png)], { type: "image/png" }));
 			} catch (e) {
-				console.warn("[designer] couldn't measure the PDF image", e);
+				await removeBusinessAsset(tenantId(), itemAssetKind(id)).catch(() => {});
+				toast.add({ title: "Can't use that PDF", description: "Its first page couldn't be read. Try exporting it again, or use an SVG or PNG.", color: "error", icon: "i-lucide-circle-alert" });
+				console.warn("[designer] PDF image refused", e);
+				return null;
 			}
 		}
 		return { id, ext: plan.ext, aspect };
@@ -119,6 +124,11 @@ export function useDesignImageUpload() {
 			p.resolve(null);
 		}
 	}
+
+	// The modal's X / Escape / overlay only closes it (no `cancel`): treat as Cancel.
+	watch(() => crop.open, (open) => {
+		if (!open && pending) onCropCancel();
+	});
 
 	function onCropCancel() {
 		pending?.resolve(null);

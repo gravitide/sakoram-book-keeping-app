@@ -35,3 +35,10 @@ export function redo<T>(h: History<T>): History<T> {
 
 export const canUndo = <T>(h: History<T>): boolean => h.past.length > 0;
 export const canRedo = <T>(h: History<T>): boolean => h.future.length > 0;
+
+/**
+ * The history after a Save: a fresh start. Save deletes the image files the
+ * saved design dropped (design-draft filesToRemove), so undo must not reach
+ * back to a design that still points at them.
+ */
+export const afterSave = <T>(saved: T): History<T> => startHistory(saved);

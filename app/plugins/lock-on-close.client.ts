@@ -35,7 +35,22 @@ export default defineNuxtPlugin(() => {
 	// (label "help-main") must never seal the vault while main is open.
 	if (win.label !== "main") return;
 
+	// The page designer announces itself (designer.vue) and Rust announces when
+	// it's gone (lib.rs). While it's open, closing main would take it down with
+	// any unsaved work, so main asks the designer to close first (it offers
+	// Save / Discard) and stays open; the user closes main again after.
+	let designerOpen = false;
+	void win.listen<boolean>("page-designer:open", (e) => {
+		designerOpen = e.payload === true;
+	}).catch(() => { /* nothing to listen for outside Tauri */ });
+
 	win.onCloseRequested(async (event) => {
+		if (designerOpen) {
+			event.preventDefault(); // synchronous, before any await
+			const { emitTo } = await import("@tauri-apps/api/event");
+			await emitTo("designer-main", "page-designer:close-request").catch(() => {});
+			return;
+		}
 		const tenants = useTenantsStore();
 		const id = tenants.activeTenantId;
 		// Only intercept when an encrypted business is actually open.

@@ -69,6 +69,15 @@ pub fn run() {
 					window.app_handle().exit(0);
 				}
 			}
+			// However the page designer closes (its own button, or designer::close
+			// on a business change), tell main it's gone: main's close guard
+			// (lock-on-close.client.ts) only defers to an OPEN designer.
+			if window.label() == designer::DESIGNER_LABEL {
+				if let tauri::WindowEvent::Destroyed = event {
+					use tauri::Emitter;
+					let _ = window.app_handle().emit_to("main", "page-designer:open", false);
+				}
+			}
 		})
 		.plugin(tauri_plugin_window_state::Builder::default().build())
 		.plugin(tauri_plugin_sql::Builder::default().build())

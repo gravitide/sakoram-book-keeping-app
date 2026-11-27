@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canRedo, canUndo, HISTORY_LIMIT, record, redo, startHistory, undo } from "./design-history";
+import { afterSave, canRedo, canUndo, HISTORY_LIMIT, record, redo, startHistory, undo } from "./design-history";
 
 describe("design history", () => {
 	it("undoes and redoes a change", () => {
@@ -34,5 +34,14 @@ describe("design history", () => {
 		const h = startHistory({ n: 1 });
 		expect(undo(h)).toBe(h);
 		expect(redo(h)).toBe(h);
+	});
+});
+
+describe("afterSave", () => {
+	it("starts a new history: a save may have deleted files that undo would bring back", () => {
+		const h = afterSave({ n: 3 });
+		expect(h.present).toEqual({ n: 3 });
+		expect(canUndo(h)).toBe(false);
+		expect(canRedo(h)).toBe(false);
 	});
 });

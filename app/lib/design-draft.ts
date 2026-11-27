@@ -9,6 +9,7 @@
 // Pure, store-free, relative imports only (vitest).
 
 import type { DesignItem, ImageExt, MarginsMm, PageDesign } from "./page-design";
+import { clampItem } from "./designer-geometry";
 import { imageFileIds } from "./page-design";
 import { resolvePaperSize } from "./paper-sizes";
 
@@ -37,12 +38,21 @@ export function replaceImage(design: PageDesign, oldId: string, newId: string, e
 	};
 }
 
-/** A copy of an item, offset down and right, just above the original. */
+/**
+ * The image file a duplicate needs: item ids name the files, so a copied
+ * image item must get its own copy of the original's file. Null for anything
+ * that isn't a file-backed image.
+ */
+export function fileCopyForDuplicate(item: DesignItem, newId: string): { fromId: string, toId: string, ext: ImageExt } | null {
+	return item.type === "image" && item.src?.kind === "file" ? { fromId: item.id, toId: newId, ext: item.src.ext } : null;
+}
+
+/** A copy of an item, offset down and right (kept on the page), just above the original. Its image file: fileCopyForDuplicate. */
 export function duplicateItem(design: PageDesign, id: string, newId: string): PageDesign {
 	const at = design.items.findIndex((i) => i.id === id);
 	if (at < 0) return design;
 	const original = design.items[at]!;
-	const copy: DesignItem = { ...original, id: newId, x: original.x + DUPLICATE_OFFSET_MM, y: original.y + DUPLICATE_OFFSET_MM };
+	const copy = clampItem({ ...original, id: newId, x: original.x + DUPLICATE_OFFSET_MM, y: original.y + DUPLICATE_OFFSET_MM } as DesignItem, design);
 	return { ...design, items: [...design.items.slice(0, at + 1), copy, ...design.items.slice(at + 1)] };
 }
 

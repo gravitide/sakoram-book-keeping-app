@@ -47,6 +47,7 @@
 					:selected-id="selectedId"
 					:render-url="preview.url.value"
 					:rendering="preview.loading.value"
+					:error="preview.error.value"
 					:page="page"
 					:zoom="zoom"
 					@select="selectedId = $event"
@@ -84,7 +85,7 @@
 						<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-send-to-back" @click="apply((d) => reorderItem(d, selected!.id, 'backward'))">
 							Back
 						</UButton>
-						<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-copy" @click="duplicateSelected">
+						<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-copy" @click="duplicateSelected()">
 							Duplicate
 						</UButton>
 						<UButton size="xs" variant="soft" color="error" icon="i-lucide-trash-2" @click="deleteSelected">
@@ -297,11 +298,12 @@
 	import { useLivePagePreview } from "~/composables/useLivePagePreview";
 	import { usePageDesign } from "~/composables/usePageDesign";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
-	import { itemAssetKind, removeBusinessAsset } from "~/lib/business-assets";
-	import { addImage, deleteItem, duplicateItem, filesToRemove, reorderItem, replaceImage, setMargins, updateItem } from "~/lib/design-draft";
-	import { canRedo, canUndo, record, redo, startHistory, undo } from "~/lib/design-history";
+	import { itemAssetKind, readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
+	import { addImage, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, reorderItem, replaceImage, setMargins, updateItem } from "~/lib/design-draft";
+	import { afterSave, canRedo, canUndo, record, redo, startHistory, undo } from "~/lib/design-history";
 	import { DESIGN_TEMPLATES } from "~/lib/design-templates";
-	import { CSS_PX_PER_MM, stepZoom } from "~/lib/designer-geometry";
+	import { clampItem, CSS_PX_PER_MM, setMarginValue, stepZoom } from "~/lib/designer-geometry";
+	import { designerShortcutsAllowed } from "~/lib/designer-keys";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
 	import { newItemId, parsePageDesign, scaleDesign } from "~/lib/page-design";
 	import { effectiveDesign, PAPER_SIZES } from "~/lib/page-settings";
@@ -387,12 +389,28 @@
 		const next = { ...item, [field]: Math.max(0, value) } as DesignItem;
 		// Images keep their proportions when the width is typed.
 		if (field === "w" && item.type === "image") (next as typeof item).h = value * (item.h / item.w);
-		apply((d) => updateItem(d, next));
+		// A typed value obeys the same page limits as a drag.
+		apply((d) => updateItem(d, clampItem(next, d)));
 	};
-	const duplicateSelected = () => {
-		if (!selected.value) return;
+	const duplicateSelected = async () => {
+		const original = selected.value;
+		if (!original) return;
 		const id = newItemId();
-		apply((d) => duplicateItem(d, selected.value!.id, id));
+		// Item ids name the image files: a copied image needs its own file.
+		const copy = fileCopyForDuplicate(original, id);
+		if (copy) {
+			const tenantId = tenants.activeTenantId;
+			if (!tenantId) return;
+			try {
+				const [, bytes] = await readBusinessAsset(tenantId, itemAssetKind(copy.fromId));
+				await saveBusinessAsset(tenantId, itemAssetKind(copy.toId), copy.ext, bytes);
+			} catch (e) {
+				toast.add({ title: "Couldn't duplicate the image", description: e instanceof Error ? e.message : String(e), color: "error", icon: "i-lucide-circle-alert" });
+				return;
+			}
+			uploaded.value = [...uploaded.value, id];
+		}
+		apply((d) => duplicateItem(d, original.id, id));
 		selectedId.value = id;
 	};
 	const deleteSelected = () => {
@@ -408,7 +426,7 @@
 	};
 	const setMargin = (side: keyof MarginsMm, value: number | null | undefined) => {
 		if (typeof value !== "number" || !Number.isFinite(value)) return;
-		apply((d) => setMargins(d, { ...d.margins, [side]: Math.max(0, value) }));
+		apply((d) => setMargins(d, setMarginValue(d.margins, side, value, d.paper)));
 	};
 	const fontOptions = computed(() => {
 		const groups: Array<Array<Record<string, unknown>>> = [
@@ -439,9 +457,11 @@
 		if (file) await addFile(file);
 	};
 	const swapSelected = (added: { id: string, ext: ImageExt, aspect: number } | null) => {
-		const old = selected.value;
-		if (!added || !old) return;
+		if (!added) return;
+		// Tracked first, so a file whose item is gone still gets cleaned up.
 		uploaded.value = [...uploaded.value, added.id];
+		const old = selected.value;
+		if (!old) return;
 		apply((d) => replaceImage(d, old.id, added.id, added.ext, added.aspect));
 		selectedId.value = added.id;
 	};
@@ -534,7 +554,8 @@
 			savedDesign.value = final.design;
 			uploaded.value = [];
 			baseline.value = final;
-			history.value = record(history.value, final);
+			// A fresh history: the files this save deleted can't be undone back.
+			history.value = afterSave(final);
 			if ("__TAURI_INTERNALS__" in window) {
 				const { emitTo } = await import("@tauri-apps/api/event");
 				await emitTo("main", "page-design:saved").catch(() => { /* main may be closing */ });
@@ -570,30 +591,50 @@
 		await destroyWindow();
 	};
 
-	let unlistenClose: (() => void) | null = null;
+	// Closing: from this window's own close button, or when the main window is
+	// asked to close while the designer is open (lock-on-close.client.ts sends
+	// `page-designer:close-request` instead of closing over unsaved work).
+	const requestClose = async () => {
+		if (dirty.value) {
+			closeAsk.value = true;
+			return;
+		}
+		// Nothing to keep: drop anything uploaded and then undone.
+		await discard();
+		await destroyWindow();
+	};
+
+	const unlisten: Array<() => void> = [];
 	onMounted(async () => {
 		if (!("__TAURI_INTERNALS__" in window)) return;
 		const { getCurrentWindow } = await import("@tauri-apps/api/window");
-		unlistenClose = await getCurrentWindow().onCloseRequested(async (event) => {
+		const win = getCurrentWindow();
+		// Main closes over an open designer only after asking it (lock-on-close.client.ts).
+		const { emitTo } = await import("@tauri-apps/api/event");
+		await emitTo("main", "page-designer:open", true).catch(() => {});
+		unlisten.push(await win.onCloseRequested((event) => {
 			event.preventDefault();
-			if (dirty.value) {
-				closeAsk.value = true;
-				return;
-			}
-			// Nothing to keep: drop anything uploaded and then undone.
-			await discard();
-			await destroyWindow();
-		});
+			void requestClose();
+		}));
+		unlisten.push(await win.listen("page-designer:close-request", async () => {
+			await win.setFocus().catch(() => {});
+			await requestClose();
+		}));
 	});
 
 	// ---- keys ---------------------------------------------------------------------------
-	const typing = (e: KeyboardEvent) => {
-		const el = e.target as HTMLElement | null;
-		return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
-	};
+	const typing = (e: KeyboardEvent) => !designerShortcutsAllowed(e.target as HTMLElement | null);
 	const onKey = (e: KeyboardEvent) => {
 		const mod = e.ctrlKey || e.metaKey;
 		const key = e.key.toLowerCase();
+		// Nothing here acts while a dialog (crop, confirm) is open or a field has focus,
+		// except Save.
+		if (mod && key === "s") {
+			e.preventDefault();
+			if (dirty.value) void save();
+			return;
+		}
+		if (typing(e)) return;
 		if (mod && key === "z") {
 			e.preventDefault();
 			if (e.shiftKey) doRedo();
@@ -601,24 +642,21 @@
 		} else if (mod && key === "y") {
 			e.preventDefault();
 			doRedo();
-		} else if (mod && key === "s") {
+		} else if (mod && key === "d") {
 			e.preventDefault();
-			if (dirty.value) void save();
-		} else if (mod && key === "d" && !typing(e)) {
-			e.preventDefault();
-			duplicateSelected();
-		} else if ((e.key === "Delete" || e.key === "Backspace") && !typing(e)) {
+			void duplicateSelected();
+		} else if (e.key === "Delete" || e.key === "Backspace") {
 			if (selected.value) {
 				e.preventDefault();
 				deleteSelected();
 			}
-		} else if (e.key === "Escape" && !typing(e)) {
+		} else if (e.key === "Escape") {
 			selectedId.value = null;
 		}
 	};
 	onMounted(() => window.addEventListener("keydown", onKey));
 	onBeforeUnmount(() => {
 		window.removeEventListener("keydown", onKey);
-		unlistenClose?.();
+		for (const off of unlisten) off();
 	});
 </script>

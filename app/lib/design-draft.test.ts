@@ -1,6 +1,6 @@
 import type { DesignItem, PageDesign } from "./page-design";
 import { describe, expect, it } from "vitest";
-import { addImage, deleteItem, duplicateItem, filesToRemove, reorderItem, replaceImage, setMargins, updateItem } from "./design-draft";
+import { addImage, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, reorderItem, replaceImage, setMargins, updateItem } from "./design-draft";
 
 const blank: PageDesign = { version: 1, paper: "a4", margins: { top: 20, right: 18, bottom: 20, left: 18 }, items: [] };
 
@@ -79,5 +79,18 @@ describe("filesToRemove", () => {
 
 	it("on the first Save of a never-chosen design: nothing the draft uses", () => {
 		expect(filesToRemove({ saved: null, draft, uploaded: ["bbbbbb000001"], outcome: "save" })).toEqual([]);
+	});
+});
+
+describe("review fixes", () => {
+	it("a duplicated image needs its own copy of the file", () => {
+		expect(fileCopyForDuplicate(img("aaaaaa000001", "svg"), "cccccc000001")).toEqual({ fromId: "aaaaaa000001", toId: "cccccc000001", ext: "svg" });
+		expect(fileCopyForDuplicate(rule, "cccccc000001")).toBeNull();
+	});
+
+	it("a duplicate near the page edge stays on the page", () => {
+		const edge = { ...img("aaaaaa000001"), x: 170, y: 277 } as DesignItem;
+		const d = duplicateItem(withItems(edge), "aaaaaa000001", "cccccc000001");
+		expect(d.items[1]).toMatchObject({ x: 170, y: 277 });
 	});
 });

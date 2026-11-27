@@ -49,7 +49,17 @@
 					:class="rendering ? 'opacity-80' : 'opacity-100'"
 					draggable="false"
 				>
-				<div v-if="rendering || !renderUrl" class="absolute top-2 right-2 pointer-events-none">
+				<!-- A render that fails says so: the page under it is stale or blank,
+					and an image that breaks the render breaks every PDF. -->
+				<div
+					v-if="error"
+					role="alert"
+					class="absolute inset-x-3 top-3 z-40 rounded-md bg-(--ui-bg) ring-1 ring-(--ui-error)/40 px-3 py-2 text-xs text-(--ui-error) shadow-sm pointer-events-none"
+				>
+					This page can't be drawn — PDFs would fail too. Undo the last change or remove the image that caused it.
+					<span class="block text-(--ui-text-muted) mt-0.5 truncate">{{ error }}</span>
+				</div>
+				<div v-else-if="rendering || !renderUrl" class="absolute top-2 right-2 pointer-events-none">
 					<UIcon name="i-lucide-loader-circle" class="size-4 animate-spin text-zinc-400" />
 				</div>
 
@@ -142,6 +152,8 @@
 		selectedId: string | null
 		renderUrl: string | null
 		rendering: boolean
+		/** The last render's error, if it failed. */
+		error?: string | null
 		page: 1 | 2
 		/** Relative to "fit the page in the window" (designer-geometry ZOOM_LEVELS). */
 		zoom: number
