@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clearBackgroundArtwork, parseStationery, resolveStationeryMode, serializeStationery, setBackgroundArtwork, setBackgroundMargins, setHeaderFooterImage, setHeaderFooterMargins, setPreprintedMargins, stationeryModeToSave } from "./stationery";
+import { clearBackgroundArtwork, parseStationery, resolveStationeryMode, serializeStationery, setBackgroundArtwork, setBackgroundMargins, setHeaderFooterGeometry, setHeaderFooterImage, setHeaderFooterMargins, setPreprintedMargins, stationeryModeToSave } from "./stationery";
 
 const DEFAULT_PREPRINTED = { top: 55, right: 18, bottom: 20, left: 18 };
 
@@ -192,5 +192,23 @@ describe("setHeaderFooterMargins", () => {
 		const both = setHeaderFooterImage(setHeaderFooterImage(null, "header", HEADER), "footer", FOOTER);
 		const next = parseStationery(setHeaderFooterMargins(both, { top: 40, right: 15, bottom: 30, left: 15 })).header_footer;
 		expect(next).toEqual({ header: HEADER, footer: FOOTER, margins: { top: 40, right: 15, bottom: 30, left: 15 } });
+	});
+});
+
+describe("setHeaderFooterGeometry", () => {
+	it("moves each stored image and sets the margins, keeping each image's format, proportions and crop", () => {
+		const both = setHeaderFooterImage(setHeaderFooterImage(null, "header", HEADER), "footer", FOOTER);
+		const moved = { x: 50, y: 5, w: 110, h: 110 / 7 };
+		const next = parseStationery(setHeaderFooterGeometry(both, { header: moved, footer: FOOTER.rect, margins: { top: 30, right: 18, bottom: 22, left: 18 } })).header_footer;
+		expect(next.header).toEqual({ ...HEADER, rect: moved });
+		expect(next.footer).toEqual(FOOTER);
+		expect(next.margins).toEqual({ top: 30, right: 18, bottom: 22, left: 18 });
+	});
+
+	it("never brings back an image that has since been removed", () => {
+		const onlyFooter = setHeaderFooterImage(null, "footer", FOOTER);
+		const next = parseStationery(setHeaderFooterGeometry(onlyFooter, { header: HEADER.rect, footer: FOOTER.rect, margins: { top: 20, right: 18, bottom: 20, left: 18 } })).header_footer;
+		expect(next.header).toBeNull();
+		expect(next.footer).toEqual(FOOTER);
 	});
 });

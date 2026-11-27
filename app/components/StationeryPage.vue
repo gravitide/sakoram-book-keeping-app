@@ -31,6 +31,28 @@
 			</div>
 		</template>
 
+		<!-- Header & footer images, each at its own place on the page. -->
+		<template v-if="mode === 'header_footer'">
+			<template v-for="slot in HEADER_FOOTER_SLOTS" :key="slot">
+				<div
+					v-if="images?.[slot]"
+					class="absolute overflow-hidden"
+					:style="box(images[slot]!.rect)"
+				>
+					<img
+						v-if="images[slot]!.url"
+						:src="images[slot]!.url!"
+						alt=""
+						class="w-full h-full object-contain"
+						draggable="false"
+					>
+					<div v-else class="w-full h-full flex items-center justify-center bg-zinc-200 text-zinc-500">
+						<UIcon :name="images[slot]!.ext === 'pdf' ? 'i-lucide-file-text' : 'i-lucide-image'" class="size-4" />
+					</div>
+				</div>
+			</template>
+		</template>
+
 		<!-- Safe area: white over pre-printed bands, dashed everywhere. -->
 		<div
 			class="absolute border border-dashed border-(--ui-primary)"
@@ -65,9 +87,10 @@
 	// positions what it returns.
 	import type { PaperSize } from "~/lib/page-settings";
 	import type { PdfLayoutKey } from "~/lib/pdf-layouts";
-	import type { BackgroundExt, StationeryMarginsMm, StationeryMode } from "~/lib/stationery";
-	import type { MmRect } from "~/lib/stationery-geometry";
+	import type { BackgroundExt, HeaderFooterSlot, StationeryMarginsMm, StationeryMode } from "~/lib/stationery";
+	import type { MmRect, PageImageView } from "~/lib/stationery-geometry";
 	import { resolvePaperSize } from "~/lib/page-settings";
+	import { HEADER_FOOTER_SLOTS } from "~/lib/stationery";
 	import { mmToPx, placeholderBars, printerBandRects, rectToPx, safeAreaMargins, safeAreaRect } from "~/lib/stationery-geometry";
 
 	const props = withDefaults(defineProps<{
@@ -75,7 +98,11 @@
 		mode: StationeryMode
 		/** Built-in only: whose margins frame the content. */
 		layout: PdfLayoutKey
-		/** The Stationery's margins (Full-page background / Pre-printed paper). Ignored under Built-in. */
+		/**
+		 * The Stationery's margins (Full-page background / Header & footer
+		 * images — already pushed out of the images — / Pre-printed paper).
+		 * Ignored under Built-in.
+		 */
 		margins: StationeryMarginsMm
 		/** CSS px per mm. */
 		scale: number
@@ -84,7 +111,9 @@
 		printerBand?: boolean
 		/** Thumbnail size: no captions. */
 		compact?: boolean
-	}>(), { artworkUrl: null, artworkExt: null, printerBand: false, compact: false });
+		/** Header & footer images: where each sits and what to show in it. */
+		images?: Partial<Record<HeaderFooterSlot, PageImageView | null>> | null
+	}>(), { artworkUrl: null, artworkExt: null, printerBand: false, compact: false, images: null });
 
 	const paperInfo = computed(() => resolvePaperSize(props.paper));
 	const px = (mm: number) => mmToPx(mm, props.scale);

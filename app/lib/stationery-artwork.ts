@@ -85,7 +85,7 @@ export function isRasterBackground(ext: BackgroundExt): boolean {
 }
 
 // CSS absolute units in px (96 per inch), for an SVG sized in mixed units.
-const SVG_UNIT_PX: Record<string, number> = { "": 1, "px": 1, "in": 96, "cm": 96 / 2.54, "mm": 96 / 25.4, "pt": 96 / 72, "pc": 16 };
+const SVG_UNIT_PX: Record<string, number> = { "": 1, px: 1, in: 96, cm: 96 / 2.54, mm: 96 / 25.4, pt: 96 / 72, pc: 16 };
 
 const svgLength = (value: string | undefined): number | null => {
 	const m = value?.trim().match(/^([\d.]+)\s*([a-z]*)$/i);

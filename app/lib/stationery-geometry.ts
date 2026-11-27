@@ -15,7 +15,7 @@
 // Pure, store-free, relative imports only.
 
 import type { PdfLayoutKey } from "./pdf-layouts";
-import type { HeaderFooterSlot, StationeryMarginsMm, StationeryMode } from "./stationery";
+import type { BackgroundExt, HeaderFooterSlot, StationeryMarginsMm, StationeryMode } from "./stationery";
 import { MAX_BAND_MM } from "./stationery";
 
 /** A CSS pixel is 1/96 inch, so this many px is one millimetre at 100 %. */
@@ -354,6 +354,13 @@ export interface HeaderFooterRects {
 }
 
 export type ImageCorner = "nw" | "ne" | "sw" | "se";
+
+/** A placed Header & footer image as a page view draws it: where, what (a blob URL, or null for a placeholder) and its format. */
+export interface PageImageView {
+	rect: MmRect
+	url: string | null
+	ext: BackgroundExt
+}
 
 /** The band each image pushes out: its inner edge + the gap. 0 where there is no image. */
 export function bandFloors(page: PageDims, images: HeaderFooterRects): { top: number, bottom: number } {

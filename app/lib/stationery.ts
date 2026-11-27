@@ -232,3 +232,26 @@ export function setHeaderFooterMargins(stored: string | null | undefined, margin
 	const current = parseStationery(stored);
 	return serializeStationery(stationerySchema.parse({ ...current, header_footer: { ...current.header_footer, margins } }));
 }
+
+/** Where the two images sit and the margins around them — what the Stationery editor edits. */
+export interface HeaderFooterGeometry {
+	header: HeaderFooterImage["rect"] | null
+	footer: HeaderFooterImage["rect"] | null
+	margins: StationeryMarginsMm
+}
+
+/**
+ * The stored JSON with the images moved / resized and the margins replaced.
+ * Only images that are still stored are moved — a rect for an image removed
+ * since the editor opened is ignored — and each keeps its format, proportions
+ * and crop. Every other mode's settings are kept.
+ */
+export function setHeaderFooterGeometry(stored: string | null | undefined, geometry: HeaderFooterGeometry): string {
+	const current = parseStationery(stored);
+	const hf = current.header_footer;
+	const moved = (image: HeaderFooterImage | null, rect: HeaderFooterImage["rect"] | null) => (image && rect ? { ...image, rect: { ...rect } } : image);
+	return serializeStationery(stationerySchema.parse({
+		...current,
+		header_footer: { header: moved(hf.header, geometry.header), footer: moved(hf.footer, geometry.footer), margins: geometry.margins }
+	}));
+}

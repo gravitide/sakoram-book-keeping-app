@@ -4,7 +4,7 @@
 		fullscreen
 		:title="editable ? `Edit stationery — ${modeLabel}` : `Preview page — ${modeLabel}`"
 		:description="editable
-			? `${paperInfo.label} · ${paperInfo.widthMm} × ${paperInfo.heightMm} mm. Drag the dashed guides to set the Safe area the content stays inside.`
+			? `${paperInfo.label} · ${paperInfo.widthMm} × ${paperInfo.heightMm} mm. ${mode === 'header_footer' ? 'Drag an image to move it, a corner to resize it, and the dashed guides to set the Safe area.' : 'Drag the dashed guides to set the Safe area the content stays inside.'}`
 			: `${paperInfo.label} · ${paperInfo.widthMm} × ${paperInfo.heightMm} mm. Your Layout's own margins frame the page.`"
 		:ui="{ body: 'flex-1 min-h-0 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row gap-4' }"
 	>
@@ -62,8 +62,45 @@
 						:scale="scale"
 						:artwork-url="artwork.url.value"
 						:artwork-ext="artwork.ext.value"
+						:images="pageImages"
 						printer-band
 					>
+						<!-- Header & footer images: drag to move, a corner to resize
+							(aspect locked), arrow keys to nudge. -->
+						<template v-if="mode === 'header_footer'">
+							<div
+								v-for="img in imageBoxes"
+								:key="img.slot"
+								role="group"
+								tabindex="0"
+								:aria-label="`${SLOT_LABEL[img.slot]}: ${formatMm(img.rect.x)} mm from the left, ${formatMm(img.rect.y)} mm from the top, ${formatMm(img.rect.w)} mm wide`"
+								class="group absolute z-20 outline-none touch-none cursor-move ring-1 ring-(--ui-primary)/40 hover:ring-(--ui-primary) focus-visible:ring-2 focus-visible:ring-(--ui-primary)"
+								:class="imageDrag?.slot === img.slot ? 'ring-2 ring-(--ui-primary)' : ''"
+								:style="img.style"
+								@pointerdown="onImagePointerDown(img.slot, 'move', $event)"
+								@pointermove="onImagePointerMove"
+								@pointerup="onImagePointerUp"
+								@pointercancel="onImagePointerUp"
+								@keydown="onImageKey(img.slot, $event)"
+							>
+								<span
+									v-for="corner in CORNERS"
+									:key="corner"
+									class="absolute size-2.5 rounded-sm bg-white ring-1 ring-(--ui-primary) opacity-70 group-hover:opacity-100 group-focus-visible:opacity-100"
+									:class="[CORNER_CLASS[corner]]"
+									@pointerdown.stop="onImagePointerDown(img.slot, corner, $event)"
+								/>
+								<span
+									class="absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-(--ui-primary) px-1.5 py-0.5 text-[10px] font-medium text-white tabular-nums pointer-events-none transition-opacity"
+									:class="[
+										img.slot === 'header' ? 'top-full mt-1' : 'bottom-full mb-1',
+										imageDrag?.slot === img.slot ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'
+									]"
+								>
+									{{ formatMm(img.rect.w) }} × {{ formatMm(img.rect.h) }} mm
+								</span>
+							</div>
+						</template>
 						<!-- Margin guides. A wide transparent hit strip around a 1px
 							line; focusable, so arrow keys move them too. -->
 						<div
@@ -141,6 +178,9 @@
 					<p class="text-xs text-(--ui-text-muted) mt-2">
 						Drag a guide, or focus it and use the arrow keys (Shift for 5 mm). Side margins snap to each other.
 					</p>
+					<p v-if="mode === 'header_footer'" class="text-xs text-(--ui-text-muted) mt-2">
+						Each image's band always reaches {{ HEADER_FOOTER_GAP_MM }} mm past it and follows it when it moves; drag the guide further out for more room. Images snap to the page edges and the centre line.
+					</p>
 				</div>
 				<div v-else>
 					<div class="text-sm font-medium mb-2">
@@ -155,7 +195,7 @@
 						</template>
 					</dl>
 					<p class="text-xs text-(--ui-text-muted) mt-2">
-						Built-in stationery uses the {{ layoutLabel }} Layout's own margins, scaled for {{ paperInfo.label }}. To set your own, choose Full-page background or Pre-printed paper.
+						Built-in stationery uses the {{ layoutLabel }} Layout's own margins, scaled for {{ paperInfo.label }}. To set your own, choose another Stationery.
 					</p>
 				</div>
 
@@ -245,12 +285,16 @@
 	// the Layout's own margins as the Safe area, placeholders, printer band and
 	// the sample invoice — no guides, no Apply, nothing written back.
 	//
-	// Header & footer images (#361) will add draggable image boxes to the same
-	// page; the guides already live in StationeryPage's slot for that reason.
+	// Header & footer images add a draggable box per image to the same page
+	// (StationeryPage's slot, the guides' px space): move, corner-resize with
+	// the aspect locked, arrow-key nudge. Each image's band follows it, and
+	// its guide can't be dragged into it (stationery-geometry.ts: dragImage,
+	// resizeImage, nudgeImage, followImage, bandFloors). Apply hands back the
+	// images' rects with the margins.
 	import type { PaperSize } from "~/lib/page-settings";
 	import type { PdfLayoutKey } from "~/lib/pdf-layouts";
-	import type { StationeryMarginsMm, StationeryMode } from "~/lib/stationery";
-	import type { ArrowDirection, MarginEdge } from "~/lib/stationery-geometry";
+	import type { HeaderFooterSlot, StationeryMarginsMm, StationeryMode } from "~/lib/stationery";
+	import type { ArrowDirection, HeaderFooterRects, ImageCorner, MarginEdge, MmRect, PageImageView } from "~/lib/stationery-geometry";
 	import type { CompanySettingsRow } from "~/stores/settings";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
@@ -258,18 +302,26 @@
 	import { resolvePaperSize } from "~/lib/page-settings";
 	import { PDF_LAYOUTS } from "~/lib/pdf-layouts";
 	import { sampleStationeryPreviewPayload } from "~/lib/sample-pdf";
-	import { parseStationery, setBackgroundMargins, setPreprintedMargins, STATIONERY_MODES } from "~/lib/stationery";
+	import { HEADER_FOOTER_SLOTS, parseStationery, setBackgroundMargins, setHeaderFooterGeometry, setPreprintedMargins, STATIONERY_MODES } from "~/lib/stationery";
 	import {
+		bandFloors,
 		CSS_PX_PER_MM,
+		dragImage,
 		dragMargin,
 		editsMargins,
 		fitMargins,
 		fitScale,
+		followImage,
+		HEADER_FOOTER_GAP_MM,
+		headerFooterMargins,
 		marginGuides,
 		marginLimits,
 		mmToPx,
+		nudgeImage,
 		nudgeMargin,
 		PRINTER_BAND_MM,
+		rectToPx,
+		resizeImage,
 		rulerTicks,
 		safeAreaMargins,
 		setMargin,
@@ -286,11 +338,21 @@
 	}>();
 	const openModel = defineModel<boolean>("open", { required: true });
 	const margins = defineModel<StationeryMarginsMm>("margins", { required: true });
+	/** Header & footer images only: where each image sits (null = none). */
+	const images = defineModel<HeaderFooterRects>("images", { default: () => ({ header: null, footer: null }) });
 
 	const RULER_PX = 22;
 	const GUTTER_PX = 24;
 	const EDGES: MarginEdge[] = ["top", "bottom", "left", "right"];
 	const EDGE_LABEL: Record<MarginEdge, string> = { top: "Top", bottom: "Bottom", left: "Left", right: "Right" };
+	const SLOT_LABEL: Record<HeaderFooterSlot, string> = { header: "Header image", footer: "Footer image" };
+	const CORNERS: ImageCorner[] = ["nw", "ne", "sw", "se"];
+	const CORNER_CLASS: Record<ImageCorner, string> = {
+		nw: "-left-1.5 -top-1.5 cursor-nwse-resize",
+		ne: "-right-1.5 -top-1.5 cursor-nesw-resize",
+		sw: "-left-1.5 -bottom-1.5 cursor-nesw-resize",
+		se: "-right-1.5 -bottom-1.5 cursor-nwse-resize"
+	};
 	// Where each guide's readout sits so it never covers the page edge it measures.
 	const LABEL_POSITION: Record<MarginEdge, string> = {
 		top: "top-full mt-1 left-1/2 -translate-x-1/2",
@@ -313,6 +375,10 @@
 	// Re-seeded on every open: this modal lives on a kept-alive page, so a
 	// cancelled edit must not survive to the next open.
 	const draft = ref<StationeryMarginsMm>({ ...margins.value });
+	const draftImages = ref<HeaderFooterRects>({ header: null, footer: null });
+	const isHeaderFooter = computed(() => props.mode === "header_footer");
+	/** The least each band may be: never into its image (Header & footer images only). */
+	const floors = computed(() => (isHeaderFooter.value ? bandFloors(paperInfo.value, draftImages.value) : {}));
 	const fitted = ref(false);
 	/** Relative to "fit the page in the window". */
 	const zoom = ref(1);
@@ -326,7 +392,10 @@
 			fitted.value = false;
 			return;
 		}
-		const next = fitMargins(paperInfo.value, margins.value);
+		const copy = (r: MmRect | null) => (r ? { ...r } : null);
+		draftImages.value = isHeaderFooter.value ? { header: copy(images.value.header), footer: copy(images.value.footer) } : { header: null, footer: null };
+		let next = fitMargins(paperInfo.value, margins.value);
+		if (isHeaderFooter.value) next = headerFooterMargins(paperInfo.value, draftImages.value, next);
 		fitted.value = EDGES.some((e) => next[e] !== margins.value[e]);
 		draft.value = next;
 	});
@@ -334,6 +403,7 @@
 	const apply = () => {
 		if (!editable.value) return;
 		margins.value = { ...draft.value };
+		if (isHeaderFooter.value) images.value = { header: draftImages.value.header, footer: draftImages.value.footer };
 		openModel.value = false;
 	};
 	const cancel = () => {
@@ -347,11 +417,11 @@
 		zoom.value = 1;
 	};
 
-	const limits = computed(() => Object.fromEntries(EDGES.map((e) => [e, marginLimits(paperInfo.value, draft.value, e)])) as Record<MarginEdge, { min: number, max: number }>);
+	const limits = computed(() => Object.fromEntries(EDGES.map((e) => [e, marginLimits(paperInfo.value, draft.value, e, floors.value)])) as Record<MarginEdge, { min: number, max: number }>);
 
 	const onTyped = (edge: MarginEdge, value: number | null | undefined) => {
 		if (typeof value !== "number" || !Number.isFinite(value)) return;
-		draft.value = setMargin(paperInfo.value, draft.value, edge, value);
+		draft.value = setMargin(paperInfo.value, draft.value, edge, value, floors.value);
 	};
 
 	// ---- zoom -----------------------------------------------------------
@@ -389,7 +459,7 @@
 	};
 	const onPointerMove = (e: PointerEvent) => {
 		if (!dragging.value || !dragStart) return;
-		draft.value = dragMargin(paperInfo.value, dragStart.margins, dragging.value, { dx: e.clientX - dragStart.x, dy: e.clientY - dragStart.y }, scale.value);
+		draft.value = dragMargin(paperInfo.value, dragStart.margins, dragging.value, { dx: e.clientX - dragStart.x, dy: e.clientY - dragStart.y }, scale.value, floors.value);
 	};
 	const onPointerUp = () => {
 		dragging.value = null;
@@ -401,11 +471,74 @@
 		const arrow = ARROWS[e.key];
 		if (!arrow) return;
 		e.preventDefault();
-		draft.value = nudgeMargin(paperInfo.value, draft.value, edge, arrow, e.shiftKey ? 5 : 1);
+		draft.value = nudgeMargin(paperInfo.value, draft.value, edge, arrow, e.shiftKey ? 5 : 1, floors.value);
+	};
+
+	// ---- header & footer images ----------------------------------------
+	const headerFooterStored = computed(() => parseStationery(props.settings?.pdf_stationery).header_footer);
+	const imageArt = { header: useStationeryArtwork("header"), footer: useStationeryArtwork("footer") };
+	const pageImages = computed(() => {
+		if (!isHeaderFooter.value) return null;
+		const view = (slot: HeaderFooterSlot): PageImageView | null => {
+			const rect = draftImages.value[slot];
+			const ext = headerFooterStored.value[slot]?.ext;
+			return rect && ext ? { rect, url: imageArt[slot].url.value, ext } : null;
+		};
+		return { header: view("header"), footer: view("footer") };
+	});
+	const imageBoxes = computed(() => HEADER_FOOTER_SLOTS.flatMap((slot) => {
+		const rect = pageImages.value?.[slot]?.rect;
+		if (!rect) return [];
+		const r = rectToPx(rect, scale.value);
+		return [{ slot, rect, style: { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` } }];
+	}));
+
+	/** One image moved or resized: it takes `rect`, and its band follows it from where the gesture began. */
+	const placeImage = (slot: HeaderFooterSlot, before: MmRect, rect: MmRect, startMargins: StationeryMarginsMm) => {
+		draftImages.value = { ...draftImages.value, [slot]: rect };
+		draft.value = followImage(paperInfo.value, slot, before, rect, startMargins);
+	};
+
+	const imageDrag = ref<{ slot: HeaderFooterSlot, handle: "move" | ImageCorner, x: number, y: number, rect: MmRect, margins: StationeryMarginsMm } | null>(null);
+
+	const onImagePointerDown = (slot: HeaderFooterSlot, handle: "move" | ImageCorner, e: PointerEvent) => {
+		const rect = draftImages.value[slot];
+		if (e.button !== 0 || !rect) return;
+		// Capture on the image box (a corner handle's parent) so moves keep coming.
+		const box = (handle === "move" ? e.currentTarget : (e.currentTarget as HTMLElement).parentElement) as HTMLElement;
+		box.setPointerCapture(e.pointerId);
+		box.focus();
+		imageDrag.value = { slot, handle, x: e.clientX, y: e.clientY, rect: { ...rect }, margins: { ...draft.value } };
+		e.preventDefault();
+	};
+	const onImagePointerMove = (e: PointerEvent) => {
+		const d = imageDrag.value;
+		if (!d) return;
+		const delta = { dx: e.clientX - d.x, dy: e.clientY - d.y };
+		const rect = d.handle === "move"
+			? dragImage(paperInfo.value, d.slot, d.rect, delta, scale.value, d.margins)
+			: resizeImage(paperInfo.value, d.slot, d.rect, d.handle, delta, scale.value, d.margins);
+		placeImage(d.slot, d.rect, rect, d.margins);
+	};
+	const onImagePointerUp = () => {
+		imageDrag.value = null;
+	};
+	const onImageKey = (slot: HeaderFooterSlot, e: KeyboardEvent) => {
+		const arrow = ARROWS[e.key];
+		const rect = draftImages.value[slot];
+		if (!arrow || !rect) return;
+		e.preventDefault();
+		placeImage(slot, rect, nudgeImage(paperInfo.value, slot, rect, arrow, e.shiftKey ? 5 : 1, draft.value), draft.value);
 	};
 
 	// ---- artwork / paper ------------------------------------------------
 	const paperMismatch = computed(() => {
+		if (isHeaderFooter.value) {
+			const placedOn = HEADER_FOOTER_SLOTS.map((s) => headerFooterStored.value[s]?.paper).find((p) => p && p !== props.paper);
+			return placedOn
+				? `These images were placed on ${resolvePaperSize(placedOn).label}. Check that they still sit where you want them on ${paperInfo.value.label}.`
+				: null;
+		}
 		if (props.mode !== "background") return null;
 		const prepared = parseStationery(props.settings?.pdf_stationery).background.paper;
 		if (!prepared || prepared === props.paper) return null;
@@ -420,6 +553,9 @@
 		if (!props.settings) return null;
 		// Built-in: the Layout's margins, exactly as the settings stand.
 		if (!editable.value) return props.settings;
+		if (isHeaderFooter.value) {
+			return { ...props.settings, pdf_stationery: setHeaderFooterGeometry(props.settings.pdf_stationery, { ...draftImages.value, margins: { ...draft.value } }) };
+		}
 		const setMargins = props.mode === "background" ? setBackgroundMargins : setPreprintedMargins;
 		return { ...props.settings, pdf_stationery: setMargins(props.settings.pdf_stationery, { ...draft.value }) };
 	};
