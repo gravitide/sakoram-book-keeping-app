@@ -5,7 +5,7 @@ import type { PaperGeometry } from "./stationery-geometry";
 import { describe, expect, it } from "vitest";
 import { resolvePaperSize } from "./page-settings";
 import { MAX_BAND_MM, parseStationery } from "./stationery";
-import { confirmPaperGeometry, paperGeometryOf, refitPaperGeometry, refitStationery, stationeryReview, withPaperGeometry } from "./stationery-geometry";
+import { confirmPaperGeometry, modeNeedsReview, paperGeometryOf, refitPaperGeometry, refitStationery, stationeryReview, withPaperGeometry } from "./stationery-geometry";
 
 const A4 = resolvePaperSize("a4");
 const A5 = resolvePaperSize("a5");
@@ -219,6 +219,39 @@ describe("stationeryReview — what the editor asks the user to check", () => {
 		g.header_footer.header!.paper = null;
 		g.background.paper = null;
 		expect(stationeryReview(g, "png", "us-letter")).toMatchObject({ header: null, background: null });
+	});
+});
+
+describe("modeNeedsReview — whether the active Stationery needs a look", () => {
+	const onLetter = () => refitPaperGeometry(A4, LETTER, a4Geometry());
+
+	it("header & footer images: when either image was placed on another sheet", () => {
+		expect(modeNeedsReview(stationeryReview(onLetter(), null, "us-letter"), "header_footer")).toBe(true);
+		const onlyFooter = onLetter();
+		onlyFooter.header_footer.header = null;
+		expect(modeNeedsReview(stationeryReview(onlyFooter, null, "us-letter"), "header_footer")).toBe(true);
+	});
+
+	it("full-page background: when the artwork was prepared for another sheet", () => {
+		expect(modeNeedsReview(stationeryReview(a4Geometry(), "svg", "us-letter"), "background")).toBe(true);
+		expect(modeNeedsReview(stationeryReview(a4Geometry(), "png", "us-legal"), "background")).toBe(true);
+	});
+
+	it("never for another mode's artwork — that gets its own card's note", () => {
+		const review = stationeryReview(onLetter(), "svg", "us-letter");
+		expect(modeNeedsReview(review, "background")).toBe(true);
+		expect(modeNeedsReview(review, "builtin")).toBe(false);
+		expect(modeNeedsReview(review, "preprinted")).toBe(false);
+		const noImages = a4Geometry();
+		noImages.header_footer.header = null;
+		noImages.header_footer.footer = null;
+		expect(modeNeedsReview(stationeryReview(noImages, "svg", "us-letter"), "header_footer")).toBe(false);
+	});
+
+	it("nothing to check, nothing to open", () => {
+		expect(modeNeedsReview(stationeryReview(a4Geometry(), "svg", "a4"), "header_footer")).toBe(false);
+		expect(modeNeedsReview(stationeryReview(a4Geometry(), null, "us-letter"), "background")).toBe(false);
+		expect(modeNeedsReview(stationeryReview(refitPaperGeometry(A4, A5, a4Geometry()), "png", "a5"), "header_footer")).toBe(false);
 	});
 });
 

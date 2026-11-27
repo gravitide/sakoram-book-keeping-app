@@ -671,6 +671,18 @@ export function stationeryReview(g: PaperGeometry, backgroundExt: BackgroundExt 
 }
 
 /**
+ * Whether the ACTIVE mode has something to check — what makes the settings
+ * page open the Stationery editor, banner showing, right after a Paper size
+ * pick. Only that mode's own artwork counts: another mode's flags wait on its
+ * card until the user switches to it.
+ */
+export function modeNeedsReview(review: StationeryReview, mode: StationeryMode): boolean {
+	if (mode === "header_footer") return review.header !== null || review.footer !== null;
+	if (mode === "background") return review.background !== null;
+	return false;
+}
+
+/**
  * The geometry after Apply in the Stationery editor, which showed the user
  * this mode on this sheet: Header & footer images now count as placed on it,
  * the background as prepared for it — except a raster one that needs a

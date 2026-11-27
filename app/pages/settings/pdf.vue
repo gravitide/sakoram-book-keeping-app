@@ -286,6 +286,7 @@
 						v-if="form.pdf_stationery_mode === 'background'"
 						:paper="paperKey"
 						:review="stationeryCheck.background"
+						:locked="artworkLock"
 						@artwork="onBackgroundArtwork"
 					/>
 					<StationeryHeaderFooterCard
@@ -294,6 +295,7 @@
 						:margins="activeStationeryMargins"
 						:rects="form.header_footer_images"
 						:review="stationeryCheck"
+						:locked="artworkLock"
 						@placed="onImagePlaced"
 					/>
 					<StationeryEditorModal
@@ -700,7 +702,8 @@
 	import { PDF_TOKENS } from "~/lib/pdf-tokens";
 	import { sampleInvoicePayload } from "~/lib/sample-pdf";
 	import { BACKGROUND_DEFAULT_MARGINS, HEADER_FOOTER_DEFAULT_MARGINS, MAX_BAND_MM, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, serializeStationery, STATIONERY_MODES, stationeryModeToSave, stationerySchema } from "~/lib/stationery";
-	import { confirmPaperGeometry, headerFooterMargins, refitPaperGeometry, scaleForWidth, stationeryReview, withPaperGeometry } from "~/lib/stationery-geometry";
+	import { artworkPaperLock } from "~/lib/stationery-artwork";
+	import { confirmPaperGeometry, headerFooterMargins, modeNeedsReview, refitPaperGeometry, scaleForWidth, stationeryReview, withPaperGeometry } from "~/lib/stationery-geometry";
 	import { isHexColor, THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -789,35 +792,17 @@
 		withPaperGeometry(parseStationery(store.settings?.pdf_stationery), formGeometry())
 	));
 
-	// A Paper size change re-fits every mode's geometry ON THE FORM, right
-	// when it is picked (stationery-geometry.ts refitPaperGeometry: A4 ↔ A5
-	// scales, to or from Letter / Legal keeps mm sizes and clamps). Here, and
-	// not when a PDF renders or the editor opens, because:
-	//   - the form's geometry is then always in the picked sheet's own
-	//     coordinates, so the thumbnail, the editor and the sample preview
-	//     show what Save will write, and an edit made after the change is
-	//     never re-fitted a second time;
-	//   - Save stores geometry that already fits its sheet, so every PDF
-	//     (rendered with no editor involved) is right, and nothing has to
-	//     remember which sheet stored geometry was meant for;
-	//   - each pick re-fits from the sheet before it, so A4 → A5 → A4 (saved
-	//     or not) comes back where it started.
-	// Hydrate (load / Discard) sets the paper directly: stored geometry is
-	// already in the stored sheet's coordinates.
-	const setPaper = (key: PaperSize) => {
-		const from = resolvePaperSize(form.pdf_paper_size);
-		const to = resolvePaperSize(key);
-		if (from.key === to.key) return;
-		setFormGeometry(refitPaperGeometry(from, to, formGeometry()));
-		form.pdf_paper_size = to.key;
-	};
-
 	const paperKey = computed(() => resolvePaperSize(form.pdf_paper_size).key);
 	const formatMm = (mm: number) => String(Math.round(mm * 10) / 10);
 
 	// What the cards and the editor flag for a check on the picked sheet.
 	const stationeryCheck = computed(() =>
 		stationeryReview(formGeometry(), parseStationery(store.settings?.pdf_stationery).background.ext, paperKey.value));
+
+	// Artwork saves the moment it changes, for the paper picked now — so not
+	// while a Paper size change is unsaved (Discard would leave it on the
+	// wrong sheet). The cards disable their actions and show this note.
+	const artworkLock = computed(() => artworkPaperLock(paperKey.value, store.settings?.pdf_paper_size));
 
 	// The margins of the mode being edited — what the thumbnail frames and the
 	// Stationery editor drags. Each mode keeps its own (Built-in has none of
@@ -860,6 +845,36 @@
 	onDeactivated(() => {
 		editorOpen.value = false;
 	});
+
+	// A Paper size change re-fits every mode's geometry ON THE FORM, right
+	// when it is picked (stationery-geometry.ts refitPaperGeometry: A4 ↔ A5
+	// scales, to or from Letter / Legal keeps mm sizes and clamps). Here, and
+	// not when a PDF renders or the editor opens, because:
+	//   - the form's geometry is then always in the picked sheet's own
+	//     coordinates, so the thumbnail, the editor and the sample preview
+	//     show what Save will write, and an edit made after the change is
+	//     never re-fitted a second time;
+	//   - Save stores geometry that already fits its sheet, so every PDF
+	//     (rendered with no editor involved) is right, and nothing has to
+	//     remember which sheet stored geometry was meant for;
+	//   - each pick re-fits from the sheet before it, so A4 → A5 → A4 (saved
+	//     or not) comes back where it started.
+	// Hydrate (load / Discard) sets the paper directly: stored geometry is
+	// already in the stored sheet's coordinates.
+	//
+	// When the re-fit leaves the ACTIVE mode's artwork needing a look (images
+	// clamped onto a Letter / Legal sheet, a background prepared for another
+	// one — stationeryReview), the Stationery editor opens straight away with
+	// its "Check your stationery" banner. Another mode's artwork only gets its
+	// card's note.
+	const setPaper = (key: PaperSize) => {
+		const from = resolvePaperSize(form.pdf_paper_size);
+		const to = resolvePaperSize(key);
+		if (from.key === to.key) return;
+		setFormGeometry(refitPaperGeometry(from, to, formGeometry()));
+		form.pdf_paper_size = to.key;
+		if (modeNeedsReview(stationeryCheck.value, form.pdf_stationery_mode)) editorOpen.value = true;
+	};
 
 	const currency = useActiveCurrency();
 	const colors = THEME_COLORS;
