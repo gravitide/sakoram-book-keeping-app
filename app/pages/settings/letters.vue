@@ -110,28 +110,28 @@
 				</p>
 			</UCard>
 
-			<!-- Stationery artwork (future: Full-page background / Header & footer images) -->
+			<!-- Stationery artwork: a pointer — letters set to "use stationery" print on the business Stationery -->
 			<UCard id="artwork" class="scroll-mt-6">
 				<template #header>
-					<div class="flex items-center justify-between">
-						<div class="font-medium">
-							Stationery artwork
-						</div>
-						<UBadge size="xs" color="neutral" variant="subtle">
-							Coming soon
-						</UBadge>
+					<div class="font-medium">
+						Stationery artwork
 					</div>
 					<div class="text-xs text-(--ui-text-muted) mt-1">
-						Print letters — and every other document — on your own artwork: a
-						full-page background, or separate header and footer images. Set up
-						with the rest of your Stationery in PDF settings.
+						Letters set to "use stationery" print on your business Stationery,
+						like every other document — including a full-page background or
+						separate header and footer images.
 					</div>
 				</template>
 
-				<div class="text-sm text-(--ui-text-muted) py-2 flex items-center gap-2">
+				<p class="text-sm text-(--ui-text-muted) py-2 flex items-center gap-2">
 					<UIcon name="i-lucide-image" class="size-4" />
-					Not available yet — letters use your business Stationery: Built-in or Pre-printed paper.
-				</div>
+					<span>
+						Upload and place your artwork in
+						<NuxtLink to="/settings/pdf#stationery" class="text-(--ui-primary) hover:underline">
+							PDF settings
+						</NuxtLink>.
+					</span>
+				</p>
 			</UCard>
 		</div>
 
@@ -151,7 +151,7 @@
 // the Pre-printed paper bands a pre-printed letter reserves (opened in the
 // Stationery editor and saved straight away — they're the business-wide bands
 // in company_settings.pdf_stationery, shared with the Pre-printed paper
-// Stationery on /settings/pdf), and a placeholder for the artwork modes.
+// Stationery on /settings/pdf), and a pointer to the Stationery artwork there.
 	import type { StationeryMarginsMm } from "~/lib/stationery";
 	import type { LetterCategoryRow } from "~/stores/letter_categories";
 	import { resolvePaperSize } from "~/lib/page-settings";
