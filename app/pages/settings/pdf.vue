@@ -176,33 +176,14 @@
 					<SectionCard
 						icon="i-lucide-stamp"
 						title="Stationery"
-						subtitle="What is printed around the content of every PDF — quotes, invoices, bills, vouchers, payslips, statements, reports and letters."
+						subtitle="What's printed around the content of every PDF — quotes, invoices, bills, vouchers, payslips, statements, reports and letters."
 					>
-						<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-							<button
-								v-for="m in STATIONERY_MODES"
-								:key="m.key"
-								type="button"
-								class="p-3 rounded-md border text-left transition cursor-pointer hover:border-(--ui-primary)/50"
-								:class="[
-									form.pdf_stationery_mode === m.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)'
-								]"
-								:aria-pressed="form.pdf_stationery_mode === m.key"
-								@click="form.pdf_stationery_mode = m.key"
-							>
-								<div class="text-sm font-medium">
-									{{ m.label }}
-								</div>
-								<div class="text-xs text-(--ui-text-muted) mt-0.5">
-									{{ m.description }}
-								</div>
-							</button>
-						</div>
-
-						<!-- Page 1 of the sample invoice, rendered by Typst from the live
-							(unsaved) form ~500 ms after the last change (useLivePagePreview), with
-							the drawn page as the fallback if a render fails. -->
-						<div class="mt-5 flex flex-col sm:flex-row items-start gap-5">
+						<!-- Page 1 of the sample invoice on the left, rendered by Typst from the
+							live (unsaved) form ~500 ms after the last change (useLivePagePreview),
+							with the drawn page as the fallback if a render fails. Everything you
+							act on sits on the right: the mode list (the selected mode shows its
+							next step), the two actions and one line of paper / margins. -->
+						<div class="flex flex-col sm:flex-row items-start gap-5">
 							<div class="shrink-0" :style="{ width: `${PREVIEW_W_PX}px` }">
 								<StationeryPage
 									v-if="livePreview.error.value"
@@ -242,26 +223,43 @@
 								<p v-if="livePreview.error.value" class="mt-1.5 text-xs text-(--ui-text-muted)">
 									Couldn't render the preview, so this is a drawing of the page.
 								</p>
+								<p v-if="!livePreview.error.value" class="mt-2 flex items-center gap-1.5 text-xs text-(--ui-text-muted)">
+									<span class="size-1.5 rounded-full" :class="livePreview.loading.value ? 'bg-(--ui-warning)' : 'bg-(--ui-success)'" aria-hidden="true" />
+									Live preview, page 1
+								</p>
 							</div>
-							<div class="space-y-3 min-w-0">
-								<p v-if="form.pdf_stationery_mode === 'builtin'" class="text-xs text-(--ui-text-muted)">
-									Your Layout's own margins frame the page. Set the header logo and the header &amp; footer text below.
-								</p>
-								<p v-else-if="form.pdf_stationery_mode === 'background'" class="text-xs text-(--ui-text-muted)">
-									Upload your artwork below, then set the Safe area. Your logo, header text and footer aren't printed — the artwork is your letterhead.
-								</p>
-								<p v-else-if="form.pdf_stationery_mode === 'header_footer'" class="text-xs text-(--ui-text-muted)">
-									Upload your header and footer images below, then place them and set the Safe area. Your logo, header text and footer aren't printed — the images are your letterhead.
-								</p>
-								<p v-else class="text-xs text-(--ui-text-muted)">
-									Your paper already carries your letterhead, so nothing is printed in its blank bands — no logo, header text or footer. Set how deep the top and bottom bands are; page numbers sit just above the bottom one.
-								</p>
+							<div class="flex flex-col gap-3 min-w-0 flex-1 w-full">
+								<div class="flex flex-col gap-1.5" role="group" aria-label="Stationery">
+									<button
+										v-for="m in STATIONERY_MODES"
+										:key="m.key"
+										type="button"
+										class="flex items-start gap-2.5 w-full px-3 py-2.5 rounded-md border text-left transition cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ui-primary)"
+										:class="form.pdf_stationery_mode === m.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border) hover:border-(--ui-border-accented)'"
+										:aria-pressed="form.pdf_stationery_mode === m.key"
+										@click="form.pdf_stationery_mode = m.key"
+									>
+										<span
+											class="mt-0.5 size-3.5 shrink-0 rounded-full border-[1.5px] flex items-center justify-center"
+											:class="form.pdf_stationery_mode === m.key ? 'border-(--ui-primary)' : 'border-(--ui-border-accented)'"
+											aria-hidden="true"
+										>
+											<span v-if="form.pdf_stationery_mode === m.key" class="size-1.5 rounded-full bg-(--ui-primary)" />
+										</span>
+										<span class="min-w-0">
+											<span class="block text-sm font-medium">{{ m.label }}</span>
+											<span class="block text-xs text-(--ui-text-muted) mt-0.5">{{ m.description }}</span>
+											<span v-if="form.pdf_stationery_mode === m.key" class="block text-xs text-(--ui-primary) mt-1">{{ m.nextStep }}</span>
+										</span>
+									</button>
+								</div>
 								<div class="flex flex-wrap gap-2">
 									<UButton
 										icon="i-lucide-file-search"
 										variant="soft"
 										size="sm"
 										:loading="samplePreview.state.rendering"
+										title="Opens a two-page sample, so you can check the second page too"
 										@click="samplePreview.open()"
 									>
 										Preview as PDF
@@ -277,15 +275,15 @@
 										Adjust margins &amp; placement
 									</UButton>
 								</div>
-								<p class="text-xs text-(--ui-text-muted)">
-									The preview shows your changes before you save. Preview as PDF opens a two-page sample, so you can check the second page too.
-								</p>
-								<div class="text-xs text-(--ui-text-muted) tabular-nums">
+								<p class="text-xs text-(--ui-text-muted) tabular-nums">
 									{{ resolvePaperSize(paperKey).label }}
-									<template v-if="form.pdf_stationery_mode !== 'builtin'">
-										· margins {{ formatMm(activeStationeryMargins.top) }} / {{ formatMm(activeStationeryMargins.right) }} / {{ formatMm(activeStationeryMargins.bottom) }} / {{ formatMm(activeStationeryMargins.left) }} mm (top / right / bottom / left)
+									<template v-if="form.pdf_stationery_mode === 'builtin'">
+										· Layout margins
 									</template>
-								</div>
+									<span v-else title="Top / right / bottom / left">
+										· Safe area {{ formatMm(activeStationeryMargins.top) }} / {{ formatMm(activeStationeryMargins.right) }} / {{ formatMm(activeStationeryMargins.bottom) }} / {{ formatMm(activeStationeryMargins.left) }} mm
+									</span>
+								</p>
 							</div>
 						</div>
 					</SectionCard>
