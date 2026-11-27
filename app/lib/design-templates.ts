@@ -96,7 +96,7 @@ function build(key: DesignTemplateKey): { margins: MarginsMm, items: DesignItem[
 		case "minimal":
 			return {
 				documentStyle: "minimal",
-				margins: margins(46, 22),
+				margins: margins(38, 22),
 				items: [
 					logo(18, 14, 12),
 					text(34, 16, 90, "{business_name}", style(14, INK)),

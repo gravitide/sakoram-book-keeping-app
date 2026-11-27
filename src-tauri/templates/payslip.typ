@@ -12,7 +12,7 @@
 #let cfg = layout-config(data)
 
 #set document(title: data.number, author: if data.business_name != none { data.business_name } else { () })
-#set page(..page-setup(data, margin: cfg.margin, footer: cfg.footer))
+#set page(..page-setup(data))
 #set text(font: resolve-font(data), size: cfg.text-size, lang: "en", number-width: "tabular")
 #set par(leading: cfg.leading, spacing: cfg.spacing)
 
@@ -93,7 +93,7 @@
 // A fixed 30% amount column is too narrow on paper smaller than A4 (A5:
 // "150,000.00" overran its cell), so there it sizes to its content instead.
 // Kept at 30% on A4 and wider so A4 output is unchanged.
-#let amount-col = if data.page.margin_scale < 1 { auto } else { 30% }
+#let amount-col = if data.page.paper == "a5" { auto } else { 30% }
 
 #grid(
   columns: (1fr, 1fr),
