@@ -7,7 +7,6 @@ import type { LetterRow } from "~/stores/letters";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { letterBodyToBlocks } from "./letter-body";
 import { buildPageSettings } from "./page-settings";
-import { buildFooterBlocks } from "./pdf-chrome";
 import { pdfThemeHex } from "./theme";
 
 export interface LetterPdfArgs {
@@ -26,7 +25,7 @@ export const buildLetterPdfPayload = ({ row, settings }: LetterPdfArgs) => ({
 	// A letter printed onto pre-printed paper gets the Pre-printed paper page
 	// block: page.chrome false (letter.typ draws no letterhead, page-setup
 	// drops the footer) and page.margins holds the blank bands.
-	page: buildPageSettings(settings, { preprinted: row.pre_printed === 1 }),
+	page: buildPageSettings(settings, { omitItems: row.pre_printed === 1 }),
 	theme_color: pdfThemeHex(settings),
 	font_family: settings?.pdf_font ?? "Akt",
 	business_name: settings?.business_name ?? null,
@@ -36,7 +35,5 @@ export const buildLetterPdfPayload = ({ row, settings }: LetterPdfArgs) => ({
 	// · address) so the letter footer matches the invoice/quote footer.
 	address_line1: settings?.address_line1 ?? null,
 	city: settings?.city ?? null,
-	logo_scale: settings?.pdf_logo_scale ?? 100,
-	footer_blocks: buildFooterBlocks(settings),
-	logo_path: settings?.pdf_header_logo_path ?? null
+	logo_path: settings?.logo_path ?? null
 });

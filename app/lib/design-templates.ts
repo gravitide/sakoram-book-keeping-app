@@ -126,9 +126,15 @@ function build(key: DesignTemplateKey): { margins: MarginsMm, items: DesignItem[
 	}
 }
 
-/** A fresh copy of a starter design (new item ids) for `paper`, and the Document style it sets (null = keep the current one). */
-export function designTemplate(key: DesignTemplateKey, paper: PaperSize): { design: PageDesign, documentStyle: PdfLayoutKey | null } {
-	const { margins: m, items, documentStyle } = build(key);
+/**
+ * A fresh copy of a starter design for `paper`, and the Document style it sets
+ * (null = keep the current one). `ids` makes the item ids — fresh random ones
+ * by default; page-settings.ts passes a fixed sequence for the never-chosen
+ * default so every render of it is identical.
+ */
+export function designTemplate(key: DesignTemplateKey, paper: PaperSize, ids: () => string = newItemId): { design: PageDesign, documentStyle: PdfLayoutKey | null } {
+	const { margins: m, items: built, documentStyle } = build(key);
+	const items = built.map((item) => ({ ...item, id: ids() }));
 	const a4: PageDesign = { version: 1, paper: "a4", margins: m, items };
 	return { design: scaleDesign(a4, paper), documentStyle };
 }

@@ -1,310 +1,132 @@
+import type { PageDesign } from "./page-design";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { describe, expect, it } from "vitest";
-import { buildLayoutAndPage, buildPageSettings, PAPER_SIZES } from "./page-settings";
+import { designTemplate } from "./design-templates";
+import { scaleDesign } from "./page-design";
+import { buildLayoutAndPage, buildPageSettings, effectiveDesign, PAPER_SIZES } from "./page-settings";
+import { pdfThemeHex } from "./theme";
 
-// A Built-in business whose stored Stationery holds Pre-printed paper bands
-// (top / bottom as given; sides 14 / 16) that only a pre-printed letter uses.
-const settings = (top: number, bottom: number, paper?: string) => ({
-	pdf_stationery_mode: "builtin",
-	pdf_stationery: JSON.stringify({ preprinted: { top, right: 14, bottom, left: 16 } }),
-	pdf_paper_size: paper
-}) as CompanySettingsRow;
+const STYLE = { font: "Inter", size: 9, bold: true, italic: false, color: "accent", align: "right" } as const;
 
-const BUILTIN_A4 = {
+const STORED: PageDesign = {
+	version: 1,
 	paper: "a4",
-	margin_scale: 1,
-	stationery: "builtin",
-	chrome: true,
-	margins: null,
-	page_numbers: true,
-	page_number_position: "footer",
-	allow_landscape: true,
-	background: null,
-	header_footer: null
+	margins: { top: 50, right: 18, bottom: 30, left: 18 },
+	items: [
+		{ type: "image", id: "logo00000001", x: 168, y: 12, w: 24, h: 24, pages: "every", src: { kind: "company_logo" }, guide: false },
+		{ type: "image", id: "artwork00001", x: 0, y: 0, w: 210, h: 297, pages: "first", src: { kind: "file", ext: "svg" }, guide: false },
+		{ type: "image", id: "emptyslot001", x: 0, y: 0, w: 50, h: 50, pages: "every", src: null, guide: false },
+		{ type: "image", id: "guidescan001", x: 0, y: 0, w: 210, h: 297, pages: "every", src: { kind: "file", ext: "png" }, guide: true },
+		{ type: "text", id: "name00000001", x: 18, y: 13, w: 140, pages: "every", text: "{business_name}\n{website}", style: STYLE },
+		{ type: "text", id: "emptytext001", x: 18, y: 30, w: 140, pages: "every", text: "{phone}", style: STYLE },
+		{ type: "page_number", id: "pageno000001", x: 142, y: 289, w: 50, pages: "every", format: "slash", hide_single: false, style: { ...STYLE, color: "#6b7280" } },
+		{ type: "line", id: "rule00000001", x: 18, y: 40, length: 174, vertical: false, thickness: 2, color: "accent", pages: "not_first" }
+	]
 };
 
-const onStationery = (mode: string, stationery: object | string | null = null) => ({
-	pdf_stationery_mode: mode,
-	pdf_stationery: typeof stationery === "string" || stationery === null ? stationery : JSON.stringify(stationery)
-}) as CompanySettingsRow;
+const settings = (over: Partial<CompanySettingsRow> = {}) => ({
+	business_name: "Gravitide",
+	website: "",
+	phone: "",
+	pdf_paper_size: "a4",
+	pdf_theme_color: "blue",
+	logo_path: "D:/Biz/logos/logo.png",
+	pdf_design: JSON.stringify(STORED),
+	...over
+}) as Partial<CompanySettingsRow>;
+
+const withoutIds = (d: PageDesign) => ({ ...d, items: d.items.map(({ id: _id, ...rest }) => rest) });
+
+describe("effectiveDesign", () => {
+	it("is the Classic template on the business's paper when none was chosen", () => {
+		const d = effectiveDesign(settings({ pdf_design: null, pdf_paper_size: "a5" }));
+		expect(withoutIds(d)).toEqual(withoutIds(designTemplate("classic", "a5").design));
+	});
+
+	it("gives the untouched default the same ids on every render", () => {
+		const s = settings({ pdf_design: null });
+		expect(effectiveDesign(s)).toEqual(effectiveDesign(s));
+	});
+
+	it("is Classic when the stored design can't be read", () => {
+		const d = effectiveDesign(settings({ pdf_design: "{broken" }));
+		expect(withoutIds(d)).toEqual(withoutIds(designTemplate("classic", "a4").design));
+	});
+
+	it("moves a stored design onto the business's current paper", () => {
+		expect(effectiveDesign(settings({ pdf_paper_size: "us-letter" }))).toEqual(scaleDesign(STORED, "us-letter"));
+	});
+});
 
 describe("buildPageSettings", () => {
-	it("lays every document out on A4 with the Layout's own margins by default", () => {
-		expect(buildPageSettings(settings(55, 20, "a4"))).toEqual(BUILTIN_A4);
+	const page = buildPageSettings(settings());
+
+	it("carries exactly the paper, the safe area and the printable items", () => {
+		expect(Object.keys(page).sort()).toEqual(["items", "margins", "paper"]);
+		expect(page.paper).toBe("a4");
+		expect(page.margins).toEqual(STORED.margins);
 	});
 
-	it("works before settings have loaded", () => {
-		expect(buildPageSettings(null)).toEqual(BUILTIN_A4);
+	it("leaves out empty image slots, guide-only images and text with nothing to print", () => {
+		expect(page.items.map((i) => i.id)).toEqual(["logo00000001", "artwork00001", "name00000001", "pageno000001", "rule00000001"]);
 	});
 
-	it("a letter on pre-printed paper reserves the business's Pre-printed paper bands even when the active mode is Built-in", () => {
-		expect(buildPageSettings(settings(60, 25), { preprinted: true })).toEqual({
-			paper: "a4",
-			margin_scale: 1,
-			stationery: "preprinted",
-			chrome: false,
-			margins: { top: 60, right: 14, bottom: 25, left: 16 },
-			page_numbers: true,
-			page_number_position: "safe_area",
-			allow_landscape: false,
-			background: null,
-			header_footer: null
+	it("names where each image comes from", () => {
+		expect(page.items[0]).toEqual({ type: "image", id: "logo00000001", x: 168, y: 12, w: 24, h: 24, pages: "every", src: "company_logo" });
+		expect(page.items[1]).toEqual({ type: "image", id: "artwork00001", x: 0, y: 0, w: 210, h: 297, pages: "first", src: "item", ext: "svg" });
+	});
+
+	it("fills text fields and resolves Accent to the business's PDF colour", () => {
+		const accent = pdfThemeHex(settings());
+		expect(page.items[2]).toEqual({
+			type: "text",
+			id: "name00000001",
+			x: 18,
+			y: 13,
+			w: 140,
+			pages: "every",
+			lines: ["Gravitide"],
+			font: "Inter",
+			size: 9,
+			bold: true,
+			italic: false,
+			color: accent,
+			align: "right"
 		});
+		expect(page.items[3]).toMatchObject({ type: "page_number", format: "slash", hide_single: false, color: "#6b7280" });
+		expect(page.items[4]).toEqual({ type: "line", id: "rule00000001", x: 18, y: 40, length: 174, vertical: false, thickness: 2, color: accent, pages: "not_first" });
 	});
 
-	it("a letter on pre-printed paper uses the same bands as the business's Pre-printed paper mode", () => {
-		const business = { ...settings(40, 30), pdf_stationery_mode: "preprinted" } as CompanySettingsRow;
-		expect(buildPageSettings(business, { preprinted: true })).toEqual(buildPageSettings(business));
+	it("prints no design items on pre-printed paper but keeps the safe area", () => {
+		const preprinted = buildPageSettings(settings(), { omitItems: true });
+		expect(preprinted).toEqual({ paper: "a4", margins: STORED.margins, items: [] });
 	});
 
-	it("a letter that uses the stationery renders like every other document, whatever the mode", () => {
-		const business = { ...settings(40, 30), pdf_stationery_mode: "preprinted" } as CompanySettingsRow;
-		expect(buildPageSettings(business, { preprinted: false })).toEqual(buildPageSettings(business));
-		expect(buildPageSettings(settings(40, 30), { preprinted: false })).toEqual(buildPageSettings(settings(40, 30)));
-	});
-
-	it("falls back to 55 mm / 20 mm bands when settings are missing", () => {
-		expect(buildPageSettings(null, { preprinted: true }).margins).toEqual({ top: 55, right: 18, bottom: 20, left: 18 });
-	});
-
-	it("ignores the business's pre-printed bands when the document is not on pre-printed paper", () => {
-		expect(buildPageSettings(settings(60, 25), { preprinted: false })).toEqual(BUILTIN_A4);
-	});
-
-	it("numbers the pages of every document, pre-printed paper included (templates print them only past one page)", () => {
-		expect(buildPageSettings(null).page_numbers).toBe(true);
-		expect(buildPageSettings(settings(60, 25), { preprinted: true }).page_numbers).toBe(true);
-		expect(buildPageSettings(onStationery("preprinted")).page_numbers).toBe(true);
+	it("works without settings at all", () => {
+		const bare = buildPageSettings(null);
+		expect(bare.paper).toBe("a4");
+		expect(bare.items.some((i) => i.type === "image")).toBe(false);
 	});
 });
 
-describe("stationery mode", () => {
-	it("built-in: the Layout's margins apply and the app draws its own identity", () => {
-		const page = buildPageSettings(onStationery("builtin", { preprinted: { top: 40, right: 10, bottom: 30, left: 10 } }));
-		expect(page).toMatchObject({ stationery: "builtin", chrome: true, margins: null });
-	});
-
-	it("pre-printed paper: the Stationery's four margins bound the Safe area", () => {
-		const page = buildPageSettings(onStationery("preprinted", { preprinted: { top: 40, right: 10, bottom: 30, left: 12 } }));
-		expect(page.margins).toEqual({ top: 40, right: 10, bottom: 30, left: 12 });
-	});
-
-	it("pre-printed paper: nothing of the built-in identity is drawn (no logo, header text, business block or footer)", () => {
-		const page = buildPageSettings(onStationery("preprinted"));
-		expect({ stationery: page.stationery, chrome: page.chrome }).toEqual({ stationery: "preprinted", chrome: false });
-	});
-
-	it("pre-printed paper with nothing stored reserves today's 55 mm / 20 mm letter bands", () => {
-		expect(buildPageSettings(onStationery("preprinted", null)).margins).toEqual({ top: 55, right: 18, bottom: 20, left: 18 });
-	});
-
-	it("pre-printed paper with malformed stored JSON still reserves the default bands", () => {
-		expect(buildPageSettings(onStationery("preprinted", "{oops")).margins).toEqual({ top: 55, right: 18, bottom: 20, left: 18 });
-	});
-
-	it("an unknown mode falls back to Built-in", () => {
-		expect(buildPageSettings(onStationery("letterhead"))).toMatchObject({ stationery: "builtin", chrome: true, margins: null, background: null, header_footer: null });
-	});
-});
-
-describe("full-page background", () => {
-	const withArtwork = { background: { ext: "pdf", paper: "a4", margins: { top: 50, right: 15, bottom: 30, left: 17 } } };
-
-	it("draws the artwork behind every page and bounds the Safe area with the background's own margins", () => {
-		expect(buildPageSettings(onStationery("background", withArtwork))).toEqual({
-			paper: "a4",
-			margin_scale: 1,
-			stationery: "background",
-			chrome: false,
-			margins: { top: 50, right: 15, bottom: 30, left: 17 },
-			page_numbers: true,
-			page_number_position: "safe_area",
-			allow_landscape: false,
-			background: { ext: "pdf" },
-			header_footer: null
-		});
-	});
-
-	it("still owns the page when no artwork is uploaded yet: its margins apply, nothing is drawn behind", () => {
-		expect(buildPageSettings(onStationery("background", null))).toMatchObject({
-			stationery: "background",
-			chrome: false,
-			margins: { top: 40, right: 18, bottom: 25, left: 18 },
-			background: null,
-			header_footer: null
-		});
-	});
-
-	it("never scales its margins with the paper", () => {
-		expect(buildPageSettings({ ...onStationery("background", withArtwork), pdf_paper_size: "a5" } as CompanySettingsRow).margins).toEqual({ top: 50, right: 15, bottom: 30, left: 17 });
-	});
-
-	it("a letter set to pre-printed paper reserves the Pre-printed bands and draws no background", () => {
-		const both = onStationery("background", { ...withArtwork, preprinted: { top: 60, right: 14, bottom: 25, left: 16 } });
-		expect(buildPageSettings(both, { preprinted: true })).toMatchObject({
-			stationery: "preprinted",
-			margins: { top: 60, right: 14, bottom: 25, left: 16 },
-			background: null,
-			header_footer: null
-		});
-	});
-
-	it("pre-printed paper ignores a stored background", () => {
-		expect(buildPageSettings(onStationery("preprinted", withArtwork)).background).toBeNull();
-	});
-});
-
-describe("page number position", () => {
-	it("built-in keeps the number just above the footer, in the bottom band", () => {
-		expect(buildPageSettings(onStationery("builtin")).page_number_position).toBe("footer");
-	});
-
-	it("pre-printed paper puts the number inside the Safe area, so it never prints over the paper's own footer", () => {
-		expect(buildPageSettings(onStationery("preprinted")).page_number_position).toBe("safe_area");
-	});
-
-	it("a letter on pre-printed paper also keeps its number inside the Safe area", () => {
-		expect(buildPageSettings(settings(60, 25), { preprinted: true }).page_number_position).toBe("safe_area");
-	});
-});
-
-describe("paper size", () => {
-	it.each(["a5", "us-letter", "us-legal"])("lays the page out on the business's paper (%s)", (paper) => {
-		expect(buildPageSettings(settings(55, 20, paper)).paper).toBe(paper);
-	});
-
-	it("falls back to A4 for a value it doesn't know", () => {
-		expect(buildPageSettings(settings(55, 20, "tabloid")).paper).toBe("a4");
-	});
-
-	// Built-in Layout margins scale with paper width relative to A4's 210 mm;
-	// type sizes are not scaled at all (they live in the templates, in points).
-	it.each([
-		["a4", 18, 18],
-		["a5", 18, 12.69], // 148 mm wide: the spec's "18 mm on A4 ≈ 12.7 mm on A5"
-		["us-letter", 18, 18.51], // 8.5 in = 215.9 mm
-		["us-legal", 18, 18.51] // same width as Letter
-	])("scales a %s Layout margin of %d mm to about %d mm", (paper, a4Mm, expectedMm) => {
-		const { margin_scale } = buildPageSettings(settings(55, 20, paper as string));
-		expect((a4Mm as number) * margin_scale).toBeCloseTo(expectedMm as number, 2);
-	});
-
-	it("never scales the Stationery's own margins — pre-printed bands stay as the business set them on A5", () => {
-		expect(buildPageSettings(settings(60, 25, "a5"), { preprinted: true }).margins).toEqual({ top: 60, right: 14, bottom: 25, left: 16 });
-	});
-
-	it("offers exactly the four supported sheets, A4 first", () => {
-		expect(PAPER_SIZES.map((p) => p.key)).toEqual(["a4", "a5", "us-letter", "us-legal"]);
-	});
-});
-
-describe("orientation", () => {
-	it("built-in lets a wide document (the statement) turn its sheet landscape", () => {
-		expect(buildPageSettings(onStationery("builtin")).allow_landscape).toBe(true);
-	});
-
-	it("pre-printed paper keeps every document portrait: the paper is printed portrait", () => {
-		expect(buildPageSettings(onStationery("preprinted")).allow_landscape).toBe(false);
-	});
-
-	it("a full-page background keeps every document portrait, so the artwork isn't cropped to a landscape band", () => {
-		expect(buildPageSettings(onStationery("background", { background: { ext: "svg" } })).allow_landscape).toBe(false);
-	});
-
-	it("a letter on pre-printed paper stays portrait under a Built-in business", () => {
-		expect(buildPageSettings(settings(60, 25), { preprinted: true }).allow_landscape).toBe(false);
-	});
-});
-
-describe("header & footer images", () => {
-	const header = { ext: "svg", aspect: 7, rect: { x: 0, y: 0, w: 210, h: 30 }, paper: "a4", crop: null, live_text: false };
-	const footer = { ext: "png", aspect: 14, rect: { x: 20, y: 282, w: 210, h: 15 }, paper: "a4", crop: null, live_text: false };
-	const both = { header_footer: { header, footer, margins: { top: 40, right: 15, bottom: 12, left: 15 } } };
-
-	it("draws both images at their stored place on every page and keeps the content out of their bands", () => {
-		expect(buildPageSettings(onStationery("header_footer", both))).toEqual({
-			paper: "a4",
-			margin_scale: 1,
-			stationery: "header_footer",
-			chrome: false,
-			// The top band already clears the header (30 + 4); the bottom one is
-			// pushed out of the footer (297 − 282 + 4 = 19).
-			margins: { top: 40, right: 15, bottom: 19, left: 15 },
-			page_numbers: true,
-			page_number_position: "safe_area",
-			allow_landscape: false,
-			background: null,
-			header_footer: {
-				header: { ext: "svg", x: 0, y: 0, w: 210, h: 30 },
-				footer: { ext: "png", x: 20, y: 282, w: 210, h: 15 }
-			}
-		});
-	});
-
-	it("with only one image, only that one is drawn", () => {
-		const one = { header_footer: { header: null, footer } };
-		expect(buildPageSettings(onStationery("header_footer", one)).header_footer).toEqual({ header: null, footer: { ext: "png", x: 20, y: 282, w: 210, h: 15 } });
-	});
-
-	it("still owns the page before any image is added: its own margins, nothing drawn", () => {
-		expect(buildPageSettings(onStationery("header_footer", null))).toMatchObject({
-			stationery: "header_footer",
-			chrome: false,
-			margins: { top: 20, right: 18, bottom: 20, left: 18 },
-			background: null,
-			header_footer: null
-		});
-	});
-
-	it("keeps every document portrait", () => {
-		expect(buildPageSettings(onStationery("header_footer", both)).allow_landscape).toBe(false);
-	});
-
-	it("a letter set to pre-printed paper reserves the Pre-printed bands and draws neither image", () => {
-		expect(buildPageSettings(onStationery("header_footer", both), { preprinted: true })).toMatchObject({
-			stationery: "preprinted",
-			margins: { top: 55, right: 18, bottom: 20, left: 18 },
-			header_footer: null
-		});
-	});
-
-	it("other modes never carry the images", () => {
-		expect(buildPageSettings(onStationery("background", both)).header_footer).toBeNull();
-		expect(buildPageSettings(onStationery("builtin", both)).header_footer).toBeNull();
-	});
-});
-
-// ADR 0001 amendment: Layout is a Built-in choice only.
 describe("buildLayoutAndPage", () => {
-	const withLayout = (mode: string, layout: string) => ({ ...onStationery(mode), pdf_layout: layout }) as CompanySettingsRow;
-
-	it("renders the business's own Layout under Built-in stationery", () => {
-		expect(buildLayoutAndPage(withLayout("builtin", "compact")).layout).toBe("compact");
-		expect(buildLayoutAndPage(withLayout("builtin", "minimal")).layout).toBe("minimal");
-	});
-
-	it.each(["background", "header_footer", "preprinted"])("renders Classic under %s, whatever Layout is stored", (mode) => {
-		for (const layout of ["classic", "modern", "minimal", "compact"]) {
-			expect(buildLayoutAndPage(withLayout(mode, layout)).layout).toBe("classic");
+	it("keeps the stored Document style whatever the design", () => {
+		for (const pdf_layout of ["classic", "modern", "minimal", "compact"]) {
+			expect(buildLayoutAndPage(settings({ pdf_layout })).layout).toBe(pdf_layout);
 		}
 	});
 
-	it("a letter on pre-printed paper renders Classic even for a Built-in business", () => {
-		expect(buildLayoutAndPage(withLayout("builtin", "modern"), { preprinted: true }).layout).toBe("classic");
+	it("lets the caller pick the style (the sample preview)", () => {
+		expect(buildLayoutAndPage(settings({ pdf_layout: "classic" }), undefined, "minimal").layout).toBe("minimal");
 	});
 
-	it("an explicit Layout (the settings page's unsaved pick) follows the same rule", () => {
-		expect(buildLayoutAndPage(withLayout("builtin", "classic"), undefined, "modern").layout).toBe("modern");
-		expect(buildLayoutAndPage(withLayout("preprinted", "classic"), undefined, "modern").layout).toBe("classic");
+	it("falls back to Classic for an unknown style", () => {
+		expect(buildLayoutAndPage(settings({ pdf_layout: "letterhead" })).layout).toBe("classic");
 	});
+});
 
-	it("falls back to Classic for an unknown or missing Layout", () => {
-		expect(buildLayoutAndPage(withLayout("builtin", "letterhead")).layout).toBe("classic");
-		expect(buildLayoutAndPage(null).layout).toBe("classic");
-	});
-
-	it("carries the page block buildPageSettings builds", () => {
-		const s = withLayout("preprinted", "modern");
-		expect(buildLayoutAndPage(s, { preprinted: true }).page).toEqual(buildPageSettings(s, { preprinted: true }));
+describe("paper sizes", () => {
+	it("lists the four sheets, A4 first", () => {
+		expect(PAPER_SIZES.map((p) => p.key)).toEqual(["a4", "a5", "us-letter", "us-legal"]);
 	});
 });

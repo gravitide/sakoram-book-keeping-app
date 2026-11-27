@@ -10,8 +10,6 @@ import type { PdfLayoutKey } from "./pdf-layouts";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { computeLineTotals, formatMoney, formatQty } from "./money";
 import { buildLayoutAndPage, resolvePaperSize } from "./page-settings";
-import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
-import { layoutMarginsMm, safeAreaRect } from "./stationery-geometry";
 import { pdfThemeHex } from "./theme";
 
 interface SampleCurrency {
@@ -36,7 +34,7 @@ const SAMPLE_FORMATTED = {
 
 function base(settings: CompanySettingsRow | null, currency: SampleCurrency, layoutKey: PdfLayoutKey) {
 	return {
-		// The picked Layout under Built-in, Classic under any other Stationery.
+		// The picked Document style, on the business's page design.
 		...buildLayoutAndPage(settings, undefined, layoutKey),
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
@@ -61,10 +59,7 @@ function base(settings: CompanySettingsRow | null, currency: SampleCurrency, lay
 		phone: settings?.phone ?? "+94 11 234 5678",
 		address_line1: settings?.address_line1 ?? "42 Galle Road",
 		city: settings?.city ?? "Colombo",
-		logo_scale: settings?.pdf_logo_scale ?? 100,
-		header_blocks: buildHeaderBlocks(settings),
-		footer_blocks: buildFooterBlocks(settings),
-		logo_path: settings?.pdf_header_logo_path ?? null,
+		logo_path: settings?.logo_path ?? null,
 		bank: {
 			bank_account_number: "0011 2233 4455",
 			bank_account_name: settings?.business_name ?? "Your Business",
@@ -115,19 +110,14 @@ const SAMPLE_FIXED_MM = 175;
 const SAMPLE_LINE_MM = 9;
 const SAMPLE_MAX_LINES = 80;
 
-/**
- * How tall the Safe area is on one page of the business's paper (mm): the
- * Stationery's margins, or under Built-in the Layout's own.
- */
-function safeAreaHeightMm(page: PageSettings, layoutKey: PdfLayoutKey): number {
-	const paper = resolvePaperSize(page.paper);
-	const margins = page.margins ?? layoutMarginsMm(layoutKey, paper);
-	return safeAreaRect(paper, margins).h;
+/** How tall the design's safe area is on one page of the business's paper (mm). */
+function safeAreaHeightMm(page: PageSettings): number {
+	return resolvePaperSize(page.paper).heightMm - page.margins.top - page.margins.bottom;
 }
 
 /** Lines that put the sample at about one and a half pages. */
-function previewLineCount(page: PageSettings, layoutKey: PdfLayoutKey): number {
-	const n = Math.round((1.5 * safeAreaHeightMm(page, layoutKey) - SAMPLE_FIXED_MM) / SAMPLE_LINE_MM);
+function previewLineCount(page: PageSettings): number {
+	const n = Math.round((1.5 * safeAreaHeightMm(page) - SAMPLE_FIXED_MM) / SAMPLE_LINE_MM);
 	return Math.min(SAMPLE_MAX_LINES, Math.max(1, n));
 }
 
@@ -154,7 +144,7 @@ const previewLines = (count: number) => Array.from({ length: count }, (_, i) => 
  */
 export function sampleStationeryPreviewPayload(settings: CompanySettingsRow | null, currency: SampleCurrency, layoutKey: PdfLayoutKey) {
 	const common = base(settings, currency, layoutKey);
-	const lines = previewLines(previewLineCount(common.page, common.layout));
+	const lines = previewLines(previewLineCount(common.page));
 	const noSym = (c: number) => formatMoney(c, { code: currency.code, withSymbol: false });
 	const sym = (c: number) => `${currency.symbol} ${noSym(c)}`;
 	const subtotal = lines.reduce((s, l) => s + l.subtotal, 0);

@@ -10,7 +10,6 @@ import type { BankSnapshot, ClientSnapshot } from "~/stores/quotes";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR, formatQty, formatRate } from "./money";
 import { buildLayoutAndPage } from "./page-settings";
-import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
 import { richTextToBlocks } from "./rich-text";
 import { pdfThemeHex } from "./theme";
 
@@ -106,10 +105,7 @@ export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, pa
 		phone: settings?.phone ?? null,
 		address_line1: settings?.address_line1 ?? null,
 		city: settings?.city ?? null,
-		logo_scale: settings?.pdf_logo_scale ?? 100,
-		header_blocks: buildHeaderBlocks(settings),
-		footer_blocks: buildFooterBlocks(settings),
-		logo_path: settings?.pdf_header_logo_path ?? null,
+		logo_path: settings?.logo_path ?? null,
 		bank,
 		lines: lines.map((l) => ({
 			item_label: l.item_label,

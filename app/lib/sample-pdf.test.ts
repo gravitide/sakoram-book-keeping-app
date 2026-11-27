@@ -24,40 +24,39 @@ describe("sampleInvoicePayload", () => {
 	});
 });
 
+/** A stored design with just this safe area (no items). */
+const designWith = (top: number, bottom: number) => JSON.stringify({ version: 1, paper: "a4", margins: { top, right: 18, bottom, left: 18 }, items: [] });
+
 describe("sampleStationeryPreviewPayload", () => {
-	it("is an invoice on the business's own Stationery", () => {
-		const p = sampleStationeryPreviewPayload(on({ pdf_stationery_mode: "preprinted", pdf_paper_size: "a5" }), currency, "compact");
+	it("is an invoice on the business's own paper and design", () => {
+		const p = sampleStationeryPreviewPayload(on({ pdf_paper_size: "a5", pdf_design: designWith(30, 20) }), currency, "compact");
 		expect(p.kind).toBe("invoice");
 		expect(p.page.paper).toBe("a5");
-		expect(p.page.stationery).toBe("preprinted");
+		expect(p.page.items).toEqual([]);
 	});
 
-	it("renders the picked Layout under Built-in and Classic under any other Stationery", () => {
-		expect(sampleStationeryPreviewPayload(on({ pdf_stationery_mode: "builtin" }), currency, "compact").layout).toBe("compact");
-		expect(sampleStationeryPreviewPayload(on({ pdf_stationery_mode: "preprinted" }), currency, "compact").layout).toBe("classic");
-		expect(sampleInvoicePayload(on({ pdf_stationery_mode: "background" }), currency, "modern").layout).toBe("classic");
+	it("renders the picked Document style whatever the design", () => {
+		expect(sampleStationeryPreviewPayload(on({ pdf_design: designWith(55, 20) }), currency, "compact").layout).toBe("compact");
+		expect(sampleInvoicePayload(on({}), currency, "modern").layout).toBe("modern");
 	});
 
-	it("runs to about 25 lines on A4 with Built-in stationery", () => {
+	it("runs to about 25 lines on A4 with the default design", () => {
 		const n = sampleStationeryPreviewPayload(on({}), currency, "classic").lines.length;
-		expect(n).toBeGreaterThanOrEqual(20);
-		expect(n).toBeLessThanOrEqual(32);
+		// Calibrated against real two-page renders by verify:pdf (SAMPLE_FIXED_MM).
+		expect(n).toBeGreaterThanOrEqual(14);
+		expect(n).toBeLessThanOrEqual(36);
 	});
 
-	it("adds lines on a taller Safe area and drops them on a shorter one, so it stays two pages", () => {
+	it("adds lines on a taller safe area and drops them on a shorter one, so it stays two pages", () => {
 		const lines = (overrides: Partial<CompanySettingsRow>) => sampleStationeryPreviewPayload(on(overrides), currency, "classic").lines.length;
 		const a4 = lines({ pdf_paper_size: "a4" });
 		expect(lines({ pdf_paper_size: "us-legal" })).toBeGreaterThan(a4);
 		expect(lines({ pdf_paper_size: "a5" })).toBeLessThan(a4);
-		const deepBands = JSON.stringify({ preprinted: { top: 80, right: 18, bottom: 40, left: 18 } });
-		const shallowBands = JSON.stringify({ preprinted: { top: 10, right: 18, bottom: 10, left: 18 } });
-		expect(lines({ pdf_stationery_mode: "preprinted", pdf_stationery: deepBands }))
-			.toBeLessThan(lines({ pdf_stationery_mode: "preprinted", pdf_stationery: shallowBands }));
+		expect(lines({ pdf_design: designWith(80, 40) })).toBeLessThan(lines({ pdf_design: designWith(10, 10) }));
 	});
 
-	it("always has at least one line, however deep the bands", () => {
-		const bands = JSON.stringify({ preprinted: { top: 150, right: 18, bottom: 150, left: 18 } });
-		const p = sampleStationeryPreviewPayload(on({ pdf_stationery_mode: "preprinted", pdf_stationery: bands, pdf_paper_size: "a5" }), currency, "classic");
+	it("always has at least one line, however deep the margins", () => {
+		const p = sampleStationeryPreviewPayload(on({ pdf_design: designWith(140, 140), pdf_paper_size: "a5" }), currency, "classic");
 		expect(p.lines.length).toBeGreaterThanOrEqual(1);
 	});
 

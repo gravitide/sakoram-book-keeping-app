@@ -9,7 +9,6 @@ import type { BankSnapshot, ClientSnapshot, QuoteLineRow, QuoteRow } from "~/sto
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR, formatQty, formatRate } from "./money";
 import { buildLayoutAndPage } from "./page-settings";
-import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
 import { richTextToBlocks } from "./rich-text";
 import { pdfThemeHex } from "./theme";
 
@@ -88,10 +87,7 @@ export const buildQuotePdfPayload = ({ row: q, lines, settings, currency }: Quot
 		phone: settings?.phone ?? null,
 		address_line1: settings?.address_line1 ?? null,
 		city: settings?.city ?? null,
-		logo_scale: settings?.pdf_logo_scale ?? 100,
-		header_blocks: buildHeaderBlocks(settings),
-		footer_blocks: buildFooterBlocks(settings),
-		logo_path: settings?.pdf_header_logo_path ?? null,
+		logo_path: settings?.logo_path ?? null,
 		// Bank block is opt-in per quote (migration 0046). Off → no payment
 		// details on the PDF regardless of which bank was snapshotted.
 		bank: q.include_bank_details ? bank : null,
