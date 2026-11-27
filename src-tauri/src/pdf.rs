@@ -239,15 +239,8 @@ pub(crate) fn stage_background(data: &mut Value, business_folder: Option<&Path>,
 		return Ok(());
 	}
 	let ext = bg.get("ext").and_then(|v| v.as_str()).unwrap_or("").to_string();
-	let plain = crate::tenants::is_plain_ext(&ext);
-	let src = business_folder
-		.filter(|_| plain)
-		.map(|f| f.join(crate::tenants::STATIONERY_DIR).join(format!("background.{ext}")))
-		.filter(|p| p.is_file());
-	match src {
-		Some(src) => {
-			let name = format!("stationery-background.{ext}");
-			std::fs::copy(&src, work_dir.join(&name))?;
+	match stage_stationery_file("background", &ext, business_folder, work_dir)? {
+		Some(name) => {
 			if let Some(obj) = bg.as_object_mut() {
 				obj.insert("file".into(), Value::String(name));
 			}
