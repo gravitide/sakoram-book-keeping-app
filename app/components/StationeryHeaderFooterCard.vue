@@ -2,106 +2,116 @@
 	<SectionCard
 		icon="i-lucide-panels-top-bottom"
 		title="Header & footer images"
-		subtitle="Two images of your own, one for the top of the page and one for the bottom. Each lands at full page width, flush to its edge; move and resize it in the Stationery editor. The content always stays 4 mm clear of them."
+		subtitle="One image for the top of the page and one for the bottom, each at full width against its edge. Move and resize them in the Stationery editor; the content stays 4 mm clear."
 	>
 		<p v-if="locked" class="mb-4 text-xs text-(--ui-warning)">
 			{{ locked }} Images save the moment they change, placed on the paper picked now.
 		</p>
-		<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-			<div v-for="slot in HEADER_FOOTER_SLOTS" :key="slot" class="space-y-3">
-				<div class="text-sm font-medium">
-					{{ SLOT_LABEL[slot] }}
-				</div>
-				<!-- The image as uploaded, on white: it previews against the paper. -->
-				<div
-					class="relative h-24 rounded-md border-2 border-dashed overflow-hidden bg-white transition"
-					:class="locked ? 'border-(--ui-border-accented) cursor-not-allowed opacity-60' : dragOver === slot ? 'border-(--ui-primary) scale-[1.01] cursor-pointer' : 'border-(--ui-border-accented) hover:border-(--ui-primary)/60 cursor-pointer'"
-					:aria-disabled="locked ? true : undefined"
-					role="button"
-					tabindex="0"
-					:aria-label="`Upload a ${slot} image`"
-					@click="pick(slot)"
-					@keydown.enter.prevent="pick(slot)"
-					@keydown.space.prevent="pick(slot)"
-					@dragover.prevent="dragOver = locked ? null : slot"
-					@dragenter.prevent="dragOver = locked ? null : slot"
-					@dragleave.prevent="dragOver = null"
-					@drop.prevent="onDrop(slot, $event)"
-				>
-					<img
-						v-if="previews[slot].url.value"
-						:src="previews[slot].url.value!"
-						:alt="SLOT_LABEL[slot]"
-						class="absolute inset-0 w-full h-full object-contain p-1"
-					>
+		<!-- Same shape as the Full-page background card: the artwork on the left
+			(the header image above the footer image, as on the page), and the
+			Safe area and colour (the page's slot) as labelled groups on the
+			right. Below md they stack. -->
+		<div class="grid grid-cols-1 md:grid-cols-[18rem_minmax(0,1fr)] gap-x-8 gap-y-6 items-start">
+			<div class="flex flex-col gap-6 min-w-0">
+				<div v-for="slot in HEADER_FOOTER_SLOTS" :key="slot" class="space-y-3">
+					<div class="text-sm font-medium">
+						{{ SLOT_LABEL[slot] }}
+					</div>
+					<!-- The image as uploaded, on white: it previews against the paper. -->
 					<div
-						v-else-if="images[slot]"
-						class="absolute inset-0 flex flex-col items-center justify-center gap-1 text-zinc-500"
+						class="relative h-24 rounded-md overflow-hidden bg-white transition"
+						:class="[
+							images[slot] ? 'border' : 'border-2 border-dashed',
+							locked ? 'border-(--ui-border-accented) cursor-not-allowed opacity-60' : dragOver === slot ? 'border-(--ui-primary) scale-[1.01] cursor-pointer' : 'border-(--ui-border-accented) hover:border-(--ui-primary)/60 cursor-pointer'
+						]"
+						:aria-disabled="locked ? true : undefined"
+						role="button"
+						tabindex="0"
+						:aria-label="`Upload a ${slot} image`"
+						@click="pick(slot)"
+						@keydown.enter.prevent="pick(slot)"
+						@keydown.space.prevent="pick(slot)"
+						@dragover.prevent="dragOver = locked ? null : slot"
+						@dragenter.prevent="dragOver = locked ? null : slot"
+						@dragleave.prevent="dragOver = null"
+						@drop.prevent="onDrop(slot, $event)"
 					>
-						<UIcon :name="images[slot]!.ext === 'pdf' ? 'i-lucide-file-text' : 'i-lucide-image'" class="size-6" />
-						<span class="text-[11px]">{{ images[slot]!.ext === "pdf" ? "PDF image (first page)" : "Image" }}</span>
+						<img
+							v-if="previews[slot].url.value"
+							:src="previews[slot].url.value!"
+							:alt="SLOT_LABEL[slot]"
+							class="absolute inset-0 w-full h-full object-contain p-1"
+						>
+						<div
+							v-else-if="images[slot]"
+							class="absolute inset-0 flex flex-col items-center justify-center gap-1 text-zinc-500"
+						>
+							<UIcon :name="images[slot]!.ext === 'pdf' ? 'i-lucide-file-text' : 'i-lucide-image'" class="size-6" />
+							<span class="text-[11px]">{{ images[slot]!.ext === "pdf" ? "PDF image (first page)" : "Image" }}</span>
+						</div>
+						<div
+							v-else
+							class="absolute inset-0 flex flex-col items-center justify-center gap-1 text-zinc-400 px-3 text-center"
+						>
+							<UIcon name="i-lucide-upload" class="size-5" />
+							<span class="text-[11px]">Drop an SVG, PDF, PNG or JPEG, or click to choose</span>
+						</div>
+						<div v-if="busy === slot" class="absolute inset-0 bg-white/70 flex items-center justify-center">
+							<UIcon name="i-lucide-loader-circle" class="size-6 animate-spin text-zinc-500" />
+						</div>
 					</div>
-					<div
-						v-else
-						class="absolute inset-0 flex flex-col items-center justify-center gap-1 text-zinc-400 px-3 text-center"
-					>
-						<UIcon name="i-lucide-upload" class="size-5" />
-						<span class="text-[11px]">Drop an SVG, PDF, PNG or JPEG, or click to choose</span>
-					</div>
-					<div v-if="busy === slot" class="absolute inset-0 bg-white/70 flex items-center justify-center">
-						<UIcon name="i-lucide-loader-circle" class="size-6 animate-spin text-zinc-500" />
-					</div>
-				</div>
 
-				<div class="flex flex-wrap gap-2">
-					<UButton icon="i-lucide-upload" size="sm" variant="soft" :loading="busy === slot" :disabled="!!locked" @click="pick(slot)">
-						{{ images[slot] ? "Replace" : "Upload" }}
-					</UButton>
-					<UButton
-						v-if="images[slot] && isRasterArtwork(images[slot]!.ext)"
-						icon="i-lucide-crop"
-						size="sm"
-						variant="soft"
-						color="neutral"
-						:disabled="busy !== null || !!locked"
-						@click="openRecrop(slot)"
-					>
-						Crop
-					</UButton>
-					<UButton
-						v-if="images[slot]"
-						icon="i-lucide-trash-2"
-						size="sm"
-						variant="soft"
-						color="error"
-						:disabled="busy !== null || !!locked"
-						@click="remove(slot)"
-					>
-						Remove
-					</UButton>
-				</div>
+					<div class="flex flex-wrap gap-2">
+						<UButton icon="i-lucide-upload" size="sm" variant="soft" :loading="busy === slot" :disabled="!!locked" @click="pick(slot)">
+							{{ images[slot] ? "Replace" : "Upload" }}
+						</UButton>
+						<UButton
+							v-if="images[slot] && isRasterArtwork(images[slot]!.ext)"
+							icon="i-lucide-crop"
+							size="sm"
+							variant="soft"
+							color="neutral"
+							:disabled="busy !== null || !!locked"
+							@click="openRecrop(slot)"
+						>
+							Crop
+						</UButton>
+						<UButton
+							v-if="images[slot]"
+							icon="i-lucide-trash-2"
+							size="sm"
+							variant="soft"
+							color="error"
+							:disabled="busy !== null || !!locked"
+							@click="remove(slot)"
+						>
+							Remove
+						</UButton>
+					</div>
 
-				<p v-if="!images[slot]" class="text-xs text-(--ui-text-muted)">
-					No {{ slot }} image — its Reserved band is just your margin.
-				</p>
-				<p v-else-if="review?.[slot]" class="text-xs text-(--ui-warning)">
-					Placed on {{ resolvePaperSize(review[slot]!).label }} — it keeps its size on {{ paperInfo.label }} and was moved onto the page. Check it in the Stationery editor (Apply keeps it).
-				</p>
-				<UAlert
-					v-if="images[slot]?.ext === 'svg' && images[slot]!.live_text"
-					color="warning"
-					variant="subtle"
-					icon="i-lucide-type"
-					title="Convert the text to outlines"
-					description="This SVG still contains live text. The PDF uses only Sakoram's bundled fonts, so its lettering may come out in a different typeface. Convert text to outlines in your design app and upload it again."
-				/>
+					<p v-if="!images[slot]" class="text-xs text-(--ui-text-muted)">
+						No {{ slot }} image — its Reserved band is just your margin.
+					</p>
+					<p v-else-if="review?.[slot]" class="text-xs text-(--ui-warning)">
+						Placed on {{ resolvePaperSize(review[slot]!).label }} — it keeps its size on {{ paperInfo.label }} and was moved onto the page. Check it in the Stationery editor (Apply keeps it).
+					</p>
+					<UAlert
+						v-if="images[slot]?.ext === 'svg' && images[slot]!.live_text"
+						color="warning"
+						variant="subtle"
+						icon="i-lucide-type"
+						title="Convert the text to outlines"
+						description="This SVG still contains live text. The PDF uses only Sakoram's bundled fonts, so its lettering may come out in a different typeface. Convert text to outlines in your design app and upload it again."
+					/>
+				</div>
 			</div>
-		</div>
 
-		<!-- The page's own controls for this mode: the way into the Stationery
-			editor (the Safe area) and the PDF colour. -->
-		<div v-if="$slots.default" class="pt-4 border-t border-(--ui-border) space-y-4">
-			<slot />
+			<!-- The page's own controls for this mode, beside the images they
+				frame: the way into the Stationery editor (the Safe area) and the
+				PDF colour. -->
+			<div v-if="$slots.default" class="flex flex-col gap-6 min-w-0">
+				<slot />
+			</div>
 		</div>
 
 		<input

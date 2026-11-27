@@ -411,6 +411,7 @@
 								@placed="onImagePlaced"
 							>
 								<StationeryAdjustRow
+									heading="Safe area"
 									label="Adjust margins &amp; placement"
 									:summary="safeAreaSummary(activeStationeryMargins)"
 									summary-title="Top / right / bottom / left"
