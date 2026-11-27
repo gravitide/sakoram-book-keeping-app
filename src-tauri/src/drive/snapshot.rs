@@ -129,7 +129,7 @@ fn add_file(zip: &mut zip::ZipWriter<std::fs::File>, name: &str, src: &Path) -> 
 	zip.write_all(&bytes).map_err(|e| e.to_string())
 }
 
-/// Snapshot zip = db entries + `business.json` + `logos/*` + `stationery/*` + root `pdf-header*`
+/// Snapshot zip = db entries + `business.json` + `logos/*` + `stationery/*`
 /// + the manifest. Attachments are NOT included; they upload individually.
 pub fn build_zip(folder: &Path, db_entries: &[(String, PathBuf)], manifest: &Manifest, out: &Path) -> Result<(), String> {
 	let file = std::fs::File::create(out).map_err(|e| format!("create snapshot zip: {e}"))?;
@@ -140,19 +140,11 @@ pub fn build_zip(folder: &Path, db_entries: &[(String, PathBuf)], manifest: &Man
 	}
 	add_file(&mut zip, "business.json", &folder.join("business.json"))?;
 
-	// Logos, and Stationery artwork with its untouched original (ADR 0001).
+	// Logos, and the page design's images (stationery/item-<id>.<ext>).
 	for dir in ["logos", crate::tenants::STATIONERY_DIR] {
 		if let Ok(entries) = std::fs::read_dir(folder.join(dir)) {
 			for entry in entries.flatten().filter(|e| e.path().is_file()) {
 				let name = format!("{dir}/{}", entry.file_name().to_string_lossy());
-				add_file(&mut zip, &name, &entry.path())?;
-			}
-		}
-	}
-	if let Ok(entries) = std::fs::read_dir(folder) {
-		for entry in entries.flatten().filter(|e| e.path().is_file()) {
-			let name = entry.file_name().to_string_lossy().to_string();
-			if name.starts_with("pdf-header") {
 				add_file(&mut zip, &name, &entry.path())?;
 			}
 		}
@@ -329,7 +321,8 @@ pub(crate) mod tests {
 			extract_zip(&zip, &dest).unwrap();
 			assert_eq!(count_rows(&dest.join("business.db")).await, 3);
 			assert_eq!(std::fs::read(dest.join("logos").join("logo.png")).unwrap(), b"PNGDATA");
-			assert_eq!(std::fs::read(dest.join("pdf-header.png")).unwrap(), b"HEADER");
+			// A stray retired PDF header image is left out.
+			assert!(!dest.join("pdf-header.png").exists());
 			assert!(dest.join("business.json").exists());
 			assert!(dest.join(MANIFEST_NAME).exists());
 			// Attachments are NOT in the zip — they are uploaded individually.

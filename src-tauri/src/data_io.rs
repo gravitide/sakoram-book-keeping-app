@@ -5,10 +5,9 @@
 //   manifest.json     metadata: schema version, app version, business name
 //   data.json         { "<table>": [...rows...], ... }
 //   assets/logo.<ext> the tenant's logo file, if any
-//   assets/pdf-header.<ext>  the PDF header logo, if any
 //   attachments/<type>/<id>/<file>  document attachments
-//   stationery/<file> the folder's Stationery artwork + untouched originals
-//                     (fixed names; the DB stores no path to them)
+//   stationery/<file> the folder's page-design images (item-<id>.<ext>; the
+//                     DB stores only their format, no path)
 //
 // For ENCRYPTED bundles `manifest.json` stays cleartext (so the import
 // preview can show the business name / timestamp / version without the
@@ -260,8 +259,6 @@ pub(crate) fn current_iso_utc() -> String {
 pub(crate) struct BundleAssets {
 	/// (asset name e.g. "logo.png", bytes) — `assets/<name>`.
 	pub logo: Option<(String, Vec<u8>)>,
-	/// ("pdf-header.<ext>", bytes) — `assets/<name>`.
-	pub pdf_header: Option<(String, Vec<u8>)>,
 	/// ("<type>/<id>/<basename>", bytes) — `attachments/<rel>`.
 	pub attachments: Vec<(String, Vec<u8>)>,
 	/// (file name, bytes) of everything in the folder's `stationery/` — the
@@ -344,9 +341,6 @@ pub(crate) fn write_plain_bundle<W: Write + Seek>(w: W, manifest: &ExportManifes
 	if let Some((name, bytes)) = &assets.logo {
 		entry(&mut zip, &format!("assets/{name}"), bytes)?;
 	}
-	if let Some((name, bytes)) = &assets.pdf_header {
-		entry(&mut zip, &format!("assets/{name}"), bytes)?;
-	}
 	for (rel, bytes) in &assets.attachments {
 		entry(&mut zip, &format!("attachments/{rel}"), bytes)?;
 	}
@@ -358,7 +352,7 @@ pub(crate) fn write_plain_bundle<W: Write + Seek>(w: W, manifest: &ExportManifes
 }
 
 /// Read an UNENCRYPTED bundle's data and assets. The logo is the one the
-/// manifest names; the PDF header, attachments and stationery are found by
+/// manifest names; attachments and stationery are found by
 /// scanning entry names.
 pub(crate) fn read_plain_bundle<R: Read + Seek>(archive: &mut zip::ZipArchive<R>, manifest: &ExportManifest) -> Result<(Value, BundleAssets), String> {
 	let data: Value = read_zip_json(archive, "data.json")?;
@@ -372,9 +366,7 @@ pub(crate) fn read_plain_bundle<R: Read + Seek>(archive: &mut zip::ZipArchive<R>
 		if name.ends_with('/') {
 			continue;
 		}
-		if let Some(ext) = name.strip_prefix("assets/pdf-header.") {
-			assets.pdf_header = Some((format!("pdf-header.{ext}"), read_zip_bytes(archive, &name)?));
-		} else if let Some(rel) = name.strip_prefix("attachments/") {
+		if let Some(rel) = name.strip_prefix("attachments/") {
 			if !rel.is_empty() {
 				assets.attachments.push((rel.to_string(), read_zip_bytes(archive, &name)?));
 			}
@@ -422,9 +414,8 @@ pub async fn export_tenant_data(
 	}
 	pool.close().await;
 
-	// Collect attachments + PDF header before sealing the bundle.
+	// Collect attachments + stationery before sealing the bundle.
 	let attachment_files = collect_attachment_files(&data);
-	let pdf_header = collect_pdf_header(&data);
 	let stationery_files = collect_stationery(&folder)?;
 
 	// Resolve the logo file (if present) from the business folder's logos/ dir.
@@ -457,8 +448,6 @@ pub async fn export_tenant_data(
 			"data": Value::Object(data.clone()),
 			"logo_name": logo_payload.as_ref().map(|(name, _)| name.clone()),
 			"logo_bytes_b64": logo_payload.as_ref().map(|(_, bytes)| BASE64.encode(bytes)),
-			"pdf_header_name": pdf_header.as_ref().map(|(name, _)| name.clone()),
-			"pdf_header_bytes_b64": pdf_header.as_ref().map(|(_, bytes)| BASE64.encode(bytes)),
 			"attachments": attachment_files.iter()
 				.map(|(path, bytes)| serde_json::json!({ "path": path, "bytes_b64": BASE64.encode(bytes) }))
 				.collect::<Vec<_>>(),
@@ -492,7 +481,6 @@ pub async fn export_tenant_data(
 	let Some(blob) = encrypted_blob else {
 		let assets = BundleAssets {
 			logo: logo_payload,
-			pdf_header,
 			attachments: attachment_files,
 			stationery: stationery_files,
 		};
@@ -593,16 +581,6 @@ pub async fn import_tenant_data(
 			.and_then(|v| v.as_str())
 			.map(|b64| BASE64.decode(b64.as_bytes()).map_err(|e| format!("bad logo bytes: {e}")))
 			.transpose()?;
-		let pdf_header = match (
-			payload.get("pdf_header_name").and_then(|v| v.as_str()),
-			payload.get("pdf_header_bytes_b64").and_then(|v| v.as_str()),
-		) {
-			(Some(name), Some(b64)) => Some((
-				name.to_string(),
-				BASE64.decode(b64.as_bytes()).map_err(|e| format!("bad pdf header: {e}"))?,
-			)),
-			_ => None,
-		};
 		let mut attachments: Vec<(String, Vec<u8>)> = Vec::new();
 		if let Some(Value::Array(list)) = payload.get("attachments") {
 			for a in list {
@@ -620,7 +598,7 @@ pub async fn import_tenant_data(
 			_ => None,
 		};
 		let stationery = stationery_from_payload(&payload)?;
-		(data, BundleAssets { logo, pdf_header, attachments, stationery })
+		(data, BundleAssets { logo, attachments, stationery })
 	} else {
 		read_plain_bundle(&mut archive, &manifest)?
 	};
@@ -705,7 +683,7 @@ async fn populate_new_tenant(
 	assets: &BundleAssets,
 ) -> Result<(), String> {
 	let (logo_name, logo_bytes) = logo_parts(assets);
-	let (pdf_header, attachments) = (&assets.pdf_header, &assets.attachments);
+	let attachments = &assets.attachments;
 	// Rewrite attachment paths now that we know the new tenant id.
 	rewrite_attachment_paths(app, tenant_id, data)?;
 
@@ -738,21 +716,6 @@ async fn populate_new_tenant(
 		.await
 		.map_err(|e| format!("rewrite logo_path: {e}"))?;
 
-	// Restore the PDF header logo + rewrite its settings path.
-	if let Some(new_header_path) = write_pdf_header(app, tenant_id, pdf_header)? {
-		sqlx::query("UPDATE company_settings SET pdf_header_logo_path = ? WHERE id = 1")
-			.bind(new_header_path)
-			.execute(&pool)
-			.await
-			.map_err(|e| format!("rewrite pdf_header_logo_path: {e}"))?;
-	} else {
-		// No header in the bundle → clear the stale path so the app doesn't
-		// point at a missing file from the exporter's machine.
-		sqlx::query("UPDATE company_settings SET pdf_header_logo_path = NULL WHERE id = 1")
-			.execute(&pool)
-			.await
-			.map_err(|e| format!("clear pdf_header_logo_path: {e}"))?;
-	}
 	write_attachment_files(app, tenant_id, attachments)?;
 	write_stationery(&tenants::folder_for(app, tenant_id)?, &assets.stationery)?;
 
@@ -770,7 +733,7 @@ async fn import_replace(
 	assets: &BundleAssets,
 ) -> Result<tenants::Tenant, String> {
 	let (logo_name, logo_bytes) = logo_parts(assets);
-	let (pdf_header, attachments) = (&assets.pdf_header, &assets.attachments);
+	let attachments = &assets.attachments;
 	let folder = tenants::folder_for(app, target_id)?;
 	let db_path = folder.join("business.db");
 	if !db_path.exists() {
@@ -807,21 +770,6 @@ async fn import_replace(
 		.await
 		.map_err(|e| format!("rewrite logo_path: {e}"))?;
 
-	// Restore the PDF header logo + rewrite its settings path.
-	if let Some(new_header_path) = write_pdf_header(app, target_id, pdf_header)? {
-		sqlx::query("UPDATE company_settings SET pdf_header_logo_path = ? WHERE id = 1")
-			.bind(new_header_path)
-			.execute(&pool)
-			.await
-			.map_err(|e| format!("rewrite pdf_header_logo_path: {e}"))?;
-	} else {
-		// No header in the bundle → clear the stale path so the app doesn't
-		// point at a missing file from the exporter's machine.
-		sqlx::query("UPDATE company_settings SET pdf_header_logo_path = NULL WHERE id = 1")
-			.execute(&pool)
-			.await
-			.map_err(|e| format!("clear pdf_header_logo_path: {e}"))?;
-	}
 	write_attachment_files(app, target_id, attachments)?;
 	write_stationery(&folder, &assets.stationery)?;
 
@@ -884,17 +832,6 @@ fn write_attachment_files(app: &AppHandle, tenant_id: &str, attachments: &[(Stri
 	Ok(())
 }
 
-/// Write the PDF header logo to `<business folder>/pdf-header.<ext>`, returning
-/// its absolute path so company_settings.pdf_header_logo_path can be rewritten.
-fn write_pdf_header(app: &AppHandle, tenant_id: &str, header: &Option<(String, Vec<u8>)>) -> Result<Option<String>, String> {
-	let Some((name, bytes)) = header else { return Ok(None) };
-	let ext = Path::new(name).extension().and_then(|e| e.to_str()).unwrap_or("png");
-	let folder = tenants::folder_for(app, tenant_id)?;
-	let path = folder.join(format!("pdf-header.{ext}"));
-	std::fs::write(&path, bytes).map_err(|e| format!("write pdf header: {e}"))?;
-	Ok(Some(path.to_string_lossy().to_string()))
-}
-
 /// Read the on-disk bytes for every attachment referenced by the dumped
 /// `document_attachments` rows. Returns (relative_path, bytes), where
 /// relative_path = "<document_type>/<document_id>/<basename(file_path)>" — a
@@ -926,19 +863,6 @@ fn collect_attachment_files(data: &serde_json::Map<String, Value>) -> Vec<(Strin
 		}
 	}
 	out
-}
-
-/// Resolve the PDF header logo (path on company_settings.pdf_header_logo_path)
-/// to (asset_name, bytes), if it exists. asset_name carries just the extension.
-fn collect_pdf_header(data: &serde_json::Map<String, Value>) -> Option<(String, Vec<u8>)> {
-	let settings = data.get("company_settings")?.as_array()?.first()?.as_object()?;
-	let path = settings.get("pdf_header_logo_path").and_then(|v| v.as_str())?;
-	if path.is_empty() {
-		return None;
-	}
-	let ext = Path::new(path).extension().and_then(|e| e.to_str()).unwrap_or("png");
-	let bytes = std::fs::read(path).ok()?;
-	Some((format!("pdf-header.{ext}"), bytes))
 }
 
 /// The bundle's logo as the (name, bytes) pair write_logo takes.
@@ -1025,7 +949,6 @@ mod tests {
 		let folder = folder_with_stationery("export");
 		let assets = BundleAssets {
 			logo: Some(("logo.png".into(), b"LOGO".to_vec())),
-			pdf_header: Some(("pdf-header.svg".into(), b"<svg/>".to_vec())),
 			attachments: vec![("invoice/1/a.jpg".into(), b"scan".to_vec())],
 			stationery: collect_stationery(&folder).unwrap(),
 		};
@@ -1044,7 +967,6 @@ mod tests {
 		let (back_data, back) = read_plain_bundle(&mut archive, &manifest()).unwrap();
 		assert_eq!(back_data, data);
 		assert_eq!(back.logo, assets.logo);
-		assert_eq!(back.pdf_header, assets.pdf_header);
 		assert_eq!(back.attachments, assets.attachments);
 		assert_eq!(sorted(back.stationery), sorted(assets.stationery));
 	}
