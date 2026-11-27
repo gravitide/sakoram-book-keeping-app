@@ -533,7 +533,7 @@ sakoram_app/
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
 │  │     ├─ company.vue               ← business info, address, bank, signatures, defaults, logo
-│  │     ├─ pdf.vue                   ← Paper & layout (paper size + Layout picker, then the Colour card) · Stationery (mode picker; Pre-printed paper bands; a to-scale thumbnail of the current page (`StationeryPage`) + **Edit stationery** (`StationeryEditorModal`) for Full-page background / Header & footer images / Pre-printed paper — **Preview page**, the same editor read-only, under Built-in; `StationeryBackgroundCard` — upload / aspect-locked crop + ~300 DPI downscale / live-text SVG warning / Remove — while Full-page background; `StationeryHeaderFooterCard` — upload / free-form Crop / Remove per image, a new image placed full-width flush to its edge — while Header & footer images; Built-in-only header logo + header/footer text cards) · Font. Every card has a sidebar anchor.
+│  │     ├─ pdf.vue                   ← Paper & layout (paper size + Layout picker, then the Colour card) · Stationery (mode picker; Pre-printed paper bands; a to-scale thumbnail of the current page (`StationeryPage`) + **Edit stationery** (`StationeryEditorModal`) for Full-page background / Header & footer images / Pre-printed paper — **Preview page**, the same editor read-only, under Built-in; `StationeryBackgroundCard` — upload / aspect-locked crop + ~300 DPI downscale / live-text SVG warning / Remove — while Full-page background; `StationeryHeaderFooterCard` — upload / free-form Crop / Remove per image, a new image placed full-width flush to its edge — while Header & footer images; picking a Paper size re-fits every mode's geometry on the form (`setPaper`); Built-in-only header logo + header/footer text cards) · Font. Every card has a sidebar anchor.
 │  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), light/dark/system toggle, zoom (6 discrete steps)
 │  │     ├─ payroll.vue               ← cycle template (period_start_day / period_end_day / pay_day)
 │  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + a pointer card to the Pre-printed paper bands (they live on the Stationery at /settings/pdf#stationery since 0056) + a "Stationery artwork" coming-soon placeholder (#artwork). (Signatures moved to /settings/company#signatures — they're shared across letters + quote/invoice "Prepared by".)
@@ -2793,8 +2793,34 @@ surface flagged in the same audit was deleted in v0.164.1.)
   learns of it through `placed`, and patches its dirty BASELINE too so the
   upload doesn't read as an unsaved edit. `verify:pdf` places its fixtures
   with these same functions and fails a case where removing EITHER image
-  leaves the render unchanged. Images are NOT yet re-fitted when the Paper
-  size changes (#362): a rect placed on A4 renders as stored on A5.
+  leaves the render unchanged.
+- **Changing the Paper size re-fits Stationery geometry ON THE FORM, at the
+  pick** (`setPaper` in /settings/pdf → `refitPaperGeometry` in
+  stationery-geometry.ts) — not at render, not when the editor opens. So the
+  form's geometry is always in the picked sheet's coordinates (thumbnail,
+  editor and sample preview show what Save writes; an edit after the pick is
+  never re-fitted twice), stored geometry always fits the stored sheet, and
+  `hydrate()` (load / Discard) must set `pdf_paper_size` directly, never via
+  `setPaper`. Rules: A4 ↔ A5 scales every mode's margins, image places and
+  sizes by the width ratio (a footer from the BOTTOM edge; bands capped at
+  `MAX_BAND_MM`) — exact round trip, `verify:pdf` proves A4 → A5 → A4 renders
+  byte-identically. To or from Letter / Legal: margins keep mm; images keep
+  mm size, distance from their own edge and from the centre line, then
+  `clampImageRect` (shrunk, still pinned to the edge) with the band following.
+  Every image and the background carry the `paper` they were placed /
+  prepared on; a scaled one moves to the new sheet with it, a clamped one
+  keeps the old one — and THAT mismatch is the "Check your stationery" state
+  (`stationeryReview`: editor banner, Header & footer card note, background
+  card note / Re-crop alert). Apply in the editor clears it
+  (`confirmPaperGeometry`, via the editor's `applied` emit), except a raster
+  background prepared for another SHAPE, which only a Re-crop clears
+  (`ImageCropModal` reshapes the stored crop of the ORIGINAL with
+  `fitCropToAspect`). The form carries those sheets
+  (`background_paper` / `header_footer_papers`); because the cards save
+  artwork immediately, they report the sheet they saved for (`placed`,
+  `artwork`) and the page patches form AND baseline — skip that and Save
+  writes back a stale sheet. `verify:pdf`'s `imagePlacementProblem` fails any
+  render whose images leave the page or crowd the Safe area.
 - **The Stationery editor holds no geometry.** mm ↔ px at any zoom, margin
   drag / nudge limits (margins never cross: the Safe area keeps
   `MIN_SAFE_AREA_MM`; each band ≤ `MAX_BAND_MM`), snapping (whole mm, side
