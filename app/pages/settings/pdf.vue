@@ -78,6 +78,18 @@
 									<span class="size-1.5 shrink-0 rounded-full" :class="livePreview.loading.value ? 'bg-(--ui-warning)' : 'bg-(--ui-success)'" aria-hidden="true" />
 									{{ paperLabel }}, live preview of page 1
 								</p>
+								<!-- The full two-page sample, right under the page it extends. -->
+								<UButton
+									class="mt-3 w-full justify-center"
+									icon="i-lucide-file-search"
+									variant="soft"
+									size="sm"
+									:loading="samplePreview.state.rendering"
+									title="Opens a two-page sample, so you can check the second page too"
+									@click="samplePreview.open()"
+								>
+									Preview as PDF
+								</UButton>
 							</div>
 
 							<div class="order-1 sm:order-2 @container flex flex-col gap-5 min-w-0 flex-1 w-full">
@@ -140,19 +152,6 @@
 											</span>
 										</button>
 									</div>
-								</div>
-
-								<div>
-									<UButton
-										icon="i-lucide-file-search"
-										variant="soft"
-										size="sm"
-										:loading="samplePreview.state.rendering"
-										title="Opens a two-page sample, so you can check the second page too"
-										@click="samplePreview.open()"
-									>
-										Preview as PDF
-									</UButton>
 								</div>
 							</div>
 						</div>
