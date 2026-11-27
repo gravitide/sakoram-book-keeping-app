@@ -27,15 +27,18 @@ export type StationeryMode = "builtin" | "background" | "header_footer" | "prepr
 export interface StationeryModeOption {
 	key: StationeryMode
 	label: string
+	/** One line, shown under the label in the picker. */
 	description: string
+	/** What to do next, shown only on the selected mode. */
+	nextStep: string
 }
 
 /** The Stationery picker, Built-in (the default) first. */
 export const STATIONERY_MODES: readonly StationeryModeOption[] = [
-	{ key: "builtin", label: "Built-in", description: "The app draws your logo, header text and footer on every page." },
-	{ key: "background", label: "Full-page background", description: "Your own page-sized artwork (SVG, PDF, PNG or JPEG) is drawn behind the content on every page." },
-	{ key: "header_footer", label: "Header & footer images", description: "Two images of your own — one for the top of the page, one for the bottom — each placed and sized where you want them, on every page." },
-	{ key: "preprinted", label: "Pre-printed paper", description: "Nothing is printed around the content — blank bands are left for paper that already carries your letterhead." }
+	{ key: "builtin", label: "Built-in", description: "The app draws your logo, header text and footer.", nextStep: "Set the header logo and the header & footer text below." },
+	{ key: "background", label: "Full-page background", description: "One page-sized artwork (SVG, PDF, PNG or JPEG) behind every page.", nextStep: "Upload your artwork below, then adjust the Safe area." },
+	{ key: "header_footer", label: "Header & footer images", description: "Separate top and bottom images you place yourself.", nextStep: "Upload both images below, then place them." },
+	{ key: "preprinted", label: "Pre-printed paper", description: "Prints nothing in the bands your letterhead already fills.", nextStep: "Set how deep the top and bottom bands are." }
 ];
 
 const MODE_KEYS = new Set<string>(STATIONERY_MODES.map((m) => m.key));
