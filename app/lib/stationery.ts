@@ -17,12 +17,8 @@ import { z } from "zod";
 /** Every value the DB column accepts (CHECK in migration 0055). */
 export type StoredStationeryMode = "builtin" | "background" | "header_footer" | "preprinted";
 
-/**
- * The modes the app can render today. Header & footer images is
- * stored-but-not-built: resolveStationeryMode reads it as Built-in until its
- * renderer lands.
- */
-export type StationeryMode = "builtin" | "background" | "preprinted";
+/** The modes the app renders — every stored mode. */
+export type StationeryMode = StoredStationeryMode;
 
 export interface StationeryModeOption {
 	key: StationeryMode
@@ -34,12 +30,13 @@ export interface StationeryModeOption {
 export const STATIONERY_MODES: readonly StationeryModeOption[] = [
 	{ key: "builtin", label: "Built-in", description: "The app draws your logo, header text and footer on every page." },
 	{ key: "background", label: "Full-page background", description: "Your own page-sized artwork (SVG, PDF, PNG or JPEG) is drawn behind the content on every page." },
+	{ key: "header_footer", label: "Header & footer images", description: "Two images of your own — one for the top of the page, one for the bottom — each placed and sized where you want them, on every page." },
 	{ key: "preprinted", label: "Pre-printed paper", description: "Nothing is printed around the content — blank bands are left for paper that already carries your letterhead." }
 ];
 
 const MODE_KEYS = new Set<string>(STATIONERY_MODES.map((m) => m.key));
 
-/** The stored mode, or Built-in for anything missing, unknown or not yet renderable. */
+/** The stored mode, or Built-in for anything missing or unknown. */
 export function resolveStationeryMode(stored: string | null | undefined): StationeryMode {
 	return stored && MODE_KEYS.has(stored) ? stored as StationeryMode : "builtin";
 }
@@ -119,13 +116,56 @@ const backgroundSchema = z.object({
 	margins: marginsSchema(BACKGROUND_DEFAULT_MARGINS)
 }).catch({ ext: null, paper: null, crop: null, live_text: false, margins: { ...BACKGROUND_DEFAULT_MARGINS } });
 
+// Header & footer images' Safe area before either image is placed. Placing an
+// image pushes its band out to the image's inner edge + 4 mm
+// (stationery-geometry.ts headerFooterMargins).
+export const HEADER_FOOTER_DEFAULT_MARGINS: Readonly<StationeryMarginsMm> = { top: 20, right: 18, bottom: 20, left: 18 };
+
+/** Which of the two Header & footer images. */
+export type HeaderFooterSlot = "header" | "footer";
+export const HEADER_FOOTER_SLOTS: readonly HeaderFooterSlot[] = ["header", "footer"];
+
+const mmRectSchema = z.object({
+	x: z.number().finite(),
+	y: z.number().finite(),
+	w: z.number().finite().positive(),
+	h: z.number().finite().positive()
+});
+
+// One Header & footer image. The file is always stationery/<slot>.<ext>; this
+// records its format and where it sits on the page — never a path. Anything
+// that can't be placed (unknown format, no size) reads as no image at all.
+const headerFooterImageSchema = z.object({
+	ext: z.enum(BACKGROUND_EXTS),
+	/** The artwork's width / height, so a resize keeps its proportions. */
+	aspect: z.number().finite().positive(),
+	/** Where it is drawn, in mm from the page's top-left corner. */
+	rect: mmRectSchema,
+	/** The sheet `rect` was placed on (a later Paper size change re-fits it). */
+	paper: z.enum(PAPER_KEYS).nullable().catch(null),
+	/** Raster crop in source pixels of the untouched original, for Re-crop. null = uncropped. */
+	crop: cropSchema.nullable().catch(null),
+	/** An SVG that still holds live text — the settings page warns to outline it. */
+	live_text: z.boolean().catch(false)
+}).nullable().catch(null);
+
+const headerFooterSchema = z.object({
+	header: headerFooterImageSchema.default(null),
+	footer: headerFooterImageSchema.default(null),
+	margins: marginsSchema(HEADER_FOOTER_DEFAULT_MARGINS)
+}).catch({ header: null, footer: null, margins: { ...HEADER_FOOTER_DEFAULT_MARGINS } });
+
 export const stationerySchema = z.object({
 	preprinted: marginsSchema(PREPRINTED_DEFAULT_MARGINS),
-	background: backgroundSchema
+	background: backgroundSchema,
+	header_footer: headerFooterSchema
 });
 
 export type BackgroundStationery = z.infer<typeof backgroundSchema>;
 export type BackgroundArtwork = Pick<BackgroundStationery, "ext" | "paper" | "crop" | "live_text">;
+
+export type HeaderFooterImage = NonNullable<z.infer<typeof headerFooterImageSchema>>;
+export type HeaderFooterStationery = z.infer<typeof headerFooterSchema>;
 
 export type Stationery = z.infer<typeof stationerySchema>;
 
@@ -176,4 +216,19 @@ export function clearBackgroundArtwork(stored: string | null | undefined): strin
 export function setBackgroundMargins(stored: string | null | undefined, margins: StationeryMarginsMm): string {
 	const current = parseStationery(stored);
 	return serializeStationery(stationerySchema.parse({ ...current, background: { ...current.background, margins } }));
+}
+
+/**
+ * The stored JSON with one Header & footer image replaced — or removed, with
+ * null. The other image, the margins and every other mode are kept.
+ */
+export function setHeaderFooterImage(stored: string | null | undefined, slot: HeaderFooterSlot, image: HeaderFooterImage | null): string {
+	const current = parseStationery(stored);
+	return serializeStationery(stationerySchema.parse({ ...current, header_footer: { ...current.header_footer, [slot]: image } }));
+}
+
+/** The stored JSON with Header & footer images' four margins replaced (refused values fall back to defaults). */
+export function setHeaderFooterMargins(stored: string | null | undefined, margins: StationeryMarginsMm): string {
+	const current = parseStationery(stored);
+	return serializeStationery(stationerySchema.parse({ ...current, header_footer: { ...current.header_footer, margins } }));
 }

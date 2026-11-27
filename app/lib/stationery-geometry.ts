@@ -8,14 +8,14 @@
 // the page's top-left corner) until it is converted with a `scale`: CSS pixels
 // per millimetre at the editor's current zoom.
 //
-// Header & footer images (#361) land here too: `snapValue` already takes a
-// list of targets (page edges, centre) and `MmRect` is the shape an image's
-// placement will use.
+// Header & footer images live here too: where an image starts, how it moves
+// and resizes (aspect locked, snapping to the page edges and the centre line)
+// and the band each image pushes out ahead of it (its inner edge + 4 mm).
 //
 // Pure, store-free, relative imports only.
 
 import type { PdfLayoutKey } from "./pdf-layouts";
-import type { StationeryMarginsMm, StationeryMode } from "./stationery";
+import type { HeaderFooterSlot, StationeryMarginsMm, StationeryMode } from "./stationery";
 import { MAX_BAND_MM } from "./stationery";
 
 /** A CSS pixel is 1/96 inch, so this many px is one millimetre at 100 %. */
@@ -54,6 +54,12 @@ export interface MmRect {
 
 export type MarginEdge = keyof StationeryMarginsMm;
 
+/**
+ * The least each margin may be — the bands Header & footer images push out
+ * (bandFloors). An edge that isn't listed may go right to the page edge.
+ */
+export type BandFloors = Partial<Record<MarginEdge, number>>;
+
 export const mmToPx = (mm: number, scale: number): number => mm * scale;
 export const pxToMm = (px: number, scale: number): number => px / scale;
 
@@ -91,21 +97,27 @@ export function snapValue(value: number, { step, targets = [], threshold = 0 }: 
 const OPPOSITE: Record<MarginEdge, MarginEdge> = { top: "bottom", bottom: "top", left: "right", right: "left" };
 const extentOf = (page: PageDims, edge: MarginEdge) => (edge === "top" || edge === "bottom" ? page.heightMm : page.widthMm);
 
+/** The deepest a band may go: the Safe area keeps MIN_SAFE_AREA_MM and the band stays within MAX_BAND_MM. */
+const deepestBand = (page: PageDims, margins: StationeryMarginsMm, edge: MarginEdge) =>
+	Math.max(0, Math.min(MAX_BAND_MM, extentOf(page, edge) - margins[OPPOSITE[edge]] - MIN_SAFE_AREA_MM));
+
 /**
- * Where a margin may go: from the page edge to the point where the Safe area
- * would be thinner than MIN_SAFE_AREA_MM (so margins can never cross), and no
- * deeper than the Stationery accepts. The printer band plays no part.
+ * Where a margin may go: from the page edge (or its floor — never into a
+ * Header & footer image) to the point where the Safe area would be thinner
+ * than MIN_SAFE_AREA_MM (so margins can never cross), and no deeper than the
+ * Stationery accepts. The printer band plays no part.
  */
-export function marginLimits(page: PageDims, margins: StationeryMarginsMm, edge: MarginEdge): { min: number, max: number } {
-	const room = extentOf(page, edge) - margins[OPPOSITE[edge]] - MIN_SAFE_AREA_MM;
-	return { min: 0, max: Math.max(0, Math.min(MAX_BAND_MM, room)) };
+export function marginLimits(page: PageDims, margins: StationeryMarginsMm, edge: MarginEdge, floors: BandFloors = {}): { min: number, max: number } {
+	const max = deepestBand(page, margins, edge);
+	const min = Math.max(0, floors[edge] ?? 0);
+	return { min, max: Math.max(min, max) };
 }
 
 const clamp = (v: number, { min, max }: { min: number, max: number }) => Math.min(max, Math.max(min, v));
 
 /** One margin set to a typed value: rounded to the step, then held inside its limits. */
-export function setMargin(page: PageDims, margins: StationeryMarginsMm, edge: MarginEdge, valueMm: number): StationeryMarginsMm {
-	const value = clamp(snapValue(valueMm, { step: MARGIN_STEP_MM }), marginLimits(page, margins, edge));
+export function setMargin(page: PageDims, margins: StationeryMarginsMm, edge: MarginEdge, valueMm: number, floors: BandFloors = {}): StationeryMarginsMm {
+	const value = clamp(snapValue(valueMm, { step: MARGIN_STEP_MM }), marginLimits(page, margins, edge, floors));
 	return { ...margins, [edge]: value };
 }
 
@@ -121,7 +133,8 @@ export function dragMargin(
 	start: StationeryMarginsMm,
 	edge: MarginEdge,
 	delta: { dx: number, dy: number },
-	scale: number
+	scale: number,
+	floors: BandFloors = {}
 ): StationeryMarginsMm {
 	const movedPx = { top: delta.dy, bottom: -delta.dy, left: delta.dx, right: -delta.dx }[edge];
 	const raw = start[edge] + pxToMm(movedPx, scale);
@@ -130,7 +143,7 @@ export function dragMargin(
 		targets: [start[OPPOSITE[edge]]],
 		threshold: pxToMm(SNAP_DISTANCE_PX, scale)
 	});
-	return { ...start, [edge]: clamp(snapped, marginLimits(page, start, edge)) };
+	return { ...start, [edge]: clamp(snapped, marginLimits(page, start, edge, floors)) };
 }
 
 export interface MarginGuide {
@@ -158,12 +171,12 @@ export type ArrowDirection = "up" | "down" | "left" | "right";
  * points (down on the top guide deepens the top band; down on the bottom
  * guide makes it shallower). Arrows across the guide do nothing.
  */
-export function nudgeMargin(page: PageDims, margins: StationeryMarginsMm, edge: MarginEdge, arrow: ArrowDirection, stepMm: number): StationeryMarginsMm {
+export function nudgeMargin(page: PageDims, margins: StationeryMarginsMm, edge: MarginEdge, arrow: ArrowDirection, stepMm: number, floors: BandFloors = {}): StationeryMarginsMm {
 	const along = edge === "top" || edge === "bottom" ? ["up", "down"] : ["left", "right"];
 	if (!along.includes(arrow)) return margins;
 	// +1 when the arrow points away from the guide's own page edge.
 	const inward = { top: "down", bottom: "up", left: "right", right: "left" }[edge] === arrow ? 1 : -1;
-	return setMargin(page, margins, edge, margins[edge] + inward * stepMm);
+	return setMargin(page, margins, edge, margins[edge] + inward * stepMm, floors);
 }
 
 /**
@@ -321,4 +334,191 @@ export function placeholderBars(safe: MmRect): MmRect[] {
 		y += ROW_PITCH_MM;
 	}
 	return bars;
+}
+
+// ---- Header & footer images ---------------------------------------------
+// Each image is an MmRect on the page. The header's band (the top margin)
+// always reaches at least HEADER_FOOTER_GAP_MM past the header's bottom edge,
+// the footer's (the bottom margin) past the footer's top edge — so content
+// never runs into an image. A band may be dragged further out, never in.
+
+/** The clear gap between an image's inner edge and its band. */
+export const HEADER_FOOTER_GAP_MM = 4;
+
+/** The narrowest an image may be resized to. */
+export const MIN_IMAGE_MM = 10;
+
+export interface HeaderFooterRects {
+	header: MmRect | null
+	footer: MmRect | null
+}
+
+export type ImageCorner = "nw" | "ne" | "sw" | "se";
+
+/** The band each image pushes out: its inner edge + the gap. 0 where there is no image. */
+export function bandFloors(page: PageDims, images: HeaderFooterRects): { top: number, bottom: number } {
+	return {
+		top: images.header ? images.header.y + images.header.h + HEADER_FOOTER_GAP_MM : 0,
+		bottom: images.footer ? page.heightMm - images.footer.y + HEADER_FOOTER_GAP_MM : 0
+	};
+}
+
+/** The margins with each band pushed out of its image (what the PDF reserves). */
+export function headerFooterMargins(page: PageDims, images: HeaderFooterRects, margins: StationeryMarginsMm): StationeryMarginsMm {
+	const floors = bandFloors(page, images);
+	return { ...margins, top: Math.max(margins.top, floors.top), bottom: Math.max(margins.bottom, floors.bottom) };
+}
+
+/**
+ * How far from its own page edge an image's inner edge may reach: the deepest
+ * its band can go (the Safe area keeps its minimum against the OPPOSITE band,
+ * and no band is deeper than MAX_BAND_MM) less the gap.
+ */
+const deepestImageEdge = (page: PageDims, slot: HeaderFooterSlot, margins: StationeryMarginsMm) =>
+	Math.max(0, deepestBand(page, margins, slot === "header" ? "top" : "bottom") - HEADER_FOOTER_GAP_MM);
+
+/**
+ * An image rect made to fit: no wider than the page, its inner edge no deeper
+ * than its band allows (shrunk with its proportions kept, anchored at its
+ * centre), then moved fully onto the page. `margins` supplies the OPPOSITE band.
+ */
+export function clampImageRect(page: PageDims, slot: HeaderFooterSlot, rect: MmRect, margins: StationeryMarginsMm): MmRect {
+	const depth = deepestImageEdge(page, slot, margins);
+	const k = Math.min(1, page.widthMm / rect.w, depth / rect.h);
+	const w = rect.w * k;
+	const h = rect.h * k;
+	const cx = rect.x + rect.w / 2;
+	const cy = rect.y + rect.h / 2;
+	const [yMin, yMax] = slot === "header" ? [0, depth - h] : [page.heightMm - depth, page.heightMm - h];
+	return {
+		x: clamp(cx - w / 2, { min: 0, max: page.widthMm - w }),
+		y: clamp(cy - h / 2, { min: yMin, max: Math.max(yMin, yMax) }),
+		w,
+		h
+	};
+}
+
+/**
+ * Where a newly added image starts: full page width, flush to its own edge
+ * (the top for the header, the bottom for the footer). An image too tall for
+ * that is shrunk to fit and centred.
+ */
+export function defaultImageRect(page: PageDims, slot: HeaderFooterSlot, aspect: number, margins: StationeryMarginsMm): MmRect {
+	const w = page.widthMm;
+	const h = w / aspect;
+	return clampImageRect(page, slot, { x: 0, y: slot === "header" ? 0 : page.heightMm - h, w, h }, margins);
+}
+
+/** How deep an image's inner edge sits from its own page edge. */
+const innerEdge = (page: PageDims, slot: HeaderFooterSlot, rect: MmRect) =>
+	slot === "header" ? rect.y + rect.h : page.heightMm - rect.y;
+
+/**
+ * The margins after an image was added, moved, resized or removed. Its band
+ * follows it: a new image's band sits exactly at its inner edge + the gap; a
+ * moved or resized one carries its band along by the same distance (so extra
+ * room the user gave it is kept), never closer than the gap. Removing an
+ * image leaves its band where it was. The other band is never touched.
+ */
+export function followImage(
+	page: PageDims,
+	slot: HeaderFooterSlot,
+	before: MmRect | null,
+	after: MmRect | null,
+	margins: StationeryMarginsMm
+): StationeryMarginsMm {
+	if (!after) return { ...margins };
+	const edge: MarginEdge = slot === "header" ? "top" : "bottom";
+	const floor = innerEdge(page, slot, after) + HEADER_FOOTER_GAP_MM;
+	const followed = before ? margins[edge] + innerEdge(page, slot, after) - innerEdge(page, slot, before) : floor;
+	return { ...margins, [edge]: clamp(Math.max(followed, floor), marginLimits(page, margins, edge, { [edge]: floor })) };
+}
+
+/** The snap distance in mm at this zoom. */
+const snapMm = (scale: number) => pxToMm(SNAP_DISTANCE_PX, scale);
+
+/**
+ * An image dragged by (dx, dy) screen pixels from where the drag began. Its
+ * left edge, right edge or middle snaps to the page's left edge, right edge
+ * or centre line; its top or bottom to the page's top or bottom edge;
+ * otherwise it moves in whole millimetres. It stays on the page, and never so
+ * deep that its band would leave the content too little room.
+ */
+export function dragImage(
+	page: PageDims,
+	slot: HeaderFooterSlot,
+	start: MmRect,
+	delta: { dx: number, dy: number },
+	scale: number,
+	margins: StationeryMarginsMm
+): MmRect {
+	const threshold = snapMm(scale);
+	const x = snapValue(start.x + pxToMm(delta.dx, scale), {
+		step: MARGIN_STEP_MM,
+		targets: [0, page.widthMm - start.w, (page.widthMm - start.w) / 2],
+		threshold
+	});
+	const y = snapValue(start.y + pxToMm(delta.dy, scale), {
+		step: MARGIN_STEP_MM,
+		targets: [0, page.heightMm - start.h],
+		threshold
+	});
+	return clampImageRect(page, slot, { ...start, x, y }, margins);
+}
+
+/** An image moved by an arrow key, `stepMm` the way it points, staying on the page. */
+export function nudgeImage(page: PageDims, slot: HeaderFooterSlot, rect: MmRect, arrow: ArrowDirection, stepMm: number, margins: StationeryMarginsMm): MmRect {
+	const d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[arrow];
+	return clampImageRect(page, slot, { ...rect, x: rect.x + d[0]! * stepMm, y: rect.y + d[1]! * stepMm }, margins);
+}
+
+/**
+ * An image resized from one corner by (dx, dy) screen pixels from where the
+ * drag began. The opposite corner stays put and the proportions are locked:
+ * the size follows whichever way the pointer moved further. The moving
+ * vertical edge snaps to the page's left / right edge or centre line (or the
+ * moving horizontal edge to the top / bottom edge); the width otherwise moves
+ * in whole millimetres. Never narrower than MIN_IMAGE_MM, never off the page,
+ * never so tall that its band would leave the content too little room.
+ */
+export function resizeImage(
+	page: PageDims,
+	slot: HeaderFooterSlot,
+	start: MmRect,
+	corner: ImageCorner,
+	delta: { dx: number, dy: number },
+	scale: number,
+	margins: StationeryMarginsMm
+): MmRect {
+	const aspect = start.w / start.h;
+	const east = corner === "ne" || corner === "se";
+	const south = corner === "sw" || corner === "se";
+	// The fixed corner.
+	const ax = east ? start.x : start.x + start.w;
+	const ay = south ? start.y : start.y + start.h;
+	const dxMm = pxToMm(delta.dx, scale) * (east ? 1 : -1);
+	const dyMm = pxToMm(delta.dy, scale) * (south ? 1 : -1);
+	const byX = start.w + dxMm;
+	const byY = (start.h + dyMm) * aspect;
+	let w = Math.abs(byX - start.w) >= Math.abs(byY - start.w) ? byX : byY;
+
+	// Snap the moving edge, else whole millimetres of width.
+	const threshold = snapMm(scale);
+	const movingX = east ? ax + w : ax - w;
+	const xTarget = [0, page.widthMm / 2, page.widthMm].find((t) => Math.abs(t - movingX) <= threshold);
+	const movingY = south ? ay + w / aspect : ay - w / aspect;
+	const yTarget = [0, page.heightMm].find((t) => Math.abs(t - movingY) <= threshold);
+	if (xTarget !== undefined) w = Math.abs(xTarget - ax);
+	else if (yTarget !== undefined) w = Math.abs(yTarget - ay) * aspect;
+	else w = Math.round(w / MARGIN_STEP_MM) * MARGIN_STEP_MM;
+
+	// Room from the fixed corner towards the moving one.
+	const depth = deepestImageEdge(page, slot, margins);
+	const roomW = east ? page.widthMm - ax : ax;
+	const roomH = slot === "header"
+		? (south ? depth - ay : ay)
+		: (south ? page.heightMm - ay : ay - (page.heightMm - depth));
+	w = Math.max(MIN_IMAGE_MM, Math.min(w, roomW, Math.max(0, roomH) * aspect));
+	const h = w / aspect;
+	return { x: east ? ax : ax - w, y: south ? ay : ay - h, w, h };
 }
