@@ -92,15 +92,9 @@
 					</div>
 				</template>
 
-				<p class="text-sm text-(--ui-text-muted) py-2 flex items-center gap-2">
-					<UIcon name="i-lucide-layout-template" class="size-4" />
-					<span>
-						Choose a design and set its safe area in
-						<NuxtLink to="/settings/pdf#design" class="text-(--ui-primary) hover:underline">
-							PDF settings
-						</NuxtLink>.
-					</span>
-				</p>
+				<UButton icon="i-lucide-pencil-ruler" variant="soft" @click="designer.open()">
+					Open page designer
+				</UButton>
 			</UCard>
 		</div>
 	</div>
@@ -110,11 +104,13 @@
 // Per-business Letters settings: managed category list (immediate persistence)
 // and a pointer to the page design on /settings/pdf.
 	import type { LetterCategoryRow } from "~/stores/letter_categories";
+	import { usePageDesignerWindow } from "~/composables/usePageDesignerWindow";
 	import { useLetterCategoriesStore } from "~/stores/letter_categories";
 
 	definePageMeta({ title: "Letters" });
 
 	const catStore = useLetterCategoriesStore();
+	const designer = usePageDesignerWindow();
 	const toast = useToast();
 
 	await catStore.load();

@@ -11,12 +11,12 @@
 // only orchestrates them with the Rust asset commands and the settings store.
 
 import type { DesignTemplateKey } from "~/lib/design-templates";
-import type { MarginsMm, PageDesign } from "~/lib/page-design";
+import type { PageDesign } from "~/lib/page-design";
 import type { PaperSize } from "~/lib/page-settings";
 import type { PdfLayoutKey } from "~/lib/pdf-layouts";
 import { itemAssetKind, readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
 import { designTemplate } from "~/lib/design-templates";
-import { imageFileIds, parsePageDesign, withLogoSlots, withMargins } from "~/lib/page-design";
+import { imageFileIds, parsePageDesign, withLogoSlots } from "~/lib/page-design";
 import { resolvePaperSize } from "~/lib/page-settings";
 import { logoSpotPlan } from "~/lib/stationery-artwork";
 import { useSettingsStore } from "~/stores/settings";
@@ -81,19 +81,5 @@ export function usePageDesign() {
 		}
 	}
 
-	/**
-	 * Save a new safe area, in the coordinates of the business's current paper.
-	 * A never-chosen design becomes Classic first (its logo copied in), keeping
-	 * the Document style the business picked.
-	 */
-	async function saveMargins(margins: MarginsMm): Promise<void> {
-		if (!parsePageDesign(settings.settings?.pdf_design)) await applyTemplate("classic", { keepDocumentStyle: true });
-		const stored = parsePageDesign(settings.settings?.pdf_design)!;
-		// Only the margins change, mapped back to the design's own sheet: the
-		// items are never rescaled by a save, so paper switches can't shrink them.
-		const paper = resolvePaperSize(settings.settings?.pdf_paper_size).key;
-		await settings.save({ pdf_design: JSON.stringify(withMargins(stored, margins, paper)) });
-	}
-
-	return { fillLogoSpots, prepareTemplate, applyTemplate, saveMargins };
+	return { fillLogoSpots, prepareTemplate, applyTemplate };
 }
