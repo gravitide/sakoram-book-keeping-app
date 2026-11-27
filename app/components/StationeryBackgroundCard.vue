@@ -141,7 +141,6 @@
 </template>
 
 <script setup lang="ts">
-	import type { BusinessAssetKind } from "~/lib/business-assets";
 	// Full-page background Stationery: upload / crop / downscale / remove the
 	// artwork. Its four Safe-area margins are set in the Stationery editor
 	// (StationeryEditorModal, opened from the Stationery section).
@@ -153,6 +152,8 @@
 	// paper it was prepared for, the crop and the live-text flag — never a path.
 	//
 	// Artwork changes save immediately (like the header logo).
+
+	import type { BusinessAssetKind } from "~/lib/business-assets";
 	import type { CropRect } from "~/lib/crop-rect";
 	import type { PaperSize } from "~/lib/page-settings";
 	import type { BackgroundArtwork, BackgroundExt } from "~/lib/stationery";

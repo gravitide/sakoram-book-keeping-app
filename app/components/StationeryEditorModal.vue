@@ -179,7 +179,7 @@
 						Drag a guide, or focus it and use the arrow keys (Shift for 5 mm). Side margins snap to each other.
 					</p>
 					<p v-if="mode === 'header_footer'" class="text-xs text-(--ui-text-muted) mt-2">
-						Each image's band always reaches {{ HEADER_FOOTER_GAP_MM }} mm past it and follows it when it moves; drag the guide further out for more room. Images snap to the page edges and the centre line.
+						Each image's Reserved band always reaches {{ HEADER_FOOTER_GAP_MM }} mm past it and follows it when it moves; drag the guide further out for more room. Images snap to the page edges and the centre line.
 					</p>
 				</div>
 				<div v-else>

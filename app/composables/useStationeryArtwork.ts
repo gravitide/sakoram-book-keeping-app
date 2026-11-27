@@ -1,4 +1,3 @@
-import type { Ref } from "vue";
 // The open business's Stationery artwork as something an <img> can show,
 // shared by the Stationery thumbnail, the artwork cards' upload tiles and the
 // Stationery editor — so the bytes (and, for a PDF, a Typst render) are
@@ -16,6 +15,8 @@ import type { Ref } from "vue";
 // the last user of that kind unmounts. Reloads when the stored artwork changes,
 // and on `reload()` — an upload that replaces the file with the same format
 // leaves the stored JSON identical, so the uploader must call it.
+
+import type { Ref } from "vue";
 import type { BusinessAssetKind } from "~/lib/business-assets";
 import type { BackgroundExt } from "~/lib/stationery";
 import { invoke } from "@tauri-apps/api/core";

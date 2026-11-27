@@ -82,7 +82,7 @@
 				</div>
 
 				<p v-if="!images[slot]" class="text-xs text-(--ui-text-muted)">
-					No {{ slot }} image — that band is just your margin.
+					No {{ slot }} image — its Reserved band is just your margin.
 				</p>
 				<p v-else-if="review?.[slot]" class="text-xs text-(--ui-warning)">
 					Placed on {{ resolvePaperSize(review[slot]!).label }} — it keeps its size on {{ paperInfo.label }} and was moved onto the page. Check it in the Stationery editor (Apply keeps it).
