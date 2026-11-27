@@ -332,7 +332,7 @@
 							title="Header logo"
 							subtitle="Letterhead-style PNG, JPG, or SVG. Different from the square Company logo, which is only used in the sidebar."
 						>
-							<div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-6 items-start">
+							<div class="grid grid-cols-1 gap-6 items-start">
 								<div class="flex flex-col gap-3">
 									<div
 										class="group relative h-28 w-full rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition cursor-pointer"
@@ -424,80 +424,14 @@
 										<div class="flex items-baseline justify-between mb-1.5 gap-2 flex-wrap">
 											<span class="text-sm font-medium">Logo size</span>
 											<span class="text-xs text-(--ui-text-muted) tabular-nums">
-												{{ form.pdf_logo_scale }}% — prints ≈ {{ previewLogoMm.h.toFixed(1) }}mm tall
+												{{ form.pdf_logo_scale }}% — prints ≈ {{ logoPrintMm.h.toFixed(1) }}mm tall
 											</span>
 										</div>
 										<USlider v-model="form.pdf_logo_scale" :min="50" :max="150" :step="5" />
-										<p v-if="previewClamped" class="text-xs text-(--ui-text-muted) mt-2 flex items-start gap-1.5">
+										<p v-if="logoWidthClamped" class="text-xs text-(--ui-text-muted) mt-2 flex items-start gap-1.5">
 											<UIcon name="i-lucide-info" class="size-3.5 shrink-0 mt-0.5" />
 											<span>Capped at 55mm wide so the logo can't collide with the document title — growing the size won't widen it further.</span>
 										</p>
-									</div>
-								</div>
-
-								<!-- Live A4 preview. Reads the form, not the saved settings, so
-								the slider and colour take effect immediately. Only the top
-								band is shown — the header is what's being tuned here. -->
-								<div class="justify-self-center lg:justify-self-end">
-									<div
-										class="relative rounded-md ring-1 ring-(--ui-border) bg-white overflow-hidden shadow-sm"
-										:style="{ width: `${PAPER_W_PX}px`, height: `${mmPx(105)}px` }"
-									>
-										<div :style="{ padding: `${mmPx(16)}px ${mmPx(18)}px 0` }">
-											<div class="flex justify-between items-end gap-2" :style="{ minHeight: `${mmPx(18)}px` }">
-												<!-- 3.35mm ≈ 9.5pt, the Classic Layout's base text size, so
-													the block occupies true-to-scale space on the sheet.
-													The previous 2.6mm rendered SMALLER than the real PDF. -->
-												<div v-if="previewHeaderLines.length" class="text-left leading-tight min-w-0" :style="{ fontSize: `${mmPx(3.35)}px` }">
-													<div v-for="(l, i) in previewHeaderLines" :key="i" class="text-zinc-700 truncate">
-														{{ l }}
-													</div>
-												</div>
-												<div v-else />
-												<img
-													v-if="store.pdfHeaderLogoSrc"
-													:src="store.pdfHeaderLogoSrc"
-													alt=""
-													:style="previewLogoStyle"
-													class="object-contain shrink-0"
-													@load="onPreviewLogoLoad"
-												>
-												<span
-													v-else
-													class="font-bold text-zinc-800 leading-none shrink-0"
-													:style="{ fontSize: `${mmPx(5)}px` }"
-												>
-													{{ store.settings?.business_name || "Your business" }}
-												</span>
-											</div>
-											<div :style="{ height: `${mmPx(2)}px` }" />
-											<div :style="{ height: '2px', backgroundColor: themeColor }" />
-											<!-- Skeleton body: conveys where the header sits relative
-											to the rest of the page without pretending to be real. -->
-											<div :style="{ marginTop: `${mmPx(6)}px` }" class="flex justify-center">
-												<div class="rounded-sm bg-zinc-300" :style="{ width: `${mmPx(30)}px`, height: `${mmPx(3.5)}px` }" />
-											</div>
-											<div :style="{ marginTop: `${mmPx(7)}px` }" class="flex justify-between">
-												<div class="space-y-1">
-													<div class="rounded-sm bg-zinc-200" :style="{ width: `${mmPx(28)}px`, height: `${mmPx(1.8)}px` }" />
-													<div class="rounded-sm bg-zinc-200" :style="{ width: `${mmPx(22)}px`, height: `${mmPx(1.8)}px` }" />
-												</div>
-												<div class="space-y-1 flex flex-col items-end">
-													<div class="rounded-sm bg-zinc-200" :style="{ width: `${mmPx(20)}px`, height: `${mmPx(1.8)}px` }" />
-													<div class="rounded-sm bg-zinc-200" :style="{ width: `${mmPx(16)}px`, height: `${mmPx(1.8)}px` }" />
-												</div>
-											</div>
-											<div :style="{ marginTop: `${mmPx(7)}px` }" class="space-y-1">
-												<div class="rounded-sm bg-zinc-100" :style="{ height: `${mmPx(4)}px` }" />
-												<div class="rounded-sm bg-zinc-200" :style="{ height: `${mmPx(2.6)}px` }" />
-												<div class="rounded-sm bg-zinc-200" :style="{ height: `${mmPx(2.6)}px` }" />
-											</div>
-										</div>
-										<!-- Fade to signal the page continues below the crop. -->
-										<div class="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-b from-transparent to-white" />
-									</div>
-									<div class="mt-1.5 text-[10px] uppercase tracking-wider text-(--ui-text-muted) text-center">
-										A4 preview · classic
 									</div>
 								</div>
 							</div>
@@ -707,7 +641,6 @@
 	import { readBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
 	import { PAPER_SIZES, resolvePaperSize } from "~/lib/page-settings";
-	import { blocksToPlainLines, buildHeaderBlocks } from "~/lib/pdf-chrome";
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
 	import { PDF_TOKENS } from "~/lib/pdf-tokens";
 	import { sampleStationeryPreviewPayload } from "~/lib/sample-pdf";
@@ -916,29 +849,22 @@
 		if (isHexColor(v)) form.pdf_theme_color = v.trim().toLowerCase();
 	};
 
-	// ---- live paper preview --------------------------------------------
-	// A scaled A4 sheet rendered from the LIVE form values, so the logo size
-	// slider shows its effect without saving. Geometry mirrors doc-classic:
-	// 210mm wide, 18mm side margins, 16mm top, 12mm baseline logo height,
-	// and the same 55mm width clamp header-logo() applies in common.typ.
-	// Only the top band is shown — the header is what's being tuned.
-	const PAPER_W_PX = 300;
-	const PAPER_MM = 210;
-	const mmPx = (mm: number) => (mm * PAPER_W_PX) / PAPER_MM;
-
-	// Natural aspect of the uploaded logo, needed to derive width from height
-	// exactly as measure() does in Typst. 4:1 is a placeholder until it loads.
+	// ---- header logo print size ---------------------------------------
+	// What the Logo size slider reports: the same maths header-logo(data, 12mm)
+	// does in common.typ — 12mm baseline height × scale, then a 55mm width clamp
+	// that shrinks both axes. Needs the logo's natural aspect, read off-screen
+	// from the uploaded file (4:1 placeholder until it loads).
 	const logoAspect = ref(4);
-	const onPreviewLogoLoad = (e: Event) => {
-		const el = e.target as HTMLImageElement;
-		if (el.naturalWidth > 0 && el.naturalHeight > 0) {
-			logoAspect.value = el.naturalWidth / el.naturalHeight;
-		}
-	};
+	watch(() => store.pdfHeaderLogoSrc, (src) => {
+		if (!src) return;
+		const img = new Image();
+		img.onload = () => {
+			if (img.naturalWidth > 0 && img.naturalHeight > 0) logoAspect.value = img.naturalWidth / img.naturalHeight;
+		};
+		img.src = src;
+	}, { immediate: true });
 
-	// Same clamp as header-logo(data, 12mm): scale the baseline, then if the
-	// derived width exceeds 55mm, shrink both axes to fit.
-	const previewLogoMm = computed(() => {
+	const logoPrintMm = computed(() => {
 		let h = 12 * (form.pdf_logo_scale / 100);
 		let w = h * logoAspect.value;
 		if (w > 55) {
@@ -947,11 +873,7 @@
 		}
 		return { w, h };
 	});
-	const previewLogoStyle = computed(() => ({
-		width: `${mmPx(previewLogoMm.value.w)}px`,
-		height: `${mmPx(previewLogoMm.value.h)}px`
-	}));
-	const previewClamped = computed(() => 12 * (form.pdf_logo_scale / 100) * logoAspect.value > 55);
+	const logoWidthClamped = computed(() => 12 * (form.pdf_logo_scale / 100) * logoAspect.value > 55);
 
 	// The settings the previews render with (the live page preview, Preview as
 	// PDF and the Stationery editor's sample): the saved row with the live
@@ -1008,12 +930,6 @@
 		label: t.label,
 		onSelect: () => (target === "header" ? headerEditor : footerEditor).value?.insertText(t.token)
 	}))];
-
-	// Plain-text projection of the custom header for the paper mock. Marks are
-	// ignored — a faithful rich-text mock isn't worth the complexity when
-	// the Stationery section's live preview renders the real thing.
-	const previewHeaderLines = computed(() =>
-		blocksToPlainLines(buildHeaderBlocks(previewSettings.value)));
 
 	// The sample both previews show: the Stationery editor's two-page invoice
 	// (sample-pdf.ts), on the live form's paper, Stationery, Layout (Built-in
