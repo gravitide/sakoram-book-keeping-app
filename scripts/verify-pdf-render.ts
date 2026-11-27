@@ -46,10 +46,10 @@
 // cases do the same with real header / footer images (stage_header_footer),
 // placed by the real geometry (defaultImageRect + followImage).
 
+import type { Buffer } from "node:buffer";
 import type { PaperSize } from "../app/lib/page-settings";
 import type { HeaderFooterSlot } from "../app/lib/stationery";
 import type { MmRect } from "../app/lib/stationery-geometry";
-import type { Buffer } from "node:buffer";
 import type { LetterRow } from "../app/stores/letters";
 import type { PayslipRow } from "../app/stores/payslips";
 import type { QuoteLineRow } from "../app/stores/quotes";
@@ -72,8 +72,8 @@ import { buildPayslipPdfPayload } from "../app/lib/payslip-pdf.ts";
 import { buildQuotePdfPayload } from "../app/lib/quote-pdf.ts";
 import { buildAgedReceivablesPdfPayload, buildCashFlowPdfPayload, buildPnlPdfPayload } from "../app/lib/report-pdf.ts";
 import { sampleInvoicePayload, sampleStationeryPreviewPayload } from "../app/lib/sample-pdf.ts";
-import { defaultImageRect, followImage } from "../app/lib/stationery-geometry.ts";
 import { buildCustomerStatementPdfPayload } from "../app/lib/statement-pdf.ts";
+import { defaultImageRect, followImage } from "../app/lib/stationery-geometry.ts";
 import { buildVoucherPdfPayload } from "../app/lib/voucher-pdf.ts";
 import { pdfPageTexts } from "./pdf-text.ts";
 
