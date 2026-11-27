@@ -947,6 +947,14 @@ fn files_with_stem(dir: &Path, stem: &str) -> Vec<PathBuf> {
 		.collect()
 }
 
+/// Whether `ext` is a short plain word (1–5 ASCII letters / digits) — safe to
+/// put after a fixed stem in a file name. Asset extensions arrive from the
+/// frontend (`write_asset`) and from a PDF payload (`pdf::stage_background`),
+/// so both check them here rather than trusting the caller.
+pub(crate) fn is_plain_ext(ext: &str) -> bool {
+	!ext.is_empty() && ext.len() <= 5 && ext.chars().all(|c| c.is_ascii_alphanumeric())
+}
+
 /// Write an asset into `folder`, replacing any copy of it in another format.
 /// Returns the absolute path written. The extension must be a short plain word
 /// (it becomes part of a file name, and arrives from the frontend).
@@ -955,7 +963,7 @@ pub(crate) fn write_asset(folder: &Path, kind: &str, ext: &str, bytes: &[u8]) ->
 		let e = ext.trim().trim_start_matches('.').to_lowercase();
 		if e.is_empty() { "png".to_string() } else { e }
 	};
-	if ext.len() > 5 || !ext.chars().all(|c| c.is_ascii_alphanumeric()) {
+	if !is_plain_ext(&ext) {
 		return Err(format!("unsupported file extension: {ext}"));
 	}
 	let (dir, stem) = asset_dir_and_stem(folder, kind)?;
@@ -995,7 +1003,7 @@ pub(crate) fn remove_asset(folder: &Path, kind: &str) -> Result<(), String> {
 ///
 /// Done in Rust (std::fs, which is NOT gated by Tauri's capability scope)
 /// rather than the JS fs plugin, because a business folder can live on ANY
-/// drive (e.g. D:Sakoram…) — outside the fs plugin's allow-list, which can't
+/// drive (e.g. D:\Sakoram\…) — outside the fs plugin's allow-list, which can't
 /// cleanly glob arbitrary drive roots. The path is derived from the registry
 /// (never caller-controlled), so this stays safe. Returns the absolute path of
 /// the written file (stored on company_settings.{logo_path,pdf_header_logo_path};
@@ -1408,5 +1416,15 @@ mod tests {
 		assert!(write_asset(&folder, "stationery-background", "svg/../../evil", b"x").is_err());
 		assert!(write_asset(&folder, "stationery-background", "../x", b"x").is_err());
 		assert!(remove_asset(&folder, "business-db").is_err());
+	}
+
+	#[test]
+	fn a_plain_extension_is_one_to_five_ascii_letters_or_digits() {
+		for ok in ["svg", "pdf", "png", "jpg", "jpeg", "JPG", "a1"] {
+			assert!(is_plain_ext(ok), "{ok}");
+		}
+		for bad in ["", "toolong", "s.g", "../x", "svg/..", "pn g", "jpé"] {
+			assert!(!is_plain_ext(bad), "{bad}");
+		}
 	}
 }

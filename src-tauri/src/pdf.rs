@@ -198,40 +198,16 @@ async fn render_pdf(
 		.ok_or_else(|| PdfError::Typst("non-UTF-8 output path".into()))?
 		.to_string();
 
-	let cmd = app.shell().sidecar("typst")?;
-	let output = cmd
-		.args([
-			"compile",
-			"--root",
-			&work_dir_str,
-			"--font-path",
-			&fonts_dir_str,
-			&template_str,
-			&output_str,
-		])
-		.output()
-		.await
-		.map_err(|e| PdfError::Typst(format!("spawn failed: {e}")))?;
-
-	if !output.status.success() {
-		// Typst writes both warnings and errors to stderr; surface only the
-		// real error lines to the user. The full stderr still goes to the
-		// dev terminal (println below) for debugging.
-		let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-		let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-		eprintln!("typst stderr:\n{stderr}");
-		if !stdout.trim().is_empty() {
-			eprintln!("typst stdout:\n{stdout}");
-		}
-
-		let user_message = extract_typst_errors(&stderr)
-			.or_else(|| {
-				let trimmed = stderr.trim();
-				if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
-			})
-			.unwrap_or_else(|| stdout.trim().to_string());
-		return Err(PdfError::Typst(user_message));
-	}
+	run_typst(app, &[
+		"compile",
+		"--root",
+		&work_dir_str,
+		"--font-path",
+		&fonts_dir_str,
+		&template_str,
+		&output_str,
+	])
+	.await?;
 
 	// 7. Optional owner-password encryption. A blank/whitespace password
 	//    is treated as "no protection" — the JS side only sends one when
@@ -260,7 +236,7 @@ pub(crate) fn stage_background(data: &mut Value, business_folder: Option<&Path>,
 		return Ok(());
 	}
 	let ext = bg.get("ext").and_then(|v| v.as_str()).unwrap_or("").to_string();
-	let plain = !ext.is_empty() && ext.len() <= 5 && ext.chars().all(|c| c.is_ascii_alphanumeric());
+	let plain = crate::tenants::is_plain_ext(&ext);
 	let src = business_folder
 		.filter(|_| plain)
 		.map(|f| f.join(crate::tenants::STATIONERY_DIR).join(format!("background.{ext}")))
@@ -276,6 +252,36 @@ pub(crate) fn stage_background(data: &mut Value, business_folder: Option<&Path>,
 		None => *bg = Value::Null,
 	}
 	Ok(())
+}
+
+/// Run the bundled Typst sidecar with `args`. On failure, surface only the
+/// real error lines to the user (Typst writes warnings and errors to stderr);
+/// the full stderr / stdout still go to the dev terminal for debugging. The
+/// one spawn path for every render — PDFs and the PDF-background preview.
+async fn run_typst(app: &AppHandle, args: &[&str]) -> Result<(), PdfError> {
+	let output = app
+		.shell()
+		.sidecar("typst")?
+		.args(args)
+		.output()
+		.await
+		.map_err(|e| PdfError::Typst(format!("spawn failed: {e}")))?;
+	if output.status.success() {
+		return Ok(());
+	}
+	let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+	let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+	eprintln!("typst stderr:\n{stderr}");
+	if !stdout.trim().is_empty() {
+		eprintln!("typst stdout:\n{stdout}");
+	}
+	let user_message = extract_typst_errors(&stderr)
+		.or_else(|| {
+			let trimmed = stderr.trim();
+			if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+		})
+		.unwrap_or_else(|| stdout.trim().to_string());
+	Err(PdfError::Typst(user_message))
 }
 
 /// Pull just the `error:` lines (and any wrapped continuation lines) out of
@@ -495,27 +501,9 @@ pub async fn render_stationery_artwork_png(app: AppHandle, ppi: u32) -> Result<V
 		.ok_or_else(|| PdfError::Typst("This business has no PDF background.".into()))?;
 	let output = work_dir.join("artwork.png");
 	let path_str = |p: &Path| p.to_str().map(str::to_string).ok_or_else(|| PdfError::Typst("non-UTF-8 path in app data dir".into()));
-	let out = app
-		.shell()
-		.sidecar("typst")?
-		.args([
-			"compile".to_string(),
-			"--root".to_string(),
-			path_str(&work_dir)?,
-			"--format".to_string(),
-			"png".to_string(),
-			"--ppi".to_string(),
-			ppi.clamp(20, 150).to_string(),
-			path_str(&template)?,
-			path_str(&output)?,
-		])
-		.output()
-		.await
-		.map_err(|e| PdfError::Typst(format!("spawn failed: {e}")))?;
-	if !out.status.success() {
-		let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-		return Err(PdfError::Typst(extract_typst_errors(&stderr).unwrap_or(stderr)));
-	}
+	let (root, template, out) = (path_str(&work_dir)?, path_str(&template)?, path_str(&output)?);
+	let ppi = ppi.clamp(20, 150).to_string();
+	run_typst(&app, &["compile", "--root", &root, "--format", "png", "--ppi", &ppi, &template, &out]).await?;
 	Ok(std::fs::read(&output)?)
 }
 
