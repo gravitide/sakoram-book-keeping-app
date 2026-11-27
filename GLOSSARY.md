@@ -51,5 +51,7 @@ _Avoid_: Page size, page format
 
 **Layout**:
 How a document's own content (title, details block, line table, totals) is
-arranged inside the Safe area. Independent of the Stationery.
+arranged inside the Safe area. A choice only under Built-in stationery; every
+other Stationery mode uses Classic, because the artwork or the printed paper is
+the design.
 _Avoid_: Template (the old word for Layout + Stationery combined)
