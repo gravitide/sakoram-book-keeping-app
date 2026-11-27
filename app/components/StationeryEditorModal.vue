@@ -561,7 +561,7 @@
 		if (props.mode !== "background" || !review.background) return null;
 		const was = resolvePaperSize(review.background.preparedFor).label;
 		return review.background.recrop
-			? `This artwork was cropped for ${was}. On ${here} it is scaled to cover the page, so its edges are cut off — re-crop it for ${here} on the Full-page background card (Re-crop starts from your original upload).`
+			? `This artwork was cropped for ${was}. On ${here} it is scaled to cover the page, so its edges are cut off — once the Paper size is saved, re-crop it for ${here} on the Full-page background card (Re-crop starts from your original upload).`
 			: `This artwork was prepared for ${was}. It is scaled to cover ${here}, so its edges may be cut off — check the page and the preview, then Apply to keep it.`;
 	});
 

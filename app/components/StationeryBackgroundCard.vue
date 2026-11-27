@@ -10,8 +10,9 @@
 				Stationery editor (Stationery section above). -->
 			<div class="flex flex-col items-center gap-2">
 				<div
-					class="relative w-44 rounded-md border-2 border-dashed overflow-hidden bg-white transition cursor-pointer"
-					:class="dragOver ? 'border-(--ui-primary) scale-[1.01]' : 'border-(--ui-border-accented) hover:border-(--ui-primary)/60'"
+					class="relative w-44 rounded-md border-2 border-dashed overflow-hidden bg-white transition"
+					:class="locked ? 'border-(--ui-border-accented) cursor-not-allowed opacity-60' : dragOver ? 'border-(--ui-primary) scale-[1.01] cursor-pointer' : 'border-(--ui-border-accented) hover:border-(--ui-primary)/60 cursor-pointer'"
+					:aria-disabled="locked ? true : undefined"
 					:style="{ aspectRatio: `${paperInfo.widthMm} / ${paperInfo.heightMm}` }"
 					role="button"
 					tabindex="0"
@@ -19,8 +20,8 @@
 					@click="pick"
 					@keydown.enter.prevent="pick"
 					@keydown.space.prevent="pick"
-					@dragover.prevent="dragOver = true"
-					@dragenter.prevent="dragOver = true"
+					@dragover.prevent="dragOver = !locked"
+					@dragenter.prevent="dragOver = !locked"
 					@dragleave.prevent="dragOver = false"
 					@drop.prevent="onDrop"
 				>
@@ -67,6 +68,7 @@
 						size="sm"
 						variant="soft"
 						:loading="busy"
+						:disabled="!!locked"
 						@click="pick"
 					>
 						{{ artwork.ext ? "Replace" : "Upload" }}
@@ -77,7 +79,7 @@
 						size="sm"
 						variant="soft"
 						:color="review?.recrop ? 'warning' : 'neutral'"
-						:disabled="busy"
+						:disabled="busy || !!locked"
 						@click="openRecrop"
 					>
 						Re-crop
@@ -88,13 +90,16 @@
 						size="sm"
 						variant="soft"
 						color="error"
-						:disabled="busy"
+						:disabled="busy || !!locked"
 						@click="remove"
 					>
 						Remove
 					</UButton>
 				</div>
 
+				<p v-if="locked" class="text-xs text-(--ui-warning)">
+					{{ locked }} The background saves the moment it changes, for the paper it was made for.
+				</p>
 				<p v-if="!artwork.ext" class="text-xs text-(--ui-text-muted)">
 					No background yet — documents print with blank margins until you upload one.
 				</p>
@@ -166,6 +171,11 @@
 		paper: PaperSize
 		/** Prepared for another sheet (from the page's live form), or null. */
 		review?: StationeryReview["background"]
+		/**
+		 * Why the artwork can't change right now (an unsaved Paper size change —
+		 * stationery-artwork.ts artworkPaperLock), or null.
+		 */
+		locked?: string | null
 	}>();
 	const emit = defineEmits<{
 		/** The artwork was saved for this sheet, or removed (null). */
@@ -184,7 +194,9 @@
 	const fileInput = useTemplateRef<HTMLInputElement>("fileInput");
 	const dragOver = ref(false);
 	const busy = ref(false);
-	const pick = () => fileInput.value?.click();
+	const pick = () => {
+		if (!props.locked) fileInput.value?.click();
+	};
 
 	const fail = (title: string, err: unknown) => toast.add({
 		title,
@@ -272,7 +284,7 @@
 	// a Paper size change to or from Letter / Legal that is how the artwork
 	// gets its new proportions back.
 	const openRecrop = async () => {
-		if (!tenants.activeTenantId || !artwork.value.ext) return;
+		if (props.locked || !tenants.activeTenantId || !artwork.value.ext) return;
 		try {
 			let ext: string;
 			let bytes: number[];
@@ -296,6 +308,7 @@
 
 	// ---- upload --------------------------------------------------------
 	const upload = async (file: File) => {
+		if (props.locked) return;
 		if (!tenants.activeTenantId) {
 			toast.add({ title: "No active business", color: "error", icon: "i-lucide-circle-alert" });
 			return;
@@ -355,7 +368,7 @@
 
 	// Remove deletes the artwork and its original. Switching modes never does.
 	const remove = async () => {
-		if (!tenants.activeTenantId) return;
+		if (props.locked || !tenants.activeTenantId) return;
 		busy.value = true;
 		try {
 			await removeBusinessAsset(tenants.activeTenantId, "stationery-background");

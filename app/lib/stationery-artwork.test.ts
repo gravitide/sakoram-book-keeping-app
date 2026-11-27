@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { backgroundFormatOf, backgroundMimeOf, backgroundPixelSize, downscaleSize, isRasterBackground, matchesPaperAspect, svgAspect, svgHasLiveText } from "./stationery-artwork";
+import { artworkPaperLock, backgroundFormatOf, backgroundMimeOf, backgroundPixelSize, downscaleSize, isRasterBackground, matchesPaperAspect, svgAspect, svgHasLiveText } from "./stationery-artwork";
 
 describe("backgroundPixelSize", () => {
 	// About 300 DPI at the paper size — the spec's 2480 × 3508 for A4.
@@ -137,5 +137,26 @@ describe("svgAspect", () => {
 		expect(svgAspect("<svg/>")).toBeNull();
 		expect(svgAspect("<svg viewBox=\"0 0 0 10\"/>")).toBeNull();
 		expect(svgAspect("not an svg")).toBeNull();
+	});
+});
+
+describe("artworkPaperLock", () => {
+	// Artwork saves the moment it is uploaded, cropped or removed, tagged with
+	// the sheet it was made for — so it must never be made for a sheet that
+	// Discard could still take back.
+	it("allows artwork changes while the picked Paper size is the saved one", () => {
+		expect(artworkPaperLock("a4", "a4")).toBeNull();
+		expect(artworkPaperLock("us-letter", "us-letter")).toBeNull();
+	});
+
+	it("blocks them while a Paper size change is unsaved, saying what to do", () => {
+		expect(artworkPaperLock("a5", "a4")).toBe("Save or discard the paper size change first.");
+		expect(artworkPaperLock("a4", "us-legal")).toBe("Save or discard the paper size change first.");
+	});
+
+	it("reads a missing or unknown saved paper as A4, the way every PDF does", () => {
+		expect(artworkPaperLock("a4", null)).toBeNull();
+		expect(artworkPaperLock("a4", "tabloid")).toBeNull();
+		expect(artworkPaperLock("a5", undefined)).not.toBeNull();
 	});
 });

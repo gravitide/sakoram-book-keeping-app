@@ -4,6 +4,9 @@
 		title="Header & footer images"
 		subtitle="Two images of your own, one for the top of the page and one for the bottom. Each lands at full page width, flush to its edge; move and resize it in the Stationery editor. The content always stays 4 mm clear of them."
 	>
+		<p v-if="locked" class="mb-4 text-xs text-(--ui-warning)">
+			{{ locked }} Images save the moment they change, placed on the paper picked now.
+		</p>
 		<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 			<div v-for="slot in HEADER_FOOTER_SLOTS" :key="slot" class="space-y-3">
 				<div class="text-sm font-medium">
@@ -11,16 +14,17 @@
 				</div>
 				<!-- The image as uploaded, on white: it previews against the paper. -->
 				<div
-					class="relative h-24 rounded-md border-2 border-dashed overflow-hidden bg-white transition cursor-pointer"
-					:class="dragOver === slot ? 'border-(--ui-primary) scale-[1.01]' : 'border-(--ui-border-accented) hover:border-(--ui-primary)/60'"
+					class="relative h-24 rounded-md border-2 border-dashed overflow-hidden bg-white transition"
+					:class="locked ? 'border-(--ui-border-accented) cursor-not-allowed opacity-60' : dragOver === slot ? 'border-(--ui-primary) scale-[1.01] cursor-pointer' : 'border-(--ui-border-accented) hover:border-(--ui-primary)/60 cursor-pointer'"
+					:aria-disabled="locked ? true : undefined"
 					role="button"
 					tabindex="0"
 					:aria-label="`Upload a ${slot} image`"
 					@click="pick(slot)"
 					@keydown.enter.prevent="pick(slot)"
 					@keydown.space.prevent="pick(slot)"
-					@dragover.prevent="dragOver = slot"
-					@dragenter.prevent="dragOver = slot"
+					@dragover.prevent="dragOver = locked ? null : slot"
+					@dragenter.prevent="dragOver = locked ? null : slot"
 					@dragleave.prevent="dragOver = null"
 					@drop.prevent="onDrop(slot, $event)"
 				>
@@ -50,7 +54,7 @@
 				</div>
 
 				<div class="flex flex-wrap gap-2">
-					<UButton icon="i-lucide-upload" size="sm" variant="soft" :loading="busy === slot" @click="pick(slot)">
+					<UButton icon="i-lucide-upload" size="sm" variant="soft" :loading="busy === slot" :disabled="!!locked" @click="pick(slot)">
 						{{ images[slot] ? "Replace" : "Upload" }}
 					</UButton>
 					<UButton
@@ -59,7 +63,7 @@
 						size="sm"
 						variant="soft"
 						color="neutral"
-						:disabled="busy !== null"
+						:disabled="busy !== null || !!locked"
 						@click="openRecrop(slot)"
 					>
 						Crop
@@ -70,7 +74,7 @@
 						size="sm"
 						variant="soft"
 						color="error"
-						:disabled="busy !== null"
+						:disabled="busy !== null || !!locked"
 						@click="remove(slot)"
 					>
 						Remove
@@ -158,6 +162,11 @@
 		rects?: HeaderFooterRects
 		/** Images placed on another sheet (from the page's live form). */
 		review?: Pick<StationeryReview, "header" | "footer">
+		/**
+		 * Why the images can't change right now (an unsaved Paper size change —
+		 * stationery-artwork.ts artworkPaperLock), or null.
+		 */
+		locked?: string | null
 	}>();
 	const emit = defineEmits<{
 		/** An image was added, cropped or removed and saved: its new place (null = gone) and the margins after its band followed it. */
@@ -184,6 +193,7 @@
 	const dragOver = ref<HeaderFooterSlot | null>(null);
 	const busy = ref<HeaderFooterSlot | null>(null);
 	const pick = (slot: HeaderFooterSlot) => {
+		if (props.locked) return;
 		pickingFor.value = slot;
 		fileInput.value?.click();
 	};
@@ -244,6 +254,7 @@
 	};
 
 	const upload = async (slot: HeaderFooterSlot, file: File) => {
+		if (props.locked) return;
 		const ext = backgroundFormatOf(file.name);
 		if (!ext) {
 			toast.add({ title: "Use an SVG, PDF, PNG or JPEG file", color: "error", icon: "i-lucide-circle-alert" });
@@ -309,7 +320,7 @@
 
 	const openRecrop = async (slot: HeaderFooterSlot) => {
 		const image = images.value[slot];
-		if (!image || !tenants.activeTenantId) return;
+		if (props.locked || !image || !tenants.activeTenantId) return;
 		try {
 			let ext: string;
 			let bytes: number[];
@@ -362,7 +373,7 @@
 	// Remove deletes that image and its original only — the other image, and
 	// both bands, stay as they are. Switching modes never deletes anything.
 	const remove = async (slot: HeaderFooterSlot) => {
-		if (!tenants.activeTenantId) return;
+		if (props.locked || !tenants.activeTenantId) return;
 		busy.value = slot;
 		try {
 			await removeBusinessAsset(tenants.activeTenantId, ASSET[slot]);

@@ -23,6 +23,18 @@ export interface PixelSize {
 	h: number
 }
 
+/**
+ * Why Stationery artwork can't be uploaded, cropped or removed right now, or
+ * null when it can. Artwork saves the moment it changes, tagged with the
+ * picked Paper size (and placed on that sheet); while a Paper size change is
+ * still unsaved, Discard would put the stored artwork back on the old sheet
+ * with geometry made for the new one. So the change must be saved or
+ * discarded first. `savedPaper` is the stored column (missing / unknown = A4).
+ */
+export function artworkPaperLock(pickedPaper: PaperSize, savedPaper: string | null | undefined): string | null {
+	return resolvePaperSize(savedPaper).key === pickedPaper ? null : "Save or discard the paper size change first.";
+}
+
 /** The pixel size of a portrait sheet at ~300 DPI (A4: 2480 × 3508). */
 export function backgroundPixelSize(paper: PaperSize): PixelSize {
 	const { widthMm, heightMm } = resolvePaperSize(paper);
