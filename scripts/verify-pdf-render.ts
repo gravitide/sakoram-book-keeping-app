@@ -73,7 +73,7 @@ import { buildQuotePdfPayload } from "../app/lib/quote-pdf.ts";
 import { buildAgedReceivablesPdfPayload, buildCashFlowPdfPayload, buildPnlPdfPayload } from "../app/lib/report-pdf.ts";
 import { sampleInvoicePayload, sampleStationeryPreviewPayload } from "../app/lib/sample-pdf.ts";
 import { buildCustomerStatementPdfPayload } from "../app/lib/statement-pdf.ts";
-import { defaultImageRect, followImage } from "../app/lib/stationery-geometry.ts";
+import { defaultImageRect, followImage, HEADER_FOOTER_GAP_MM, refitStationery } from "../app/lib/stationery-geometry.ts";
 import { buildVoucherPdfPayload } from "../app/lib/voucher-pdf.ts";
 import { pdfPageTexts } from "./pdf-text.ts";
 
@@ -248,6 +248,19 @@ const headerFooterImages = (
 		}),
 		pdf_paper_size: paper
 	};
+};
+// Stationery set up on one sheet, then the Paper size changed: re-fitted the
+// way /settings/pdf does when a paper is picked (refitStationery), one sheet
+// after another along `papers`.
+const refitted = (setup: { pdf_stationery: string, pdf_paper_size: PaperSize }, ...papers: PaperSize[]) => {
+	let json = setup.pdf_stationery;
+	let from = resolvePaperSize(setup.pdf_paper_size);
+	for (const paper of papers) {
+		const to = resolvePaperSize(paper);
+		json = refitStationery(json, from, to);
+		from = to;
+	}
+	return { ...setup, pdf_stationery: json, pdf_paper_size: from.key };
 };
 const customChrome = {
 	pdf_header_custom: 1,
@@ -604,7 +617,10 @@ const STATIONERY_PREVIEW_STATIONERY: [string, Partial<CompanySettingsRow> | ((pa
 	["preprinted-deep", bands({ top: 60, right: 18, bottom: 30, left: 18 })],
 	["header-footer", (paper) => headerFooterImages("svg", "svg", { paper })],
 	["header-footer-raster", (paper) => headerFooterImages("png", "pdf", { paper })],
-	["header-footer-moved", (paper) => headerFooterImages("svg", null, { paper, moved: true })]
+	["header-footer-moved", (paper) => headerFooterImages("svg", null, { paper, moved: true })],
+	// Placed on A4, then the Paper size changed to this sheet.
+	["header-footer-refit", (paper) => refitted(headerFooterImages("png", "pdf"), paper)],
+	["header-footer-moved-refit", (paper) => refitted(headerFooterImages("svg", "svg", { moved: true }), paper)]
 ];
 
 const cases: Case[] = [
@@ -766,6 +782,18 @@ const cases: Case[] = [
 	// bands stay reserved) rather than failing.
 	{ ...docCase("invoice-classic-header-footer-files-missing", invoice(settingsFor({ ...headerFooterImages() }))), businessFolder: join(REPO, "scripts/fixtures/no-such-folder") },
 	{ ...docCase("invoice-classic-header-footer-a5", invoice(settingsFor({ ...headerFooterImages("svg", "svg", { paper: "a5" }) }))), multipage: true },
+	// Placed on A4, then the Paper size changed (#362): A5 scales the images
+	// and bands, Letter / Legal keep their size, clamped onto the page.
+	// imagePlacementProblem proves each stays on the page and clear of the
+	// Safe area. A4 → A5 → A4 must come back to the A4 render exactly.
+	{ ...docCase("invoice-classic-header-footer-refit-a5", invoice(settingsFor({ ...refitted(headerFooterImages(), "a5") }))), multipage: true },
+	{ ...docCase("invoice-classic-header-footer-raster-refit-a5", invoice(settingsFor({ ...refitted(headerFooterImages("png", "pdf"), "a5") }))), multipage: true },
+	{ ...docCase("invoice-classic-header-footer-moved-refit-a5", invoice(settingsFor({ ...refitted(headerFooterImages("svg", "svg", { moved: true }), "a5") }))), multipage: true },
+	docCase("invoice-classic-header-footer-refit-us-letter", invoice(settingsFor({ ...refitted(headerFooterImages(), "us-letter") }), 1)),
+	docCase("invoice-classic-header-footer-refit-us-legal", invoice(settingsFor({ ...refitted(headerFooterImages("png", "pdf"), "us-legal") }))),
+	{ ...docCase("invoice-classic-header-footer-refit-a5-a4", invoice(settingsFor({ ...refitted(headerFooterImages(), "a5", "a4") }))), sameAs: "invoice-classic-header-footer" },
+	{ name: "payslip-classic-header-footer-refit-a5", template: "payslip.typ", payload: payslip(settingsFor({ ...refitted(headerFooterImages("png", "pdf"), "a5") })), multipage: true },
+	{ name: "statement-header-footer-refit-a5", template: "statement.typ", payload: statement(settingsFor({ ...refitted(headerFooterImages(), "a5") })), multipage: true },
 	docCase("quote-classic-header-footer", buildQuotePdfPayload({ row: docRow as never, lines: docLines(3), settings: settingsFor({ ...headerFooterImages() }), currency })),
 	docCase("bill-classic-header-footer", buildBillPdfPayload({ row: docRow as never, lines: docLines(2) as never, settings: settingsFor({ ...headerFooterImages("png", "pdf") }), currency, paidCents: 2000000 })),
 	...LAYOUTS.map((key): Case => ({ name: `payslip-${key}-header-footer`, template: "payslip.typ", payload: payslip(settingsFor({ ...headerFooterImages(), ...customChrome, pdf_layout: key })) })),
@@ -1018,6 +1046,29 @@ const orientationProblem = (c: Case, r: Rendered): string | null => {
 	return wrong.length ? `${wrong.length} page(s) are ${landscape ? "portrait" : "landscape"}; this Stationery wants ${landscape ? "landscape" : "portrait"}` : null;
 };
 
+// Header & footer images must sit on the page, and the Safe area clear of
+// them by at least the gap — above all after a Paper size change re-fitted
+// them (#362). Read from the page block every template receives.
+const imagePlacementProblem = (c: Case): string | null => {
+	const page = c.payload.page as (PageBlock & { paper?: string, margins?: { top: number, bottom: number } | null }) | undefined;
+	const hf = page?.header_footer;
+	if (!hf || !page?.margins) return null;
+	const sheet = resolvePaperSize(page.paper);
+	const eps = 1e-6;
+	for (const slot of ["header", "footer"] as const) {
+		const image = hf[slot] as { x: number, y: number, w: number, h: number } | null;
+		if (!image) continue;
+		if (image.x < -eps || image.y < -eps || image.x + image.w > sheet.widthMm + eps || image.y + image.h > sheet.heightMm + eps) {
+			return `the ${slot} image (${image.x}, ${image.y}, ${image.w} × ${image.h} mm) runs off the ${sheet.label} page`;
+		}
+		const clear = slot === "header"
+			? page.margins.top - (image.y + image.h)
+			: page.margins.bottom - (sheet.heightMm - image.y);
+		if (clear < HEADER_FOOTER_GAP_MM - eps) return `the Safe area comes within ${clear} mm of the ${slot} image`;
+	}
+	return null;
+};
+
 const sha256 = (buf: Buffer) => createHash("sha256").update(buf).digest("hex");
 
 // A case with Stationery artwork on disk must actually show it: the same
@@ -1080,7 +1131,7 @@ for (const c of allCases) {
 	if (KEEP_DIR) writeFileSync(join(KEEP_DIR, `${c.name}.pdf`), pdf);
 
 	// Checked in both modes: --update must not bless a wrong page count.
-	const problem = pageNumberProblem(c, rendered) ?? identityProblem(c, rendered) ?? orientationProblem(c, rendered) ?? artworkProblem(c, hash)
+	const problem = pageNumberProblem(c, rendered) ?? identityProblem(c, rendered) ?? orientationProblem(c, rendered) ?? imagePlacementProblem(c) ?? artworkProblem(c, hash)
 		// (Under --only the other case may simply not have rendered.)
 		?? (c.sameAs && (ONLY === undefined || c.sameAs in hashes) && hashes[c.sameAs] !== hash ? `should render exactly like ${c.sameAs}` : null);
 	if (problem) {
