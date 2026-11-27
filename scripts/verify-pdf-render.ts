@@ -692,15 +692,16 @@ const cases: Case[] = [
 	// bespoke templates keep their own content. The Stationery's bands
 	// (48 / 24 mm, sides 16) bound the Safe area, and "Page N of M" sits inside
 	// it, at its bottom edge.
-	// The bands take 77 mm of A4, so the invoice spills onto page 2.
+	// The bands take 77 mm of A4, so 5 lines spill the invoice onto page 2
+	// (3 stopped doing so once the accent rule became Built-in only).
 	// Layout is a Built-in choice only (ADR 0001 amendment): whatever Layout is
 	// stored, every other Stationery renders Classic, byte for byte.
 	...LAYOUTS.map((key): Case => ({
-		...docCase(`invoice-${key}-preprinted`, invoice(settingsFor({ ...preprintedPaper, pdf_layout: key }))),
+		...docCase(`invoice-${key}-preprinted`, invoice(settingsFor({ ...preprintedPaper, pdf_layout: key }), 5)),
 		multipage: true,
 		...(key === "classic" ? {} : { sameAs: "invoice-classic-preprinted" })
 	})),
-	{ ...docCase("invoice-classic-preprinted-custom-chrome", invoice(settingsFor({ ...preprintedPaper, ...customChrome }))), multipage: true },
+	{ ...docCase("invoice-classic-preprinted-custom-chrome", invoice(settingsFor({ ...preprintedPaper, ...customChrome }), 5)), multipage: true },
 	{ ...docCase("invoice-classic-preprinted-multipage", invoice(settingsFor({ ...preprintedPaper }), 30)), multipage: true },
 	{ ...docCase("invoice-compact-preprinted-multipage", invoice(settingsFor({ ...preprintedPaper, ...customChrome, pdf_layout: "compact" }), 40)), multipage: true },
 	docCase("quote-classic-preprinted", buildQuotePdfPayload({ row: docRow as never, lines: docLines(3), settings: settingsFor({ ...preprintedPaper }), currency })),

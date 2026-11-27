@@ -59,9 +59,9 @@
 
 <script setup lang="ts">
 	// The PDF accent colour (company_settings.pdf_theme_color): one compact row,
-	// shared by every Stationery mode's options on /settings/pdf — the colour
-	// prints in every mode (the line under the title, table headings), so each
-	// mode's section carries it. Bound to the page form; saving is the page's.
+	// shared by every Stationery mode's options on /settings/pdf. Under Built-in
+	// it colours the accent lines; under every mode it tints the highlighted
+	// totals in statements and reports, so each mode's section carries it. Bound to the page form; saving is the page's.
 	import { isHexColor, THEME_COLORS, themeHex } from "~/lib/theme";
 
 	const props = defineProps<{

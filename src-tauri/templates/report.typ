@@ -60,10 +60,10 @@
 // ============================================================
 // Header: logo (or wordmark) + red rule
 // ============================================================
-// Logo or wordmark (Built-in stationery only — see builtin-logo); the accent
-// rule stays under every mode.
+// Logo or wordmark and the accent rule — Built-in stationery only (see
+// builtin-logo); any other Stationery draws its own lines.
 #builtin-logo(data, 12mm, 16pt, below: -2mm)
-#line(length: 100%, stroke: 2pt + theme)
+#if data.page.chrome { line(length: 100%, stroke: 2pt + theme) }
 
 // ============================================================
 // Title + period subtitle

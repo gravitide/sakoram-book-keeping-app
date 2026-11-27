@@ -788,7 +788,7 @@
 	// picker itself is PdfColorRow, shown in every mode's options.
 	const themeColor = computed(() => themeHex(form.pdf_theme_color));
 	// Outside Built-in the colour still prints; say where.
-	const COLOR_HINT = "Used for the line under the title and for table headings.";
+	const COLOR_HINT = "Used for the highlighted totals in statements and reports.";
 
 	// ---- header logo print size ---------------------------------------
 	// What the Logo size slider reports: the same maths header-logo(data, 12mm)
