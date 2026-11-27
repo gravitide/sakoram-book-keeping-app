@@ -130,7 +130,7 @@
 										class="ml-3 pl-3 border-l border-(--ui-border) space-y-0.5 mt-0.5"
 									>
 										<NuxtLink
-											v-for="section in child.sections"
+											v-for="section in sectionsOf(child)"
 											:key="section.hash"
 											:to="`${child.to}${section.hash}`"
 											class="flex items-center gap-2 px-3 py-1 rounded-md text-xs hover:bg-(--ui-bg-elevated) hover:text-(--ui-text)"
@@ -394,8 +394,11 @@
 	// compile time, no runtime fetch). Wide PNG, rendered in the About modal.
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import { useHelpWindow } from "~/composables/useHelpWindow";
+	import { usePdfSettingsMode } from "~/composables/usePdfSettingsMode";
 	import { applyPrimaryColor } from "~/lib/color-ramp";
 	import { FONT_LICENCE_NAME, FONT_LICENCE_URL, FONT_LICENCES } from "~/lib/font-licences";
+	import { pdfSettingsSections } from "~/lib/pdf-settings-sections";
+	import { resolveStationeryMode } from "~/lib/stationery";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
 
@@ -611,8 +614,13 @@
 	};
 
 	interface NavSection { hash: string, label: string, icon: string }
-	interface NavChild { to: string, label: string, icon: string, sections?: NavSection[] }
+	// `sections` is a function when the anchors depend on live state (read in
+	// render, so the sidebar follows it).
+	interface NavChild { to: string, label: string, icon: string, sections?: NavSection[] | (() => NavSection[]) }
 	interface NavItem { to?: string, key?: string, label: string, icon?: string, divider?: boolean, children?: NavChild[], action?: () => void, heading?: boolean }
+
+	// /settings/pdf's live Stationery mode (its middle anchor is named after it).
+	const pdfMode = usePdfSettingsMode();
 
 	const nav: NavItem[] = [
 		{ to: "/", label: "Dashboard", icon: "i-lucide-layout-dashboard" },
@@ -721,16 +729,10 @@
 					to: "/settings/pdf",
 					label: "PDF",
 					icon: "i-lucide-file-text",
-					sections: [
-						// One per card on the page (none orphaned): Colour sits in the
-						// Paper & layout section, the two Built-in cards in Stationery.
-						{ hash: "#paper-layout", label: "Paper & layout", icon: "i-lucide-layout-template" },
-						{ hash: "#color", label: "Colour", icon: "i-lucide-palette" },
-						{ hash: "#stationery", label: "Stationery", icon: "i-lucide-stamp" },
-						{ hash: "#header-logo", label: "Header logo", icon: "i-lucide-image" },
-						{ hash: "#header-footer", label: "Header & footer", icon: "i-lucide-panel-top" },
-						{ hash: "#font", label: "Font", icon: "i-lucide-type" }
-					]
+					// The page's three sections: Page, the picked Stationery mode's
+					// options (named after it — the page shares its live, maybe
+					// unsaved pick; the saved one until it has mounted), Font.
+					sections: () => pdfSettingsSections(pdfMode.value ?? resolveStationeryMode(settings.settings?.pdf_stationery_mode))
 				},
 				{
 					to: "/settings/letters",
@@ -803,6 +805,9 @@
 			divider: true
 		}
 	];
+
+	const sectionsOf = (child: NavChild): NavSection[] =>
+		typeof child.sections === "function" ? child.sections() : child.sections ?? [];
 
 	// A child owns its route and everything nested under it
 	// (`/employees` covers `/employees/12`).

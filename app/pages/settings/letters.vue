@@ -104,7 +104,7 @@
 				</div>
 				<p class="text-xs text-(--ui-text-muted) mt-3">
 					Paper size and the rest of your Stationery are in
-					<NuxtLink to="/settings/pdf#stationery" class="text-(--ui-primary) hover:underline">
+					<NuxtLink to="/settings/pdf#page" class="text-(--ui-primary) hover:underline">
 						PDF settings
 					</NuxtLink>.
 				</p>
@@ -127,7 +127,7 @@
 					<UIcon name="i-lucide-image" class="size-4" />
 					<span>
 						Upload and place your artwork in
-						<NuxtLink to="/settings/pdf#stationery" class="text-(--ui-primary) hover:underline">
+						<NuxtLink to="/settings/pdf#page" class="text-(--ui-primary) hover:underline">
 							PDF settings
 						</NuxtLink>.
 					</span>

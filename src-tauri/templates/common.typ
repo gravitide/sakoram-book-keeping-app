@@ -664,15 +664,13 @@
   let key = data.at("layout", default: "classic")
   // Any Stationery other than Built-in owns the page around the Safe area
   // (pre-printed paper already carries the business identity), so the Layout
-  // drops its logo / wordmark and header text and keeps only its title,
-  // number and accent rule. Those modes always render with Classic (the
-  // Layout is a Built-in choice only — buildLayoutAndPage in
-  // app/lib/page-settings.ts decides it), so this is Classic's header; the
-  // number is in meta-block.
+  // drops its logo / wordmark, header text AND accent rule (the artwork or the
+  // printed paper draws its own lines) and keeps only its title; the number is
+  // in meta-block. Those modes always render with Classic (the Layout is a
+  // Built-in choice only — buildLayoutAndPage in app/lib/page-settings.ts
+  // decides it), so this is Classic's title.
   if not data.page.chrome {
     return [
-      #line(length: 100%, stroke: 2pt + rgb(data.theme_color))
-      #v(8pt)
       #align(center, text(weight: "bold", size: 14pt, tracking: 0.04em)[#data.title])
       #v(14pt)
     ]
