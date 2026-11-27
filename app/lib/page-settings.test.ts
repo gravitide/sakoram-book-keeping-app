@@ -1,6 +1,6 @@
 import type { CompanySettingsRow } from "~/stores/settings";
 import { describe, expect, it } from "vitest";
-import { buildPageSettings, PAPER_SIZES } from "./page-settings";
+import { buildLayoutAndPage, buildPageSettings, PAPER_SIZES } from "./page-settings";
 
 // A Built-in business whose stored Stationery holds Pre-printed paper bands
 // (top / bottom as given; sides 14 / 16) that only a pre-printed letter uses.
@@ -271,5 +271,40 @@ describe("header & footer images", () => {
 	it("other modes never carry the images", () => {
 		expect(buildPageSettings(onStationery("background", both)).header_footer).toBeNull();
 		expect(buildPageSettings(onStationery("builtin", both)).header_footer).toBeNull();
+	});
+});
+
+// ADR 0001 amendment: Layout is a Built-in choice only.
+describe("buildLayoutAndPage", () => {
+	const withLayout = (mode: string, layout: string) => ({ ...onStationery(mode), pdf_layout: layout }) as CompanySettingsRow;
+
+	it("renders the business's own Layout under Built-in stationery", () => {
+		expect(buildLayoutAndPage(withLayout("builtin", "compact")).layout).toBe("compact");
+		expect(buildLayoutAndPage(withLayout("builtin", "minimal")).layout).toBe("minimal");
+	});
+
+	it.each(["background", "header_footer", "preprinted"])("renders Classic under %s, whatever Layout is stored", (mode) => {
+		for (const layout of ["classic", "modern", "minimal", "compact"]) {
+			expect(buildLayoutAndPage(withLayout(mode, layout)).layout).toBe("classic");
+		}
+	});
+
+	it("a letter on pre-printed paper renders Classic even for a Built-in business", () => {
+		expect(buildLayoutAndPage(withLayout("builtin", "modern"), { preprinted: true }).layout).toBe("classic");
+	});
+
+	it("an explicit Layout (the settings page's unsaved pick) follows the same rule", () => {
+		expect(buildLayoutAndPage(withLayout("builtin", "classic"), undefined, "modern").layout).toBe("modern");
+		expect(buildLayoutAndPage(withLayout("preprinted", "classic"), undefined, "modern").layout).toBe("classic");
+	});
+
+	it("falls back to Classic for an unknown or missing Layout", () => {
+		expect(buildLayoutAndPage(withLayout("builtin", "letterhead")).layout).toBe("classic");
+		expect(buildLayoutAndPage(null).layout).toBe("classic");
+	});
+
+	it("carries the page block buildPageSettings builds", () => {
+		const s = withLayout("preprinted", "modern");
+		expect(buildLayoutAndPage(s, { preprinted: true }).page).toEqual(buildPageSettings(s, { preprinted: true }));
 	});
 });

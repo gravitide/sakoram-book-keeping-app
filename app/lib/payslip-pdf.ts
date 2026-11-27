@@ -13,9 +13,8 @@ import type { CurrencyMeta } from "~/lib/money";
 import type { EmployeeSnapshot, PayslipLineRow, PayslipRow } from "~/stores/payslips";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR } from "./money";
-import { buildPageSettings } from "./page-settings";
+import { buildLayoutAndPage } from "./page-settings";
 import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
-import { resolveLayoutKey } from "./pdf-layouts";
 import { pdfThemeHex } from "./theme";
 
 export interface PayslipPdfPayloadArgs {
@@ -60,9 +59,8 @@ export function buildPayslipPdfPayload(args: PayslipPdfPayloadArgs): Record<stri
 
 	return {
 		number: row.number,
-		layout: resolveLayoutKey(settings?.pdf_layout),
+		...buildLayoutAndPage(settings),
 		title: "PAY SLIP",
-		page: buildPageSettings(settings),
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,

@@ -2,10 +2,8 @@
 	<UModal
 		v-model:open="openModel"
 		fullscreen
-		:title="editable ? `Edit stationery — ${modeLabel}` : `Preview page — ${modeLabel}`"
-		:description="editable
-			? `${paperInfo.label} · ${paperInfo.widthMm} × ${paperInfo.heightMm} mm. ${mode === 'header_footer' ? 'Drag an image to move it, a corner to resize it, and the dashed guides to set the Safe area.' : 'Drag the dashed guides to set the Safe area the content stays inside.'}`
-			: `${paperInfo.label} · ${paperInfo.widthMm} × ${paperInfo.heightMm} mm. Your Layout's own margins frame the page.`"
+		:title="`Adjust margins & placement — ${modeLabel}`"
+		:description="`${paperInfo.label} · ${paperInfo.widthMm} × ${paperInfo.heightMm} mm. ${mode === 'header_footer' ? 'Drag an image to move it, a corner to resize it, and the dashed guides to set the Safe area.' : 'Drag the dashed guides to set the Safe area the content stays inside.'}`"
 		:ui="{ body: 'flex-1 min-h-0 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row gap-4' }"
 	>
 		<template #body>
@@ -57,7 +55,6 @@
 						class="shadow-lg ring-1 ring-black/10"
 						:paper="paper"
 						:mode="mode"
-						:layout="layout"
 						:margins="draft"
 						:scale="scale"
 						:artwork-url="artwork.url.value"
@@ -104,7 +101,7 @@
 						<!-- Margin guides. A wide transparent hit strip around a 1px
 							line; focusable, so arrow keys move them too. -->
 						<div
-							v-for="g in editable ? guides : []"
+							v-for="g in guides"
 							:key="g.edge"
 							role="slider"
 							tabindex="0"
@@ -160,7 +157,7 @@
 					:description="`These margins left no room for content on ${paperInfo.label}, so they were reduced to fit. Apply to keep them.`"
 				/>
 
-				<div v-if="editable">
+				<div>
 					<div class="text-sm font-medium mb-2">
 						Safe area margins
 					</div>
@@ -180,22 +177,6 @@
 					</p>
 					<p v-if="mode === 'header_footer'" class="text-xs text-(--ui-text-muted) mt-2">
 						Each image's Reserved band always reaches {{ HEADER_FOOTER_GAP_MM }} mm past it and follows it when it moves; drag the guide further out for more room. Images snap to the page edges and the centre line.
-					</p>
-				</div>
-				<div v-else>
-					<div class="text-sm font-medium mb-2">
-						Safe area margins
-					</div>
-					<dl class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm tabular-nums">
-						<template v-for="edge in EDGES" :key="edge">
-							<dt class="text-(--ui-text-muted)">
-								{{ EDGE_LABEL[edge] }}
-							</dt>
-							<dd>{{ formatMm(layoutMargins[edge]) }} mm</dd>
-						</template>
-					</dl>
-					<p class="text-xs text-(--ui-text-muted) mt-2">
-						Built-in stationery uses the {{ layoutLabel }} Layout's own margins, scaled for {{ paperInfo.label }}. To set your own, choose another Stationery.
 					</p>
 				</div>
 
@@ -242,16 +223,11 @@
 		</template>
 		<template #footer>
 			<div class="flex items-center justify-end gap-2 w-full">
-				<template v-if="editable">
-					<UButton color="neutral" variant="outline" @click="cancel">
-						Cancel
-					</UButton>
-					<UButton icon="i-lucide-check" @click="apply">
-						Apply
-					</UButton>
-				</template>
-				<UButton v-else color="neutral" variant="outline" @click="cancel">
-					Close
+				<UButton color="neutral" variant="outline" @click="cancel">
+					Cancel
+				</UButton>
+				<UButton icon="i-lucide-check" @click="apply">
+					Apply
 				</UButton>
 			</div>
 		</template>
@@ -281,9 +257,10 @@
 	// result. It edits a DRAFT: Apply hands the margins back to the settings
 	// page's form (saved with its Save changes), Cancel drops them.
 	//
-	// Under Built-in the editor is a PREVIEW (editsMargins): the page, rulers,
-	// the Layout's own margins as the Safe area, placeholders, printer band and
-	// the sample invoice — no guides, no Apply, nothing written back.
+	// It opens for the modes that own their margins — Full-page background,
+	// Header & footer images and Pre-printed paper (the Letters page opens it
+	// on the Pre-printed paper bands). Built-in has nothing to adjust: its
+	// margins belong to the Layout, and /settings/pdf's live preview shows them.
 	//
 	// Header & footer images add a draggable box per image to the same page
 	// (StationeryPage's slot, the guides' px space): move, corner-resize with
@@ -292,7 +269,6 @@
 	// resizeImage, nudgeImage, followImage, bandFloors). Apply hands back the
 	// images' rects with the margins.
 	import type { PaperSize } from "~/lib/page-settings";
-	import type { PdfLayoutKey } from "~/lib/pdf-layouts";
 	import type { HeaderFooterSlot, StationeryMarginsMm, StationeryMode } from "~/lib/stationery";
 	import type { ArrowDirection, HeaderFooterRects, ImageCorner, MarginEdge, MmRect, PageImageView } from "~/lib/stationery-geometry";
 	import type { CompanySettingsRow } from "~/stores/settings";
@@ -300,7 +276,7 @@
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { useStationeryArtwork } from "~/composables/useStationeryArtwork";
 	import { resolvePaperSize } from "~/lib/page-settings";
-	import { PDF_LAYOUTS } from "~/lib/pdf-layouts";
+	import { resolveLayoutKey } from "~/lib/pdf-layouts";
 	import { sampleStationeryPreviewPayload } from "~/lib/sample-pdf";
 	import { HEADER_FOOTER_SLOTS, paperGeometryOf, parseStationery, setBackgroundMargins, setHeaderFooterGeometry, setPreprintedMargins, HEADER_FOOTER_LABEL as SLOT_LABEL, STATIONERY_MODES, stationeryReview } from "~/lib/stationery";
 	import {
@@ -308,7 +284,6 @@
 		CSS_PX_PER_MM,
 		dragImage,
 		dragMargin,
-		editsMargins,
 		fitMargins,
 		fitScale,
 		followImage,
@@ -324,17 +299,15 @@
 		rectToPx,
 		resizeImage,
 		rulerTicks,
-		safeAreaMargins,
 		setMargin,
 		stepZoom
 	} from "~/lib/stationery-geometry";
 
 	const props = defineProps<{
-		/** Built-in opens as a preview; the other modes edit their own margins. */
+		/** Any mode but Built-in, whose margins belong to the Layout. */
 		mode: StationeryMode
 		paper: PaperSize
-		layout: PdfLayoutKey
-		/** The settings page's live (maybe unsaved) values, for the sample preview. */
+		/** The live (maybe unsaved) settings, for the sample preview. */
 		settings: CompanySettingsRow | null
 	}>();
 	const emit = defineEmits<{
@@ -370,10 +343,6 @@
 
 	const paperInfo = computed(() => resolvePaperSize(props.paper));
 	const modeLabel = computed(() => STATIONERY_MODES.find((m) => m.key === props.mode)?.label ?? "");
-	const editable = computed(() => editsMargins(props.mode));
-	// Built-in's read-only Safe area: the Layout's margins on this sheet.
-	const layoutMargins = computed(() => safeAreaMargins(props.mode, props.layout, paperInfo.value, margins.value));
-	const layoutLabel = computed(() => PDF_LAYOUTS.find((l) => l.key === props.layout)?.label ?? "");
 	const artwork = useStationeryArtwork();
 	const currency = useActiveCurrency();
 
@@ -394,10 +363,6 @@
 		if (!open) return;
 		zoom.value = 1;
 		dragging.value = null;
-		if (!editable.value) {
-			fitted.value = false;
-			return;
-		}
 		const copy = (r: MmRect | null) => (r ? { ...r } : null);
 		draftImages.value = isHeaderFooter.value ? { header: copy(images.value.header), footer: copy(images.value.footer) } : { header: null, footer: null };
 		let next = fitMargins(paperInfo.value, margins.value);
@@ -407,7 +372,6 @@
 	});
 
 	const apply = () => {
-		if (!editable.value) return;
 		margins.value = { ...draft.value };
 		if (isHeaderFooter.value) images.value = { header: draftImages.value.header, footer: draftImages.value.footer };
 		emit("applied");
@@ -563,21 +527,22 @@
 	});
 
 	// ---- sample preview -------------------------------------------------
-	// The page's live settings with this draft's margins in place, so the
-	// preview shows what Apply + Save would print.
+	// The live settings with this draft's margins in place, on the mode being
+	// edited (the Letters page edits the Pre-printed paper bands whatever the
+	// business's active mode), so the preview shows what Apply + Save would print.
 	const previewSettings = (): CompanySettingsRow | null => {
 		if (!props.settings) return null;
-		// Built-in: the Layout's margins, exactly as the settings stand.
-		if (!editable.value) return props.settings;
+		const onMode = { ...props.settings, pdf_stationery_mode: props.mode };
 		if (isHeaderFooter.value) {
-			return { ...props.settings, pdf_stationery: setHeaderFooterGeometry(props.settings.pdf_stationery, { ...draftImages.value, margins: { ...draft.value } }) };
+			return { ...onMode, pdf_stationery: setHeaderFooterGeometry(props.settings.pdf_stationery, { ...draftImages.value, margins: { ...draft.value } }) };
 		}
 		const setMargins = props.mode === "background" ? setBackgroundMargins : setPreprintedMargins;
-		return { ...props.settings, pdf_stationery: setMargins(props.settings.pdf_stationery, { ...draft.value }) };
+		return { ...onMode, pdf_stationery: setMargins(props.settings.pdf_stationery, { ...draft.value }) };
 	};
 	const preview = usePdfPreview({
 		command: "export_invoice_pdf",
-		buildPayload: () => sampleStationeryPreviewPayload(previewSettings(), currency.value, props.layout),
+		// Any mode here renders Classic (page-settings.ts buildLayoutAndPage).
+		buildPayload: () => sampleStationeryPreviewPayload(previewSettings(), currency.value, resolveLayoutKey(props.settings?.pdf_layout)),
 		fileName: () => "sample-invoice.pdf",
 		title: "Stationery preview"
 	});

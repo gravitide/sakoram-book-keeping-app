@@ -533,10 +533,10 @@ sakoram_app/
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
 │  │     ├─ company.vue               ← business info, address, bank, signatures, defaults, logo
-│  │     ├─ pdf.vue                   ← Paper & layout (paper size + Layout picker, then the Colour card) · Stationery (mode picker; Pre-printed paper bands; a to-scale thumbnail of the current page (`StationeryPage`) + **Edit stationery** (`StationeryEditorModal`) for Full-page background / Header & footer images / Pre-printed paper — **Preview page**, the same editor read-only, under Built-in; `StationeryBackgroundCard` — upload / aspect-locked crop + ~300 DPI downscale / live-text SVG warning / Remove — while Full-page background; `StationeryHeaderFooterCard` — upload / free-form Crop / Remove per image, a new image placed full-width flush to its edge — while Header & footer images; picking a Paper size re-fits every mode's geometry on the form (`setPaper`) and opens the editor when the ACTIVE mode needs a check; both artwork cards are locked while that Paper size change is unsaved; Built-in-only header logo + header/footer text cards) · Font. Every card has a sidebar anchor.
+│  │     ├─ pdf.vue                   ← Paper & layout (paper size + the Layout picker — Built-in only; other modes show a "Classic" note — then the Colour card) · Stationery (mode picker; a LIVE preview: page 1 of the sample invoice rendered by Typst from the unsaved form (`useLivePagePreview` → `render_document_page_png`, ~500 ms debounce, latest-wins), falling back to the drawn `StationeryPage` if a render fails; beside it **Preview as PDF** (the two-page `sampleStationeryPreviewPayload` in `PdfPreviewModal`, every mode) and **Adjust margins & placement** (`StationeryEditorModal`, every mode but Built-in); `StationeryBackgroundCard` — upload / aspect-locked crop + ~300 DPI downscale / live-text SVG warning / Remove — while Full-page background; `StationeryHeaderFooterCard` — upload / free-form Crop / Remove per image, a new image placed full-width flush to its edge — while Header & footer images; picking a Paper size re-fits every mode's geometry on the form (`setPaper`) and opens the editor when the ACTIVE mode needs a check; both artwork cards are locked while that Paper size change is unsaved; Built-in-only header logo + header/footer text cards) · Font. Every card has a sidebar anchor.
 │  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), light/dark/system toggle, zoom (6 discrete steps)
 │  │     ├─ payroll.vue               ← cycle template (period_start_day / period_end_day / pay_day)
-│  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + a pointer card to the Pre-printed paper bands (they live on the Stationery at /settings/pdf#stationery since 0056) + a "Stationery artwork" coming-soon placeholder (#artwork). (Signatures moved to /settings/company#signatures — they're shared across letters + quote/invoice "Prepared by".)
+│  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + the Pre-printed paper card (#preprinted): **Adjust pre-printed paper** opens `StationeryEditorModal` on the business-wide Pre-printed paper bands (`mode="preprinted"`, whatever the active mode) and saves them straight away through the settings store (`setPreprintedMargins`) + a "Stationery artwork" pointer card (#artwork) linking to /settings/pdf#stationery. (Signatures moved to /settings/company#signatures — they're shared across letters + quote/invoice "Prepared by".)
 │  │     ├─ businesses.vue            ← tenant CRUD + Export/Import (local .zip)
 │  │     ├─ backup.vue                ← Google Drive backup — hosts DriveBackupCard (moved off the Businesses page in v0.163.0 so it is findable); shows a "not available in this build" note when there are no Google credentials
 │  │     └─ developer.vue             ← per-machine developer options (localStorage via useUiState, no save bar). Currently: the breakpoint-badge switch. Everything defaults OFF in every build.
@@ -551,8 +551,8 @@ sakoram_app/
 │  │  ├─ CategoryFormModal.vue        ← create/edit category (8-color × 16-icon picker)
 │  │  ├─ CurrencyPicker.vue           ← onboarding + Settings → Business details currency dropdown. Built-in CURRENCIES list plus a "Custom currency…" option that reveals Code + Symbol inputs; emits both v-models so parents just bind code + symbol-override.
 │  │  ├─ BusinessBankFormModal.vue    ← create/edit modal for managed bank accounts (label + bank fields + 8-swatch colour tag; new banks pre-pick the least-used swatch). Auto-marks the first bank as default so freshly-created accounts immediately seed new quotes / invoices.
-│  │  ├─ StationeryEditorModal.vue    ← full-window Stationery editor: page to scale with mm rulers, artwork, four draggable / arrow-key margin guides, grey placeholder content, the informational 5 mm printer band, zoom, and "Preview sample invoice" (always two pages). Edits a DRAFT; Apply hands the margins to /settings/pdf's form (saved with Save changes). Under Built-in it opens as a preview ("Preview page"): the Layout's margins (`safeAreaMargins`) as the Safe area, no guides, no Apply. Under Header & footer images it also edits the two images (drag to move, corner-resize aspect-locked, arrow keys; `v-model:images`). Holds NO geometry — every rule is in `app/lib/stationery-geometry.ts`
-│  │  ├─ StationeryPage.vue           ← one to-scale sheet (artwork / Header & footer images / pre-printed bands, Safe area, placeholder bars, optional printer band); the thumbnail and the editor both draw it, the editor's guides sit in its slot
+│  │  ├─ StationeryEditorModal.vue    ← full-window Stationery editor: page to scale with mm rulers, artwork, four draggable / arrow-key margin guides, grey placeholder content, the informational 5 mm printer band, zoom, and "Preview sample invoice" (always two pages). Edits a DRAFT; Apply hands the margins to its opener (/settings/pdf's form, saved with Save changes; /settings/letters saves the bands on Apply). Never opened under Built-in — that mode's margins belong to the Layout; the live preview on /settings/pdf shows them. Its sample renders on the mode being edited (`pdf_stationery_mode: props.mode`). Under Header & footer images it also edits the two images (drag to move, corner-resize aspect-locked, arrow keys; `v-model:images`). Holds NO geometry — every rule is in `app/lib/stationery-geometry.ts`
+│  │  ├─ StationeryPage.vue           ← one to-scale sheet (artwork / Header & footer images / pre-printed bands, Safe area, placeholder bars, optional printer band); the editor draws it (its guides sit in its slot) and /settings/pdf uses it only as the fallback when the live preview can't render
 │  │  ├─ BankColorDot.vue             ← the bank-account colour marker (business_banks.color → themeHex dot, grey fallback) rendered in front of bank identities everywhere
 │  │  ├─ NewQuoteModal.vue            ← "New quote" form-in-a-modal (client + project title) — replaces /quotes/new
 │  │  ├─ NewInvoiceModal.vue          ← "New invoice" form-in-a-modal — replaces /invoices/new
@@ -2427,9 +2427,9 @@ persisted to localStorage).
   side by side); duplicate-to-clone. Sidebar "Correspondence" group.
   **Categories are a managed list** (`letter_categories`, migration 0041) —
   `LetterCategoryPicker` (search-or-create) on the modal + detail; managed on
-  the new **`/settings/letters`** page (Business group) alongside a
-  pointer to the Pre-printed paper bands (on the Stationery, /settings/pdf,
-  since 0056) and a "coming soon" Stationery artwork placeholder.
+  the new **`/settings/letters`** page (Business group) alongside the
+  Pre-printed paper bands ("Adjust pre-printed paper" opens the Stationery
+  editor on them) and a "Stationery artwork" pointer to the artwork on /settings/pdf.
   Rich text uses TipTap's official `useEditor` + `immediatelyRender: false`
   (a hand-rolled `new Editor` in `onMounted` did NOT bind to `EditorContent` —
   that was the "rich text doesn't work" bug); `@tiptap/pm` is an explicit dep.
@@ -2711,6 +2711,18 @@ surface flagged in the same audit was deleted in v0.164.1.)
   widths, the 55 mm logo clamp) is NOT scaled, so check the A5 render. Don't hand-write `paper:` / Stationery margins in a template or a
   builder, and add `page-setup` to the SELECTIVE import list of
   voucher/report/statement/letter. `bun run verify:pdf` proves byte identity.
+- **Layout is a Built-in choice only, decided in `buildLayoutAndPage`.**
+  (ADR 0001 amendment.) Every builder whose template reads `data.layout`
+  (quote / invoice / bill / payslip and the Settings samples) spreads
+  `...buildLayoutAndPage(settings)` from page-settings.ts, which returns the
+  stored (or, on /settings/pdf, the form's) Layout under Built-in and
+  `"classic"` under every other mode — including a letter on pre-printed
+  paper. `pdf_layout` itself is never rewritten, so switching back restores
+  it. Don't compute `layout` in a builder or check the mode in Typst:
+  `doc-header`'s `chrome: false` branch is Classic's header only. In
+  `verify:pdf` the non-Classic cases under another Stationery are `sameAs`
+  their Classic case (an `~unnumbered` twin compares with its counterpart's
+  twin), which proves the rule byte for byte.
 - **Landscape is granted by `page.allow_landscape`, not asked for.** The
   statement passes `flipped: true`; `page-geometry` only turns the sheet when
   the page block allows it, which is Built-in only — pre-printed paper and
@@ -2740,8 +2752,9 @@ surface flagged in the same audit was deleted in v0.164.1.)
   (accepted — those modes have no byte-identity baseline).
 - **Stationery suppression is `page.chrome`, read in two places only.** It is
   true only for Built-in. `page-setup` drops the template's footer when it is
-  false (no template gates its own footer); `doc-header` returns a title +
-  number + accent-rule-only header per Layout, and voucher/report/statement/
+  false (no template gates its own footer); `doc-header` returns Classic's
+  title + accent-rule-only header (those modes always render Classic — see
+  `buildLayoutAndPage` above), and voucher/report/statement/
   letter draw their logo/wordmark through common.typ's `builtin-logo` (gated
   on it; each keeps its accent rule, except letter, which drops its rule too).
   The statement also drops its FROM business block. `verify:pdf` reads every
@@ -2846,6 +2859,21 @@ surface flagged in the same audit was deleted in v0.164.1.)
   `render_stationery_artwork_png({ artwork })`, since an `<img>` can't show a
   PDF — the Header & footer card also reads a PDF image's proportions that way). A same-format re-upload leaves the stored
   JSON identical, so the uploader calls its `reload()`.
+- **The live preview on /settings/pdf is a real render, rate-limited.**
+  `useLivePagePreview(payload, { deps })` re-renders page 1 through
+  `render_document_page_png` (pdf.rs: `stage_render` — the SAME staging
+  `render_pdf` uses, so logo, Stationery artwork and companions match a real
+  PDF — then `typst compile --format png --pages 1`, each render in its own
+  `pdf-work/page-preview/<uuid>` dir, removed afterwards). Debounce +
+  latest-wins live in the pure `app/lib/latest-debounced.ts` (vitest, fake
+  timers): a slow render finishing after a newer one is dropped. `deps`
+  carries what changes the render without changing the payload — the
+  artwork blob URLs and the header logo src / crop (a same-format re-upload
+  keeps the stored JSON identical). The page is kept alive: the composable
+  pauses on deactivate and re-renders on activate, and pdf.vue re-hydrates
+  its form on activation when nothing is unsaved — the Letters page saves the
+  Pre-printed paper bands into the same `pdf_stationery` JSON, and a stale
+  form would otherwise save the old bands back.
 - **The Stationery preview sample is exactly two pages, everywhere.**
   `sampleStationeryPreviewPayload` (sample-pdf.ts) sizes its line count from
   the Safe area's height so the invoice lands at ~1.5 pages; `verify:pdf`

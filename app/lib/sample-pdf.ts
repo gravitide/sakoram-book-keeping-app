@@ -9,7 +9,7 @@ import type { PageSettings } from "./page-settings";
 import type { PdfLayoutKey } from "./pdf-layouts";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { computeLineTotals, formatMoney, formatQty } from "./money";
-import { buildPageSettings, resolvePaperSize } from "./page-settings";
+import { buildLayoutAndPage, resolvePaperSize } from "./page-settings";
 import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
 import { layoutMarginsMm, safeAreaRect } from "./stationery-geometry";
 import { pdfThemeHex } from "./theme";
@@ -36,8 +36,8 @@ const SAMPLE_FORMATTED = {
 
 function base(settings: CompanySettingsRow | null, currency: SampleCurrency, layoutKey: PdfLayoutKey) {
 	return {
-		layout: layoutKey,
-		page: buildPageSettings(settings),
+		// The picked Layout under Built-in, Classic under any other Stationery.
+		...buildLayoutAndPage(settings, undefined, layoutKey),
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,
@@ -154,7 +154,7 @@ const previewLines = (count: number) => Array.from({ length: count }, (_, i) => 
  */
 export function sampleStationeryPreviewPayload(settings: CompanySettingsRow | null, currency: SampleCurrency, layoutKey: PdfLayoutKey) {
 	const common = base(settings, currency, layoutKey);
-	const lines = previewLines(previewLineCount(common.page, layoutKey));
+	const lines = previewLines(previewLineCount(common.page, common.layout));
 	const noSym = (c: number) => formatMoney(c, { code: currency.code, withSymbol: false });
 	const sym = (c: number) => `${currency.symbol} ${noSym(c)}`;
 	const subtotal = lines.reduce((s, l) => s + l.subtotal, 0);

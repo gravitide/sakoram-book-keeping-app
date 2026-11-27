@@ -665,25 +665,12 @@
   // Any Stationery other than Built-in owns the page around the Safe area
   // (pre-printed paper already carries the business identity), so the Layout
   // drops its logo / wordmark and header text and keeps only its title,
-  // number and accent rule. The number is in meta-block for every Layout but
-  // Minimal, which prints it here.
+  // number and accent rule. Those modes always render with Classic (the
+  // Layout is a Built-in choice only — buildLayoutAndPage in
+  // app/lib/page-settings.ts decides it), so this is Classic's header; the
+  // number is in meta-block.
   if not data.page.chrome {
-    return if key == "modern" [
-      #tapered-rule(rgb(data.theme_color), thickness: 3pt)
-      #v(16pt)
-    ] else if key == "minimal" [
-      #align(right)[
-        #text(size: 9pt, tracking: 0.2em, fill: rgb("#6b7280"))[#upper(data.title)]
-        #v(2pt)
-        #text(weight: "semibold", size: 13pt)[\##data.number]
-      ]
-      #v(24pt)
-    ] else if key == "compact" [
-      #line(length: 100%, stroke: 1.5pt + rgb(data.theme_color))
-      #v(6pt)
-      #align(center, text(weight: "bold", size: 12pt, tracking: 0.04em)[#data.title])
-      #v(10pt)
-    ] else [
+    return [
       #line(length: 100%, stroke: 2pt + rgb(data.theme_color))
       #v(8pt)
       #align(center, text(weight: "bold", size: 14pt, tracking: 0.04em)[#data.title])

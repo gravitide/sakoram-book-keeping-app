@@ -36,3 +36,14 @@ up a Layout.
   originals travel in both the export bundle and the Drive snapshot.
 - **Stationery is not frozen per document.** Re-rendering an old invoice uses the
   current Stationery, the same as logos and templates did before.
+
+## Amendment (2026-11-27): Layout is a Built-in choice only
+
+In use, picking a Layout under Full-page background, Header & footer images or
+Pre-printed paper added little: the artwork (or the printed paper) is the
+design, and once the Layout's own logo and header text are suppressed the four
+Layouts differ only in small ways. The Layout picker is therefore shown only
+under Built-in, and every other Stationery mode renders with **Classic**. The
+stored Layout is kept, so switching back to Built-in restores it. The rest of
+this ADR stands: Stationery and Layout remain separate settings, and margins
+still come from the Layout under Built-in and from the Stationery otherwise.

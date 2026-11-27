@@ -97,7 +97,7 @@
 		paper: PaperSize
 		mode: StationeryMode
 		/** Built-in only: whose margins frame the content. */
-		layout: PdfLayoutKey
+		layout?: PdfLayoutKey
 		/**
 		 * The Stationery's margins (Full-page background / Header & footer
 		 * images — already pushed out of the images — / Pre-printed paper).
@@ -113,7 +113,7 @@
 		compact?: boolean
 		/** Header & footer images: where each sits and what to show in it. */
 		images?: Partial<Record<HeaderFooterSlot, PageImageView | null>> | null
-	}>(), { artworkUrl: null, artworkExt: null, printerBand: false, compact: false, images: null });
+	}>(), { layout: "classic", artworkUrl: null, artworkExt: null, printerBand: false, compact: false, images: null });
 
 	const paperInfo = computed(() => resolvePaperSize(props.paper));
 	const px = (mm: number) => mmToPx(mm, props.scale);

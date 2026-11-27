@@ -78,71 +78,129 @@
 				</div>
 			</UCard>
 
-			<!-- Pre-printed paper: the bands live with the Stationery now -->
+			<!-- Pre-printed paper: the business-wide bands, edited here in the
+				Stationery editor (they're the same bands the Pre-printed paper
+				Stationery uses, so either place edits one setting). -->
 			<UCard id="preprinted" class="scroll-mt-6">
 				<template #header>
 					<div class="font-medium">
 						Pre-printed paper
 					</div>
 					<div class="text-xs text-(--ui-text-muted) mt-1">
-						A letter set to "Pre-printed paper" leaves your business's blank
-						bands — the same Pre-printed paper bands every document uses on
-						that Stationery, set once in PDF settings.
+						A letter set to "Pre-printed paper" prints onto paper that already
+						carries your letterhead, so it leaves blank bands at the top and
+						bottom for it — whatever Stationery your other documents use. Set
+						how deep those bands are here.
 					</div>
 				</template>
 
-				<UButton to="/settings/pdf#stationery" color="neutral" variant="outline" icon="i-lucide-stamp" trailing-icon="i-lucide-arrow-right">
-					Open PDF stationery
-				</UButton>
+				<div class="flex flex-wrap items-center gap-3">
+					<UButton icon="i-lucide-pencil-ruler" :disabled="!settingsStore.settings" @click="openBands">
+						Adjust pre-printed paper
+					</UButton>
+					<span class="text-xs text-(--ui-text-muted) tabular-nums">
+						Top {{ formatMm(storedBands.top) }} mm · bottom {{ formatMm(storedBands.bottom) }} mm · {{ paperLabel }}
+					</span>
+				</div>
+				<p class="text-xs text-(--ui-text-muted) mt-3">
+					Paper size and the rest of your Stationery are in
+					<NuxtLink to="/settings/pdf#stationery" class="text-(--ui-primary) hover:underline">
+						PDF settings
+					</NuxtLink>.
+				</p>
 			</UCard>
 
-			<!-- Stationery artwork (future: Full-page background / Header & footer images) -->
+			<!-- Stationery artwork: a pointer — letters set to "use stationery" print on the business Stationery -->
 			<UCard id="artwork" class="scroll-mt-6">
 				<template #header>
-					<div class="flex items-center justify-between">
-						<div class="font-medium">
-							Stationery artwork
-						</div>
-						<UBadge size="xs" color="neutral" variant="subtle">
-							Coming soon
-						</UBadge>
+					<div class="font-medium">
+						Stationery artwork
 					</div>
 					<div class="text-xs text-(--ui-text-muted) mt-1">
-						Print letters — and every other document — on your own artwork: a
-						full-page background, or separate header and footer images. Set up
-						with the rest of your Stationery in PDF settings.
+						Letters set to "use stationery" print on your business Stationery,
+						like every other document — including a full-page background or
+						separate header and footer images.
 					</div>
 				</template>
 
-				<div class="text-sm text-(--ui-text-muted) py-2 flex items-center gap-2">
+				<p class="text-sm text-(--ui-text-muted) py-2 flex items-center gap-2">
 					<UIcon name="i-lucide-image" class="size-4" />
-					Not available yet — letters use your business Stationery: Built-in or Pre-printed paper.
-				</div>
+					<span>
+						Upload and place your artwork in
+						<NuxtLink to="/settings/pdf#stationery" class="text-(--ui-primary) hover:underline">
+							PDF settings
+						</NuxtLink>.
+					</span>
+				</p>
 			</UCard>
 		</div>
+
+		<StationeryEditorModal
+			v-model:open="bandsOpen"
+			v-model:margins="bandsDraft"
+			mode="preprinted"
+			:paper="paperKey"
+			:settings="settingsStore.settings"
+			@applied="saveBands"
+		/>
 	</div>
 </template>
 
 <script setup lang="ts">
 // Per-business Letters settings: managed category list (immediate persistence),
-// a pointer to the Pre-printed paper bands (they live on the Stationery, in
-// PDF settings), and a placeholder for the future Stationery artwork modes.
+// the Pre-printed paper bands a pre-printed letter reserves (opened in the
+// Stationery editor and saved straight away — they're the business-wide bands
+// in company_settings.pdf_stationery, shared with the Pre-printed paper
+// Stationery on /settings/pdf), and a pointer to the Stationery artwork there.
+	import type { StationeryMarginsMm } from "~/lib/stationery";
 	import type { LetterCategoryRow } from "~/stores/letter_categories";
+	import { resolvePaperSize } from "~/lib/page-settings";
+	import { parseStationery, setPreprintedMargins } from "~/lib/stationery";
+	import { formatMm } from "~/lib/stationery-geometry";
 	import { useLetterCategoriesStore } from "~/stores/letter_categories";
+	import { useSettingsStore } from "~/stores/settings";
 
 	definePageMeta({ title: "Letters" });
 
 	const catStore = useLetterCategoriesStore();
+	const settingsStore = useSettingsStore();
 	const toast = useToast();
 
-	await catStore.load();
+	await Promise.all([catStore.load(), settingsStore.ensureLoaded()]);
+
+	const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+	// ---- Pre-printed paper bands --------------------------------------
+	const storedBands = computed(() => parseStationery(settingsStore.settings?.pdf_stationery).preprinted);
+	const paperKey = computed(() => resolvePaperSize(settingsStore.settings?.pdf_paper_size).key);
+	const paperLabel = computed(() => resolvePaperSize(paperKey.value).label);
+	const bandsOpen = ref(false);
+	// The editor drafts on its own and hands the bands back on Apply; seeded
+	// from the saved settings every time it opens (kept-alive page).
+	const bandsDraft = ref<StationeryMarginsMm>({ ...storedBands.value });
+	watch(bandsOpen, (open) => {
+		if (open) bandsDraft.value = { ...storedBands.value };
+	}, { flush: "sync" });
+	const openBands = () => {
+		bandsOpen.value = true;
+	};
+	onDeactivated(() => {
+		bandsOpen.value = false;
+	});
+
+	const saveBands = async () => {
+		try {
+			await settingsStore.save({ pdf_stationery: setPreprintedMargins(settingsStore.settings?.pdf_stationery, { ...bandsDraft.value }) });
+			toast.add({ title: "Pre-printed paper bands saved", color: "success", icon: "i-lucide-check" });
+		} catch (err) {
+			toast.add({ title: "Could not save the bands", description: msg(err), color: "error", icon: "i-lucide-circle-alert" });
+		}
+	};
 
 	const busy = ref(false);
 	const newName = ref("");
 	const editingId = ref<number | null>(null);
 	const editName = ref("");
-
-	const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 	const addCategory = async () => {
 		const name = newName.value.trim();

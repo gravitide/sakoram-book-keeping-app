@@ -42,7 +42,7 @@ export function buildFooterBlocks(settings: CompanySettingsRow | null): LetterBl
  * A block is one line UNLESS it contains hard breaks (Shift+Enter), which
  * arrive as runs of `{ text: "", line_break: true }` — joining run text alone
  * silently collapses a four-line address into one. Marks are dropped: the mock
- * conveys arrangement, and "Preview on PDF" renders the real thing.
+ * conveys arrangement, and the page's live preview renders the real thing.
  */
 export function blocksToPlainLines(blocks: LetterBlock[]): string[] {
 	const lines: string[] = [];

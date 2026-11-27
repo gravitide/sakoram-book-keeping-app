@@ -28,9 +28,14 @@ describe("sampleStationeryPreviewPayload", () => {
 	it("is an invoice on the business's own Stationery", () => {
 		const p = sampleStationeryPreviewPayload(on({ pdf_stationery_mode: "preprinted", pdf_paper_size: "a5" }), currency, "compact");
 		expect(p.kind).toBe("invoice");
-		expect(p.layout).toBe("compact");
 		expect(p.page.paper).toBe("a5");
 		expect(p.page.stationery).toBe("preprinted");
+	});
+
+	it("renders the picked Layout under Built-in and Classic under any other Stationery", () => {
+		expect(sampleStationeryPreviewPayload(on({ pdf_stationery_mode: "builtin" }), currency, "compact").layout).toBe("compact");
+		expect(sampleStationeryPreviewPayload(on({ pdf_stationery_mode: "preprinted" }), currency, "compact").layout).toBe("classic");
+		expect(sampleInvoicePayload(on({ pdf_stationery_mode: "background" }), currency, "modern").layout).toBe("classic");
 	});
 
 	it("runs to about 25 lines on A4 with Built-in stationery", () => {
