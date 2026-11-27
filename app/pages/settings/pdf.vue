@@ -392,9 +392,9 @@
 							>
 								<StationeryAdjustRow
 									heading="Safe area"
+									description="The space kept clear between your content and each edge of the page."
 									label="Adjust margins &amp; placement"
-									:summary="safeAreaSummary(activeStationeryMargins)"
-									summary-title="Top / right / bottom / left"
+									:margins="activeStationeryMargins"
 									:attention="activeModeNeedsCheck"
 									@adjust="openEditor"
 								/>
@@ -412,9 +412,9 @@
 							>
 								<StationeryAdjustRow
 									heading="Safe area"
+									description="The space kept clear between your content and each edge of the page."
 									label="Adjust margins &amp; placement"
-									:summary="safeAreaSummary(activeStationeryMargins)"
-									summary-title="Top / right / bottom / left"
+									:margins="activeStationeryMargins"
 									:attention="activeModeNeedsCheck"
 									@adjust="openEditor"
 								/>
@@ -607,7 +607,7 @@
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
 	import { PAPER_SIZES, resolvePaperSize } from "~/lib/page-settings";
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
-	import { MODE_OPTIONS, PDF_SECTION_IDS, preprintedBandSummary, safeAreaSummary } from "~/lib/pdf-settings-sections";
+	import { MODE_OPTIONS, PDF_SECTION_IDS, preprintedBandSummary } from "~/lib/pdf-settings-sections";
 	import { PDF_TOKENS } from "~/lib/pdf-tokens";
 	import { sampleStationeryPreviewPayload } from "~/lib/sample-pdf";
 	import { BACKGROUND_DEFAULT_MARGINS, confirmPaperGeometry, HEADER_FOOTER_DEFAULT_MARGINS, modeNeedsReview, paperGeometryOf, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, serializeStationery, STATIONERY_MODES, stationeryReview, stationerySchema, withPaperGeometry } from "~/lib/stationery";

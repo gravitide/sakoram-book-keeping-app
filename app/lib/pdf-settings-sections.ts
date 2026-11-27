@@ -65,8 +65,3 @@ export function preprintedBandSummary(m: StationeryMarginsMm): string {
 	else parts.push(`Left ${formatMm(m.left)} mm`, `Right ${formatMm(m.right)} mm`);
 	return parts.join(" · ");
 }
-
-/** A Safe area's four margins, CSS order: "Safe area 40 / 18 / 25 / 18 mm". */
-export function safeAreaSummary(m: StationeryMarginsMm): string {
-	return `Safe area ${[m.top, m.right, m.bottom, m.left].map(formatMm).join(" / ")} mm`;
-}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MODE_OPTIONS, PDF_SECTION_IDS, pdfSettingsSections, preprintedBandSummary, safeAreaSummary } from "./pdf-settings-sections";
+import { MODE_OPTIONS, PDF_SECTION_IDS, pdfSettingsSections, preprintedBandSummary } from "./pdf-settings-sections";
 import { STATIONERY_MODES } from "./stationery";
 
 describe("pdfSettingsSections", () => {
@@ -32,11 +32,5 @@ describe("preprintedBandSummary", () => {
 
 	it("rounds to a tenth of a millimetre", () => {
 		expect(preprintedBandSummary({ top: 55.04, right: 18.01, bottom: 20.26, left: 17.99 })).toBe("Top 55 mm · Bottom 20.3 mm · Sides 18 mm");
-	});
-});
-
-describe("safeAreaSummary", () => {
-	it("prints top / right / bottom / left", () => {
-		expect(safeAreaSummary({ top: 40, right: 18, bottom: 25.56, left: 12 })).toBe("Safe area 40 / 18 / 25.6 / 12 mm");
 	});
 });
