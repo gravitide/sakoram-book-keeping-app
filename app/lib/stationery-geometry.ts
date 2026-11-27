@@ -673,8 +673,8 @@ export function stationeryReview(g: PaperGeometry, backgroundExt: BackgroundExt 
 /**
  * The geometry after Apply in the Stationery editor, which showed the user
  * this mode on this sheet: Header & footer images now count as placed on it,
- * an SVG / PDF background as prepared for it. A raster background still needs
- * its re-crop, so Apply leaves it flagged.
+ * the background as prepared for it — except a raster one that needs a
+ * re-crop (stationeryReview), which Apply leaves flagged.
  */
 export function confirmPaperGeometry(g: PaperGeometry, mode: StationeryMode, paper: PaperSize, backgroundExt: BackgroundExt | null): PaperGeometry {
 	const out = copyGeometry(g);
@@ -683,7 +683,7 @@ export function confirmPaperGeometry(g: PaperGeometry, mode: StationeryMode, pap
 			if (image) image.paper = paper;
 		}
 	}
-	if (mode === "background" && backgroundExt && !RASTER_EXTS.has(backgroundExt)) out.background.paper = paper;
+	if (mode === "background" && backgroundExt && !stationeryReview(g, backgroundExt, paper).background?.recrop) out.background.paper = paper;
 	return out;
 }
 

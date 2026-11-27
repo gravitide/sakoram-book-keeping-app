@@ -242,6 +242,10 @@ describe("confirmPaperGeometry — Apply in the editor confirms what it showed",
 		expect(confirmPaperGeometry(onLetter(), "background", "us-letter", "png").background.paper).toBe("a4");
 	});
 
+	it("a raster background prepared for A4 and shown on A5 (same shape) is confirmed like any check", () => {
+		expect(confirmPaperGeometry(a4Geometry(), "background", "a5", "jpg").background.paper).toBe("a5");
+	});
+
 	it("touches nothing of a mode it wasn't editing", () => {
 		expect(confirmPaperGeometry(onLetter(), "preprinted", "us-letter", "svg")).toEqual(onLetter());
 	});
