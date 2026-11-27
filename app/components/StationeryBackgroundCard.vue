@@ -7,7 +7,7 @@
 		<div class="grid grid-cols-1 md:grid-cols-[auto_minmax(0,1fr)] gap-6 items-start">
 			<!-- The artwork, to scale on the paper. White in both themes: it
 				previews against the paper. The Safe area is set in the
-				Stationery editor (Stationery section above). -->
+				Stationery editor (the page's slot below). -->
 			<div class="flex flex-col items-center gap-2">
 				<div
 					class="relative w-44 rounded-md border-2 border-dashed overflow-hidden bg-white transition"
@@ -126,6 +126,12 @@
 			</div>
 		</div>
 
+		<!-- The page's own controls for this mode: the way into the Stationery
+			editor (the Safe area) and the PDF colour. -->
+		<div v-if="$slots.default" class="pt-4 border-t border-(--ui-border) space-y-4">
+			<slot />
+		</div>
+
 		<ImageCropModal
 			v-model:open="cropOpen"
 			:image-blob="cropBlob"
@@ -143,7 +149,7 @@
 <script setup lang="ts">
 	// Full-page background Stationery: upload / crop / downscale / remove the
 	// artwork. Its four Safe-area margins are set in the Stationery editor
-	// (StationeryEditorModal, opened from the Stationery section).
+	// (StationeryEditorModal, opened by the page from this card's default slot).
 	//
 	// Files go through Rust commands only (a business folder can live on any
 	// drive — see CLAUDE.md): stationery/background.<ext> is what PDFs render;

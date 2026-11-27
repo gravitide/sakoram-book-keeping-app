@@ -98,6 +98,12 @@
 			</div>
 		</div>
 
+		<!-- The page's own controls for this mode: the way into the Stationery
+			editor (the Safe area) and the PDF colour. -->
+		<div v-if="$slots.default" class="pt-4 border-t border-(--ui-border) space-y-4">
+			<slot />
+		</div>
+
 		<input
 			ref="fileInput"
 			type="file"

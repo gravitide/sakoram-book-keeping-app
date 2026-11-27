@@ -78,7 +78,7 @@
 					<URadioGroup v-model="paperChoice" :items="paperChoices" />
 					<p class="text-xs text-(--ui-text-muted) mt-3">
 						Stationery and paper size are set in
-						<NuxtLink to="/settings/pdf#stationery" class="text-(--ui-primary) hover:underline">
+						<NuxtLink to="/settings/pdf#page" class="text-(--ui-primary) hover:underline">
 							PDF settings
 						</NuxtLink>, and the Pre-printed paper bands in
 						<NuxtLink to="/settings/letters#preprinted" class="text-(--ui-primary) hover:underline">

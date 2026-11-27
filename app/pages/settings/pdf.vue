@@ -8,7 +8,7 @@
 				PDF
 			</h1>
 			<p class="text-sm text-(--ui-text-muted)">
-				Paper, layout, stationery, font and colour for your generated PDFs.
+				The page, its stationery and the font of every PDF you generate.
 			</p>
 		</header>
 
@@ -17,174 +17,25 @@
 			class="max-w-5xl mx-auto"
 			@submit="onSubmit"
 		>
-			<!-- Order follows the PDF itself: the sheet, the Layout and its accent
-				colour first, then the Stationery around it (Built-in's logo and
-				header/footer text cards sit inside its section), then the type. Every
-				section has a sidebar anchor in app/layouts/default.vue — a new card
-				goes inside one of them, never between. -->
-			<div class="space-y-6">
-				<div id="paper-layout" class="scroll-mt-6 space-y-6">
+			<!-- One top-down flow: the Page (paper, live preview, Stationery mode),
+				then the picked mode's own options, then the Font. Each of the three
+				is a sidebar anchor in app/layouts/default.vue (ids and the mode
+				headings: app/lib/pdf-settings-sections.ts) — a new card goes inside
+				one of them, never between. -->
+			<div class="space-y-8">
+				<section :id="PDF_SECTION_IDS.page" class="scroll-mt-6">
 					<SectionCard
-						icon="i-lucide-layout-template"
-						title="Paper &amp; layout"
-						subtitle="The sheet every PDF is printed on, and — with Built-in stationery — how your quotes, invoices, bills and payslips arrange their content on it."
+						icon="i-lucide-file"
+						title="Page"
+						subtitle="The sheet every PDF is printed on, and what's printed around its content — quotes, invoices, bills, vouchers, payslips, statements, reports and letters."
 					>
-						<div class="mb-5">
-							<div class="text-sm font-medium mb-1">
-								Paper size
-							</div>
-							<p class="text-xs text-(--ui-text-muted) mb-2">
-								The sheet every PDF is laid out on. Margins follow the paper's width; text stays the same size.
-							</p>
-							<div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-								<button
-									v-for="p in PAPER_SIZES"
-									:key="p.key"
-									type="button"
-									class="px-3 py-2 rounded-md border text-left transition cursor-pointer hover:border-(--ui-primary)/50"
-									:class="[
-										form.pdf_paper_size === p.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)'
-									]"
-									:aria-pressed="form.pdf_paper_size === p.key"
-									@click="setPaper(p.key)"
-								>
-									<div class="text-xs font-medium">
-										{{ p.label }}
-									</div>
-									<div class="text-xs text-(--ui-text-muted)">
-										{{ p.widthMm }} × {{ p.heightMm }} mm
-									</div>
-								</button>
-							</div>
-						</div>
-						<!-- Layout is a Built-in choice only (ADR 0001 amendment): every
-							other Stationery renders Classic (page-settings.ts
-							buildLayoutAndPage). Hidden, not cleared, so switching back to
-							Built-in restores the stored pick. -->
-						<div v-if="form.pdf_stationery_mode !== 'builtin'">
-							<div class="text-sm font-medium mb-1">
-								Layout
-							</div>
-							<p class="text-xs text-(--ui-text-muted)">
-								{{ stationeryDesign }} the design, so documents use the Classic layout. The other layouts are available with Built-in stationery — your choice is kept for when you switch back.
-							</p>
-						</div>
-						<div v-else>
-							<div class="text-sm font-medium mb-2">
-								Layout
-							</div>
-							<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-								<button
-									v-for="l in PDF_LAYOUTS"
-									:key="l.key"
-									type="button"
-									:title="l.description"
-									class="p-2 rounded-md border text-left transition cursor-pointer hover:border-(--ui-primary)/50"
-									:class="[
-										form.pdf_layout === l.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)'
-									]"
-									:aria-pressed="form.pdf_layout === l.key"
-									@click="form.pdf_layout = l.key"
-								>
-									<div class="rounded-sm overflow-hidden ring-1 ring-(--ui-border) mb-1.5">
-										<PdfLayoutThumb :layout-key="l.key" :color="themeColor" />
-									</div>
-									<div class="text-xs font-medium flex items-center gap-1">
-										{{ l.label }}
-									</div>
-								</button>
-							</div>
-						</div>
-					</SectionCard>
-
-					<div id="color" class="scroll-mt-6">
-						<SectionCard
-							icon="i-lucide-palette"
-							title="Colour"
-							subtitle="The accent used for the header rule and highlights on your generated PDFs. Independent of the app's theme colour."
-						>
-							<!-- One row of eight, matching the Theme colour picker on
-								/settings/appearance. Capped at max-w-xl so the swatches stay a
-								compact row on a full-width card; labels truncate at the narrow
-								end ("Emerald" at text-[10px]), the full name stays in the title
-								tooltip. -->
-							<div class="grid grid-cols-8 gap-1.5 max-w-xl">
-								<button
-									v-for="c in colors"
-									:key="c.value"
-									type="button"
-									class="group flex flex-col items-center gap-1.5 min-w-0"
-									:title="c.label"
-									@click="form.pdf_theme_color = c.value"
-								>
-									<span
-										class="size-9 rounded-full border-2 transition shrink-0"
-										:class="form.pdf_theme_color === c.value ? 'border-(--ui-text) scale-110' : 'border-(--ui-border) group-hover:border-(--ui-text-muted)'"
-										:style="{ backgroundColor: c.hex }"
-									/>
-									<span
-										class="text-[10px] w-full text-center truncate"
-										:class="form.pdf_theme_color === c.value ? 'text-(--ui-text) font-medium' : 'text-(--ui-text-muted)'"
-									>
-										{{ c.label }}
-									</span>
-								</button>
-							</div>
-
-							<!-- Custom accent. Writes the same form field as the presets,
-								just as a literal hex — so dirty tracking, save and the
-								live preview all work unchanged. The native colour input
-								opens the OS picker (no dependency, works offline); the
-								hex field is for pasting an exact brand colour, which is
-								the more common case for an invoice accent. The input is
-								hidden inside the swatch label so the click target matches
-								the eight circles above — a bare colour input renders as an
-								OS-styled control that would look nothing like them. -->
-							<div class="mt-4 pt-4 border-t border-(--ui-border) flex items-center gap-3 max-w-xl">
-								<label
-									class="size-9 rounded-full border-2 shrink-0 cursor-pointer transition relative overflow-hidden"
-									:class="isCustomColor ? 'border-(--ui-text) scale-110' : 'border-(--ui-border) hover:border-(--ui-text-muted)'"
-									:style="{ backgroundColor: themeColor }"
-									title="Pick a custom colour"
-								>
-									<input
-										v-model="customColorWell"
-										type="color"
-										class="absolute inset-0 opacity-0 cursor-pointer"
-									>
-								</label>
-								<div class="min-w-0">
-									<div class="text-sm font-medium" :class="isCustomColor ? 'text-(--ui-text)' : 'text-(--ui-text-muted)'">
-										Custom
-									</div>
-									<div class="text-xs text-(--ui-text-muted)">
-										Your exact brand colour
-									</div>
-								</div>
-								<UInput
-									:model-value="customHexDraft"
-									placeholder="#1d4ed8"
-									class="w-32 ml-auto"
-									@update:model-value="onHexInput(String($event))"
-								/>
-							</div>
-						</SectionCard>
-					</div>
-				</div>
-
-				<div id="stationery" class="scroll-mt-6 space-y-6">
-					<SectionCard
-						icon="i-lucide-stamp"
-						title="Stationery"
-						subtitle="What's printed around the content of every PDF — quotes, invoices, bills, vouchers, payslips, statements, reports and letters."
-					>
-						<!-- Page 1 of the sample invoice on the left, rendered by Typst from the
-							live (unsaved) form ~500 ms after the last change (useLivePagePreview),
-							with the drawn page as the fallback if a render fails. Everything you
-							act on sits on the right: the mode list (the selected mode shows its
-							next step), the two actions and one line of paper / margins. -->
-						<div class="flex flex-col sm:flex-row items-start gap-5">
-							<div class="shrink-0" :style="{ width: `${PREVIEW_W_PX}px` }">
+						<!-- Page 1 of the sample invoice on the left, rendered by Typst from
+							the live (unsaved) form ~500 ms after the last change
+							(useLivePagePreview), with the drawn page as the fallback if a
+							render fails. The controls sit on the right — and come first
+							below sm, so a narrow window leads with what you act on. -->
+						<div class="flex flex-col sm:flex-row items-start gap-6">
+							<div class="order-2 sm:order-1 shrink-0 self-center sm:self-start" :style="{ width: `${PREVIEW_W_PX}px` }">
 								<StationeryPage
 									v-if="livePreview.error.value"
 									class="rounded-sm ring-1 ring-(--ui-border) shadow-sm"
@@ -203,7 +54,7 @@
 									class="relative overflow-hidden rounded-sm ring-1 ring-(--ui-border) shadow-sm bg-white"
 									:style="{ height: `${previewHeightPx}px` }"
 									role="img"
-									:aria-label="`Page 1 of a sample invoice on ${resolvePaperSize(paperKey).label}`"
+									:aria-label="`Page 1 of a sample invoice on ${paperLabel}`"
 									:aria-busy="livePreview.loading.value"
 								>
 									<img
@@ -220,40 +71,78 @@
 										<UIcon name="i-lucide-loader-circle" class="size-5 animate-spin text-zinc-400" />
 									</div>
 								</div>
-								<p v-if="livePreview.error.value" class="mt-1.5 text-xs text-(--ui-text-muted)">
-									Couldn't render the preview, so this is a drawing of the page.
+								<p v-if="livePreview.error.value" class="mt-2 text-xs text-(--ui-text-muted)">
+									{{ paperLabel }}. Couldn't render the preview, so this is a drawing of the page.
 								</p>
-								<p v-if="!livePreview.error.value" class="mt-2 flex items-center gap-1.5 text-xs text-(--ui-text-muted)">
-									<span class="size-1.5 rounded-full" :class="livePreview.loading.value ? 'bg-(--ui-warning)' : 'bg-(--ui-success)'" aria-hidden="true" />
-									Live preview, page 1
+								<p v-else class="mt-2 flex items-center gap-1.5 text-xs text-(--ui-text-muted)">
+									<span class="size-1.5 shrink-0 rounded-full" :class="livePreview.loading.value ? 'bg-(--ui-warning)' : 'bg-(--ui-success)'" aria-hidden="true" />
+									{{ paperLabel }}, live preview of page 1
 								</p>
 							</div>
-							<div class="flex flex-col gap-3 min-w-0 flex-1 w-full">
-								<div class="flex flex-col gap-1.5" role="group" aria-label="Stationery">
-									<button
-										v-for="m in STATIONERY_MODES"
-										:key="m.key"
-										type="button"
-										class="flex items-start gap-2.5 w-full px-3 py-2.5 rounded-md border text-left transition cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ui-primary)"
-										:class="form.pdf_stationery_mode === m.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border) hover:border-(--ui-border-accented)'"
-										:aria-pressed="form.pdf_stationery_mode === m.key"
-										@click="form.pdf_stationery_mode = m.key"
-									>
-										<span
-											class="mt-0.5 size-3.5 shrink-0 rounded-full border-[1.5px] flex items-center justify-center"
-											:class="form.pdf_stationery_mode === m.key ? 'border-(--ui-primary)' : 'border-(--ui-border-accented)'"
-											aria-hidden="true"
+
+							<div class="order-1 sm:order-2 @container flex flex-col gap-5 min-w-0 flex-1 w-full">
+								<div>
+									<div id="pdf-paper-label" class="text-sm font-medium">
+										Paper size
+									</div>
+									<p class="text-xs text-(--ui-text-muted) mt-0.5 mb-2">
+										Margins follow the paper's width; text stays the same size.
+									</p>
+									<div class="grid grid-cols-2 @lg:grid-cols-4 gap-2" role="group" aria-labelledby="pdf-paper-label">
+										<button
+											v-for="p in PAPER_SIZES"
+											:key="p.key"
+											type="button"
+											class="px-3 py-2 rounded-md border text-left transition cursor-pointer hover:border-(--ui-primary)/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ui-primary)"
+											:class="[
+												form.pdf_paper_size === p.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)'
+											]"
+											:aria-pressed="form.pdf_paper_size === p.key"
+											@click="setPaper(p.key)"
 										>
-											<span v-if="form.pdf_stationery_mode === m.key" class="size-1.5 rounded-full bg-(--ui-primary)" />
-										</span>
-										<span class="min-w-0">
-											<span class="block text-sm font-medium">{{ m.label }}</span>
-											<span class="block text-xs text-(--ui-text-muted) mt-0.5">{{ m.description }}</span>
-											<span v-if="form.pdf_stationery_mode === m.key" class="block text-xs text-(--ui-primary) mt-1">{{ m.nextStep }}</span>
-										</span>
-									</button>
+											<div class="text-xs font-medium">
+												{{ p.label }}
+											</div>
+											<div class="text-xs text-(--ui-text-muted) tabular-nums">
+												{{ p.widthMm }} × {{ p.heightMm }} mm
+											</div>
+										</button>
+									</div>
 								</div>
-								<div class="flex flex-wrap gap-2">
+
+								<div>
+									<div id="pdf-stationery-label" class="text-sm font-medium">
+										Stationery
+									</div>
+									<p class="text-xs text-(--ui-text-muted) mt-0.5 mb-2">
+										What's printed around the content of every page. Its options follow below.
+									</p>
+									<div class="flex flex-col gap-1.5" role="group" aria-labelledby="pdf-stationery-label">
+										<button
+											v-for="m in STATIONERY_MODES"
+											:key="m.key"
+											type="button"
+											class="flex items-start gap-2.5 w-full px-3 py-2.5 rounded-md border text-left transition cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ui-primary)"
+											:class="form.pdf_stationery_mode === m.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border) hover:border-(--ui-border-accented)'"
+											:aria-pressed="form.pdf_stationery_mode === m.key"
+											@click="form.pdf_stationery_mode = m.key"
+										>
+											<span
+												class="mt-0.5 size-3.5 shrink-0 rounded-full border-[1.5px] flex items-center justify-center"
+												:class="form.pdf_stationery_mode === m.key ? 'border-(--ui-primary)' : 'border-(--ui-border-accented)'"
+												aria-hidden="true"
+											>
+												<span v-if="form.pdf_stationery_mode === m.key" class="size-1.5 rounded-full bg-(--ui-primary)" />
+											</span>
+											<span class="min-w-0">
+												<span class="block text-sm font-medium">{{ m.label }}</span>
+												<span class="block text-xs text-(--ui-text-muted) mt-0.5">{{ m.description }}</span>
+											</span>
+										</button>
+									</div>
+								</div>
+
+								<div>
 									<UButton
 										icon="i-lucide-file-search"
 										variant="soft"
@@ -264,235 +153,311 @@
 									>
 										Preview as PDF
 									</UButton>
-									<UButton
-										v-if="form.pdf_stationery_mode !== 'builtin'"
-										icon="i-lucide-pencil-ruler"
-										variant="soft"
-										color="neutral"
-										size="sm"
-										@click="openEditor"
-									>
-										Adjust margins &amp; placement
-									</UButton>
 								</div>
-								<p class="text-xs text-(--ui-text-muted) tabular-nums">
-									{{ resolvePaperSize(paperKey).label }}
-									<template v-if="form.pdf_stationery_mode === 'builtin'">
-										· Layout margins
-									</template>
-									<span v-else title="Top / right / bottom / left">
-										· Safe area {{ formatMm(activeStationeryMargins.top) }} / {{ formatMm(activeStationeryMargins.right) }} / {{ formatMm(activeStationeryMargins.bottom) }} / {{ formatMm(activeStationeryMargins.left) }} mm
-									</span>
-								</p>
 							</div>
 						</div>
 					</SectionCard>
+				</section>
 
-					<!-- Full-page background: artwork + its own Safe-area margins. Hidden
-						(not cleared) under other modes, like Built-in's controls below. -->
-					<StationeryBackgroundCard
-						v-if="form.pdf_stationery_mode === 'background'"
-						:paper="paperKey"
-						:review="stationeryCheck.background"
-						:locked="artworkLock"
-						@artwork="onBackgroundArtwork"
-					/>
-					<StationeryHeaderFooterCard
-						v-if="form.pdf_stationery_mode === 'header_footer'"
-						:paper="paperKey"
-						:margins="activeStationeryMargins"
-						:rects="form.header_footer_images"
-						:review="stationeryCheck"
-						:locked="artworkLock"
-						@placed="onImagePlaced"
-					/>
-					<StationeryEditorModal
-						v-model:open="editorOpen"
-						v-model:margins="activeStationeryMargins"
-						v-model:images="form.header_footer_images"
-						:mode="form.pdf_stationery_mode"
-						:paper="paperKey"
-						:settings="previewSettings"
-						@applied="onStationeryApplied"
-					/>
+				<!-- The picked mode's options. Every other mode's settings stay on the
+					form (hidden, never cleared), so switching back restores them
+					untouched. A mode switch swaps the whole section with a short fade
+					(none under prefers-reduced-motion) and never scrolls. -->
+				<section :id="PDF_SECTION_IDS.options" class="scroll-mt-6" aria-labelledby="pdf-mode-options-heading">
+					<Transition
+						mode="out-in"
+						enter-active-class="transition-opacity duration-150 ease-out motion-reduce:transition-none"
+						enter-from-class="opacity-0"
+						leave-active-class="transition-opacity duration-100 ease-in motion-reduce:transition-none"
+						leave-to-class="opacity-0"
+					>
+						<div :key="form.pdf_stationery_mode" class="space-y-4">
+							<div class="px-1">
+								<h2 id="pdf-mode-options-heading" class="text-base font-semibold text-balance">
+									{{ modeOptions.heading }}
+								</h2>
+								<p class="text-xs text-(--ui-text-muted) mt-0.5">
+									{{ modeOptions.blurb }}
+								</p>
+							</div>
 
-					<!-- Built-in stationery's own controls. Hidden (not cleared) under any
-						other mode, so switching back restores them untouched. The anchor
-						wrappers always render, so the sidebar's Header logo / Header &
-						footer links land here (on the note) whatever the mode. -->
-					<div id="header-logo" class="scroll-mt-6">
-						<p v-if="form.pdf_stationery_mode !== 'builtin'" class="text-xs text-(--ui-text-muted) px-1">
-							The header logo and header &amp; footer text belong to Built-in stationery. They're kept while another Stationery is selected — choose Built-in above to edit them.
-						</p>
-						<SectionCard
-							v-else
-							icon="i-lucide-image"
-							title="Header logo"
-							subtitle="Letterhead-style PNG, JPG, or SVG. Different from the square Company logo, which is only used in the sidebar."
-						>
-							<div class="grid grid-cols-1 gap-6 items-start">
-								<div class="flex flex-col gap-3">
-									<div
-										class="group relative h-28 w-full rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition cursor-pointer"
-										:class="[
-											pdfLogoDragOver
-												? 'border-(--ui-primary) bg-white scale-[1.01]'
-												: 'border-(--ui-border-accented) bg-white hover:border-(--ui-primary)/60'
-										]"
-										role="button"
-										tabindex="0"
-										aria-label="Upload PDF header logo"
-										@click="pickPdfLogo"
-										@keydown.enter.prevent="pickPdfLogo"
-										@keydown.space.prevent="pickPdfLogo"
-										@dragover.prevent="pdfLogoDragOver = true"
-										@dragenter.prevent="pdfLogoDragOver = true"
-										@dragleave.prevent="pdfLogoDragOver = false"
-										@drop.prevent="onPdfLogoDrop"
-									>
-										<input
-											ref="pdfLogoInput"
-											type="file"
-											accept="image/png,image/jpeg,image/webp,image/svg+xml"
-											class="hidden"
-											@change="onPdfLogoFileChange"
+							<template v-if="form.pdf_stationery_mode === 'builtin'">
+								<!-- Layout is a Built-in choice only (ADR 0001 amendment): every
+									other Stationery renders Classic (page-settings.ts
+									buildLayoutAndPage). The stored pick is kept meanwhile. -->
+								<SectionCard
+									icon="i-lucide-layout-template"
+									title="Look"
+									subtitle="How your quotes, invoices, bills and payslips arrange their content on the page, and the accent colour they're drawn in."
+								>
+									<div>
+										<div id="pdf-layout-label" class="text-sm font-medium mb-2">
+											Layout
+										</div>
+										<div class="grid grid-cols-2 sm:grid-cols-4 gap-3" role="group" aria-labelledby="pdf-layout-label">
+											<button
+												v-for="l in PDF_LAYOUTS"
+												:key="l.key"
+												type="button"
+												:title="l.description"
+												class="p-2 rounded-md border text-left transition cursor-pointer hover:border-(--ui-primary)/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ui-primary)"
+												:class="[
+													form.pdf_layout === l.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)'
+												]"
+												:aria-pressed="form.pdf_layout === l.key"
+												@click="form.pdf_layout = l.key"
+											>
+												<div class="rounded-sm overflow-hidden ring-1 ring-(--ui-border) mb-1.5">
+													<PdfLayoutThumb :layout-key="l.key" :color="themeColor" />
+												</div>
+												<div class="text-xs font-medium flex items-center gap-1">
+													{{ l.label }}
+												</div>
+											</button>
+										</div>
+									</div>
+									<div class="pt-4 border-t border-(--ui-border)">
+										<PdfColorRow v-model="form.pdf_theme_color" />
+									</div>
+								</SectionCard>
+
+								<SectionCard
+									icon="i-lucide-image"
+									title="Header logo"
+									subtitle="Letterhead-style PNG, JPG, or SVG. Different from the square Company logo, which is only used in the sidebar."
+								>
+									<div class="flex flex-col gap-3">
+										<div
+											class="group relative h-28 w-full rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition cursor-pointer"
+											:class="[
+												pdfLogoDragOver
+													? 'border-(--ui-primary) bg-white scale-[1.01]'
+													: 'border-(--ui-border-accented) bg-white hover:border-(--ui-primary)/60'
+											]"
+											role="button"
+											tabindex="0"
+											aria-label="Upload PDF header logo"
+											@click="pickPdfLogo"
+											@keydown.enter.prevent="pickPdfLogo"
+											@keydown.space.prevent="pickPdfLogo"
+											@dragover.prevent="pdfLogoDragOver = true"
+											@dragenter.prevent="pdfLogoDragOver = true"
+											@dragleave.prevent="pdfLogoDragOver = false"
+											@drop.prevent="onPdfLogoDrop"
 										>
-										<img
-											v-if="store.pdfHeaderLogoSrc"
-											:src="store.pdfHeaderLogoSrc"
-											alt="PDF header logo"
-											class="max-w-full max-h-full object-contain p-3"
-										>
-										<!-- Fixed zinc hint: the tile is white in both themes (it
-										previews against the PDF's actual background), so the
-										theme-reactive muted token would vanish in dark mode. -->
-										<div v-else class="flex flex-col items-center gap-1 text-zinc-400">
-											<UIcon name="i-lucide-image-up" class="size-7" />
-											<div class="text-[10px] uppercase tracking-wider">
-												Drop wide logo
+											<input
+												ref="pdfLogoInput"
+												type="file"
+												accept="image/png,image/jpeg,image/webp,image/svg+xml"
+												class="hidden"
+												@change="onPdfLogoFileChange"
+											>
+											<img
+												v-if="store.pdfHeaderLogoSrc"
+												:src="store.pdfHeaderLogoSrc"
+												alt="PDF header logo"
+												class="max-w-full max-h-full object-contain p-3"
+											>
+											<!-- Fixed zinc hint: the tile is white in both themes (it
+												previews against the PDF's actual background), so the
+												theme-reactive muted token would vanish in dark mode. -->
+											<div v-else class="flex flex-col items-center gap-1 text-zinc-400">
+												<UIcon name="i-lucide-image-up" class="size-7" />
+												<div class="text-[10px] uppercase tracking-wider">
+													Drop wide logo
+												</div>
+											</div>
+											<div
+												v-if="store.pdfHeaderLogoSrc"
+												class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100"
+											>
+												<UIcon name="i-lucide-upload" class="size-5 text-white" />
+												<span class="text-[10px] uppercase tracking-wider text-white">
+													Replace
+												</span>
 											</div>
 										</div>
-										<div
-											v-if="store.pdfHeaderLogoSrc"
-											class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100"
-										>
-											<UIcon name="i-lucide-upload" class="size-5 text-white" />
-											<span class="text-[10px] uppercase tracking-wider text-white">
-												Replace
-											</span>
-										</div>
-									</div>
-									<div class="flex flex-wrap items-center gap-2">
-										<UButton
-											v-if="!store.settings?.pdf_header_logo_path"
-											icon="i-lucide-upload"
-											size="xs"
-											variant="soft"
-											@click="pickPdfLogo"
-										>
-											Upload header
-										</UButton>
-										<template v-else>
-											<UButton icon="i-lucide-upload" size="xs" variant="soft" @click="pickPdfLogo">
-												Replace
-											</UButton>
+										<div class="flex flex-wrap items-center gap-2">
 											<UButton
-												v-if="!isSvgLogo"
-												icon="i-lucide-crop"
+												v-if="!store.settings?.pdf_header_logo_path"
+												icon="i-lucide-upload"
 												size="xs"
 												variant="soft"
-												color="neutral"
-												@click="openRecrop"
+												@click="pickPdfLogo"
 											>
-												Re-crop
+												Upload header
 											</UButton>
-											<UButton
-												icon="i-lucide-trash-2"
-												size="xs"
-												variant="ghost"
-												color="neutral"
-												@click="removePdfLogo"
-											>
-												Remove
-											</UButton>
-										</template>
-									</div>
-
-									<div>
-										<div class="flex items-baseline justify-between mb-1.5 gap-2 flex-wrap">
-											<span class="text-sm font-medium">Logo size</span>
-											<span class="text-xs text-(--ui-text-muted) tabular-nums">
-												{{ form.pdf_logo_scale }}% — prints ≈ {{ logoPrintMm.h.toFixed(1) }}mm tall
-											</span>
-										</div>
-										<USlider v-model="form.pdf_logo_scale" :min="50" :max="150" :step="5" />
-										<p v-if="logoWidthClamped" class="text-xs text-(--ui-text-muted) mt-2 flex items-start gap-1.5">
-											<UIcon name="i-lucide-info" class="size-3.5 shrink-0 mt-0.5" />
-											<span>Capped at 55mm wide so the logo can't collide with the document title — growing the size won't widen it further.</span>
-										</p>
-									</div>
-								</div>
-							</div>
-						</SectionCard>
-					</div>
-
-					<div id="header-footer" class="scroll-mt-6">
-						<SectionCard
-							v-if="form.pdf_stationery_mode === 'builtin'"
-							icon="i-lucide-panel-top"
-							title="Header &amp; footer text"
-							subtitle="Print your own details instead of the built-in header block and footer line. Use fields like {business_name} so the text follows Business details instead of going stale."
-						>
-							<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-								<div>
-									<div class="flex items-center justify-between gap-2 mb-2">
-										<div class="text-sm font-medium">
-											Header text
-										</div>
-										<div class="flex items-center gap-2">
-											<UDropdownMenu :items="tokenItems('header')">
-												<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-braces" :disabled="!headerCustom">
-													Insert field
+											<template v-else>
+												<UButton icon="i-lucide-upload" size="xs" variant="soft" @click="pickPdfLogo">
+													Replace
 												</UButton>
-											</UDropdownMenu>
-											<USwitch v-model="headerCustom" />
+												<UButton
+													v-if="!isSvgLogo"
+													icon="i-lucide-crop"
+													size="xs"
+													variant="soft"
+													color="neutral"
+													@click="openRecrop"
+												>
+													Re-crop
+												</UButton>
+												<UButton
+													icon="i-lucide-trash-2"
+													size="xs"
+													variant="ghost"
+													color="neutral"
+													@click="removePdfLogo"
+												>
+													Remove
+												</UButton>
+											</template>
+										</div>
+
+										<div>
+											<div class="flex items-baseline justify-between mb-1.5 gap-2 flex-wrap">
+												<span class="text-sm font-medium">Logo size</span>
+												<span class="text-xs text-(--ui-text-muted) tabular-nums">
+													{{ form.pdf_logo_scale }}% — prints ≈ {{ logoPrintMm.h.toFixed(1) }}mm tall
+												</span>
+											</div>
+											<USlider v-model="form.pdf_logo_scale" :min="50" :max="150" :step="5" />
+											<p v-if="logoWidthClamped" class="text-xs text-(--ui-text-muted) mt-2 flex items-start gap-1.5">
+												<UIcon name="i-lucide-info" class="size-3.5 shrink-0 mt-0.5" />
+												<span>Capped at 55mm wide so the logo can't collide with the document title — growing the size won't widen it further.</span>
+											</p>
 										</div>
 									</div>
-									<div :class="headerCustom ? '' : 'opacity-50 pointer-events-none'">
-										<RichTextEditor ref="headerEditor" v-model="headerTextModel" minimal :min-height="120" />
+								</SectionCard>
+
+								<SectionCard
+									icon="i-lucide-panel-top"
+									title="Header &amp; footer text"
+									subtitle="Print your own details instead of the built-in header block and footer line. Use fields like {business_name} so the text follows Business details instead of going stale."
+								>
+									<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+										<div>
+											<div class="flex items-center justify-between gap-2 mb-2">
+												<div class="text-sm font-medium">
+													Header text
+												</div>
+												<div class="flex items-center gap-2">
+													<UDropdownMenu :items="tokenItems('header')">
+														<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-braces" :disabled="!headerCustom">
+															Insert field
+														</UButton>
+													</UDropdownMenu>
+													<USwitch v-model="headerCustom" aria-label="Use custom header text" />
+												</div>
+											</div>
+											<div :class="headerCustom ? '' : 'opacity-50 pointer-events-none'">
+												<RichTextEditor ref="headerEditor" v-model="headerTextModel" minimal :min-height="120" />
+											</div>
+											<p class="text-xs text-(--ui-text-muted) mt-2">
+												Prints opposite the logo.
+											</p>
+										</div>
+
+										<div>
+											<div class="flex items-center justify-between gap-2 mb-2">
+												<div class="text-sm font-medium">
+													Footer text
+												</div>
+												<div class="flex items-center gap-2">
+													<UDropdownMenu :items="tokenItems('footer')">
+														<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-braces" :disabled="!footerCustom">
+															Insert field
+														</UButton>
+													</UDropdownMenu>
+													<USwitch v-model="footerCustom" aria-label="Use custom footer text" />
+												</div>
+											</div>
+											<div :class="footerCustom ? '' : 'opacity-50 pointer-events-none'">
+												<RichTextEditor ref="footerEditor" v-model="footerTextModel" minimal :min-height="120" />
+											</div>
+											<p class="text-xs text-(--ui-text-muted) mt-2">
+												Replaces the business name · website · phone line at the bottom of every page. Limited to 3 paragraphs so it can't crowd the page.
+											</p>
+										</div>
 									</div>
-									<p class="text-xs text-(--ui-text-muted) mt-2">
-										Prints opposite the logo.
+								</SectionCard>
+							</template>
+
+							<!-- Full-page background: artwork, its Safe area (in the editor) and
+								the colour. -->
+							<StationeryBackgroundCard
+								v-else-if="form.pdf_stationery_mode === 'background'"
+								:paper="paperKey"
+								:review="stationeryCheck.background"
+								:locked="artworkLock"
+								@artwork="onBackgroundArtwork"
+							>
+								<StationeryAdjustRow
+									label="Adjust margins &amp; placement"
+									:summary="safeAreaSummary(activeStationeryMargins)"
+									summary-title="Top / right / bottom / left"
+									:attention="activeModeNeedsCheck"
+									@adjust="openEditor"
+								/>
+								<PdfColorRow v-model="form.pdf_theme_color" :hint="COLOR_HINT" />
+							</StationeryBackgroundCard>
+
+							<StationeryHeaderFooterCard
+								v-else-if="form.pdf_stationery_mode === 'header_footer'"
+								:paper="paperKey"
+								:margins="activeStationeryMargins"
+								:rects="form.header_footer_images"
+								:review="stationeryCheck"
+								:locked="artworkLock"
+								@placed="onImagePlaced"
+							>
+								<StationeryAdjustRow
+									label="Adjust margins &amp; placement"
+									:summary="safeAreaSummary(activeStationeryMargins)"
+									summary-title="Top / right / bottom / left"
+									:attention="activeModeNeedsCheck"
+									@adjust="openEditor"
+								/>
+								<PdfColorRow v-model="form.pdf_theme_color" :hint="COLOR_HINT" />
+							</StationeryHeaderFooterCard>
+
+							<!-- Pre-printed paper: the business-wide bands (shared with
+								pre-printed letters — Settings → Letters edits the same ones). -->
+							<SectionCard
+								v-else
+								icon="i-lucide-printer"
+								title="Pre-printed paper"
+								subtitle="Your letterhead is already printed on the paper, so nothing prints in its bands and the content keeps clear of them."
+							>
+								<div class="space-y-2">
+									<StationeryAdjustRow
+										label="Adjust bands"
+										:summary="preprintedBandSummary(form.preprinted_margins)"
+										:attention="activeModeNeedsCheck"
+										@adjust="openEditor"
+									/>
+									<p class="text-xs text-(--ui-text-muted)">
+										Letters set to pre-printed paper use these bands too.
 									</p>
 								</div>
-
-								<div>
-									<div class="flex items-center justify-between gap-2 mb-2">
-										<div class="text-sm font-medium">
-											Footer text
-										</div>
-										<div class="flex items-center gap-2">
-											<UDropdownMenu :items="tokenItems('footer')">
-												<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-braces" :disabled="!footerCustom">
-													Insert field
-												</UButton>
-											</UDropdownMenu>
-											<USwitch v-model="footerCustom" />
-										</div>
-									</div>
-									<div :class="footerCustom ? '' : 'opacity-50 pointer-events-none'">
-										<RichTextEditor ref="footerEditor" v-model="footerTextModel" minimal :min-height="120" />
-									</div>
-									<p class="text-xs text-(--ui-text-muted) mt-2">
-										Replaces the business name · website · phone line at the bottom of every page. Limited to 3 paragraphs so it can't crowd the page.
-									</p>
+								<div class="pt-4 border-t border-(--ui-border)">
+									<PdfColorRow v-model="form.pdf_theme_color" :hint="COLOR_HINT" />
 								</div>
-							</div>
-						</SectionCard>
-					</div>
-				</div>
+							</SectionCard>
+						</div>
+					</Transition>
+				</section>
 
-				<div id="font" class="scroll-mt-6">
+				<StationeryEditorModal
+					v-model:open="editorOpen"
+					v-model:margins="activeStationeryMargins"
+					v-model:images="form.header_footer_images"
+					:mode="form.pdf_stationery_mode"
+					:paper="paperKey"
+					:settings="previewSettings"
+					@applied="onStationeryApplied"
+				/>
+
+				<section :id="PDF_SECTION_IDS.font" class="scroll-mt-6">
 					<SectionCard
 						icon="i-lucide-type"
 						title="Font"
@@ -536,7 +501,7 @@
 							</div>
 						</div>
 					</SectionCard>
-				</div>
+				</section>
 
 				<!-- Not a SectionCard: this is a signpost to the Security page, not a
 					setting you change here. A compact row keeps it from reading as
@@ -635,17 +600,19 @@
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { useLivePagePreview } from "~/composables/useLivePagePreview";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
+	import { usePdfSettingsMode } from "~/composables/usePdfSettingsMode";
 	import { useStationeryArtwork } from "~/composables/useStationeryArtwork";
 	import { readBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
 	import { PAPER_SIZES, resolvePaperSize } from "~/lib/page-settings";
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
+	import { MODE_OPTIONS, PDF_SECTION_IDS, preprintedBandSummary, safeAreaSummary } from "~/lib/pdf-settings-sections";
 	import { PDF_TOKENS } from "~/lib/pdf-tokens";
 	import { sampleStationeryPreviewPayload } from "~/lib/sample-pdf";
 	import { BACKGROUND_DEFAULT_MARGINS, confirmPaperGeometry, HEADER_FOOTER_DEFAULT_MARGINS, modeNeedsReview, paperGeometryOf, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, serializeStationery, STATIONERY_MODES, stationeryReview, stationerySchema, withPaperGeometry } from "~/lib/stationery";
 	import { artworkPaperLock } from "~/lib/stationery-artwork";
-	import { formatMm, headerFooterMargins, IMAGE_EDGE, refitPaperGeometry, scaleForWidth } from "~/lib/stationery-geometry";
-	import { isHexColor, THEME_COLORS, themeHex } from "~/lib/theme";
+	import { headerFooterMargins, IMAGE_EDGE, refitPaperGeometry, scaleForWidth } from "~/lib/stationery-geometry";
+	import { themeHex } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
 
@@ -817,35 +784,12 @@
 	};
 
 	const currency = useActiveCurrency();
-	const colors = THEME_COLORS;
-	// Accent colour for the schematic thumbnails — tracks the live (unsaved)
-	// PDF colour selection so picking a swatch updates the previews instantly.
+	// Accent colour for the schematic Layout thumbnails — tracks the live
+	// (unsaved) PDF colour so picking a swatch updates them instantly. The
+	// picker itself is PdfColorRow, shown in every mode's options.
 	const themeColor = computed(() => themeHex(form.pdf_theme_color));
-
-	// A custom accent is stored as a literal hex in pdf_theme_color, the same
-	// column the preset names use — so the preset buttons' `=== c.value`
-	// comparison deselects on its own and nothing else needs to know.
-	const isCustomColor = computed(() => isHexColor(form.pdf_theme_color));
-
-	// The colour well always needs a concrete #rrggbb, even while a preset is
-	// selected, so it opens the OS picker on the current colour rather than black.
-	const customColorWell = computed({
-		get: () => themeColor.value,
-		set: (v: string) => {
-			form.pdf_theme_color = v.toLowerCase();
-		}
-	});
-
-	// Free text while typing; only committed once it's a valid hex, so a
-	// half-typed "#1d" never becomes the stored value.
-	const customHexDraft = ref("");
-	watch(() => form.pdf_theme_color, (v) => {
-		if (isHexColor(v)) customHexDraft.value = String(v).toLowerCase();
-	}, { immediate: true });
-	const onHexInput = (v: string) => {
-		customHexDraft.value = v;
-		if (isHexColor(v)) form.pdf_theme_color = v.trim().toLowerCase();
-	};
+	// Outside Built-in the colour still prints; say where.
+	const COLOR_HINT = "Used for the line under the title and for table headings.";
 
 	// ---- header logo print size ---------------------------------------
 	// What the Logo size slider reports: the same maths header-logo(data, 12mm)
@@ -954,14 +898,11 @@
 		const paper = resolvePaperSize(paperKey.value);
 		return Math.round(PREVIEW_W_PX * (paper.heightMm / paper.widthMm));
 	});
-	// What the Layout note names as "the design" under each non-Built-in mode.
-	const DESIGN_SOURCE: Record<StationeryMode, string> = {
-		builtin: "",
-		background: "Your background artwork is",
-		header_footer: "Your header and footer images are",
-		preprinted: "Your pre-printed paper is"
-	};
-	const stationeryDesign = computed(() => DESIGN_SOURCE[form.pdf_stationery_mode]);
+	const paperLabel = computed(() => resolvePaperSize(paperKey.value).label);
+	// The heading and line over the picked mode's options.
+	const modeOptions = computed(() => MODE_OPTIONS[form.pdf_stationery_mode]);
+	// The picked mode's artwork needs a look in the editor on this sheet.
+	const activeModeNeedsCheck = computed(() => modeNeedsReview(stationeryCheck.value, form.pdf_stationery_mode));
 
 	// Same curated list the Appearance page used. The Typst template falls
 	// through these for any missing glyph; free-text input lets the user pick
@@ -1023,6 +964,13 @@
 
 	await store.ensureLoaded();
 	hydrate();
+
+	// The sidebar names the middle anchor after the picked (maybe unsaved)
+	// mode — app/layouts/default.vue reads this.
+	const sidebarMode = usePdfSettingsMode();
+	watch(() => form.pdf_stationery_mode, (m) => {
+		sidebarMode.value = m;
+	}, { immediate: true });
 
 	// Dirty tracking via JSON snapshot. Same shape as company.vue.
 	const formSnapshot = computed(() => JSON.stringify(form));
