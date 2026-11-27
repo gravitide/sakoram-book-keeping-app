@@ -3,10 +3,12 @@
 //
 //   typst compile --ignore-system-fonts --creation-timestamp 1767225600 scripts/fixtures/stationery/background.typ scripts/fixtures/stationery/background.pdf
 //   typst compile --ignore-system-fonts --input second=false --format png --ppi 40 scripts/fixtures/stationery/background.typ scripts/fixtures/stationery/background.png
+//   ffmpeg -y -i scripts/fixtures/stationery/background.png -q:v 5 -flags +bitexact -map_metadata -1 scripts/fixtures/stationery/background.jpg
 //
 // then re-capture baselines (bun run verify:pdf --update). The PDF has a red
 // second page that must NEVER show up: a background is its first page only.
-// The PNG is single-page (--input second=false). Both are tiny on purpose —
+// The PNG is single-page (--input second=false); the JPEG is re-encoded from
+// it (Typst can't write JPEG). All three are tiny on purpose —
 // a real upload is downscaled to ~300 DPI by the settings page, not here.
 
 #let show-second = sys.inputs.at("second", default: "true") == "true"

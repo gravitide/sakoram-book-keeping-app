@@ -199,7 +199,7 @@ const preprintedPaper = { pdf_stationery_mode: "preprinted" };
 // Full-page background with artwork of the given format. Its margins (44 / 22,
 // sides 20) differ from both the defaults and the Pre-printed bands above, so
 // the cases prove the background's own margins bound the Safe area.
-const fullPageBackground = (ext: "svg" | "png" | "pdf" | null = "svg") => ({
+const fullPageBackground = (ext: "svg" | "png" | "jpg" | "pdf" | null = "svg") => ({
 	pdf_stationery_mode: "background",
 	pdf_stationery: JSON.stringify({
 		preprinted: { top: 48, right: 16, bottom: 24, left: 16 },
@@ -665,6 +665,7 @@ const cases: Case[] = [
 	// Each upload format. The PDF fixture's second page is solid red: a
 	// background is the first page only, so red must never appear.
 	docCase("invoice-classic-background-png", invoice(settingsFor({ ...fullPageBackground("png") }))),
+	docCase("invoice-classic-background-jpg", invoice(settingsFor({ ...fullPageBackground("jpg") }))),
 	docCase("invoice-classic-background-pdf", invoice(settingsFor({ ...fullPageBackground("pdf") }))),
 	// Repeats on every page.
 	{ ...docCase("invoice-classic-background-multipage", invoice(settingsFor({ ...fullPageBackground("pdf") }), 30)), multipage: true },
@@ -679,11 +680,20 @@ const cases: Case[] = [
 	docCase("bill-classic-background", buildBillPdfPayload({ row: docRow as never, lines: docLines(2) as never, settings: settingsFor({ ...fullPageBackground("png") }), currency, paidCents: 2000000 })),
 	docCase("sample-classic-background", sampleInvoicePayload(settingsFor({ ...fullPageBackground() }), currency, "classic")),
 	...LAYOUTS.map((key): Case => ({ name: `payslip-${key}-background`, template: "payslip.typ", payload: payslip(settingsFor({ ...fullPageBackground(), ...customChrome, pdf_layout: key })) })),
+	// The bespoke templates (their own page-setup call, not doc-header) with
+	// raster and PDF artwork too, not only SVG.
+	{ name: "payslip-classic-background-png", template: "payslip.typ", payload: payslip(settingsFor({ ...fullPageBackground("png") })) },
+	{ name: "payslip-classic-background-pdf", template: "payslip.typ", payload: payslip(settingsFor({ ...fullPageBackground("pdf") })) },
 	{ name: "voucher-background", template: "voucher.typ", payload: voucher(settingsFor({ ...fullPageBackground(), ...customChrome })) },
+	{ name: "voucher-background-png", template: "voucher.typ", payload: voucher(settingsFor({ ...fullPageBackground("png") })) },
+	{ name: "voucher-background-jpg", template: "voucher.typ", payload: voucher(settingsFor({ ...fullPageBackground("jpg") })) },
+	{ name: "voucher-background-pdf", template: "voucher.typ", payload: voucher(settingsFor({ ...fullPageBackground("pdf") })) },
+	{ name: "statement-background-pdf", template: "statement.typ", payload: statement(settingsFor({ ...fullPageBackground("pdf") })) },
 	{ name: "report-pnl-background", template: "report.typ", payload: pnl(settingsFor({ ...fullPageBackground("pdf"), ...customChrome })), multipage: true },
 	{ name: "statement-background", template: "statement.typ", payload: statement(settingsFor({ ...fullPageBackground(), ...customChrome })) },
 	{ name: "statement-background-a5", template: "statement.typ", payload: statement(settingsFor({ ...fullPageBackground("png"), pdf_paper_size: "a5" })), multipage: true },
 	{ name: "letter-background", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false), settings: settingsFor({ ...fullPageBackground() }) }) },
+	{ name: "letter-background-pdf", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false), settings: settingsFor({ ...fullPageBackground("pdf") }) }) },
 	{ name: "letter-background-multipage", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false, 20), settings: settingsFor({ ...fullPageBackground("png") }) }), multipage: true },
 	// A letter set to pre-printed paper keeps its blank bands and draws no
 	// artwork, even while the business uses a Full-page background.
@@ -954,7 +964,8 @@ for (const c of allCases) {
 
 	// Checked in both modes: --update must not bless a wrong page count.
 	const problem = pageNumberProblem(c, rendered) ?? identityProblem(c, rendered) ?? orientationProblem(c, rendered) ?? artworkProblem(c, hash)
-		?? (c.sameAs && hashes[c.sameAs] !== hash ? `should render exactly like ${c.sameAs}` : null);
+		// (Under --only the other case may simply not have rendered.)
+		?? (c.sameAs && (ONLY === undefined || c.sameAs in hashes) && hashes[c.sameAs] !== hash ? `should render exactly like ${c.sameAs}` : null);
 	if (problem) {
 		console.error(`✗ ${c.name} (${c.template}): ${problem}`);
 		failures++;
