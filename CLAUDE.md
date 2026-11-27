@@ -176,6 +176,8 @@ is no longer encoded in filenames):
   ├─ pdf-header.<ext>                    ← optional wide letterhead logo printed on PDFs
   ├─ stationery/background.<ext>         ← Full-page background artwork (svg | pdf | png | jpg); fixed name, the DB stores only the ext
   ├─ stationery/background-original.<ext> ← untouched raster upload for Re-crop (travels in BOTH backups, unlike logo originals)
+  ├─ stationery/header.<ext>, footer.<ext> ← Header & footer images (svg | pdf | png | jpg); fixed names, the DB stores ext + place only
+  ├─ stationery/header-original.<ext>, footer-original.<ext> ← their untouched raster uploads, for Crop (both backups too)
   └─ business.db.enc + business.vault.json   ← only when encrypted (decrypt-on-unlock working file is business.db)
 ```
 
@@ -531,7 +533,7 @@ sakoram_app/
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
 │  │     ├─ company.vue               ← business info, address, bank, signatures, defaults, logo
-│  │     ├─ pdf.vue                   ← Paper & layout (paper size + Layout picker, then the Colour card) · Stationery (mode picker; Pre-printed paper bands; a to-scale thumbnail of the current page (`StationeryPage`) + **Edit stationery** (`StationeryEditorModal`) for Full-page background / Pre-printed paper — **Preview page**, the same editor read-only, under Built-in; `StationeryBackgroundCard` — upload / aspect-locked crop + ~300 DPI downscale / live-text SVG warning / Remove — while Full-page background; Built-in-only header logo + header/footer text cards) · Font. Every card has a sidebar anchor.
+│  │     ├─ pdf.vue                   ← Paper & layout (paper size + Layout picker, then the Colour card) · Stationery (mode picker; Pre-printed paper bands; a to-scale thumbnail of the current page (`StationeryPage`) + **Edit stationery** (`StationeryEditorModal`) for Full-page background / Header & footer images / Pre-printed paper — **Preview page**, the same editor read-only, under Built-in; `StationeryBackgroundCard` — upload / aspect-locked crop + ~300 DPI downscale / live-text SVG warning / Remove — while Full-page background; `StationeryHeaderFooterCard` — upload / free-form Crop / Remove per image, a new image placed full-width flush to its edge — while Header & footer images; Built-in-only header logo + header/footer text cards) · Font. Every card has a sidebar anchor.
 │  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), light/dark/system toggle, zoom (6 discrete steps)
 │  │     ├─ payroll.vue               ← cycle template (period_start_day / period_end_day / pay_day)
 │  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + a pointer card to the Pre-printed paper bands (they live on the Stationery at /settings/pdf#stationery since 0056) + a "Stationery artwork" coming-soon placeholder (#artwork). (Signatures moved to /settings/company#signatures — they're shared across letters + quote/invoice "Prepared by".)
@@ -549,8 +551,8 @@ sakoram_app/
 │  │  ├─ CategoryFormModal.vue        ← create/edit category (8-color × 16-icon picker)
 │  │  ├─ CurrencyPicker.vue           ← onboarding + Settings → Business details currency dropdown. Built-in CURRENCIES list plus a "Custom currency…" option that reveals Code + Symbol inputs; emits both v-models so parents just bind code + symbol-override.
 │  │  ├─ BusinessBankFormModal.vue    ← create/edit modal for managed bank accounts (label + bank fields + 8-swatch colour tag; new banks pre-pick the least-used swatch). Auto-marks the first bank as default so freshly-created accounts immediately seed new quotes / invoices.
-│  │  ├─ StationeryEditorModal.vue    ← full-window Stationery editor: page to scale with mm rulers, artwork, four draggable / arrow-key margin guides, grey placeholder content, the informational 5 mm printer band, zoom, and "Preview sample invoice" (always two pages). Edits a DRAFT; Apply hands the margins to /settings/pdf's form (saved with Save changes). Under Built-in it opens as a preview ("Preview page"): the Layout's margins (`safeAreaMargins`) as the Safe area, no guides, no Apply. Holds NO geometry — every rule is in `app/lib/stationery-geometry.ts`
-│  │  ├─ StationeryPage.vue           ← one to-scale sheet (artwork / pre-printed bands, Safe area, placeholder bars, optional printer band); the thumbnail and the editor both draw it, the editor's guides sit in its slot
+│  │  ├─ StationeryEditorModal.vue    ← full-window Stationery editor: page to scale with mm rulers, artwork, four draggable / arrow-key margin guides, grey placeholder content, the informational 5 mm printer band, zoom, and "Preview sample invoice" (always two pages). Edits a DRAFT; Apply hands the margins to /settings/pdf's form (saved with Save changes). Under Built-in it opens as a preview ("Preview page"): the Layout's margins (`safeAreaMargins`) as the Safe area, no guides, no Apply. Under Header & footer images it also edits the two images (drag to move, corner-resize aspect-locked, arrow keys; `v-model:images`). Holds NO geometry — every rule is in `app/lib/stationery-geometry.ts`
+│  │  ├─ StationeryPage.vue           ← one to-scale sheet (artwork / Header & footer images / pre-printed bands, Safe area, placeholder bars, optional printer band); the thumbnail and the editor both draw it, the editor's guides sit in its slot
 │  │  ├─ BankColorDot.vue             ← the bank-account colour marker (business_banks.color → themeHex dot, grey fallback) rendered in front of bank identities everywhere
 │  │  ├─ NewQuoteModal.vue            ← "New quote" form-in-a-modal (client + project title) — replaces /quotes/new
 │  │  ├─ NewInvoiceModal.vue          ← "New invoice" form-in-a-modal — replaces /invoices/new
@@ -1609,7 +1611,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0052_pdf_header_footer_text.sql         ← `company_settings.pdf_header_custom` / `pdf_header_text` / `pdf_footer_custom` / `pdf_footer_text`. Opt-in rich-text page chrome: when a flag is on, the stored TipTap JSON replaces the built-in header block (printed opposite the logo) or the footer line. Flags default 0 so existing tenants render byte-identically — proven by sha256 over all 5 doc templates before/after. `{business_name}` / `{address}` / `{city}` / `{phone}` / `{email}` / `{website}` / `{tax_id}` tokens are substituted over the BLOCK TREE by `app/lib/pdf-tokens.ts` (so a token inside a bold run stays bold); unknown tokens render literally so typos are visible. `app/lib/pdf-chrome.ts` turns settings into the `header_blocks` / `footer_blocks` payload arrays for all 9 builders and caps the footer at 3 blocks — the page footer is a FIXED region repeated on every page. `render-blocks` gained a `spacing` param (default 8pt = unchanged) and **`footer-content` MOVED below it** in common.typ (definition-order rule — it now calls render-blocks). Header text reaches the 5 doc-* templates + payslip via `doc-header`; voucher/report/statement/letter get the footer only (bespoke headers). Letterhead skips header text by design. `RichTextEditor` gained a `minimal` prop (marks + align only) and an exposed `insertText()` for the Insert-field menu. SCHEMA_VERSION → 52.
 0053_logo_crop.sql                      ← `company_settings.logo_crop` (TEXT JSON {x,y,w,h} in source px, NULL for SVG/uncropped) — the square-identity-logo mirror of `pdf_logo_crop`. Raster uploads now keep the untouched original at `logos/logo-original.<ext>` and the CROPPED derivative at `logos/logo.<ext>`; `save_business_asset`/`read_business_asset` gained a `logo-original` kind (the stale-ext sweep keys on `file_stem`, and `logo-original` != `logo`, so the pair never collide). `ImageCropModal` gained `aspect` (1 = square; omitted keeps the wide PDF letterhead free-form) plus `title`/`hint` props — its copy was hardcoded to the PDF header and leaked into the logo modal. Aspect math lives in the pure `fullRect(w,h,aspect)` / `resizeRect(...,aspect)`; clamping at an image edge shrinks BOTH axes so the ratio survives. **The sharp edge: cropping emits PNG, so a JPEG upload lands as `logo.png` — `tenants.setLogoFile` must get the extension of the file ACTUALLY written**, because welcome + Businesses read `tenants.json` directly, not the DB. The logo now renders on a WHITE PLATE (sidebar / welcome / Businesses / uploader tile) but only when a logo is set — the empty-state icon keeps the muted bg, since a white square holding a grey icon reads as a broken image in dark mode. Originals are local-only: `data_io` bundles the derivative alone (same as `pdf-header-original`), so Re-crop falls back to cropping the derivative after a backup import. SCHEMA_VERSION → 53.
 0054_pdf_paper_size.sql                 ← `company_settings.pdf_paper_size` (TEXT NOT NULL DEFAULT 'a4', CHECK a4 | a5 | us-letter | us-legal — the stored value IS the Typst paper name). Picked on /settings/pdf. `buildPageSettings` emits `page.paper` + `page.margin_scale` (paper width / 210 mm); `page-setup` multiplies the Layout's A4 margins by it (18 mm → ~12.7 mm on A5) only when `page.margins` is null — Stationery / pre-printed margins are never scaled, type sizes never change. Statement stays landscape (flipped) on Built-in stationery (portrait under every other mode since phase 2). Payslip's 30 % amount column switches to `auto` below A4 width. `verify:pdf` renders every template at A5 / Letter / Legal; A4 hashes unchanged. SCHEMA_VERSION → 54.
-0055_pdf_layout_stationery.sql          ← Layout + Stationery replace `pdf_template` (ADR 0001). `pdf_layout` (classic | modern | minimal | compact, CHECK; `app/lib/pdf-layouts.ts` ↔ `layout_template` in pdf.rs), `pdf_stationery_mode` (builtin | background | header_footer | preprinted, CHECK, default builtin — only builtin + preprinted render; `resolveStationeryMode` reads the others as builtin until they land) and `pdf_stationery` (JSON holding EVERY mode's settings so switching modes loses nothing; NULL = defaults; Zod in `app/lib/stationery.ts`, field-by-field `.catch` so malformed JSON degrades to defaults). A `letterhead` business moved to Classic + Pre-printed paper; Pre-printed paper's bands were seeded from `letter_preprinted_{top,bottom}_margin_mm` (sides 18). `doc-letterhead.typ` and the `letterhead` branches in common.typ are gone. /settings/pdf regrouped into Paper & layout · Stationery (Built-in's logo + header/footer text cards only while Built-in) · Font. SCHEMA_VERSION → 55.
+0055_pdf_layout_stationery.sql          ← Layout + Stationery replace `pdf_template` (ADR 0001). `pdf_layout` (classic | modern | minimal | compact, CHECK; `app/lib/pdf-layouts.ts` ↔ `layout_template` in pdf.rs), `pdf_stationery_mode` (builtin | background | header_footer | preprinted, CHECK, default builtin — background renders since v0.166, header_footer since #361) and `pdf_stationery` (JSON holding EVERY mode's settings so switching modes loses nothing; NULL = defaults; Zod in `app/lib/stationery.ts`, field-by-field `.catch` so malformed JSON degrades to defaults). A `letterhead` business moved to Classic + Pre-printed paper; Pre-printed paper's bands were seeded from `letter_preprinted_{top,bottom}_margin_mm` (sides 18). `doc-letterhead.typ` and the `letterhead` branches in common.typ are gone. /settings/pdf regrouped into Paper & layout · Stationery (Built-in's logo + header/footer text cards only while Built-in) · Font. SCHEMA_VERSION → 55.
 0056_drop_letter_preprinted_margins.sql ← drops `company_settings.letter_preprinted_{top,bottom}_margin_mm`. A letter's paper choice is now "use stationery" (business Stationery + Paper size) or "pre-printed paper", and the latter reserves the business-wide Pre-printed paper bands (`pdf_stationery` → `preprinted`, seeded from these columns by 0055) even while the active mode is Built-in; its "Page N of M" sits inside the Safe area. /settings/letters lost its margin inputs (pointer card to /settings/pdf#stationery); /settings/pdf shows the Pre-printed bands under every mode. SCHEMA_VERSION → 56.
 ```
 
@@ -2762,11 +2764,37 @@ surface flagged in the same audit was deleted in v0.164.1.)
   when the artwork is taken out. Because no path is stored, a moved folder
   needs no `relocate_stored_paths` entry — don't add one. All artwork file ops
   go through `save_business_asset` / `read_business_asset` /
-  `remove_business_asset` (kinds `stationery-background[-original]`), never the
+  `remove_business_asset` (kinds `stationery-background[-original]`,
+  `stationery-header[-original]`, `stationery-footer[-original]`), never the
   fs plugin — call them through the typed wrappers in `app/lib/business-assets.ts`,
   whose `BusinessAssetKind` mirrors `asset_slot` in tenants.rs (add a kind to
   both). Asset extensions are checked by `tenants::is_plain_ext` on both the
   write and the render side. Export bundles and Drive snapshots both carry `stationery/*`.
+- **Header & footer images travel the same way, and sit OUT of the flow.**
+  `page.header_footer` is `{ header, footer }`, each null or `{ ext, x, y, w, h }`
+  (mm from the page's top-left); `stage_header_footer` copies
+  `stationery/<slot>.<ext>` beside the template as `stationery-<slot>.<ext>`
+  and adds `file`, dropping ONLY the image whose file is missing.
+  `page-header-footer` places both in the page's `background:` layer (so they
+  repeat on every page and never move content); `page-setup` adds the key only
+  when an image is drawn, and the two artwork modes are exclusive. The images
+  can't collide with content because `buildPageSettings` pushes each band out
+  to its image's inner edge + `HEADER_FOOTER_GAP_MM` (4) —
+  `headerFooterMargins` — so the renderer, the thumbnail and the editor all
+  agree. The stored JSON (`pdf_stationery.header_footer`) holds each image's
+  ext, aspect, rect, the `paper` it was placed on, crop and live-text flag,
+  plus the mode's own margins; `setHeaderFooterImage(slot, null)` removes one
+  and leaves the other. An image is placed by `defaultImageRect` (full width,
+  flush to its edge) and moved / resized only through `dragImage` /
+  `resizeImage` / `nudgeImage` / `clampImageRect`; its band follows it via
+  `followImage` (a new image: exactly edge + 4; a move: by the same distance,
+  keeping extra room); a guide can't go into it (`marginLimits`' `floors`,
+  from `bandFloors`). Images are saved by the card immediately; the page form
+  learns of it through `placed`, and patches its dirty BASELINE too so the
+  upload doesn't read as an unsaved edit. `verify:pdf` places its fixtures
+  with these same functions and fails a case where removing EITHER image
+  leaves the render unchanged. Images are NOT yet re-fitted when the Paper
+  size changes (#362): a rect placed on A4 renders as stored on A5.
 - **The Stationery editor holds no geometry.** mm ↔ px at any zoom, margin
   drag / nudge limits (margins never cross: the Safe area keeps
   `MIN_SAFE_AREA_MM`; each band ≤ `MAX_BAND_MM`), snapping (whole mm, side
@@ -2775,9 +2803,10 @@ surface flagged in the same audit was deleted in v0.164.1.)
   (vitest). The printer band is INFORMATION only — nothing snaps to it or is
   refused for crossing it. `LAYOUT_MARGINS_MM` there mirrors `layout-config`
   in common.typ — change both. The preview artwork comes from
-  `useStationeryArtwork` (one shared, ref-counted blob URL; a PDF background
-  is rendered to PNG by Typst through `render_stationery_artwork_png`, since
-  an `<img>` can't show a PDF). A same-format re-upload leaves the stored
+  `useStationeryArtwork(kind)` (one shared, ref-counted blob URL per kind —
+  background, header, footer; PDF artwork is rendered to PNG by Typst through
+  `render_stationery_artwork_png({ artwork })`, since an `<img>` can't show a
+  PDF — the Header & footer card also reads a PDF image's proportions that way). A same-format re-upload leaves the stored
   JSON identical, so the uploader calls its `reload()`.
 - **The Stationery preview sample is exactly two pages, everywhere.**
   `sampleStationeryPreviewPayload` (sample-pdf.ts) sizes its line count from
