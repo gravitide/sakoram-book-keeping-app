@@ -12,7 +12,12 @@ import { invoke } from "@tauri-apps/api/core";
 //   pdf-header-original             pdf-header-original.<ext> — its untouched upload
 //   stationery-background           stationery/background.<ext> — the Full-page background PDFs render
 //   stationery-background-original  stationery/background-original.<ext> — its untouched raster upload
-export type BusinessAssetKind = "logo" | "logo-original" | "pdf-header" | "pdf-header-original" | "stationery-background" | "stationery-background-original";
+//   stationery-header               stationery/header.<ext> — the Header & footer images header PDFs render
+//   stationery-header-original      stationery/header-original.<ext> — its untouched raster upload
+//   stationery-footer               stationery/footer.<ext> — the footer image
+//   stationery-footer-original      stationery/footer-original.<ext> — its untouched raster upload
+export type BusinessAssetKind = "logo" | "logo-original" | "pdf-header" | "pdf-header-original" | "stationery-background" | "stationery-background-original"
+	| "stationery-header" | "stationery-header-original" | "stationery-footer" | "stationery-footer-original";
 
 /** Write an asset (replacing any copy in another format); resolves to the absolute path written. */
 export function saveBusinessAsset(id: string, kind: BusinessAssetKind, ext: string, bytes: Uint8Array | number[]): Promise<string> {

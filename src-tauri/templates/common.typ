@@ -383,6 +383,29 @@
   image(bg.file, width: 100%, height: 100%, fit: "cover")
 }
 
+// Header & footer images, each drawn at its stored place on every page, or
+// none. `data.page.header_footer` holds `{ header, footer }`, each null or
+// `{ x, y, w, h }` in mm from the page's top-left corner plus the `file` the
+// renderer staged (pdf.rs stage_header_footer; an image whose file is missing
+// comes back null, leaving the other). Like the background they sit in the
+// page's background layer, out of the flow: they repeat on every page and
+// never move the content, which the Safe area (data.page.margins, pushed out
+// of each image by page-settings.ts) keeps clear of them.
+#let page-header-footer(data) = {
+  let hf = data.page.at("header_footer", default: none)
+  if hf == none { return none }
+  let placed = ()
+  for slot in ("header", "footer") {
+    let img = hf.at(slot, default: none)
+    if img != none and img.at("file", default: none) != none {
+      placed.push(place(top + left, dx: img.x * 1mm, dy: img.y * 1mm,
+        image(img.file, width: img.w * 1mm, height: img.h * 1mm, fit: "contain")))
+    }
+  }
+  if placed.len() == 0 { return none }
+  placed.join()
+}
+
 // page-setup minus the artwork: paper, margins, footer and page number.
 #let page-geometry(data, margin, footer, flipped) = {
   let m = data.page.margins
@@ -450,6 +473,8 @@
 //                 under every other Stationery the sheet stays portrait.
 //   background    Full-page background artwork (page-background, above),
 //                 drawn behind the content on every page; null otherwise.
+//   header_footer Header & footer images (page-header-footer, above), each
+//                 at its stored place on every page; null otherwise.
 // Returns the argument dict rather than applying `set page` itself: a set rule
 // inside a function only reaches that function's own content.
 //
@@ -459,8 +484,10 @@
 #let page-setup(data, margin: none, footer: none, flipped: false) = {
   let out = page-geometry(data, margin, footer, flipped)
   // Only added when there is artwork, so every other page is set up exactly
-  // as before (Built-in and Pre-printed renders stay byte-identical).
+  // as before (Built-in and Pre-printed renders stay byte-identical). The two
+  // artwork modes are exclusive, so at most one of them draws.
   let art = page-background(data)
+  if art == none { art = page-header-footer(data) }
   if art != none { out.insert("background", art) }
   out
 }

@@ -42,9 +42,14 @@
 //
 // Full-page background cases render with REAL artwork in each format the app
 // accepts (SVG, PNG, PDF — scripts/fixtures/stationery/), staged the way the
-// Rust renderer stages it (stage_background in pdf.rs).
+// Rust renderer stages it (stage_background in pdf.rs). Header & footer images
+// cases do the same with real header / footer images (stage_header_footer),
+// placed by the real geometry (defaultImageRect + followImage).
 
 import type { Buffer } from "node:buffer";
+import type { PageImage, PaperSize } from "../app/lib/page-settings";
+import type { HeaderFooterSlot } from "../app/lib/stationery";
+import type { MmRect } from "../app/lib/stationery-geometry";
 import type { LetterRow } from "../app/stores/letters";
 import type { PayslipRow } from "../app/stores/payslips";
 import type { QuoteLineRow } from "../app/stores/quotes";
@@ -62,11 +67,14 @@ import { DEMO_LETTERHEAD_ACCENT, demoLetterheadSettings } from "../app/lib/demo-
 import { buildInvoicePdfPayload } from "../app/lib/invoice-pdf.ts";
 import { buildLetterPdfPayload } from "../app/lib/letter-pdf.ts";
 import { CURRENCIES } from "../app/lib/money.ts";
+import { resolvePaperSize } from "../app/lib/page-settings.ts";
 import { buildPayslipPdfPayload } from "../app/lib/payslip-pdf.ts";
 import { buildQuotePdfPayload } from "../app/lib/quote-pdf.ts";
 import { buildAgedReceivablesPdfPayload, buildCashFlowPdfPayload, buildPnlPdfPayload } from "../app/lib/report-pdf.ts";
 import { sampleInvoicePayload, sampleStationeryPreviewPayload } from "../app/lib/sample-pdf.ts";
 import { buildCustomerStatementPdfPayload } from "../app/lib/statement-pdf.ts";
+import { defaultImageRect, followImage, HEADER_FOOTER_GAP_MM } from "../app/lib/stationery-geometry.ts";
+import { refitStationery } from "../app/lib/stationery.ts";
 import { buildVoucherPdfPayload } from "../app/lib/voucher-pdf.ts";
 import { pdfPageTexts } from "./pdf-text.ts";
 
@@ -78,10 +86,13 @@ const LOGO = join(REPO, "src-tauri/icons/128x128.png");
 // <folder>/stationery/background.<ext>, exactly as the app reads it.
 const BUSINESS_FOLDER = join(REPO, "scripts/fixtures");
 // The demo business's bundled letterhead, staged into a throwaway business
-// folder exactly where the demo seed writes it (stationery/background.svg).
+// folder exactly where the demo seed writes it: stationery/background.svg, and
+// its Header & footer images as stationery/header.svg + footer.svg.
 const DEMO_FOLDER = mkdtempSync(join(tmpdir(), "sakoram-demo-folder-"));
 mkdirSync(join(DEMO_FOLDER, "stationery"));
 copyFileSync(join(REPO, "app/assets/stationery/demo-letterhead.svg"), join(DEMO_FOLDER, "stationery/background.svg"));
+copyFileSync(join(REPO, "app/assets/stationery/demo-header.svg"), join(DEMO_FOLDER, "stationery/header.svg"));
+copyFileSync(join(REPO, "app/assets/stationery/demo-footer.svg"), join(DEMO_FOLDER, "stationery/footer.svg"));
 process.on("exit", () => rmSync(DEMO_FOLDER, { recursive: true, force: true }));
 const BASELINES = join(REPO, "scripts/pdf-render-baselines.json");
 const CREATION_TIMESTAMP = "1767225600"; // 2026-01-01T00:00:00Z
@@ -195,6 +206,8 @@ const settingsFor = (overrides: Partial<CompanySettingsRow> = {}): CompanySettin
 const noLogo = { pdf_header_logo_path: null };
 // The demo business: its bundled letterhead, Safe area and PDF accent.
 const demoSettings = () => settingsFor({ ...demoLetterheadSettings(null), pdf_theme_color: DEMO_LETTERHEAD_ACCENT });
+// The demo business switched to its stored Header & footer images.
+const demoHeaderFooterSettings = () => settingsFor({ ...demoLetterheadSettings(null), pdf_stationery_mode: "header_footer", pdf_theme_color: DEMO_LETTERHEAD_ACCENT });
 const preprintedPaper = { pdf_stationery_mode: "preprinted" };
 // Full-page background with artwork of the given format. Its margins (44 / 22,
 // sides 20) differ from both the defaults and the Pre-printed bands above, so
@@ -206,6 +219,55 @@ const fullPageBackground = (ext: "svg" | "png" | "jpg" | "pdf" | null = "svg") =
 		background: { ext, paper: "a4", crop: null, live_text: false, margins: { top: 44, right: 20, bottom: 22, left: 20 } }
 	})
 });
+// Header & footer images: the fixture of each given format (null = none),
+// placed where a fresh upload lands — full width, flush to its edge — on the
+// given sheet, with each band following its image exactly as the editor
+// leaves it. `moved` instead puts a narrower header, centred, 8 mm down (a
+// logo strip rather than a banner). Sides 20.
+const HF_ASPECT: Record<string, number> = { "header.svg": 7, "header.png": 210 / 36, "footer.svg": 14, "footer.pdf": 15 };
+const headerFooterImages = (
+	header: "svg" | "png" | null = "svg",
+	footer: "svg" | "pdf" | null = "svg",
+	{ paper = "a4", moved = false }: { paper?: PaperSize, moved?: boolean } = {}
+) => {
+	const sheet = resolvePaperSize(paper);
+	let margins = { top: 20, right: 20, bottom: 20, left: 20 };
+	const place = (slot: HeaderFooterSlot, ext: string | null) => {
+		if (!ext) return null;
+		const aspect = HF_ASPECT[`${slot}.${ext}`]!;
+		let rect: MmRect = defaultImageRect(sheet, slot, aspect, margins);
+		if (moved && slot === "header") {
+			const w = sheet.widthMm * 0.5;
+			rect = { x: (sheet.widthMm - w) / 2, y: 8, w, h: w / aspect };
+		}
+		margins = followImage(sheet, slot, null, rect, margins);
+		return { ext, aspect, rect, paper, crop: null, live_text: false };
+	};
+	const h = place("header", header);
+	const f = place("footer", footer);
+	return {
+		pdf_stationery_mode: "header_footer",
+		pdf_stationery: JSON.stringify({
+			preprinted: { top: 48, right: 16, bottom: 24, left: 16 },
+			background: { ext: "svg", paper: "a4", crop: null, live_text: false, margins: { top: 44, right: 20, bottom: 22, left: 20 } },
+			header_footer: { header: h, footer: f, margins }
+		}),
+		pdf_paper_size: paper
+	};
+};
+// Stationery set up on one sheet, then the Paper size changed: re-fitted the
+// way /settings/pdf does when a paper is picked (refitStationery), one sheet
+// after another along `papers`.
+const refitted = (setup: { pdf_stationery: string, pdf_paper_size: PaperSize }, ...papers: PaperSize[]) => {
+	let json = setup.pdf_stationery;
+	let from = resolvePaperSize(setup.pdf_paper_size);
+	for (const paper of papers) {
+		const to = resolvePaperSize(paper);
+		json = refitStationery(json, from, to);
+		from = to;
+	}
+	return { ...setup, pdf_stationery: json, pdf_paper_size: from.key };
+};
 const customChrome = {
 	pdf_header_custom: 1,
 	pdf_header_text: richText("{business_name}", "{address}, {city}", "Tax ID {tax_id}"),
@@ -521,7 +583,7 @@ interface Case {
 	 * than pixels.
 	 */
 	checkOnly?: true
-	/** Where Full-page background artwork is read from (default: the fixtures folder). */
+	/** Where Stationery artwork (background, header / footer images) is read from (default: the fixtures folder). */
 	businessFolder?: string
 	/** Must render byte-identically to this other case. */
 	sameAs?: string
@@ -550,14 +612,21 @@ const MULTIPAGE_ON_OTHER_PAPER = new Set([
 
 const ALL_PAPERS = ["a4", ...OTHER_PAPERS] as const;
 const bands = (preprinted: object) => ({ pdf_stationery_mode: "preprinted", pdf_stationery: JSON.stringify({ preprinted }) });
-// The Stationery the preview sample must stay two pages on.
-const STATIONERY_PREVIEW_STATIONERY: [string, Partial<CompanySettingsRow>][] = [
+// The Stationery the preview sample must stay two pages on (a function when
+// it depends on the sheet: Header & footer images are placed per sheet).
+const STATIONERY_PREVIEW_STATIONERY: [string, Partial<CompanySettingsRow> | ((paper: PaperSize) => Partial<CompanySettingsRow>)][] = [
 	["builtin", {}],
 	["background", fullPageBackground()],
 	["background-wide-sides", { pdf_stationery_mode: "background", pdf_stationery: JSON.stringify({ background: { ext: "svg", paper: "a4", crop: null, live_text: false, margins: { top: 40, right: 40, bottom: 25, left: 40 } } }) }],
 	["preprinted", preprintedPaper],
 	["preprinted-shallow", bands({ top: 5, right: 5, bottom: 5, left: 5 })],
-	["preprinted-deep", bands({ top: 60, right: 18, bottom: 30, left: 18 })]
+	["preprinted-deep", bands({ top: 60, right: 18, bottom: 30, left: 18 })],
+	["header-footer", (paper) => headerFooterImages("svg", "svg", { paper })],
+	["header-footer-raster", (paper) => headerFooterImages("png", "pdf", { paper })],
+	["header-footer-moved", (paper) => headerFooterImages("svg", null, { paper, moved: true })],
+	// Placed on A4, then the Paper size changed to this sheet.
+	["header-footer-refit", (paper) => refitted(headerFooterImages("png", "pdf"), paper)],
+	["header-footer-moved-refit", (paper) => refitted(headerFooterImages("svg", "svg", { moved: true }), paper)]
 ];
 
 const cases: Case[] = [
@@ -699,6 +768,53 @@ const cases: Case[] = [
 	// artwork, even while the business uses a Full-page background.
 	{ name: "letter-preprinted-on-business-background", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(true), settings: settingsFor({ ...fullPageBackground() }) }), sameAs: "letter-preprinted-on-business-preprinted" },
 
+	// Header & footer images Stationery, every template, with a real header
+	// and footer image on every page at their stored place and the content
+	// kept out of their bands. The business's own logo, header text and
+	// footer are set (customChrome) and must all be dropped.
+	...LAYOUTS.map((key) => docCase(`invoice-${key}-header-footer`, invoice(settingsFor({ ...headerFooterImages(), ...customChrome, pdf_layout: key })))),
+	// Raster header, PDF footer (whose red second page must never show).
+	docCase("invoice-classic-header-footer-raster", invoice(settingsFor({ ...headerFooterImages("png", "pdf") }))),
+	// Both images repeat on every page.
+	{ ...docCase("invoice-classic-header-footer-multipage", invoice(settingsFor({ ...headerFooterImages("png", "pdf") }), 30)), multipage: true },
+	// One image alone: the other band stays the plain margin.
+	docCase("invoice-classic-header-only", invoice(settingsFor({ ...headerFooterImages("svg", null) }))),
+	docCase("invoice-classic-footer-only", invoice(settingsFor({ ...headerFooterImages(null, "pdf") }))),
+	// A narrower header moved off the edge: its band follows it down.
+	docCase("invoice-classic-header-footer-moved", invoice(settingsFor({ ...headerFooterImages("svg", "svg", { moved: true }) }))),
+	// Mode chosen, nothing uploaded yet: the margins apply, nothing drawn.
+	docCase("invoice-classic-header-footer-no-images", invoice(settingsFor({ ...headerFooterImages(null, null) }))),
+	// Images recorded but their files are gone: renders without them (their
+	// bands stay reserved) rather than failing.
+	{ ...docCase("invoice-classic-header-footer-files-missing", invoice(settingsFor({ ...headerFooterImages() }))), businessFolder: join(REPO, "scripts/fixtures/no-such-folder") },
+	{ ...docCase("invoice-classic-header-footer-a5", invoice(settingsFor({ ...headerFooterImages("svg", "svg", { paper: "a5" }) }))), multipage: true },
+	// Placed on A4, then the Paper size changed (#362): A5 scales the images
+	// and bands, Letter / Legal keep their size, clamped onto the page.
+	// imagePlacementProblem proves each stays on the page and clear of the
+	// Safe area. A4 → A5 → A4 must come back to the A4 render exactly.
+	{ ...docCase("invoice-classic-header-footer-refit-a5", invoice(settingsFor({ ...refitted(headerFooterImages(), "a5") }))), multipage: true },
+	{ ...docCase("invoice-classic-header-footer-raster-refit-a5", invoice(settingsFor({ ...refitted(headerFooterImages("png", "pdf"), "a5") }))), multipage: true },
+	{ ...docCase("invoice-classic-header-footer-moved-refit-a5", invoice(settingsFor({ ...refitted(headerFooterImages("svg", "svg", { moved: true }), "a5") }))), multipage: true },
+	docCase("invoice-classic-header-footer-refit-us-letter", invoice(settingsFor({ ...refitted(headerFooterImages(), "us-letter") }), 1)),
+	docCase("invoice-classic-header-footer-refit-us-legal", invoice(settingsFor({ ...refitted(headerFooterImages("png", "pdf"), "us-legal") }))),
+	{ ...docCase("invoice-classic-header-footer-refit-a5-a4", invoice(settingsFor({ ...refitted(headerFooterImages(), "a5", "a4") }))), sameAs: "invoice-classic-header-footer" },
+	{ name: "payslip-classic-header-footer-refit-a5", template: "payslip.typ", payload: payslip(settingsFor({ ...refitted(headerFooterImages("png", "pdf"), "a5") })), multipage: true },
+	{ name: "statement-header-footer-refit-a5", template: "statement.typ", payload: statement(settingsFor({ ...refitted(headerFooterImages(), "a5") })), multipage: true },
+	docCase("quote-classic-header-footer", buildQuotePdfPayload({ row: docRow as never, lines: docLines(3), settings: settingsFor({ ...headerFooterImages() }), currency })),
+	docCase("bill-classic-header-footer", buildBillPdfPayload({ row: docRow as never, lines: docLines(2) as never, settings: settingsFor({ ...headerFooterImages("png", "pdf") }), currency, paidCents: 2000000 })),
+	...LAYOUTS.map((key): Case => ({ name: `payslip-${key}-header-footer`, template: "payslip.typ", payload: payslip(settingsFor({ ...headerFooterImages(), ...customChrome, pdf_layout: key })) })),
+	{ name: "voucher-header-footer", template: "voucher.typ", payload: voucher(settingsFor({ ...headerFooterImages(), ...customChrome })) },
+	{ name: "voucher-header-footer-raster", template: "voucher.typ", payload: voucher(settingsFor({ ...headerFooterImages("png", "pdf") })) },
+	{ name: "report-pnl-header-footer", template: "report.typ", payload: pnl(settingsFor({ ...headerFooterImages(), ...customChrome })), multipage: true },
+	// Portrait under this Stationery, like every mode but Built-in.
+	{ name: "statement-header-footer", template: "statement.typ", payload: statement(settingsFor({ ...headerFooterImages(), ...customChrome })) },
+	{ name: "statement-header-footer-a5", template: "statement.typ", payload: statement(settingsFor({ ...headerFooterImages("png", "pdf", { paper: "a5" }) })), multipage: true },
+	{ name: "letter-header-footer", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false), settings: settingsFor({ ...headerFooterImages() }) }) },
+	{ name: "letter-header-footer-multipage", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false, 20), settings: settingsFor({ ...headerFooterImages("png", "pdf") }) }), multipage: true },
+	// A letter set to pre-printed paper keeps its blank bands and draws neither image.
+	{ name: "letter-preprinted-on-business-header-footer", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(true), settings: settingsFor({ ...headerFooterImages() }) }), sameAs: "letter-preprinted-on-business-preprinted" },
+	{ ...docCase("stationery-preview-classic-header-footer", sampleStationeryPreviewPayload(settingsFor({ ...headerFooterImages("png", "pdf") }), currency, "classic")), multipage: true, pages: 2 },
+
 	// The Stationery editor's "Preview sample invoice" is exactly two pages —
 	// the continuation page, repeated Stationery and "Page 2 of 2" are what it
 	// exists to show. Three with stored baselines…
@@ -708,7 +824,7 @@ const cases: Case[] = [
 	// …and the property on every Layout × Paper size × Stationery, including
 	// shallow, deep and wide Safe areas (checkOnly: page count, no hash).
 	...STATIONERY_PREVIEW_STATIONERY.flatMap(([label, overrides]) => ALL_PAPERS.flatMap((paper) => LAYOUTS.map((key): Case => ({
-		...docCase(`stationery-preview-grid-${key}-${label}-${paper}`, sampleStationeryPreviewPayload(settingsFor({ ...overrides, pdf_layout: key, pdf_paper_size: paper }), currency, key)),
+		...docCase(`stationery-preview-grid-${key}-${label}-${paper}`, sampleStationeryPreviewPayload(settingsFor({ ...(typeof overrides === "function" ? overrides(paper) : overrides), pdf_layout: key, pdf_paper_size: paper }), currency, key)),
 		multipage: true,
 		pages: 2,
 		checkOnly: true
@@ -718,6 +834,9 @@ const cases: Case[] = [
 	// with the demo's own Safe area (one page, and one that runs on).
 	{ ...docCase("invoice-classic-demo-letterhead", invoice(demoSettings())), businessFolder: DEMO_FOLDER },
 	{ ...docCase("invoice-classic-demo-letterhead-multipage", invoice(demoSettings(), 30)), businessFolder: DEMO_FOLDER, multipage: true },
+	// ...and the same letterhead as the demo's stored Header & footer images.
+	{ ...docCase("invoice-classic-demo-header-footer", invoice(demoHeaderFooterSettings())), businessFolder: DEMO_FOLDER },
+	{ ...docCase("invoice-classic-demo-header-footer-multipage", invoice(demoHeaderFooterSettings(), 30)), businessFolder: DEMO_FOLDER, multipage: true },
 
 	// Every template on the three non-A4 sheets. Built-in Layout margins scale
 	// with paper width; Pre-printed paper bands (letters included) do not.
@@ -770,8 +889,12 @@ interface Rendered {
 	pageNumbers: PageNumber[]
 }
 
+// A page-block image once staged: the payload's own entry plus the file name Typst reads.
+type StagedImage = PageImage & { file?: string };
+
 interface PageBlock {
 	background?: { ext: string, file?: string } | null
+	header_footer?: { header: StagedImage | null, footer: StagedImage | null } | null
 	[key: string]: unknown
 }
 
@@ -789,6 +912,23 @@ const stageBackground = (page: PageBlock | undefined, folder: string, work: stri
 	return { ...page, background: { ...page.background, file } };
 };
 
+// Mirror stage_header_footer() in src-tauri/src/pdf.rs: each image's file is
+// <business folder>/stationery/<slot>.<ext>, copied beside the template as
+// stationery-<slot>.<ext> with `file` added; a missing file drops that image
+// alone (null), leaving the other.
+const stageHeaderFooter = (page: PageBlock | undefined, folder: string, work: string): PageBlock | undefined => {
+	if (!page?.header_footer) return page;
+	const stage = (slot: HeaderFooterSlot, image: StagedImage | null): StagedImage | null => {
+		if (!image) return null;
+		const src = join(folder, "stationery", `${slot}.${image.ext}`);
+		if (!/^[a-z0-9]{1,5}$/i.test(image.ext) || !existsSync(src)) return null;
+		const file = `stationery-${slot}.${image.ext}`;
+		copyFileSync(src, join(work, file));
+		return { ...image, file };
+	};
+	return { ...page, header_footer: { header: stage("header", page.header_footer.header), footer: stage("footer", page.header_footer.footer) } };
+};
+
 const render = (c: Case): Rendered => {
 	const work = mkdtempSync(join(tmpdir(), "sakoram-pdf-"));
 	try {
@@ -804,6 +944,7 @@ const render = (c: Case): Rendered => {
 			data.logo_file = null;
 		}
 		data.page = stageBackground(data.page as PageBlock | undefined, c.businessFolder ?? BUSINESS_FOLDER, work);
+		data.page = stageHeaderFooter(data.page as PageBlock | undefined, c.businessFolder ?? BUSINESS_FOLDER, work);
 		writeFileSync(join(work, "data.json"), JSON.stringify(data, null, 2));
 		copyFileSync(join(TEMPLATES, "common.typ"), join(work, "common.typ"));
 		copyFileSync(join(TEMPLATES, c.template), join(work, c.template));
@@ -911,19 +1052,52 @@ const orientationProblem = (c: Case, r: Rendered): string | null => {
 	return wrong.length ? `${wrong.length} page(s) are ${landscape ? "portrait" : "landscape"}; this Stationery wants ${landscape ? "landscape" : "portrait"}` : null;
 };
 
+// Header & footer images must sit on the page, and the Safe area clear of
+// them by at least the gap — above all after a Paper size change re-fitted
+// them (#362). Read from the page block every template receives.
+const imagePlacementProblem = (c: Case): string | null => {
+	const page = c.payload.page as (PageBlock & { paper?: string, margins?: { top: number, bottom: number } | null }) | undefined;
+	const hf = page?.header_footer;
+	if (!hf || !page?.margins) return null;
+	const sheet = resolvePaperSize(page.paper);
+	const eps = 1e-6;
+	for (const slot of ["header", "footer"] as const) {
+		const image = hf[slot] as { x: number, y: number, w: number, h: number } | null;
+		if (!image) continue;
+		if (image.x < -eps || image.y < -eps || image.x + image.w > sheet.widthMm + eps || image.y + image.h > sheet.heightMm + eps) {
+			return `the ${slot} image (${image.x}, ${image.y}, ${image.w} × ${image.h} mm) runs off the ${sheet.label} page`;
+		}
+		const clear = slot === "header"
+			? page.margins.top - (image.y + image.h)
+			: page.margins.bottom - (sheet.heightMm - image.y);
+		if (clear < HEADER_FOOTER_GAP_MM - eps) return `the Safe area comes within ${clear} mm of the ${slot} image`;
+	}
+	return null;
+};
+
 const sha256 = (buf: Buffer) => createHash("sha256").update(buf).digest("hex");
 
-// A case with Full-page background artwork on disk must actually show it: the
-// same document with the artwork taken out has to render differently. (A hash
-// alone would happily bless a render where the artwork silently went missing.)
-const hasArtwork = (c: Case) => {
-	const bg = (c.payload.page as PageBlock | undefined)?.background;
-	return Boolean(bg && existsSync(join(c.businessFolder ?? BUSINESS_FOLDER, "stationery", `background.${bg.ext}`)));
-};
+// A case with Stationery artwork on disk must actually show it: the same
+// document with the artwork taken out has to render differently — for Header &
+// footer images, with EACH image taken out in turn. (A hash alone would
+// happily bless a render where the artwork silently went missing.)
+const onDisk = (c: Case, stem: string, ext: string) => existsSync(join(c.businessFolder ?? BUSINESS_FOLDER, "stationery", `${stem}.${ext}`));
+const withPage = (c: Case, suffix: string, page: Partial<PageBlock>): Case => ({ ...c, name: `${c.name}~${suffix}`, payload: { ...c.payload, page: { ...(c.payload.page as object), ...page } } });
 const artworkProblem = (c: Case, hash: string): string | null => {
-	if (!hasArtwork(c)) return null;
-	const without = { ...c, name: `${c.name}~no-artwork`, payload: { ...c.payload, page: { ...(c.payload.page as object), background: null } } };
-	return sha256(render(without).pdf) === hash ? "the background artwork did not change the page — is page-setup drawing it?" : null;
+	const page = c.payload.page as PageBlock | undefined;
+	const bg = page?.background;
+	if (bg && onDisk(c, "background", bg.ext) && sha256(render(withPage(c, "no-artwork", { background: null })).pdf) === hash) {
+		return "the background artwork did not change the page — is page-setup drawing it?";
+	}
+	const hf = page?.header_footer;
+	for (const slot of ["header", "footer"] as const) {
+		const image = hf?.[slot];
+		if (!hf || !image || !onDisk(c, slot, image.ext)) continue;
+		if (sha256(render(withPage(c, `no-${slot}`, { header_footer: { ...hf, [slot]: null } })).pdf) === hash) {
+			return `the ${slot} image did not change the page — is page-setup drawing it?`;
+		}
+	}
+	return null;
 };
 
 interface Baselines {
@@ -963,7 +1137,7 @@ for (const c of allCases) {
 	if (KEEP_DIR) writeFileSync(join(KEEP_DIR, `${c.name}.pdf`), pdf);
 
 	// Checked in both modes: --update must not bless a wrong page count.
-	const problem = pageNumberProblem(c, rendered) ?? identityProblem(c, rendered) ?? orientationProblem(c, rendered) ?? artworkProblem(c, hash)
+	const problem = pageNumberProblem(c, rendered) ?? identityProblem(c, rendered) ?? orientationProblem(c, rendered) ?? imagePlacementProblem(c) ?? artworkProblem(c, hash)
 		// (Under --only the other case may simply not have rendered.)
 		?? (c.sameAs && (ONLY === undefined || c.sameAs in hashes) && hashes[c.sameAs] !== hash ? `should render exactly like ${c.sameAs}` : null);
 	if (problem) {

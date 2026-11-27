@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fullRect, moveRect, resizeRect } from "./crop-rect";
+import { fitCropToAspect, fullRect, moveRect, resizeRect } from "./crop-rect";
 
 describe("fullRect", () => {
 	it("covers the whole image", () => {
@@ -110,5 +110,41 @@ describe("resizeRect with an aspect lock", () => {
 	it("supports a non-square ratio", () => {
 		const r = resizeRect({ x: 0, y: 0, w: 100, h: 50 }, "se", 100, 0, 800, 600, 16, 2);
 		expect(r.w / r.h).toBeCloseTo(2, 5);
+	});
+});
+
+// Re-cropping a Full-page background for a sheet of another shape: the stored
+// crop was made for the old paper's proportions.
+describe("fitCropToAspect", () => {
+	const A4 = 210 / 297;
+	const LETTER = 215.9 / 279.4;
+
+	it("a crop already of that shape comes back as it was (to the pixel)", () => {
+		const crop = { x: 100, y: 40, w: 2480, h: 3508 };
+		expect(fitCropToAspect(crop, A4, 3000, 4000)).toEqual(crop);
+	});
+
+	it("without an aspect, the crop comes back as it was", () => {
+		const crop = { x: 0, y: 0, w: 300, h: 100 };
+		expect(fitCropToAspect(crop, undefined, 800, 600)).toEqual(crop);
+	});
+
+	it("takes the new shape, centred where the old crop was, keeping its area", () => {
+		const crop = { x: 200, y: 200, w: 2100, h: 2970 };
+		const r = fitCropToAspect(crop, LETTER, 4000, 4000);
+		expect(r.w / r.h).toBeCloseTo(LETTER, 2);
+		expect(r.x + r.w / 2).toBeCloseTo(200 + 1050, -1);
+		expect(r.y + r.h / 2).toBeCloseTo(200 + 1485, -1);
+		expect(r.w * r.h).toBeCloseTo(2100 * 2970, -4);
+	});
+
+	it("stays inside the image: shrunk if it would be too big, moved if it would hang off an edge", () => {
+		const r = fitCropToAspect({ x: 0, y: 0, w: 2100, h: 2970 }, LETTER, 2100, 2970);
+		expect(r.w / r.h).toBeCloseTo(LETTER, 2);
+		expect(r.x).toBeGreaterThanOrEqual(0);
+		expect(r.y).toBeGreaterThanOrEqual(0);
+		expect(r.x + r.w).toBeLessThanOrEqual(2100);
+		expect(r.y + r.h).toBeLessThanOrEqual(2970);
+		expect(r.w).toBe(2100);
 	});
 });

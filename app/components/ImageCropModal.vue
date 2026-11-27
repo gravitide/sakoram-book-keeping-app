@@ -57,7 +57,7 @@
 	import type { CropRect } from "~/lib/crop-rect";
 	import type { PixelSize } from "~/lib/stationery-artwork";
 	import { encodeImage } from "~/lib/canvas-image";
-	import { fullRect, moveRect, resizeRect } from "~/lib/crop-rect";
+	import { fitCropToAspect, fullRect, moveRect, resizeRect } from "~/lib/crop-rect";
 	import { downscaleSize } from "~/lib/stationery-artwork";
 
 	const props = withDefaults(defineProps<{
@@ -125,7 +125,11 @@
 			ox: (stageW - el.naturalWidth * scale) / 2,
 			oy: (stageH - el.naturalHeight * scale) / 2
 		};
-		rect.value = props.initialRect ?? fullRect(el.naturalWidth, el.naturalHeight, props.aspect);
+		// A stored crop may have been made for another shape (a background
+		// re-cropped after a Paper size change): reshape it to the locked aspect.
+		rect.value = props.initialRect
+			? fitCropToAspect(props.initialRect, props.aspect, el.naturalWidth, el.naturalHeight)
+			: fullRect(el.naturalWidth, el.naturalHeight, props.aspect);
 	};
 
 	watch(() => [openModel.value, props.imageBlob] as const, async ([open]) => {

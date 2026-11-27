@@ -68,7 +68,7 @@
 										form.pdf_paper_size === p.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border)'
 									]"
 									:aria-pressed="form.pdf_paper_size === p.key"
-									@click="form.pdf_paper_size = p.key"
+									@click="setPaper(p.key)"
 								>
 									<div class="text-xs font-medium">
 										{{ p.label }}
@@ -220,6 +220,7 @@
 								:scale="scaleForWidth(resolvePaperSize(paperKey), 150)"
 								:artwork-url="artwork.url.value"
 								:artwork-ext="artwork.ext.value"
+								:images="thumbnailImages"
 								compact
 							/>
 							<div class="space-y-3 min-w-0">
@@ -228,6 +229,9 @@
 								</p>
 								<p v-else-if="form.pdf_stationery_mode === 'background'" class="text-xs text-(--ui-text-muted)">
 									Upload your artwork below, then set the Safe area in the editor. Your logo, header text and footer aren't printed — the artwork is your letterhead.
+								</p>
+								<p v-else-if="form.pdf_stationery_mode === 'header_footer'" class="text-xs text-(--ui-text-muted)">
+									Upload your header and footer images below, then place them and set the Safe area in the editor. Your logo, header text and footer aren't printed — the images are your letterhead.
 								</p>
 								<p v-else class="text-xs text-(--ui-text-muted)">
 									Set the blank bands for your printed letterhead in the editor, or type the top and bottom bands below.
@@ -245,7 +249,7 @@
 								<div class="text-xs text-(--ui-text-muted) tabular-nums">
 									{{ resolvePaperSize(paperKey).label }}
 									<template v-if="form.pdf_stationery_mode !== 'builtin'">
-										· margins {{ activeStationeryMargins.top }} / {{ activeStationeryMargins.right }} / {{ activeStationeryMargins.bottom }} / {{ activeStationeryMargins.left }} mm (top / right / bottom / left)
+										· margins {{ formatMm(activeStationeryMargins.top) }} / {{ formatMm(activeStationeryMargins.right) }} / {{ formatMm(activeStationeryMargins.bottom) }} / {{ formatMm(activeStationeryMargins.left) }} mm (top / right / bottom / left)
 									</template>
 								</div>
 							</div>
@@ -281,14 +285,28 @@
 					<StationeryBackgroundCard
 						v-if="form.pdf_stationery_mode === 'background'"
 						:paper="paperKey"
+						:review="stationeryCheck.background"
+						:locked="artworkLock"
+						@artwork="onBackgroundArtwork"
+					/>
+					<StationeryHeaderFooterCard
+						v-if="form.pdf_stationery_mode === 'header_footer'"
+						:paper="paperKey"
+						:margins="activeStationeryMargins"
+						:rects="form.header_footer_images"
+						:review="stationeryCheck"
+						:locked="artworkLock"
+						@placed="onImagePlaced"
 					/>
 					<StationeryEditorModal
 						v-model:open="editorOpen"
 						v-model:margins="activeStationeryMargins"
+						v-model:images="form.header_footer_images"
 						:mode="form.pdf_stationery_mode"
 						:paper="paperKey"
 						:layout="form.pdf_layout"
 						:settings="previewSettings"
+						@applied="onStationeryApplied"
 					/>
 
 					<!-- Built-in stationery's own controls. Hidden (not cleared) under any
@@ -668,8 +686,10 @@
 
 <script setup lang="ts">
 	import type { CropRect } from "~/lib/crop-rect";
+	import type { PaperSize } from "~/lib/page-settings";
 	import type { PdfLayoutKey } from "~/lib/pdf-layouts";
-	import type { StationeryMarginsMm, StationeryMode } from "~/lib/stationery";
+	import type { HeaderFooterSlot, StationeryMarginsMm, StationeryMode } from "~/lib/stationery";
+	import type { HeaderFooterRects, MmRect, PageImageView, PaperGeometry } from "~/lib/stationery-geometry";
 	import type { CompanySettingsRow, SettingsUpdate } from "~/stores/settings";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
@@ -681,8 +701,9 @@
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
 	import { PDF_TOKENS } from "~/lib/pdf-tokens";
 	import { sampleInvoicePayload } from "~/lib/sample-pdf";
-	import { BACKGROUND_DEFAULT_MARGINS, MAX_BAND_MM, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, setBackgroundMargins, setPreprintedMargins, STATIONERY_MODES, stationeryModeToSave } from "~/lib/stationery";
-	import { scaleForWidth } from "~/lib/stationery-geometry";
+	import { BACKGROUND_DEFAULT_MARGINS, confirmPaperGeometry, HEADER_FOOTER_DEFAULT_MARGINS, modeNeedsReview, paperGeometryOf, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, serializeStationery, STATIONERY_MODES, stationeryReview, stationerySchema, withPaperGeometry } from "~/lib/stationery";
+	import { artworkPaperLock } from "~/lib/stationery-artwork";
+	import { formatMm, headerFooterMargins, IMAGE_EDGE, MAX_BAND_MM, refitPaperGeometry, scaleForWidth } from "~/lib/stationery-geometry";
 	import { isHexColor, THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -697,15 +718,27 @@
 	// the form so dirty-tracking can spot a removal/upload that would otherwise
 	// only mutate the store. (Document protection moved to /settings/security.)
 	// The Stationery JSON column is edited as plain numbers here (Pre-printed
-	// paper's two bands and the Full-page background's four margins) and
-	// re-assembled on save on top of whatever else is stored, so another mode's
-	// settings — and the background artwork, which saves on upload — survive.
+	// paper's two bands, the Full-page background's four margins, and Header &
+	// footer images' margins and image places) and re-assembled on save on top
+	// of whatever else is stored, so another mode's settings — and the
+	// artwork, which saves on upload — survive.
 	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_theme_color" | "pdf_paper_size" | "pdf_logo_scale" | "pdf_header_custom" | "pdf_header_text" | "pdf_footer_custom" | "pdf_footer_text"> & {
 		pdf_layout: PdfLayoutKey
-		// The RESOLVED mode the picker shows; onSubmit maps it back (stationeryModeToSave).
+		// The mode the picker shows (an unknown stored value reads as Built-in).
 		pdf_stationery_mode: StationeryMode
 		preprinted_margins: StationeryMarginsMm
 		background_margins: StationeryMarginsMm
+		/** Header & footer images' own margins, as stored (each band is pushed out of its image on top). */
+		header_footer_margins: StationeryMarginsMm
+		header_footer_images: HeaderFooterRects
+		/**
+		 * The sheet each piece of artwork was placed or prepared on (null = no
+		 * artwork / unknown). A Paper size change moves a scaled one along with
+		 * it; one only clamped onto the new sheet keeps the old one, which is
+		 * what flags it for a check in the editor (stationeryReview).
+		 */
+		background_paper: PaperSize | null
+		header_footer_papers: { header: PaperSize | null, footer: PaperSize | null }
 	};
 
 	const form = reactive<PdfForm>({
@@ -717,6 +750,10 @@
 		pdf_stationery_mode: "builtin",
 		preprinted_margins: { ...PREPRINTED_DEFAULT_MARGINS },
 		background_margins: { ...BACKGROUND_DEFAULT_MARGINS },
+		header_footer_margins: { ...HEADER_FOOTER_DEFAULT_MARGINS },
+		header_footer_images: { header: null, footer: null },
+		background_paper: null,
+		header_footer_papers: { header: null, footer: null },
 		pdf_logo_scale: 100,
 		pdf_header_custom: 0,
 		pdf_header_text: null,
@@ -724,28 +761,81 @@
 		pdf_footer_text: null
 	});
 
+	// Every mode's paper-dependent geometry, as the form holds it.
+	const formGeometry = (): PaperGeometry => {
+		const placed = (slot: "header" | "footer") => {
+			const rect = form.header_footer_images[slot];
+			return rect ? { rect: { ...rect }, paper: form.header_footer_papers[slot] } : null;
+		};
+		return {
+			preprinted: { ...form.preprinted_margins },
+			background: { margins: { ...form.background_margins }, paper: form.background_paper },
+			header_footer: { header: placed("header"), footer: placed("footer"), margins: { ...form.header_footer_margins } }
+		};
+	};
+	const setFormGeometry = (g: PaperGeometry) => {
+		form.preprinted_margins = { ...g.preprinted };
+		form.background_margins = { ...g.background.margins };
+		form.background_paper = g.background.paper;
+		form.header_footer_margins = { ...g.header_footer.margins };
+		form.header_footer_images = {
+			header: g.header_footer.header ? { ...g.header_footer.header.rect } : null,
+			footer: g.header_footer.footer ? { ...g.header_footer.footer.rect } : null
+		};
+		form.header_footer_papers = { header: g.header_footer.header?.paper ?? null, footer: g.header_footer.footer?.paper ?? null };
+	};
+
 	// Every mode's stored settings with this page's edits applied; anything
-	// this page doesn't edit (the side bands, later modes' geometry) is kept.
-	const stationeryJson = () => setBackgroundMargins(
-		setPreprintedMargins(store.settings?.pdf_stationery, { ...form.preprinted_margins }),
-		{ ...form.background_margins }
-	);
+	// this page doesn't edit (the artwork itself, which saves on upload) is
+	// kept, and a refused value falls back to its default through the schema.
+	const stationeryJson = () => serializeStationery(stationerySchema.parse(
+		withPaperGeometry(parseStationery(store.settings?.pdf_stationery), formGeometry())
+	));
 
 	const paperKey = computed(() => resolvePaperSize(form.pdf_paper_size).key);
+
+	// What the cards and the editor flag for a check on the picked sheet.
+	const stationeryCheck = computed(() =>
+		stationeryReview(formGeometry(), parseStationery(store.settings?.pdf_stationery).background.ext, paperKey.value));
+
+	// Artwork saves the moment it changes, for the paper picked now — so not
+	// while a Paper size change is unsaved (Discard would leave it on the
+	// wrong sheet). The cards disable their actions and show this note.
+	const artworkLock = computed(() => artworkPaperLock(paperKey.value, store.settings?.pdf_paper_size));
 
 	// The margins of the mode being edited — what the thumbnail frames and the
 	// Stationery editor drags. Each mode keeps its own (Built-in has none of
 	// its own; it reads the Pre-printed ones harmlessly and never writes).
+	// Header & footer images report their margins with each band already pushed
+	// out of its image — what the PDF reserves (page-settings.ts does the same).
 	const activeStationeryMargins = computed<StationeryMarginsMm>({
-		get: () => (form.pdf_stationery_mode === "background" ? form.background_margins : form.preprinted_margins),
+		get: () => {
+			if (form.pdf_stationery_mode === "background") return form.background_margins;
+			if (form.pdf_stationery_mode === "header_footer") return headerFooterMargins(resolvePaperSize(paperKey.value), form.header_footer_images, form.header_footer_margins);
+			return form.preprinted_margins;
+		},
 		set: (m) => {
 			if (form.pdf_stationery_mode === "background") form.background_margins = { ...m };
+			else if (form.pdf_stationery_mode === "header_footer") form.header_footer_margins = { ...m };
 			else if (form.pdf_stationery_mode === "preprinted") form.preprinted_margins = { ...m };
 		}
 	});
 
 	// Shared with StationeryBackgroundCard and the editor (one read / render).
 	const artwork = useStationeryArtwork();
+	// Header & footer images, shared the same way with their card and the editor.
+	const headerArt = useStationeryArtwork("header");
+	const footerArt = useStationeryArtwork("footer");
+	const thumbnailImages = computed(() => {
+		if (form.pdf_stationery_mode !== "header_footer") return null;
+		const stored = parseStationery(store.settings?.pdf_stationery).header_footer;
+		const view = (slot: HeaderFooterSlot, url: string | null): PageImageView | null => {
+			const rect = form.header_footer_images[slot];
+			const ext = stored[slot]?.ext;
+			return rect && ext ? { rect, url, ext } : null;
+		};
+		return { header: view("header", headerArt.url.value), footer: view("footer", footerArt.url.value) };
+	});
 	const editorOpen = ref(false);
 	const openEditor = () => {
 		editorOpen.value = true;
@@ -754,6 +844,36 @@
 	onDeactivated(() => {
 		editorOpen.value = false;
 	});
+
+	// A Paper size change re-fits every mode's geometry ON THE FORM, right
+	// when it is picked (stationery-geometry.ts refitPaperGeometry: A4 ↔ A5
+	// scales, to or from Letter / Legal keeps mm sizes and clamps). Here, and
+	// not when a PDF renders or the editor opens, because:
+	//   - the form's geometry is then always in the picked sheet's own
+	//     coordinates, so the thumbnail, the editor and the sample preview
+	//     show what Save will write, and an edit made after the change is
+	//     never re-fitted a second time;
+	//   - Save stores geometry that already fits its sheet, so every PDF
+	//     (rendered with no editor involved) is right, and nothing has to
+	//     remember which sheet stored geometry was meant for;
+	//   - each pick re-fits from the sheet before it, so A4 → A5 → A4 (saved
+	//     or not) comes back where it started.
+	// Hydrate (load / Discard) sets the paper directly: stored geometry is
+	// already in the stored sheet's coordinates.
+	//
+	// When the re-fit leaves the ACTIVE mode's artwork needing a look (images
+	// clamped onto a Letter / Legal sheet, a background prepared for another
+	// one — stationeryReview), the Stationery editor opens straight away with
+	// its "Check your stationery" banner. Another mode's artwork only gets its
+	// card's note.
+	const setPaper = (key: PaperSize) => {
+		const from = resolvePaperSize(form.pdf_paper_size);
+		const to = resolvePaperSize(key);
+		if (from.key === to.key) return;
+		setFormGeometry(refitPaperGeometry(from, to, formGeometry()));
+		form.pdf_paper_size = to.key;
+		if (modeNeedsReview(stationeryCheck.value, form.pdf_stationery_mode)) editorOpen.value = true;
+	};
 
 	const currency = useActiveCurrency();
 	const colors = THEME_COLORS;
@@ -943,9 +1063,8 @@
 		form.pdf_layout = resolveLayoutKey(s.pdf_layout);
 		form.pdf_paper_size = resolvePaperSize(s.pdf_paper_size).key;
 		form.pdf_stationery_mode = resolveStationeryMode(s.pdf_stationery_mode);
-		const stationery = parseStationery(s.pdf_stationery);
-		form.preprinted_margins = { ...stationery.preprinted };
-		form.background_margins = { ...stationery.background.margins };
+		// Stored geometry is already in the stored sheet's coordinates: no re-fit.
+		setFormGeometry(paperGeometryOf(parseStationery(s.pdf_stationery)));
 		form.pdf_logo_scale = s.pdf_logo_scale ?? 100;
 		form.pdf_header_custom = s.pdf_header_custom ?? 0;
 		form.pdf_header_text = s.pdf_header_text ?? null;
@@ -971,8 +1090,7 @@
 				pdf_theme_color: form.pdf_theme_color,
 				pdf_layout: form.pdf_layout,
 				pdf_paper_size: form.pdf_paper_size,
-				// A stored mode the picker can't show yet survives unless another was picked.
-				pdf_stationery_mode: stationeryModeToSave(store.settings?.pdf_stationery_mode, form.pdf_stationery_mode),
+				pdf_stationery_mode: form.pdf_stationery_mode,
 				pdf_stationery: stationeryJson(),
 				pdf_logo_scale: form.pdf_logo_scale,
 				pdf_header_custom: form.pdf_header_custom,
@@ -990,6 +1108,42 @@
 				icon: "i-lucide-circle-alert"
 			});
 		}
+	};
+
+	// A Header & footer image was added, cropped or removed — already saved by
+	// its card, together with its band. Put the same on the form AND on the
+	// baseline, so it doesn't read as an unsaved change while any other
+	// unsaved edit on the page stays exactly as it was.
+	const onImagePlaced = (slot: HeaderFooterSlot, rect: MmRect | null, margins: StationeryMarginsMm) => {
+		const edge = IMAGE_EDGE[slot];
+		const apply = (f: PdfForm) => {
+			f.header_footer_images[slot] = rect ? { ...rect } : null;
+			// Placed (or re-cropped) on the sheet picked now — the card saved that.
+			f.header_footer_papers[slot] = rect ? paperKey.value : null;
+			if (rect) f.header_footer_margins[edge] = margins[edge];
+		};
+		const saved = JSON.parse(baseline.value) as PdfForm;
+		apply(saved);
+		apply(form);
+		baseline.value = JSON.stringify(saved);
+	};
+
+	// The Full-page background was uploaded, re-cropped or removed — saved by
+	// its card for the sheet picked now (or cleared). Same form + baseline
+	// treatment as onImagePlaced, so Save never writes back a stale sheet.
+	const onBackgroundArtwork = (paper: PaperSize | null) => {
+		const saved = JSON.parse(baseline.value) as PdfForm;
+		saved.background_paper = paper;
+		form.background_paper = paper;
+		baseline.value = JSON.stringify(saved);
+	};
+
+	// Apply in the Stationery editor: the user has seen this mode on this
+	// sheet, so whatever it flagged counts as checked (a raster background
+	// still needs its re-crop). Saved with Save changes, like the margins.
+	const onStationeryApplied = () => {
+		const ext = parseStationery(store.settings?.pdf_stationery).background.ext;
+		setFormGeometry(confirmPaperGeometry(formGeometry(), form.pdf_stationery_mode, paperKey.value, ext));
 	};
 
 	const onDiscard = () => {

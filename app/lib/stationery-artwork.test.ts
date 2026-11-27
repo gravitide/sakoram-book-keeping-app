@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { backgroundFormatOf, backgroundMimeOf, backgroundPixelSize, downscaleSize, isRasterBackground, matchesPaperAspect, svgHasLiveText } from "./stationery-artwork";
+import { isRasterArtwork } from "./stationery";
+import { artworkFormatOf, artworkMimeOf, artworkPaperLock, artworkPixelSize, downscaleSize, matchesPaperAspect, svgAspect, svgHasLiveText } from "./stationery-artwork";
 
-describe("backgroundPixelSize", () => {
+describe("artworkPixelSize", () => {
 	// About 300 DPI at the paper size — the spec's 2480 × 3508 for A4.
 	it.each([
 		["a4", 2480, 3508],
@@ -9,7 +10,7 @@ describe("backgroundPixelSize", () => {
 		["us-letter", 2550, 3300],
 		["us-legal", 2550, 4200]
 	] as const)("%s → %d × %d px", (paper, w, h) => {
-		expect(backgroundPixelSize(paper)).toEqual({ w, h });
+		expect(artworkPixelSize(paper)).toEqual({ w, h });
 	});
 });
 
@@ -72,7 +73,7 @@ describe("svgHasLiveText", () => {
 	});
 });
 
-describe("backgroundFormatOf", () => {
+describe("artworkFormatOf", () => {
 	it.each([
 		["letterhead.svg", "svg"],
 		["Letterhead.PDF", "pdf"],
@@ -80,17 +81,17 @@ describe("backgroundFormatOf", () => {
 		["photo.jpg", "jpg"],
 		["photo.JPEG", "jpg"]
 	] as const)("%s → %s", (name, ext) => {
-		expect(backgroundFormatOf(name)).toBe(ext);
+		expect(artworkFormatOf(name)).toBe(ext);
 	});
 
 	it("refuses anything else", () => {
-		expect(backgroundFormatOf("logo.gif")).toBeNull();
-		expect(backgroundFormatOf("letterhead")).toBeNull();
-		expect(backgroundFormatOf("letterhead.docx")).toBeNull();
+		expect(artworkFormatOf("logo.gif")).toBeNull();
+		expect(artworkFormatOf("letterhead")).toBeNull();
+		expect(artworkFormatOf("letterhead.docx")).toBeNull();
 	});
 });
 
-describe("backgroundMimeOf", () => {
+describe("artworkMimeOf", () => {
 	it.each([
 		["svg", "image/svg+xml"],
 		["pdf", "application/pdf"],
@@ -98,17 +99,65 @@ describe("backgroundMimeOf", () => {
 		["jpg", "image/jpeg"],
 		["JPEG", "image/jpeg"]
 	] as const)("%s → %s", (ext, mime) => {
-		expect(backgroundMimeOf(ext)).toBe(mime);
+		expect(artworkMimeOf(ext)).toBe(mime);
 	});
 
 	it("is a generic binary type for anything that isn't a background format", () => {
-		expect(backgroundMimeOf("gif")).toBe("application/octet-stream");
-		expect(backgroundMimeOf("")).toBe("application/octet-stream");
+		expect(artworkMimeOf("gif")).toBe("application/octet-stream");
+		expect(artworkMimeOf("")).toBe("application/octet-stream");
 	});
 });
 
-describe("isRasterBackground", () => {
+describe("isRasterArtwork", () => {
 	it("is true for PNG and JPEG, which are cropped and downscaled; false for SVG and PDF, which stay vector", () => {
-		expect(["png", "jpg", "svg", "pdf"].map((e) => isRasterBackground(e as never))).toEqual([true, true, false, false]);
+		expect(["png", "jpg", "svg", "pdf"].map((e) => isRasterArtwork(e as never))).toEqual([true, true, false, false]);
+	});
+});
+
+describe("svgAspect", () => {
+	it("reads the proportions from the root element's width and height", () => {
+		expect(svgAspect("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"210mm\" height=\"30mm\" viewBox=\"0 0 10 10\"/>")).toBe(7);
+		expect(svgAspect("<svg width='400' height='100'></svg>")).toBe(4);
+	});
+
+	it("converts mixed units", () => {
+		expect(svgAspect("<svg width=\"1in\" height=\"25.4mm\"/>")).toBeCloseTo(1);
+		expect(svgAspect("<svg width=\"72pt\" height=\"96px\"/>")).toBeCloseTo(1);
+	});
+
+	it("falls back to the viewBox when the size is missing or relative", () => {
+		expect(svgAspect("<svg viewBox=\"0 0 210 15\"/>")).toBe(14);
+		expect(svgAspect("<svg width=\"100%\" height=\"100%\" viewBox=\"0,0,300,100\"/>")).toBe(3);
+	});
+
+	it("skips a leading XML declaration and comments", () => {
+		expect(svgAspect("<?xml version=\"1.0\"?><!-- <svg width=\"1\" height=\"9\"/> --><svg viewBox=\"0 0 20 10\"/>")).toBe(2);
+	});
+
+	it("gives null when nothing says how big it is", () => {
+		expect(svgAspect("<svg/>")).toBeNull();
+		expect(svgAspect("<svg viewBox=\"0 0 0 10\"/>")).toBeNull();
+		expect(svgAspect("not an svg")).toBeNull();
+	});
+});
+
+describe("artworkPaperLock", () => {
+	// Artwork saves the moment it is uploaded, cropped or removed, tagged with
+	// the sheet it was made for — so it must never be made for a sheet that
+	// Discard could still take back.
+	it("allows artwork changes while the picked Paper size is the saved one", () => {
+		expect(artworkPaperLock("a4", "a4")).toBeNull();
+		expect(artworkPaperLock("us-letter", "us-letter")).toBeNull();
+	});
+
+	it("blocks them while a Paper size change is unsaved, saying what to do", () => {
+		expect(artworkPaperLock("a5", "a4")).toBe("Save or discard the paper size change first.");
+		expect(artworkPaperLock("a4", "us-legal")).toBe("Save or discard the paper size change first.");
+	});
+
+	it("reads a missing or unknown saved paper as A4, the way every PDF does", () => {
+		expect(artworkPaperLock("a4", null)).toBeNull();
+		expect(artworkPaperLock("a4", "tabloid")).toBeNull();
+		expect(artworkPaperLock("a5", undefined)).not.toBeNull();
 	});
 });

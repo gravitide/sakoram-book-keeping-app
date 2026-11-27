@@ -1,18 +1,20 @@
-// What a Full-page background upload has to go through before it reaches the
-// business folder (GLOSSARY.md "Full-page background"):
+// What Stationery artwork — a Full-page background, or a Header & footer
+// image — has to go through before it reaches the business folder
+// (GLOSSARY.md):
 //
-//   SVG / PDF — stored as uploaded; they cover the page uncropped and stay
-//               vector. An SVG with live text gets a "convert text to
-//               outlines" warning (Typst falls back to other fonts for text it
-//               can't find, so the letterhead's lettering would change).
-//   PNG / JPEG — cropped to the paper's proportions when they don't match
-//               (ImageCropModal, aspect-locked), then downscaled to about
-//               300 DPI at the paper size.
+//   SVG / PDF — stored as uploaded and stay vector (a background covers the
+//               page uncropped). An SVG with live text gets a "convert text
+//               to outlines" warning (Typst falls back to other fonts for
+//               text it can't find, so the letterhead's lettering would change).
+//   PNG / JPEG — a background is cropped to the paper's proportions when they
+//               don't match (ImageCropModal, aspect-locked); either kind is
+//               downscaled to about 300 DPI at the paper size.
 //
-// Pure, store-free, relative imports only; the canvas work lives in the page.
+// Pure, store-free, relative imports only; the canvas work lives in
+// useRasterArtwork and the cards.
 
 import type { PaperSize } from "./page-settings";
-import type { BackgroundExt } from "./stationery";
+import type { ArtworkExt } from "./stationery";
 import { resolvePaperSize } from "./page-settings";
 
 const DPI = 300;
@@ -23,8 +25,20 @@ export interface PixelSize {
 	h: number
 }
 
+/**
+ * Why Stationery artwork can't be uploaded, cropped or removed right now, or
+ * null when it can. Artwork saves the moment it changes, tagged with the
+ * picked Paper size (and placed on that sheet); while a Paper size change is
+ * still unsaved, Discard would put the stored artwork back on the old sheet
+ * with geometry made for the new one. So the change must be saved or
+ * discarded first. `savedPaper` is the stored column (missing / unknown = A4).
+ */
+export function artworkPaperLock(pickedPaper: PaperSize, savedPaper: string | null | undefined): string | null {
+	return resolvePaperSize(savedPaper).key === pickedPaper ? null : "Save or discard the paper size change first.";
+}
+
 /** The pixel size of a portrait sheet at ~300 DPI (A4: 2480 × 3508). */
-export function backgroundPixelSize(paper: PaperSize): PixelSize {
+export function artworkPixelSize(paper: PaperSize): PixelSize {
 	const { widthMm, heightMm } = resolvePaperSize(paper);
 	return { w: Math.round(widthMm / MM_PER_INCH * DPI), h: Math.round(heightMm / MM_PER_INCH * DPI) };
 }
@@ -56,30 +70,53 @@ export function svgHasLiveText(svg: string): boolean {
 	return /<(?:[\w.-]+:)?(?:text|tspan|textpath)(?=[\s/>])/i.test(withoutComments);
 }
 
-// The one table of background formats: each one's MIME type. Every other
+// The one table of artwork formats: each one's MIME type. Every other
 // spelling of an extension a user's file may carry is an alias of one of them.
-const MIME: Record<BackgroundExt, string> = { svg: "image/svg+xml", pdf: "application/pdf", png: "image/png", jpg: "image/jpeg" };
-const ALIASES: Record<string, BackgroundExt> = { jpeg: "jpg" };
+const MIME: Record<ArtworkExt, string> = { svg: "image/svg+xml", pdf: "application/pdf", png: "image/png", jpg: "image/jpeg" };
+const ALIASES: Record<string, ArtworkExt> = { jpeg: "jpg" };
 
-const formatOfExt = (ext: string): BackgroundExt | null => {
+const formatOfExt = (ext: string): ArtworkExt | null => {
 	const e = ext.toLowerCase();
-	return ALIASES[e] ?? (Object.hasOwn(MIME, e) ? e as BackgroundExt : null);
+	return ALIASES[e] ?? (Object.hasOwn(MIME, e) ? e as ArtworkExt : null);
 };
 
-/** The background format a file name's extension maps to, or null if it isn't one. */
-export function backgroundFormatOf(fileName: string): BackgroundExt | null {
+/** The artwork format a file name's extension maps to, or null if it isn't one. */
+export function artworkFormatOf(fileName: string): ArtworkExt | null {
 	const dot = fileName.lastIndexOf(".");
 	if (dot < 0) return null;
 	return formatOfExt(fileName.slice(dot + 1));
 }
 
-/** The MIME type for a background extension (any spelling), or a generic binary type. */
-export function backgroundMimeOf(ext: string): string {
+/** The MIME type for an artwork extension (any spelling), or a generic binary type. */
+export function artworkMimeOf(ext: string): string {
 	const format = formatOfExt(ext);
 	return format ? MIME[format] : "application/octet-stream";
 }
 
-/** PNG and JPEG are cropped and downscaled on import; SVG and PDF are stored as they are. */
-export function isRasterBackground(ext: BackgroundExt): boolean {
-	return ext === "png" || ext === "jpg";
+// CSS absolute units in px (96 per inch), for an SVG sized in mixed units.
+const SVG_UNIT_PX: Record<string, number> = { "": 1, px: 1, in: 96, cm: 96 / 2.54, mm: 96 / 25.4, pt: 96 / 72, pc: 16 };
+
+const svgLength = (value: string | undefined): number | null => {
+	const m = value?.trim().match(/^([\d.]+)\s*([a-z]*)$/i);
+	const unit = m ? SVG_UNIT_PX[m[2]!.toLowerCase()] : undefined;
+	const n = m ? Number(m[1]) : Number.NaN;
+	return unit !== undefined && Number.isFinite(n) && n > 0 ? n * unit : null;
+};
+
+/**
+ * An SVG's width / height, read from its root element: the `width` and
+ * `height` attributes when both are absolute lengths, otherwise the
+ * `viewBox`. null when neither says (a Header & footer image then falls back
+ * to the size the browser decodes it at).
+ */
+export function svgAspect(svg: string): number | null {
+	const root = svg.replace(/<!--[\s\S]*?-->/g, "").match(/<svg\b[^>]*>/i)?.[0];
+	if (!root) return null;
+	const attr = (name: string) => root.match(new RegExp(`\\s${name}\\s*=\\s*["']([^"']*)["']`, "i"))?.[1];
+	const w = svgLength(attr("width"));
+	const h = svgLength(attr("height"));
+	if (w && h) return w / h;
+	const box = attr("viewBox")?.trim().split(/[\s,]+/).map(Number);
+	if (box?.length === 4 && box[2]! > 0 && box[3]! > 0) return box[2]! / box[3]!;
+	return null;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clearBackgroundArtwork, parseStationery, resolveStationeryMode, serializeStationery, setBackgroundArtwork, setBackgroundMargins, setPreprintedMargins, stationeryModeToSave } from "./stationery";
+import { clearBackgroundArtwork, parseStationery, resolveStationeryMode, serializeStationery, setBackgroundArtwork, setBackgroundMargins, setHeaderFooterGeometry, setHeaderFooterImage, setHeaderFooterMargins, setPreprintedMargins } from "./stationery";
 
 const DEFAULT_PREPRINTED = { top: 55, right: 18, bottom: 20, left: 18 };
 
@@ -55,27 +55,6 @@ describe("setPreprintedMargins", () => {
 	});
 });
 
-describe("stationeryModeToSave", () => {
-	it("keeps a stored mode the app can't render yet when the user didn't pick another", () => {
-		// The picker shows Header & footer images as Built-in until its renderer
-		// lands; saving the page must not quietly switch the business to Built-in.
-		expect(stationeryModeToSave("header_footer", "builtin")).toBe("header_footer");
-	});
-
-	it("saves the mode the user picked", () => {
-		expect(stationeryModeToSave("background", "preprinted")).toBe("preprinted");
-		expect(stationeryModeToSave("builtin", "preprinted")).toBe("preprinted");
-		expect(stationeryModeToSave("preprinted", "builtin")).toBe("builtin");
-		expect(stationeryModeToSave("background", "builtin")).toBe("builtin");
-		expect(stationeryModeToSave("builtin", "background")).toBe("background");
-	});
-
-	it("saves the shown mode over anything the column wouldn't accept", () => {
-		expect(stationeryModeToSave(null, "builtin")).toBe("builtin");
-		expect(stationeryModeToSave("letterhead", "builtin")).toBe("builtin");
-	});
-});
-
 describe("resolveStationeryMode", () => {
 	it("returns the stored mode when the app can render it", () => {
 		expect(resolveStationeryMode("builtin")).toBe("builtin");
@@ -83,8 +62,8 @@ describe("resolveStationeryMode", () => {
 		expect(resolveStationeryMode("background")).toBe("background");
 	});
 
-	it("reads Header & footer images as Built-in until its renderer lands", () => {
-		expect(resolveStationeryMode("header_footer")).toBe("builtin");
+	it("renders Header & footer images", () => {
+		expect(resolveStationeryMode("header_footer")).toBe("header_footer");
 	});
 });
 
@@ -147,5 +126,70 @@ describe("setBackgroundMargins", () => {
 		expect(resolveStationeryMode(null)).toBe("builtin");
 		expect(resolveStationeryMode(undefined)).toBe("builtin");
 		expect(resolveStationeryMode("letterhead")).toBe("builtin");
+	});
+});
+
+const HEADER = { ext: "svg", aspect: 7, rect: { x: 0, y: 0, w: 210, h: 30 }, paper: "a4", crop: null, live_text: false } as const;
+const FOOTER = { ext: "png", aspect: 14, rect: { x: 0, y: 282, w: 210, h: 15 }, paper: "a4", crop: { x: 0, y: 0, w: 2480, h: 177 }, live_text: false } as const;
+
+describe("header & footer images settings", () => {
+	it("has neither image and plain default margins when nothing is stored", () => {
+		expect(parseStationery(null).header_footer).toEqual({ header: null, footer: null, margins: { top: 20, right: 18, bottom: 20, left: 18 } });
+	});
+
+	it("reads each stored image: format, proportions, placement on the page, the sheet it was placed on and its crop", () => {
+		const json = JSON.stringify({ header_footer: { header: HEADER, footer: FOOTER, margins: { top: 34, right: 18, bottom: 19, left: 18 } } });
+		expect(parseStationery(json).header_footer).toEqual({ header: HEADER, footer: FOOTER, margins: { top: 34, right: 18, bottom: 19, left: 18 } });
+	});
+
+	it("drops an image it can't place (unknown format, no size), keeping the other one", () => {
+		const json = JSON.stringify({ header_footer: { header: { ...HEADER, ext: "gif" }, footer: FOOTER } });
+		expect(parseStationery(json).header_footer.header).toBeNull();
+		expect(parseStationery(json).header_footer.footer).toEqual(FOOTER);
+		const flat = JSON.stringify({ header_footer: { header: { ...HEADER, rect: { x: 0, y: 0, w: 0, h: 30 } } } });
+		expect(parseStationery(flat).header_footer.header).toBeNull();
+	});
+});
+
+describe("setHeaderFooterImage", () => {
+	it("records one image and keeps the other, the margins and every other mode", () => {
+		const stored = setHeaderFooterImage(setBackgroundArtwork(null, { ext: "pdf", paper: "a4", crop: null, live_text: false }), "footer", FOOTER);
+		const next = parseStationery(setHeaderFooterImage(stored, "header", HEADER));
+		expect(next.header_footer.header).toEqual(HEADER);
+		expect(next.header_footer.footer).toEqual(FOOTER);
+		expect(next.background.ext).toBe("pdf");
+	});
+
+	it("removing one image leaves the other untouched", () => {
+		const both = setHeaderFooterImage(setHeaderFooterImage(null, "header", HEADER), "footer", FOOTER);
+		const next = parseStationery(setHeaderFooterImage(both, "header", null)).header_footer;
+		expect(next.header).toBeNull();
+		expect(next.footer).toEqual(FOOTER);
+	});
+});
+
+describe("setHeaderFooterMargins", () => {
+	it("changes only the margins, keeping both images", () => {
+		const both = setHeaderFooterImage(setHeaderFooterImage(null, "header", HEADER), "footer", FOOTER);
+		const next = parseStationery(setHeaderFooterMargins(both, { top: 40, right: 15, bottom: 30, left: 15 })).header_footer;
+		expect(next).toEqual({ header: HEADER, footer: FOOTER, margins: { top: 40, right: 15, bottom: 30, left: 15 } });
+	});
+});
+
+describe("setHeaderFooterGeometry", () => {
+	it("moves each stored image and sets the margins, keeping each image's format, proportions and crop", () => {
+		const both = setHeaderFooterImage(setHeaderFooterImage(null, "header", HEADER), "footer", FOOTER);
+		const moved = { x: 50, y: 5, w: 110, h: 110 / 7 };
+		const next = parseStationery(setHeaderFooterGeometry(both, { header: moved, footer: FOOTER.rect, margins: { top: 30, right: 18, bottom: 22, left: 18 } })).header_footer;
+		expect(next.header).toEqual({ ...HEADER, rect: moved });
+		expect(next.footer).toEqual(FOOTER);
+		expect(next.margins).toEqual({ top: 30, right: 18, bottom: 22, left: 18 });
+	});
+
+	it("never brings back an image that has since been removed", () => {
+		const onlyFooter = setHeaderFooterImage(null, "footer", FOOTER);
+		const next = parseStationery(setHeaderFooterGeometry(onlyFooter, { header: HEADER.rect, footer: FOOTER.rect, margins: { top: 20, right: 18, bottom: 20, left: 18 } })).header_footer;
+		expect(next.header).toBeNull();
+		expect(next.footer).toEqual(FOOTER);
 	});
 });

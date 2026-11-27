@@ -919,7 +919,8 @@ pub async fn tenant_logo_path(
 ///
 /// Logo originals stay LOCAL-ONLY (`data_io` bundles the derivative alone).
 /// Stationery artwork AND its original travel in both the export bundle and
-/// the Drive snapshot (ADR 0001): the whole `stationery/` folder is copied.
+/// the Drive snapshot (ADR 0001): the whole `stationery/` folder is copied —
+/// the Full-page background and the two Header & footer images alike.
 fn asset_slot(kind: &str) -> Option<(&'static str, &'static str)> {
 	Some(match kind {
 		"logo" => ("logos", "logo"),
@@ -928,6 +929,10 @@ fn asset_slot(kind: &str) -> Option<(&'static str, &'static str)> {
 		"pdf-header-original" => ("", "pdf-header-original"),
 		"stationery-background" => (STATIONERY_DIR, "background"),
 		"stationery-background-original" => (STATIONERY_DIR, "background-original"),
+		"stationery-header" => (STATIONERY_DIR, "header"),
+		"stationery-header-original" => (STATIONERY_DIR, "header-original"),
+		"stationery-footer" => (STATIONERY_DIR, "footer"),
+		"stationery-footer-original" => (STATIONERY_DIR, "footer-original"),
 		_ => return None,
 	})
 }
@@ -1398,6 +1403,31 @@ mod tests {
 		remove_asset(&folder, "stationery-background").unwrap();
 		remove_asset(&folder, "stationery-background-original").unwrap();
 		assert!(read_asset(&folder, "stationery-background-original").is_err());
+	}
+
+	#[test]
+	fn header_and_footer_images_and_their_originals_live_under_stationery_with_fixed_names() {
+		let folder = temp_folder("asset-hf");
+		assert_eq!(write_asset(&folder, "stationery-header", "svg", b"H").unwrap(), folder.join("stationery").join("header.svg"));
+		assert_eq!(write_asset(&folder, "stationery-header-original", "png", b"HO").unwrap(), folder.join("stationery").join("header-original.png"));
+		assert_eq!(write_asset(&folder, "stationery-footer", "pdf", b"F").unwrap(), folder.join("stationery").join("footer.pdf"));
+		assert_eq!(write_asset(&folder, "stationery-footer-original", "jpg", b"FO").unwrap(), folder.join("stationery").join("footer-original.jpg"));
+		assert_eq!(read_asset(&folder, "stationery-header").unwrap(), ("svg".to_string(), b"H".to_vec()));
+		assert_eq!(read_asset(&folder, "stationery-footer").unwrap(), ("pdf".to_string(), b"F".to_vec()));
+	}
+
+	#[test]
+	fn removing_one_header_footer_image_leaves_the_other_and_the_background() {
+		let folder = temp_folder("asset-hf-remove");
+		write_asset(&folder, "stationery-background", "svg", b"BG").unwrap();
+		write_asset(&folder, "stationery-header", "png", b"H").unwrap();
+		write_asset(&folder, "stationery-header-original", "jpg", b"HO").unwrap();
+		write_asset(&folder, "stationery-footer", "svg", b"F").unwrap();
+		remove_asset(&folder, "stationery-header").unwrap();
+		remove_asset(&folder, "stationery-header-original").unwrap();
+		assert!(read_asset(&folder, "stationery-header").is_err());
+		assert_eq!(read_asset(&folder, "stationery-footer").unwrap(), ("svg".to_string(), b"F".to_vec()));
+		assert_eq!(read_asset(&folder, "stationery-background").unwrap(), ("svg".to_string(), b"BG".to_vec()));
 	}
 
 	#[test]

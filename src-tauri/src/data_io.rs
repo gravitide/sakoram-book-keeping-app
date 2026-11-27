@@ -1002,12 +1002,16 @@ mod tests {
 		}
 	}
 
-	/// A business folder with a Full-page background and its original.
+	/// A business folder with a Full-page background, Header & footer images
+	/// and their originals.
 	fn folder_with_stationery(tag: &str) -> PathBuf {
 		let folder = temp_dir(tag);
 		std::fs::create_dir_all(folder.join("stationery")).unwrap();
 		std::fs::write(folder.join("stationery").join("background.pdf"), b"%PDF-art").unwrap();
 		std::fs::write(folder.join("stationery").join("background-original.png"), b"PNG-original").unwrap();
+		std::fs::write(folder.join("stationery").join("header.png"), b"PNG-header").unwrap();
+		std::fs::write(folder.join("stationery").join("header-original.jpg"), b"JPG-header-original").unwrap();
+		std::fs::write(folder.join("stationery").join("footer.svg"), b"<svg/>").unwrap();
 		folder
 	}
 
@@ -1033,6 +1037,9 @@ mod tests {
 		let names: Vec<String> = archive.file_names().map(|s| s.to_string()).collect();
 		assert!(names.contains(&"stationery/background.pdf".to_string()));
 		assert!(names.contains(&"stationery/background-original.png".to_string()));
+		assert!(names.contains(&"stationery/header.png".to_string()));
+		assert!(names.contains(&"stationery/header-original.jpg".to_string()));
+		assert!(names.contains(&"stationery/footer.svg".to_string()));
 
 		let (back_data, back) = read_plain_bundle(&mut archive, &manifest()).unwrap();
 		assert_eq!(back_data, data);

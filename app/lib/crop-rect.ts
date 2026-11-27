@@ -33,6 +33,28 @@ export function fullRect(imgW: number, imgH: number, aspect?: number): CropRect 
 	return round({ x: (imgW - w) / 2, y: (imgH - h) / 2, w, h });
 }
 
+/**
+ * A stored crop reopened with a (possibly different) locked aspect — a
+ * Full-page background re-cropped for a Paper size of another shape. A crop
+ * already of that shape (within half a percent) comes back untouched;
+ * otherwise it takes the new shape around the same centre with the same
+ * area, shrunk if it would outgrow the image and moved fully onto it.
+ */
+export function fitCropToAspect(rect: CropRect, aspect: number | undefined, imgW: number, imgH: number): CropRect {
+	if (!aspect || aspect <= 0 || Math.abs(rect.w / rect.h - aspect) / aspect < 0.005) return { ...rect };
+	let w = Math.sqrt(rect.w * rect.h * aspect);
+	let h = w / aspect;
+	const k = Math.min(1, imgW / w, imgH / h);
+	// Whole pixels first, so rounding can't push it past an edge.
+	w = Math.min(imgW, Math.round(w * k));
+	h = Math.min(imgH, Math.round(h * k));
+	const cx = rect.x + rect.w / 2;
+	const cy = rect.y + rect.h / 2;
+	const x = Math.min(Math.max(Math.round(cx - w / 2), 0), imgW - w);
+	const y = Math.min(Math.max(Math.round(cy - h / 2), 0), imgH - h);
+	return { x, y, w, h };
+}
+
 /** Translate without resizing; clamps so the rect stays fully inside. */
 export function moveRect(rect: CropRect, dx: number, dy: number, imgW: number, imgH: number): CropRect {
 	const x = Math.min(Math.max(rect.x + dx, 0), imgW - rect.w);
