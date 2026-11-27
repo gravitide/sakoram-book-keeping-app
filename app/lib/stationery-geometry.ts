@@ -14,9 +14,10 @@
 //
 // Pure, store-free, relative imports only.
 
+import type { PaperSize } from "./page-settings";
 import type { PdfLayoutKey } from "./pdf-layouts";
-import type { BackgroundExt, HeaderFooterSlot, StationeryMarginsMm, StationeryMode } from "./stationery";
-import { MAX_BAND_MM } from "./stationery";
+import type { BackgroundExt, HeaderFooterImage, HeaderFooterSlot, Stationery, StationeryMarginsMm, StationeryMode } from "./stationery";
+import { MAX_BAND_MM, parseStationery, serializeStationery } from "./stationery";
 
 /** A CSS pixel is 1/96 inch, so this many px is one millimetre at 100 %. */
 export const CSS_PX_PER_MM = 96 / 25.4;
@@ -528,4 +529,192 @@ export function resizeImage(
 	w = Math.max(MIN_IMAGE_MM, Math.min(w, roomW, Math.max(0, roomH) * aspect));
 	const h = w / aspect;
 	return { x: east ? ax : ax - w, y: south ? ay : ay - h, w, h };
+}
+
+// ---- Paper size changes -------------------------------------------------
+// What a Paper size change does to custom Stationery. The geometry here is
+// always in the coordinates of ONE sheet; changing the sheet re-fits it:
+//
+//   A4 ↔ A5 (the same proportions, near enough): everything scales by the
+//     width ratio — margins, image positions and sizes — so an A4 → A5 → A4
+//     round trip comes back where it started. A footer keeps its distance
+//     from the BOTTOM edge (scaled), so it stays pinned there.
+//   To or from US Letter / Legal: nothing is scaled. Margins keep their mm;
+//     each image keeps its mm size and its distance from its own edge (and
+//     from the page's centre line), then is clamped onto the new page; its
+//     band follows it. That needs a look, so the images keep the sheet they
+//     were PLACED on and the editor flags them (stationeryReview).
+//
+// Every image and the Full-page background carry the sheet they were placed
+// or prepared on (`paper`). A scaled one moves to the new sheet with it; a
+// clamped one keeps the old sheet until the user confirms it in the editor
+// (confirmPaperGeometry) — or, for a raster background, re-crops it.
+
+/** A sheet: its size and which Paper size it is. */
+export interface Sheet extends PageDims {
+	key: PaperSize
+}
+
+/** A Header & footer image's place and the sheet it was placed on. */
+export interface PlacedImage {
+	rect: MmRect
+	paper: PaperSize | null
+}
+
+/** Every mode's paper-dependent geometry — what a Paper size change re-fits. */
+export interface PaperGeometry {
+	preprinted: StationeryMarginsMm
+	background: { margins: StationeryMarginsMm, paper: PaperSize | null }
+	header_footer: { header: PlacedImage | null, footer: PlacedImage | null, margins: StationeryMarginsMm }
+}
+
+const scaleMargins = (m: StationeryMarginsMm, k: number): StationeryMarginsMm =>
+	({ top: m.top * k, right: m.right * k, bottom: m.bottom * k, left: m.left * k });
+
+/** The sheet an image or artwork moves to when its geometry was scaled along with the paper. */
+const followPaper = (paper: PaperSize | null, from: Sheet, to: Sheet): PaperSize | null => (paper === from.key ? to.key : paper);
+
+/** An image scaled with the sheet: from its own edge (the footer from the bottom), sizes by the same ratio. */
+function scaleImage(from: Sheet, to: Sheet, slot: HeaderFooterSlot, image: PlacedImage, k: number): PlacedImage {
+	const { x, y, w, h } = image.rect;
+	const top = slot === "header" ? y * k : to.heightMm - (from.heightMm - y) * k;
+	return { rect: { x: x * k, y: top, w: w * k, h: h * k }, paper: followPaper(image.paper, from, to) };
+}
+
+/**
+ * An image moved to a sheet of another shape at its own size: the same
+ * distance from its own edge (the footer from the bottom) and from the
+ * centre line, then made to fit (clampImageRect) — shrunk, proportions kept,
+ * still pinned to its edge — with its band following it.
+ */
+function keepImage(from: Sheet, to: Sheet, slot: HeaderFooterSlot, image: PlacedImage, margins: StationeryMarginsMm) {
+	const { x, y, w, h } = image.rect;
+	const moved = { x: x + (to.widthMm - from.widthMm) / 2, y: slot === "header" ? y : to.heightMm - (from.heightMm - y), w, h };
+	const fitted = clampImageRect(to, slot, moved, margins);
+	const pinned = clampImageRect(to, slot, { ...fitted, y: slot === "header" ? moved.y : moved.y + moved.h - fitted.h }, margins);
+	return { image: { rect: pinned, paper: image.paper }, margins: followImage(to, slot, moved, pinned, margins) };
+}
+
+/** A4 and A5 share their proportions (near enough), so geometry scales between them. */
+const A_SERIES = new Set<PaperSize>(["a4", "a5"]);
+
+/** How a change from one Paper size to another re-fits the Stationery. */
+export function paperChangeKind(from: PaperSize, to: PaperSize): "none" | "scale" | "keep-size" {
+	if (from === to) return "none";
+	return A_SERIES.has(from) && A_SERIES.has(to) ? "scale" : "keep-size";
+}
+
+const copyGeometry = (g: PaperGeometry): PaperGeometry => structuredClone(g);
+
+/** The geometry re-fitted from one sheet to another (see above). */
+export function refitPaperGeometry(from: Sheet, to: Sheet, g: PaperGeometry): PaperGeometry {
+	const kind = paperChangeKind(from.key, to.key);
+	if (kind === "none") return copyGeometry(g);
+	const hf = g.header_footer;
+	if (kind === "keep-size") {
+		let margins = { ...hf.margins };
+		const place = (slot: HeaderFooterSlot) => {
+			const image = hf[slot];
+			if (!image) return null;
+			const out = keepImage(from, to, slot, image, margins);
+			margins = out.margins;
+			return out.image;
+		};
+		const header = place("header");
+		const footer = place("footer");
+		return { ...copyGeometry(g), header_footer: { header, footer, margins } };
+	}
+	const k = to.widthMm / from.widthMm;
+	return {
+		preprinted: scaleMargins(g.preprinted, k),
+		background: { margins: scaleMargins(g.background.margins, k), paper: followPaper(g.background.paper, from, to) },
+		header_footer: {
+			header: hf.header && scaleImage(from, to, "header", hf.header, k),
+			footer: hf.footer && scaleImage(from, to, "footer", hf.footer, k),
+			margins: scaleMargins(hf.margins, k)
+		}
+	};
+}
+
+/** What the Stationery editor asks the user to check on this sheet (null = nothing). */
+export interface StationeryReview {
+	/** Header & footer images placed on another sheet: that sheet. */
+	header: PaperSize | null
+	footer: PaperSize | null
+	/** A Full-page background prepared for another sheet; a raster one needs a re-crop. */
+	background: { preparedFor: PaperSize, recrop: boolean } | null
+}
+
+const RASTER_EXTS = new Set<BackgroundExt>(["png", "jpg"]);
+
+/**
+ * What needs a look after the Paper size changed: anything placed or
+ * prepared on a different sheet. A raster background prepared for a sheet of
+ * another shape needs a re-crop (it would be cut off by "cover"); an SVG or
+ * PDF re-covers the page and only needs a check. An unknown sheet is never
+ * flagged.
+ */
+export function stationeryReview(g: PaperGeometry, backgroundExt: BackgroundExt | null, paper: PaperSize): StationeryReview {
+	const placedOn = (image: PlacedImage | null) => (image?.paper && image.paper !== paper ? image.paper : null);
+	const prepared = g.background.paper;
+	return {
+		header: placedOn(g.header_footer.header),
+		footer: placedOn(g.header_footer.footer),
+		background: backgroundExt && prepared && prepared !== paper
+			? { preparedFor: prepared, recrop: RASTER_EXTS.has(backgroundExt) && paperChangeKind(prepared, paper) === "keep-size" }
+			: null
+	};
+}
+
+/**
+ * The geometry after Apply in the Stationery editor, which showed the user
+ * this mode on this sheet: Header & footer images now count as placed on it,
+ * an SVG / PDF background as prepared for it. A raster background still needs
+ * its re-crop, so Apply leaves it flagged.
+ */
+export function confirmPaperGeometry(g: PaperGeometry, mode: StationeryMode, paper: PaperSize, backgroundExt: BackgroundExt | null): PaperGeometry {
+	const out = copyGeometry(g);
+	if (mode === "header_footer") {
+		for (const image of [out.header_footer.header, out.header_footer.footer]) {
+			if (image) image.paper = paper;
+		}
+	}
+	if (mode === "background" && backgroundExt && !RASTER_EXTS.has(backgroundExt)) out.background.paper = paper;
+	return out;
+}
+
+/** The paper-dependent geometry out of the stored Stationery. */
+export function paperGeometryOf(s: Stationery): PaperGeometry {
+	const placed = (image: HeaderFooterImage | null): PlacedImage | null => (image ? { rect: { ...image.rect }, paper: image.paper } : null);
+	return {
+		preprinted: { ...s.preprinted },
+		background: { margins: { ...s.background.margins }, paper: s.background.paper },
+		header_footer: { header: placed(s.header_footer.header), footer: placed(s.header_footer.footer), margins: { ...s.header_footer.margins } }
+	};
+}
+
+/**
+ * The stored Stationery with this geometry put in. Only artwork that is still
+ * stored takes a place or a sheet — an image removed (or a background
+ * cleared) since the geometry was read stays gone — and every image keeps its
+ * format, proportions, crop and live-text flag.
+ */
+export function withPaperGeometry(s: Stationery, g: PaperGeometry): Stationery {
+	const put = (image: HeaderFooterImage | null, placed: PlacedImage | null) =>
+		(image && placed ? { ...image, rect: { ...placed.rect }, paper: placed.paper } : image);
+	return {
+		preprinted: { ...g.preprinted },
+		background: { ...s.background, margins: { ...g.background.margins }, paper: s.background.ext ? g.background.paper : s.background.paper },
+		header_footer: {
+			header: put(s.header_footer.header, g.header_footer.header),
+			footer: put(s.header_footer.footer, g.header_footer.footer),
+			margins: { ...g.header_footer.margins }
+		}
+	};
+}
+
+/** company_settings.pdf_stationery re-fitted from one sheet to another. */
+export function refitStationery(stored: string | null | undefined, from: Sheet, to: Sheet): string {
+	const s = parseStationery(stored);
+	return serializeStationery(withPaperGeometry(s, refitPaperGeometry(from, to, paperGeometryOf(s))));
 }
