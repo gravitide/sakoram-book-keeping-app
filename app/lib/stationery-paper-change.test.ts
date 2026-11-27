@@ -4,7 +4,7 @@
 import type { PaperGeometry } from "./stationery-geometry";
 import { describe, expect, it } from "vitest";
 import { resolvePaperSize } from "./page-settings";
-import { parseStationery } from "./stationery";
+import { MAX_BAND_MM, parseStationery } from "./stationery";
 import { confirmPaperGeometry, paperGeometryOf, refitPaperGeometry, refitStationery, stationeryReview, withPaperGeometry } from "./stationery-geometry";
 
 const A4 = resolvePaperSize("a4");
@@ -81,6 +81,12 @@ describe("refitPaperGeometry — A4 ↔ A5 scales everything proportionally", ()
 	it("an A5 → A4 → A5 round trip restores the original geometry", () => {
 		const onA5 = refitPaperGeometry(A4, A5, a4Geometry());
 		expectGeometryClose(refitPaperGeometry(A4, A5, refitPaperGeometry(A5, A4, onA5)), onA5);
+	});
+
+	it("a band is never scaled deeper than the Stationery stores (it would be reset to its default)", () => {
+		const g = a4Geometry();
+		g.preprinted.top = 120;
+		expect(refitPaperGeometry(A5, A4, g).preprinted.top).toBe(MAX_BAND_MM);
 	});
 
 	it("never mutates its input", () => {

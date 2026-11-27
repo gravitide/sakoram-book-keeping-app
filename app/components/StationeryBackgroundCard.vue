@@ -76,7 +76,7 @@
 						icon="i-lucide-crop"
 						size="sm"
 						variant="soft"
-						color="neutral"
+						:color="review?.recrop ? 'warning' : 'neutral'"
 						:disabled="busy"
 						@click="openRecrop"
 					>
@@ -98,8 +98,16 @@
 				<p v-if="!artwork.ext" class="text-xs text-(--ui-text-muted)">
 					No background yet — documents print with blank margins until you upload one.
 				</p>
-				<p v-else-if="artwork.paper && artwork.paper !== paper" class="text-xs text-(--ui-warning)">
-					This artwork was prepared for {{ paperLabel(artwork.paper) }} — it is scaled to cover {{ paperInfo.label }}. Upload artwork made for {{ paperInfo.label }} for the best fit.
+				<UAlert
+					v-else-if="review?.recrop"
+					color="warning"
+					variant="subtle"
+					icon="i-lucide-crop"
+					:title="`Re-crop for ${paperInfo.label}`"
+					:description="`This image was cropped to ${paperLabel(review.preparedFor)}'s shape, so on ${paperInfo.label} it is scaled to cover the page and its edges are cut off. Re-crop starts from your original upload.`"
+				/>
+				<p v-else-if="review" class="text-xs text-(--ui-warning)">
+					This artwork was prepared for {{ paperLabel(review.preparedFor) }} — it is scaled to cover {{ paperInfo.label }}, so its edges may be cut off. Check it in the Stationery editor (Apply keeps it), or upload artwork made for {{ paperInfo.label }}.
 				</p>
 
 				<UAlert
@@ -143,6 +151,7 @@
 	import type { CropRect } from "~/lib/crop-rect";
 	import type { PaperSize } from "~/lib/page-settings";
 	import type { BackgroundArtwork, BackgroundExt } from "~/lib/stationery";
+	import type { StationeryReview } from "~/lib/stationery-geometry";
 	import { useStationeryArtwork } from "~/composables/useStationeryArtwork";
 	import { readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
 	import { encodeImage } from "~/lib/canvas-image";
@@ -155,6 +164,12 @@
 	const props = defineProps<{
 		/** The business's Paper size as currently picked on the page (maybe unsaved). */
 		paper: PaperSize
+		/** Prepared for another sheet (from the page's live form), or null. */
+		review?: StationeryReview["background"]
+	}>();
+	const emit = defineEmits<{
+		/** The artwork was saved for this sheet, or removed (null). */
+		artwork: [paper: PaperSize | null]
 	}>();
 
 	const store = useSettingsStore();
@@ -192,6 +207,7 @@
 
 	const recordArtwork = async (next: BackgroundArtwork) => {
 		await store.save({ pdf_stationery: setBackgroundArtwork(store.settings?.pdf_stationery, next) });
+		emit("artwork", next.paper);
 		await artworkPreview.reload();
 	};
 
@@ -251,6 +267,10 @@
 		dragOver.value = false;
 	});
 
+	// Re-crop starts from the untouched ORIGINAL upload, with the stored crop
+	// reshaped to the picked paper (ImageCropModal → fitCropToAspect) — after
+	// a Paper size change to or from Letter / Legal that is how the artwork
+	// gets its new proportions back.
 	const openRecrop = async () => {
 		if (!tenants.activeTenantId || !artwork.value.ext) return;
 		try {
@@ -341,6 +361,7 @@
 			await removeBusinessAsset(tenants.activeTenantId, "stationery-background");
 			await removeBusinessAsset(tenants.activeTenantId, "stationery-background-original");
 			await store.save({ pdf_stationery: clearBackgroundArtwork(store.settings?.pdf_stationery) });
+			emit("artwork", null);
 			toast.add({ title: "Background removed", color: "info", icon: "i-lucide-image-off" });
 		} catch (err) {
 			fail("Couldn't remove the background", err);

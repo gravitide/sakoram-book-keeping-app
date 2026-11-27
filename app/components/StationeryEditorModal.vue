@@ -112,7 +112,7 @@
 							:aria-valuenow="draft[g.edge]"
 							:aria-valuemin="limits[g.edge].min"
 							:aria-valuemax="limits[g.edge].max"
-							:aria-valuetext="`${draft[g.edge]} mm`"
+							:aria-valuetext="`${formatMm(draft[g.edge])} mm`"
 							class="group absolute z-10 flex items-center justify-center outline-none touch-none"
 							:class="g.axis === 'y' ? 'left-0 right-0 h-3 -translate-y-1/2 cursor-row-resize' : 'top-0 bottom-0 w-3 -translate-x-1/2 cursor-col-resize'"
 							:style="g.axis === 'y' ? { top: `${g.px}px` } : { left: `${g.px}px` }"
@@ -136,7 +136,7 @@
 									LABEL_POSITION[g.edge]
 								]"
 							>
-								{{ EDGE_LABEL[g.edge] }} {{ draft[g.edge] }} mm
+								{{ EDGE_LABEL[g.edge] }} {{ formatMm(draft[g.edge]) }} mm
 							</span>
 						</div>
 					</StationeryPage>
@@ -319,12 +319,14 @@
 		mmToPx,
 		nudgeImage,
 		nudgeMargin,
+		paperGeometryOf,
 		PRINTER_BAND_MM,
 		rectToPx,
 		resizeImage,
 		rulerTicks,
 		safeAreaMargins,
 		setMargin,
+		stationeryReview,
 		stepZoom
 	} from "~/lib/stationery-geometry";
 
@@ -336,11 +338,18 @@
 		/** The settings page's live (maybe unsaved) values, for the sample preview. */
 		settings: CompanySettingsRow | null
 	}>();
+	const emit = defineEmits<{
+		/**
+		 * Apply was pressed: the user has seen this mode on this sheet, so the
+		 * settings page counts what the banner flagged as checked
+		 * (stationery-geometry.ts confirmPaperGeometry).
+		 */
+		applied: []
+	}>();
 	const openModel = defineModel<boolean>("open", { required: true });
 	const margins = defineModel<StationeryMarginsMm>("margins", { required: true });
 	/** Header & footer images only: where each image sits (null = none). */
 	const images = defineModel<HeaderFooterRects>("images", { default: () => ({ header: null, footer: null }) });
-
 	const RULER_PX = 22;
 	const GUTTER_PX = 24;
 	const EDGES: MarginEdge[] = ["top", "bottom", "left", "right"];
@@ -404,6 +413,7 @@
 		if (!editable.value) return;
 		margins.value = { ...draft.value };
 		if (isHeaderFooter.value) images.value = { header: draftImages.value.header, footer: draftImages.value.footer };
+		emit("applied");
 		openModel.value = false;
 	};
 	const cancel = () => {
@@ -532,18 +542,27 @@
 	};
 
 	// ---- artwork / paper ------------------------------------------------
+	// "Check your stationery" after a Paper size change that needs a look:
+	// anything placed or prepared on another sheet (stationeryReview). The
+	// settings page re-fitted the geometry when the paper was picked; images
+	// moved to or from US Letter / Legal kept their size and were clamped onto
+	// the page, and a raster background needs a re-crop. Read from the page's
+	// live settings, so Apply (which confirms) clears it on the next open.
 	const paperMismatch = computed(() => {
+		const stationery = parseStationery(props.settings?.pdf_stationery);
+		const review = stationeryReview(paperGeometryOf(stationery), stationery.background.ext, props.paper);
+		const here = paperInfo.value.label;
 		if (isHeaderFooter.value) {
-			const placedOn = HEADER_FOOTER_SLOTS.map((s) => headerFooterStored.value[s]?.paper).find((p) => p && p !== props.paper);
+			const placedOn = HEADER_FOOTER_SLOTS.map((s) => review[s]).find((p) => p !== null);
 			return placedOn
-				? `These images were placed on ${resolvePaperSize(placedOn).label}. Check that they still sit where you want them on ${paperInfo.value.label}.`
+				? `These images were placed on ${resolvePaperSize(placedOn).label}. On ${here} they keep their size and were moved onto the page — check that they sit where you want them, then Apply.`
 				: null;
 		}
-		if (props.mode !== "background") return null;
-		const prepared = parseStationery(props.settings?.pdf_stationery).background.paper;
-		if (!prepared || prepared === props.paper) return null;
-		const was = resolvePaperSize(prepared).label;
-		return `This artwork was prepared for ${was}. It is scaled to cover ${paperInfo.value.label}, so its edges may be cut off — check the preview, or upload (or re-crop) artwork made for ${paperInfo.value.label}.`;
+		if (props.mode !== "background" || !review.background) return null;
+		const was = resolvePaperSize(review.background.preparedFor).label;
+		return review.background.recrop
+			? `This artwork was cropped for ${was}. On ${here} it is scaled to cover the page, so its edges are cut off — re-crop it for ${here} on the Full-page background card (Re-crop starts from your original upload).`
+			: `This artwork was prepared for ${was}. It is scaled to cover ${here}, so its edges may be cut off — check the page and the preview, then Apply to keep it.`;
 	});
 
 	// ---- sample preview -------------------------------------------------

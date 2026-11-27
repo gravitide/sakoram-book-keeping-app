@@ -568,8 +568,12 @@ export interface PaperGeometry {
 	header_footer: { header: PlacedImage | null, footer: PlacedImage | null, margins: StationeryMarginsMm }
 }
 
-const scaleMargins = (m: StationeryMarginsMm, k: number): StationeryMarginsMm =>
-	({ top: m.top * k, right: m.right * k, bottom: m.bottom * k, left: m.left * k });
+// Capped at the deepest band the Stationery stores (a band that deep on A5
+// would otherwise be refused, and reset to its default, on the way up to A4).
+const scaleMargins = (m: StationeryMarginsMm, k: number): StationeryMarginsMm => {
+	const s = (v: number) => Math.min(MAX_BAND_MM, v * k);
+	return { top: s(m.top), right: s(m.right), bottom: s(m.bottom), left: s(m.left) };
+};
 
 /** The sheet an image or artwork moves to when its geometry was scaled along with the paper. */
 const followPaper = (paper: PaperSize | null, from: Sheet, to: Sheet): PaperSize | null => (paper === from.key ? to.key : paper);

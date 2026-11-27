@@ -80,8 +80,8 @@
 				<p v-if="!images[slot]" class="text-xs text-(--ui-text-muted)">
 					No {{ slot }} image — that band is just your margin.
 				</p>
-				<p v-else-if="images[slot]!.paper && images[slot]!.paper !== paper" class="text-xs text-(--ui-warning)">
-					Placed on {{ resolvePaperSize(images[slot]!.paper!).label }} — check it in the Stationery editor on {{ paperInfo.label }}.
+				<p v-else-if="review?.[slot]" class="text-xs text-(--ui-warning)">
+					Placed on {{ resolvePaperSize(review[slot]!).label }} — it keeps its size on {{ paperInfo.label }} and was moved onto the page. Check it in the Stationery editor (Apply keeps it).
 				</p>
 				<UAlert
 					v-if="images[slot]?.ext === 'svg' && images[slot]!.live_text"
@@ -134,7 +134,7 @@
 	import type { CropRect } from "~/lib/crop-rect";
 	import type { PaperSize } from "~/lib/page-settings";
 	import type { BackgroundExt, HeaderFooterImage, HeaderFooterSlot, StationeryMarginsMm } from "~/lib/stationery";
-	import type { MmRect } from "~/lib/stationery-geometry";
+	import type { HeaderFooterRects, MmRect, StationeryReview } from "~/lib/stationery-geometry";
 	import { invoke } from "@tauri-apps/api/core";
 	import { useStationeryArtwork } from "~/composables/useStationeryArtwork";
 	import { readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
@@ -151,6 +151,13 @@
 		paper: PaperSize
 		/** The page form's live margins (the bands a new image's band is measured against). */
 		margins: StationeryMarginsMm
+		/**
+		 * The page form's live image places — re-fitted when the Paper size is
+		 * picked, so they can differ from the stored ones until Save.
+		 */
+		rects?: HeaderFooterRects
+		/** Images placed on another sheet (from the page's live form). */
+		review?: Pick<StationeryReview, "header" | "footer">
 	}>();
 	const emit = defineEmits<{
 		/** An image was added, cropped or removed and saved: its new place (null = gone) and the margins after its band followed it. */
@@ -168,6 +175,8 @@
 
 	const paperInfo = computed(() => resolvePaperSize(props.paper));
 	const images = computed(() => parseStationery(store.settings?.pdf_stationery).header_footer);
+	/** Where an image sits now: the form's live place, else the stored one. */
+	const placeOf = (slot: HeaderFooterSlot): MmRect | null => props.rects?.[slot] ?? images.value[slot]?.rect ?? null;
 	const previews = { header: useStationeryArtwork("header"), footer: useStationeryArtwork("footer") };
 
 	const fileInput = useTemplateRef<HTMLInputElement>("fileInput");
@@ -244,7 +253,7 @@
 		try {
 			const id = activeId();
 			const bytes = new Uint8Array(await file.arrayBuffer());
-			const before = images.value[slot]?.rect ?? null;
+			const before = placeOf(slot);
 			let aspect: number;
 			let liveText = false;
 			if (isRasterBackground(ext)) {
@@ -330,8 +339,10 @@
 		try {
 			await saveBusinessAsset(activeId(), ASSET[slot], cropExt.value, new Uint8Array(await blob.arrayBuffer()));
 			const aspect = crop.w / crop.h;
-			const rect = clampImageRect(paperInfo.value, slot, { ...image.rect, h: image.rect.w / aspect }, props.margins);
-			await record(slot, { ...image, ext: cropExt.value, aspect, rect, crop: { ...crop } }, image.rect);
+			const place = placeOf(slot) ?? image.rect;
+			const rect = clampImageRect(paperInfo.value, slot, { ...place, h: place.w / aspect }, props.margins);
+			// Re-placed on the sheet picked now.
+			await record(slot, { ...image, ext: cropExt.value, aspect, rect, paper: props.paper, crop: { ...crop } }, place);
 			toast.add({ title: `${SLOT_LABEL[slot]} cropped`, color: "success", icon: "i-lucide-check" });
 		} catch (err) {
 			fail("Crop failed", err);
@@ -356,7 +367,7 @@
 		try {
 			await removeBusinessAsset(tenants.activeTenantId, ASSET[slot]);
 			await removeBusinessAsset(tenants.activeTenantId, ORIGINAL[slot]);
-			await record(slot, null, images.value[slot]?.rect ?? null);
+			await record(slot, null, placeOf(slot));
 			toast.add({ title: `${SLOT_LABEL[slot]} removed`, color: "info", icon: "i-lucide-image-off" });
 		} catch (err) {
 			fail(`Couldn't remove the ${slot} image`, err);
