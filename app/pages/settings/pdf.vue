@@ -232,14 +232,15 @@
 								<p v-else class="text-xs text-(--ui-text-muted)">
 									Set the blank bands for your printed letterhead in the editor, or type the top and bottom bands below.
 								</p>
+								<!-- Built-in has no margins of its own, so the editor opens
+									as a preview (page, Safe area, sample invoice) there. -->
 								<UButton
-									v-if="form.pdf_stationery_mode !== 'builtin'"
-									icon="i-lucide-pencil-ruler"
+									:icon="form.pdf_stationery_mode === 'builtin' ? 'i-lucide-scan-eye' : 'i-lucide-pencil-ruler'"
 									variant="soft"
 									size="sm"
 									@click="openEditor"
 								>
-									Edit stationery
+									{{ form.pdf_stationery_mode === 'builtin' ? 'Preview page' : 'Edit stationery' }}
 								</UButton>
 								<div class="text-xs text-(--ui-text-muted) tabular-nums">
 									{{ resolvePaperSize(paperKey).label }}
@@ -282,7 +283,6 @@
 						:paper="paperKey"
 					/>
 					<StationeryEditorModal
-						v-if="form.pdf_stationery_mode !== 'builtin'"
 						v-model:open="editorOpen"
 						v-model:margins="activeStationeryMargins"
 						:mode="form.pdf_stationery_mode"

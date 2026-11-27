@@ -2,8 +2,10 @@
 	<UModal
 		v-model:open="openModel"
 		fullscreen
-		:title="`Edit stationery — ${modeLabel}`"
-		:description="`${paperInfo.label} · ${paperInfo.widthMm} × ${paperInfo.heightMm} mm. Drag the dashed guides to set the Safe area the content stays inside.`"
+		:title="editable ? `Edit stationery — ${modeLabel}` : `Preview page — ${modeLabel}`"
+		:description="editable
+			? `${paperInfo.label} · ${paperInfo.widthMm} × ${paperInfo.heightMm} mm. Drag the dashed guides to set the Safe area the content stays inside.`
+			: `${paperInfo.label} · ${paperInfo.widthMm} × ${paperInfo.heightMm} mm. Your Layout's own margins frame the page.`"
 		:ui="{ body: 'flex-1 min-h-0 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row gap-4' }"
 	>
 		<template #body>
@@ -65,7 +67,7 @@
 						<!-- Margin guides. A wide transparent hit strip around a 1px
 							line; focusable, so arrow keys move them too. -->
 						<div
-							v-for="g in guides"
+							v-for="g in editable ? guides : []"
 							:key="g.edge"
 							role="slider"
 							tabindex="0"
@@ -121,7 +123,7 @@
 					:description="`These margins left no room for content on ${paperInfo.label}, so they were reduced to fit. Apply to keep them.`"
 				/>
 
-				<div>
+				<div v-if="editable">
 					<div class="text-sm font-medium mb-2">
 						Safe area margins
 					</div>
@@ -138,6 +140,22 @@
 					</div>
 					<p class="text-xs text-(--ui-text-muted) mt-2">
 						Drag a guide, or focus it and use the arrow keys (Shift for 5 mm). Side margins snap to each other.
+					</p>
+				</div>
+				<div v-else>
+					<div class="text-sm font-medium mb-2">
+						Safe area margins
+					</div>
+					<dl class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm tabular-nums">
+						<template v-for="edge in EDGES" :key="edge">
+							<dt class="text-(--ui-text-muted)">
+								{{ EDGE_LABEL[edge] }}
+							</dt>
+							<dd>{{ formatMm(layoutMargins[edge]) }} mm</dd>
+						</template>
+					</dl>
+					<p class="text-xs text-(--ui-text-muted) mt-2">
+						Built-in stationery uses the {{ layoutLabel }} Layout's own margins, scaled for {{ paperInfo.label }}. To set your own, choose Full-page background or Pre-printed paper.
 					</p>
 				</div>
 
@@ -184,11 +202,16 @@
 		</template>
 		<template #footer>
 			<div class="flex items-center justify-end gap-2 w-full">
-				<UButton color="neutral" variant="outline" @click="cancel">
-					Cancel
-				</UButton>
-				<UButton icon="i-lucide-check" @click="apply">
-					Apply
+				<template v-if="editable">
+					<UButton color="neutral" variant="outline" @click="cancel">
+						Cancel
+					</UButton>
+					<UButton icon="i-lucide-check" @click="apply">
+						Apply
+					</UButton>
+				</template>
+				<UButton v-else color="neutral" variant="outline" @click="cancel">
+					Close
 				</UButton>
 			</div>
 		</template>
@@ -218,22 +241,28 @@
 	// result. It edits a DRAFT: Apply hands the margins back to the settings
 	// page's form (saved with its Save changes), Cancel drops them.
 	//
+	// Under Built-in the editor is a PREVIEW (editsMargins): the page, rulers,
+	// the Layout's own margins as the Safe area, placeholders, printer band and
+	// the sample invoice — no guides, no Apply, nothing written back.
+	//
 	// Header & footer images (#361) will add draggable image boxes to the same
 	// page; the guides already live in StationeryPage's slot for that reason.
 	import type { PaperSize } from "~/lib/page-settings";
 	import type { PdfLayoutKey } from "~/lib/pdf-layouts";
-	import type { StationeryMarginsMm } from "~/lib/stationery";
+	import type { StationeryMarginsMm, StationeryMode } from "~/lib/stationery";
 	import type { ArrowDirection, MarginEdge } from "~/lib/stationery-geometry";
 	import type { CompanySettingsRow } from "~/stores/settings";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { useStationeryArtwork } from "~/composables/useStationeryArtwork";
 	import { resolvePaperSize } from "~/lib/page-settings";
+	import { PDF_LAYOUTS } from "~/lib/pdf-layouts";
 	import { sampleStationeryPreviewPayload } from "~/lib/sample-pdf";
 	import { parseStationery, setBackgroundMargins, setPreprintedMargins, STATIONERY_MODES } from "~/lib/stationery";
 	import {
 		CSS_PX_PER_MM,
 		dragMargin,
+		editsMargins,
 		fitMargins,
 		fitScale,
 		marginGuides,
@@ -242,13 +271,14 @@
 		nudgeMargin,
 		PRINTER_BAND_MM,
 		rulerTicks,
+		safeAreaMargins,
 		setMargin,
 		stepZoom
 	} from "~/lib/stationery-geometry";
 
 	const props = defineProps<{
-		/** The modes with their own margins. */
-		mode: "background" | "preprinted"
+		/** Built-in opens as a preview; the other modes edit their own margins. */
+		mode: StationeryMode
 		paper: PaperSize
 		layout: PdfLayoutKey
 		/** The settings page's live (maybe unsaved) values, for the sample preview. */
@@ -271,6 +301,11 @@
 
 	const paperInfo = computed(() => resolvePaperSize(props.paper));
 	const modeLabel = computed(() => STATIONERY_MODES.find((m) => m.key === props.mode)?.label ?? "");
+	const editable = computed(() => editsMargins(props.mode));
+	// Built-in's read-only Safe area: the Layout's margins on this sheet.
+	const layoutMargins = computed(() => safeAreaMargins(props.mode, props.layout, paperInfo.value, margins.value));
+	const layoutLabel = computed(() => PDF_LAYOUTS.find((l) => l.key === props.layout)?.label ?? "");
+	const formatMm = (mm: number) => String(Math.round(mm * 10) / 10);
 	const artwork = useStationeryArtwork();
 	const currency = useActiveCurrency();
 
@@ -285,14 +320,19 @@
 	const dragging = ref<MarginEdge | null>(null);
 	watch(openModel, (open) => {
 		if (!open) return;
+		zoom.value = 1;
+		dragging.value = null;
+		if (!editable.value) {
+			fitted.value = false;
+			return;
+		}
 		const next = fitMargins(paperInfo.value, margins.value);
 		fitted.value = EDGES.some((e) => next[e] !== margins.value[e]);
 		draft.value = next;
-		zoom.value = 1;
-		dragging.value = null;
 	});
 
 	const apply = () => {
+		if (!editable.value) return;
 		margins.value = { ...draft.value };
 		openModel.value = false;
 	};
@@ -378,6 +418,8 @@
 	// preview shows what Apply + Save would print.
 	const previewSettings = (): CompanySettingsRow | null => {
 		if (!props.settings) return null;
+		// Built-in: the Layout's margins, exactly as the settings stand.
+		if (!editable.value) return props.settings;
 		const setMargins = props.mode === "background" ? setBackgroundMargins : setPreprintedMargins;
 		return { ...props.settings, pdf_stationery: setMargins(props.settings.pdf_stationery, { ...draft.value }) };
 	};

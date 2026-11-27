@@ -68,7 +68,7 @@
 	import type { BackgroundExt, StationeryMarginsMm, StationeryMode } from "~/lib/stationery";
 	import type { MmRect } from "~/lib/stationery-geometry";
 	import { resolvePaperSize } from "~/lib/page-settings";
-	import { layoutMarginsMm, mmToPx, placeholderBars, printerBandRects, rectToPx, safeAreaRect } from "~/lib/stationery-geometry";
+	import { mmToPx, placeholderBars, printerBandRects, rectToPx, safeAreaMargins, safeAreaRect } from "~/lib/stationery-geometry";
 
 	const props = withDefaults(defineProps<{
 		paper: PaperSize
@@ -88,7 +88,7 @@
 
 	const paperInfo = computed(() => resolvePaperSize(props.paper));
 	const px = (mm: number) => mmToPx(mm, props.scale);
-	const effectiveMargins = computed(() => (props.mode === "builtin" ? layoutMarginsMm(props.layout, paperInfo.value) : props.margins));
+	const effectiveMargins = computed(() => safeAreaMargins(props.mode, props.layout, paperInfo.value, props.margins));
 	const safe = computed(() => safeAreaRect(paperInfo.value, effectiveMargins.value));
 	const bars = computed(() => placeholderBars(safe.value));
 	const printerBands = computed(() => printerBandRects(paperInfo.value));

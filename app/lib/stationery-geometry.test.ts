@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	CSS_PX_PER_MM,
 	dragMargin,
+	editsMargins,
 	fitMargins,
 	fitScale,
 	layoutMarginsMm,
@@ -15,6 +16,7 @@ import {
 	printerBandRects,
 	pxToMm,
 	rulerTicks,
+	safeAreaMargins,
 	safeAreaRect,
 	scaleForWidth,
 	setMargin,
@@ -214,6 +216,36 @@ describe("layoutMarginsMm", () => {
 		const a5 = layoutMarginsMm("classic", A5);
 		expect(a5.left).toBeCloseTo(18 * 148 / 210);
 		expect(a5.top).toBeCloseTo(16 * 148 / 210);
+	});
+});
+
+describe("safeAreaMargins", () => {
+	const own = { top: 50, right: 15, bottom: 30, left: 17 };
+
+	it("is the Layout's own margins under Built-in, whatever Stationery margins are stored", () => {
+		expect(safeAreaMargins("builtin", "minimal", A4, own)).toEqual({ top: 22, right: 22, bottom: 22, left: 22 });
+	});
+
+	it("scales Built-in's Layout margins with the paper, as the PDF does", () => {
+		const m = safeAreaMargins("builtin", "classic", A5, own);
+		expect(m.left).toBeCloseTo(12.6857, 3);
+		expect(m.top).toBeCloseTo(11.2762, 3);
+	});
+
+	it("is the Stationery's own margins, never scaled, under every other mode", () => {
+		expect(safeAreaMargins("background", "minimal", A5, own)).toEqual(own);
+		expect(safeAreaMargins("preprinted", "compact", A4, own)).toEqual(own);
+	});
+});
+
+describe("editsMargins", () => {
+	it("only the modes with margins of their own have guides to drag", () => {
+		expect(editsMargins("background")).toBe(true);
+		expect(editsMargins("preprinted")).toBe(true);
+	});
+
+	it("built-in is a preview: its margins belong to the Layout", () => {
+		expect(editsMargins("builtin")).toBe(false);
 	});
 });
 

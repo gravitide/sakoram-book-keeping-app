@@ -15,7 +15,7 @@
 // Pure, store-free, relative imports only.
 
 import type { PdfLayoutKey } from "./pdf-layouts";
-import type { StationeryMarginsMm } from "./stationery";
+import type { StationeryMarginsMm, StationeryMode } from "./stationery";
 import { MAX_BAND_MM } from "./stationery";
 
 /** A CSS pixel is 1/96 inch, so this many px is one millimetre at 100 %. */
@@ -204,6 +204,24 @@ export function layoutMarginsMm(layout: PdfLayoutKey, page: PageDims): Stationer
 	const k = page.widthMm / A4_WIDTH_MM;
 	const m = LAYOUT_MARGINS_MM[layout];
 	return { top: m.top * k, right: m.right * k, bottom: m.bottom * k, left: m.left * k };
+}
+
+/**
+ * The margins that bound the Safe area on this sheet. Built-in: the Layout's
+ * own (scaled by paper width) — the stored Stationery margins don't apply.
+ * Every other mode: the Stationery's own, as stored (never scaled). The same
+ * split as buildPageSettings + page-geometry (ADR 0001).
+ */
+export function safeAreaMargins(mode: StationeryMode, layout: PdfLayoutKey, page: PageDims, stationeryMargins: StationeryMarginsMm): StationeryMarginsMm {
+	return mode === "builtin" ? layoutMarginsMm(layout, page) : { ...stationeryMargins };
+}
+
+/**
+ * Whether the editor can move this mode's margins. Built-in has none of its
+ * own (they belong to the Layout), so the editor opens as a preview there.
+ */
+export function editsMargins(mode: StationeryMode): boolean {
+	return mode !== "builtin";
 }
 
 /** The printer band as four strips: top, bottom, then the two sides between them. */
