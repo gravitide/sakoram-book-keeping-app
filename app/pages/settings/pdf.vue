@@ -209,9 +209,47 @@
 							</button>
 						</div>
 
-						<p v-if="form.pdf_stationery_mode === 'builtin'" class="mt-4 text-xs text-(--ui-text-muted)">
-							Set the header logo and the header &amp; footer text below.
-						</p>
+						<!-- The current page, to scale, from the live (unsaved) form. -->
+						<div class="mt-5 flex flex-col sm:flex-row items-start gap-5">
+							<StationeryPage
+								class="shrink-0 rounded-sm ring-1 ring-(--ui-border) shadow-sm"
+								:paper="paperKey"
+								:mode="form.pdf_stationery_mode"
+								:layout="form.pdf_layout"
+								:margins="activeStationeryMargins"
+								:scale="scaleForWidth(resolvePaperSize(paperKey), 150)"
+								:artwork-url="artwork.url.value"
+								:artwork-ext="artwork.ext.value"
+								compact
+							/>
+							<div class="space-y-3 min-w-0">
+								<p v-if="form.pdf_stationery_mode === 'builtin'" class="text-xs text-(--ui-text-muted)">
+									Your Layout's own margins frame the page. Set the header logo and the header &amp; footer text below.
+								</p>
+								<p v-else-if="form.pdf_stationery_mode === 'background'" class="text-xs text-(--ui-text-muted)">
+									Upload your artwork below, then set the Safe area in the editor. Your logo, header text and footer aren't printed — the artwork is your letterhead.
+								</p>
+								<p v-else class="text-xs text-(--ui-text-muted)">
+									Set the blank bands for your printed letterhead in the editor, or type the top and bottom bands below.
+								</p>
+								<!-- Built-in has no margins of its own, so the editor opens
+									as a preview (page, Safe area, sample invoice) there. -->
+								<UButton
+									:icon="form.pdf_stationery_mode === 'builtin' ? 'i-lucide-scan-eye' : 'i-lucide-pencil-ruler'"
+									variant="soft"
+									size="sm"
+									@click="openEditor"
+								>
+									{{ form.pdf_stationery_mode === 'builtin' ? 'Preview page' : 'Edit stationery' }}
+								</UButton>
+								<div class="text-xs text-(--ui-text-muted) tabular-nums">
+									{{ resolvePaperSize(paperKey).label }}
+									<template v-if="form.pdf_stationery_mode !== 'builtin'">
+										· margins {{ activeStationeryMargins.top }} / {{ activeStationeryMargins.right }} / {{ activeStationeryMargins.bottom }} / {{ activeStationeryMargins.left }} mm (top / right / bottom / left)
+									</template>
+								</div>
+							</div>
+						</div>
 
 						<!-- Pre-printed paper: only the two blank bands. Each mode keeps its
 							own settings, so switching back to Built-in and here again
@@ -229,14 +267,29 @@
 							</p>
 							<div class="flex flex-wrap gap-6">
 								<UFormField label="Top band (mm)" help="Clears your printed letterhead. Typically 40–60 mm.">
-									<UInputNumber v-model="form.preprinted_top_mm" :min="0" :max="MAX_BAND_MM" :step="1" class="w-40" />
+									<UInputNumber v-model="form.preprinted_margins.top" :min="0" :max="MAX_BAND_MM" :step="1" class="w-40" />
 								</UFormField>
 								<UFormField label="Bottom band (mm)" help="Clears a printed footer, if any. Typically 15–30 mm.">
-									<UInputNumber v-model="form.preprinted_bottom_mm" :min="0" :max="MAX_BAND_MM" :step="1" class="w-40" />
+									<UInputNumber v-model="form.preprinted_margins.bottom" :min="0" :max="MAX_BAND_MM" :step="1" class="w-40" />
 								</UFormField>
 							</div>
 						</div>
 					</SectionCard>
+
+					<!-- Full-page background: artwork + its own Safe-area margins. Hidden
+						(not cleared) under other modes, like Built-in's controls below. -->
+					<StationeryBackgroundCard
+						v-if="form.pdf_stationery_mode === 'background'"
+						:paper="paperKey"
+					/>
+					<StationeryEditorModal
+						v-model:open="editorOpen"
+						v-model:margins="activeStationeryMargins"
+						:mode="form.pdf_stationery_mode"
+						:paper="paperKey"
+						:layout="form.pdf_layout"
+						:settings="previewSettings"
+					/>
 
 					<!-- Built-in stationery's own controls. Hidden (not cleared) under any
 						other mode, so switching back restores them untouched. The anchor
@@ -616,18 +669,20 @@
 <script setup lang="ts">
 	import type { CropRect } from "~/lib/crop-rect";
 	import type { PdfLayoutKey } from "~/lib/pdf-layouts";
-	import type { StationeryMode } from "~/lib/stationery";
+	import type { StationeryMarginsMm, StationeryMode } from "~/lib/stationery";
 	import type { CompanySettingsRow, SettingsUpdate } from "~/stores/settings";
-	import { invoke } from "@tauri-apps/api/core";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
+	import { useStationeryArtwork } from "~/composables/useStationeryArtwork";
+	import { readBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
 	import { PAPER_SIZES, resolvePaperSize } from "~/lib/page-settings";
 	import { blocksToPlainLines, buildHeaderBlocks } from "~/lib/pdf-chrome";
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
 	import { PDF_TOKENS } from "~/lib/pdf-tokens";
 	import { sampleInvoicePayload } from "~/lib/sample-pdf";
-	import { MAX_BAND_MM, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, setPreprintedBands, STATIONERY_MODES, stationeryModeToSave } from "~/lib/stationery";
+	import { BACKGROUND_DEFAULT_MARGINS, MAX_BAND_MM, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, setBackgroundMargins, setPreprintedMargins, STATIONERY_MODES, stationeryModeToSave } from "~/lib/stationery";
+	import { scaleForWidth } from "~/lib/stationery-geometry";
 	import { isHexColor, THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -641,15 +696,16 @@
 	// Only the PDF-flavoured fields live on this page. Logo paths are kept on
 	// the form so dirty-tracking can spot a removal/upload that would otherwise
 	// only mutate the store. (Document protection moved to /settings/security.)
-	// The Stationery JSON column is edited as plain numbers here (only
-	// Pre-printed paper's two bands are settable for now) and re-assembled on
-	// save on top of whatever else is stored, so another mode's settings survive.
+	// The Stationery JSON column is edited as plain numbers here (Pre-printed
+	// paper's two bands and the Full-page background's four margins) and
+	// re-assembled on save on top of whatever else is stored, so another mode's
+	// settings — and the background artwork, which saves on upload — survive.
 	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_theme_color" | "pdf_paper_size" | "pdf_logo_scale" | "pdf_header_custom" | "pdf_header_text" | "pdf_footer_custom" | "pdf_footer_text"> & {
 		pdf_layout: PdfLayoutKey
 		// The RESOLVED mode the picker shows; onSubmit maps it back (stationeryModeToSave).
 		pdf_stationery_mode: StationeryMode
-		preprinted_top_mm: number
-		preprinted_bottom_mm: number
+		preprinted_margins: StationeryMarginsMm
+		background_margins: StationeryMarginsMm
 	};
 
 	const form = reactive<PdfForm>({
@@ -659,8 +715,8 @@
 		pdf_layout: "classic",
 		pdf_paper_size: "a4",
 		pdf_stationery_mode: "builtin",
-		preprinted_top_mm: PREPRINTED_DEFAULT_MARGINS.top,
-		preprinted_bottom_mm: PREPRINTED_DEFAULT_MARGINS.bottom,
+		preprinted_margins: { ...PREPRINTED_DEFAULT_MARGINS },
+		background_margins: { ...BACKGROUND_DEFAULT_MARGINS },
 		pdf_logo_scale: 100,
 		pdf_header_custom: 0,
 		pdf_header_text: null,
@@ -670,9 +726,33 @@
 
 	// Every mode's stored settings with this page's edits applied; anything
 	// this page doesn't edit (the side bands, later modes' geometry) is kept.
-	const stationeryJson = () => setPreprintedBands(store.settings?.pdf_stationery, {
-		top: form.preprinted_top_mm,
-		bottom: form.preprinted_bottom_mm
+	const stationeryJson = () => setBackgroundMargins(
+		setPreprintedMargins(store.settings?.pdf_stationery, { ...form.preprinted_margins }),
+		{ ...form.background_margins }
+	);
+
+	const paperKey = computed(() => resolvePaperSize(form.pdf_paper_size).key);
+
+	// The margins of the mode being edited — what the thumbnail frames and the
+	// Stationery editor drags. Each mode keeps its own (Built-in has none of
+	// its own; it reads the Pre-printed ones harmlessly and never writes).
+	const activeStationeryMargins = computed<StationeryMarginsMm>({
+		get: () => (form.pdf_stationery_mode === "background" ? form.background_margins : form.preprinted_margins),
+		set: (m) => {
+			if (form.pdf_stationery_mode === "background") form.background_margins = { ...m };
+			else if (form.pdf_stationery_mode === "preprinted") form.preprinted_margins = { ...m };
+		}
+	});
+
+	// Shared with StationeryBackgroundCard and the editor (one read / render).
+	const artwork = useStationeryArtwork();
+	const editorOpen = ref(false);
+	const openEditor = () => {
+		editorOpen.value = true;
+	};
+	// Kept-alive page: never come back to a stale open editor.
+	onDeactivated(() => {
+		editorOpen.value = false;
 	});
 
 	const currency = useActiveCurrency();
@@ -864,8 +944,8 @@
 		form.pdf_paper_size = resolvePaperSize(s.pdf_paper_size).key;
 		form.pdf_stationery_mode = resolveStationeryMode(s.pdf_stationery_mode);
 		const stationery = parseStationery(s.pdf_stationery);
-		form.preprinted_top_mm = stationery.preprinted.top;
-		form.preprinted_bottom_mm = stationery.preprinted.bottom;
+		form.preprinted_margins = { ...stationery.preprinted };
+		form.background_margins = { ...stationery.background.margins };
 		form.pdf_logo_scale = s.pdf_logo_scale ?? 100;
 		form.pdf_header_custom = s.pdf_header_custom ?? 0;
 		form.pdf_header_text = s.pdf_header_text ?? null;
@@ -967,12 +1047,7 @@
 	const saveDerivative = async (bytes: number[], ext: string, cropJson: string | null) => {
 		const tenantId = tenants.activeTenantId;
 		if (!tenantId) return;
-		const target = await invoke<string>("save_business_asset", {
-			id: tenantId,
-			kind: "pdf-header",
-			ext,
-			bytes
-		});
+		const target = await saveBusinessAsset(tenantId, "pdf-header", ext, bytes);
 		await store.save({ pdf_header_logo_path: target, pdf_logo_crop: cropJson });
 		form.pdf_header_logo_path = target;
 		refreshBaseline();
@@ -997,12 +1072,7 @@
 			}
 
 			// Raster: keep the untouched original, then offer the crop.
-			await invoke<string>("save_business_asset", {
-				id: tenantId,
-				kind: "pdf-header-original",
-				ext,
-				bytes
-			});
+			await saveBusinessAsset(tenantId, "pdf-header-original", ext, bytes);
 			cropExt.value = ext;
 			cropBlob.value = new Blob([new Uint8Array(bytes)], { type: file.type || "image/png" });
 			cropInitial.value = null;
@@ -1061,11 +1131,11 @@
 			let ext = "png";
 			let bytes: number[] = [];
 			try {
-				[ext, bytes] = await invoke<[string, number[]]>("read_business_asset", { id: tenantId, kind: "pdf-header-original" });
+				[ext, bytes] = await readBusinessAsset(tenantId, "pdf-header-original");
 				cropSourceNote.value = undefined;
 			} catch {
 				// Original missing (pre-feature upload): crop the derivative itself.
-				[ext, bytes] = await invoke<[string, number[]]>("read_business_asset", { id: tenantId, kind: "pdf-header" });
+				[ext, bytes] = await readBusinessAsset(tenantId, "pdf-header");
 				cropSourceNote.value = "Original file not found — cropping the current header image instead.";
 			}
 			cropExt.value = ext;

@@ -12,9 +12,10 @@
 //     its margins to `page-setup` and the helper uses them.
 //   - `margins: {…}` — the Stationery owns the page: these four margins
 //     bound the Safe area and the Layout only arranges content inside them.
-//     That is every mode other than Built-in (today: Pre-printed paper, for
-//     the whole business or for one letter — both reserve the same
-//     business-wide Pre-printed paper bands).
+//     That is every mode other than Built-in: Full-page background (its own
+//     margins, artwork behind every page) and Pre-printed paper (for the
+//     whole business or for one letter — both reserve the same business-wide
+//     Pre-printed paper bands).
 //
 // `chrome` is the matching suppression rule: only Built-in stationery draws
 // the business identity (logo / wordmark, custom header text, the business
@@ -26,7 +27,7 @@
 // Pure, store-free, relative imports only: vitest and the render-check script
 // (scripts/verify-pdf-render.ts) both import it.
 
-import type { StationeryMarginsMm, StationeryMode } from "./stationery";
+import type { BackgroundExt, StationeryMarginsMm, StationeryMode } from "./stationery";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { parseStationery, resolveStationeryMode } from "./stationery";
 
@@ -98,9 +99,30 @@ export interface PageSettings {
 	 *                 pre-printed paper or artwork. Content reflows by that strip.
 	 */
 	page_number_position: PageNumberPosition
+	/**
+	 * A template that asks for a landscape sheet (the customer statement, for
+	 * its wide invoice table) gets one. true only for Built-in: under every
+	 * other mode the Stationery is printed or drawn PORTRAIT, and turning the
+	 * sheet would print across pre-printed paper or crop the artwork to a
+	 * landscape band. `page-setup` applies it, so templates never check the mode.
+	 */
+	allow_landscape: boolean
+	/**
+	 * The Full-page background artwork drawn behind every page, or null (any
+	 * other mode, or no artwork uploaded yet). Only the format travels: the
+	 * file is always `stationery/background.<ext>` in the business folder.
+	 * The Rust renderer (pdf.rs `stage_background`) copies it beside the
+	 * template and adds `file`, the name Typst reads it by; a missing file
+	 * comes back as null, so a moved or emptied folder renders without it.
+	 */
+	background: PageBackground | null
 }
 
 export type PageNumberPosition = "footer" | "safe_area";
+
+export interface PageBackground {
+	ext: BackgroundExt
+}
 
 /** Per-document override of the business's page settings. */
 export interface PageSettingsOverride {
@@ -118,7 +140,14 @@ type PageSettingsSource = Partial<Pick<CompanySettingsRow, PageSettingsKey>>;
 
 const marginsFor = (mode: StationeryMode, settings: PageSettingsSource | null): StationeryMarginsMm | null => {
 	if (mode === "builtin") return null;
-	return { ...parseStationery(settings?.pdf_stationery).preprinted };
+	const stored = parseStationery(settings?.pdf_stationery);
+	return { ...(mode === "background" ? stored.background.margins : stored.preprinted) };
+};
+
+const backgroundFor = (mode: StationeryMode, settings: PageSettingsSource | null): PageBackground | null => {
+	if (mode !== "background") return null;
+	const { ext } = parseStationery(settings?.pdf_stationery).background;
+	return ext ? { ext } : null;
 };
 
 export function buildPageSettings(settings: PageSettingsSource | null, override?: PageSettingsOverride): PageSettings {
@@ -135,6 +164,8 @@ export function buildPageSettings(settings: PageSettingsSource | null, override?
 		chrome: builtin,
 		margins: marginsFor(stationery, settings),
 		page_numbers: true,
-		page_number_position: builtin ? "footer" : "safe_area"
+		page_number_position: builtin ? "footer" : "safe_area",
+		allow_landscape: builtin,
+		background: backgroundFor(stationery, settings)
 	};
 }

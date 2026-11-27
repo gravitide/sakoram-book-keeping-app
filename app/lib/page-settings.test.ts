@@ -17,7 +17,9 @@ const BUILTIN_A4 = {
 	chrome: true,
 	margins: null,
 	page_numbers: true,
-	page_number_position: "footer"
+	page_number_position: "footer",
+	allow_landscape: true,
+	background: null
 };
 
 const onStationery = (mode: string, stationery: object | string | null = null) => ({
@@ -42,7 +44,9 @@ describe("buildPageSettings", () => {
 			chrome: false,
 			margins: { top: 60, right: 14, bottom: 25, left: 16 },
 			page_numbers: true,
-			page_number_position: "safe_area"
+			page_number_position: "safe_area",
+			allow_landscape: false,
+			background: null
 		});
 	});
 
@@ -97,7 +101,51 @@ describe("stationery mode", () => {
 	});
 
 	it("a mode the app can't render yet falls back to Built-in", () => {
-		expect(buildPageSettings(onStationery("background"))).toMatchObject({ stationery: "builtin", chrome: true, margins: null });
+		expect(buildPageSettings(onStationery("header_footer"))).toMatchObject({ stationery: "builtin", chrome: true, margins: null, background: null });
+	});
+});
+
+describe("full-page background", () => {
+	const withArtwork = { background: { ext: "pdf", paper: "a4", margins: { top: 50, right: 15, bottom: 30, left: 17 } } };
+
+	it("draws the artwork behind every page and bounds the Safe area with the background's own margins", () => {
+		expect(buildPageSettings(onStationery("background", withArtwork))).toEqual({
+			paper: "a4",
+			margin_scale: 1,
+			stationery: "background",
+			chrome: false,
+			margins: { top: 50, right: 15, bottom: 30, left: 17 },
+			page_numbers: true,
+			page_number_position: "safe_area",
+			allow_landscape: false,
+			background: { ext: "pdf" }
+		});
+	});
+
+	it("still owns the page when no artwork is uploaded yet: its margins apply, nothing is drawn behind", () => {
+		expect(buildPageSettings(onStationery("background", null))).toMatchObject({
+			stationery: "background",
+			chrome: false,
+			margins: { top: 40, right: 18, bottom: 25, left: 18 },
+			background: null
+		});
+	});
+
+	it("never scales its margins with the paper", () => {
+		expect(buildPageSettings({ ...onStationery("background", withArtwork), pdf_paper_size: "a5" } as CompanySettingsRow).margins).toEqual({ top: 50, right: 15, bottom: 30, left: 17 });
+	});
+
+	it("a letter set to pre-printed paper reserves the Pre-printed bands and draws no background", () => {
+		const both = onStationery("background", { ...withArtwork, preprinted: { top: 60, right: 14, bottom: 25, left: 16 } });
+		expect(buildPageSettings(both, { preprinted: true })).toMatchObject({
+			stationery: "preprinted",
+			margins: { top: 60, right: 14, bottom: 25, left: 16 },
+			background: null
+		});
+	});
+
+	it("pre-printed paper ignores a stored background", () => {
+		expect(buildPageSettings(onStationery("preprinted", withArtwork)).background).toBeNull();
 	});
 });
 
@@ -142,5 +190,23 @@ describe("paper size", () => {
 
 	it("offers exactly the four supported sheets, A4 first", () => {
 		expect(PAPER_SIZES.map((p) => p.key)).toEqual(["a4", "a5", "us-letter", "us-legal"]);
+	});
+});
+
+describe("orientation", () => {
+	it("built-in lets a wide document (the statement) turn its sheet landscape", () => {
+		expect(buildPageSettings(onStationery("builtin")).allow_landscape).toBe(true);
+	});
+
+	it("pre-printed paper keeps every document portrait: the paper is printed portrait", () => {
+		expect(buildPageSettings(onStationery("preprinted")).allow_landscape).toBe(false);
+	});
+
+	it("a full-page background keeps every document portrait, so the artwork isn't cropped to a landscape band", () => {
+		expect(buildPageSettings(onStationery("background", { background: { ext: "svg" } })).allow_landscape).toBe(false);
+	});
+
+	it("a letter on pre-printed paper stays portrait under a Built-in business", () => {
+		expect(buildPageSettings(settings(60, 25), { preprinted: true }).allow_landscape).toBe(false);
 	});
 });

@@ -369,6 +369,57 @@
 // puts the number's bottom on that edge. Content reflows by the strip in these
 // modes (decided after #355 — they have no byte-identity baseline).
 
+// Full-page background artwork, drawn behind the content on every page, or
+// none. `data.page.background` names the file the renderer staged beside the
+// template (pdf.rs stage_background; it is null when no artwork is uploaded or
+// the file is missing). SVG and PDF stay vector; a PDF contributes its FIRST
+// page only (image()'s default). The artwork covers the whole sheet: raster
+// uploads are already cropped to the paper's proportions, so "cover" only
+// trims artwork prepared for a different sheet. (No document is landscape
+// under a background: page-geometry only flips the sheet for Built-in.)
+#let page-background(data) = {
+  let bg = data.page.at("background", default: none)
+  if bg == none or bg.at("file", default: none) == none { return none }
+  image(bg.file, width: 100%, height: 100%, fit: "cover")
+}
+
+// page-setup minus the artwork: paper, margins, footer and page number.
+#let page-geometry(data, margin, footer, flipped) = {
+  let m = data.page.margins
+  assert(m != none or margin != none, message: "page-setup: no margins (template passed none, data.page.margins is null)")
+  let s = data.page.margin_scale
+  // `margin` is a length or a dict of lengths (x / top / bottom …).
+  let scaled = if s == 1 { margin } else if type(margin) == dictionary {
+    let out = (:)
+    for (side, len) in margin { out.insert(side, len * s) }
+    out
+  } else { margin * s }
+  let foot = if data.page.chrome { footer } else { none }
+  // A template asks for landscape (the statement); only Built-in grants it —
+  // every other Stationery is printed or drawn portrait (page-settings.ts).
+  let flipped = flipped and data.page.allow_landscape
+  if data.page.page_numbers and data.page.page_number_position == "safe_area" {
+    // The strip the number owns at the bottom of the Safe area.
+    let strip = 5mm
+    assert(m != none, message: "page-setup: a safe-area page number needs Stationery margins")
+    return (
+      paper: data.page.paper,
+      flipped: flipped,
+      margin: (top: m.top * 1mm, right: m.right * 1mm, bottom: m.bottom * 1mm + strip, left: m.left * 1mm),
+      footer-descent: 0pt,
+      footer: [#page-number(strip)#foot],
+    )
+  }
+  (
+    paper: data.page.paper,
+    flipped: flipped,
+    margin: if m != none {
+      (top: m.top * 1mm, right: m.right * 1mm, bottom: m.bottom * 1mm, left: m.left * 1mm)
+    } else { scaled },
+    footer: if data.page.page_numbers { page-number-footer(foot) } else { foot },
+  )
+}
+
 // --- page setup ----------------------------------------------------------
 // The ONE page setup every template applies, as
 //   #set page(..page-setup(data, margin: <Layout margins>, footer: [...]))
@@ -393,6 +444,12 @@
 //                 template's footer (built-in or custom) is dropped here, so
 //                 no template has to gate its own footer. Templates gate their
 //                 logo / header text / business block on it themselves.
+//   allow_landscape
+//                 true only for Built-in. A template passing `flipped: true`
+//                 (the statement) gets landscape only when this is true;
+//                 under every other Stationery the sheet stays portrait.
+//   background    Full-page background artwork (page-background, above),
+//                 drawn behind the content on every page; null otherwise.
 // Returns the argument dict rather than applying `set page` itself: a set rule
 // inside a function only reaches that function's own content.
 //
@@ -400,36 +457,12 @@
 // Typst resolves names in definition order, so a common.typ helper that ever
 // calls this has to sit below it.
 #let page-setup(data, margin: none, footer: none, flipped: false) = {
-  let m = data.page.margins
-  assert(m != none or margin != none, message: "page-setup: no margins (template passed none, data.page.margins is null)")
-  let s = data.page.margin_scale
-  // `margin` is a length or a dict of lengths (x / top / bottom …).
-  let scaled = if s == 1 { margin } else if type(margin) == dictionary {
-    let out = (:)
-    for (side, len) in margin { out.insert(side, len * s) }
-    out
-  } else { margin * s }
-  let foot = if data.page.chrome { footer } else { none }
-  if data.page.page_numbers and data.page.page_number_position == "safe_area" {
-    // The strip the number owns at the bottom of the Safe area.
-    let strip = 5mm
-    assert(m != none, message: "page-setup: a safe-area page number needs Stationery margins")
-    return (
-      paper: data.page.paper,
-      flipped: flipped,
-      margin: (top: m.top * 1mm, right: m.right * 1mm, bottom: m.bottom * 1mm + strip, left: m.left * 1mm),
-      footer-descent: 0pt,
-      footer: [#page-number(strip)#foot],
-    )
-  }
-  (
-    paper: data.page.paper,
-    flipped: flipped,
-    margin: if m != none {
-      (top: m.top * 1mm, right: m.right * 1mm, bottom: m.bottom * 1mm, left: m.left * 1mm)
-    } else { scaled },
-    footer: if data.page.page_numbers { page-number-footer(foot) } else { foot },
-  )
+  let out = page-geometry(data, margin, footer, flipped)
+  // Only added when there is artwork, so every other page is set up exactly
+  // as before (Built-in and Pre-printed renders stay byte-identical).
+  let art = page-background(data)
+  if art != none { out.insert("background", art) }
+  out
 }
 
 // --- notes -------------------------------------------------------------

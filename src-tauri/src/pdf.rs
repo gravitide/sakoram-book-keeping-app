@@ -156,6 +156,12 @@ async fn render_pdf(
 		obj.insert("logo_file".into(), Value::Null);
 	}
 
+	// 2b. Full-page background artwork (if the page block asks for one) from
+	//     the OPEN business's folder. The DB stores only its format, never a
+	//     path, so a moved folder needs no rewrite.
+	let business_folder = crate::tenants::active_folder(app).ok().flatten();
+	stage_background(&mut data, business_folder.as_deref(), &work_dir)?;
+
 	// 3. Write data.json
 	let data_path = work_dir.join("data.json");
 	std::fs::write(&data_path, serde_json::to_vec_pretty(&data)?)?;
@@ -192,40 +198,16 @@ async fn render_pdf(
 		.ok_or_else(|| PdfError::Typst("non-UTF-8 output path".into()))?
 		.to_string();
 
-	let cmd = app.shell().sidecar("typst")?;
-	let output = cmd
-		.args([
-			"compile",
-			"--root",
-			&work_dir_str,
-			"--font-path",
-			&fonts_dir_str,
-			&template_str,
-			&output_str,
-		])
-		.output()
-		.await
-		.map_err(|e| PdfError::Typst(format!("spawn failed: {e}")))?;
-
-	if !output.status.success() {
-		// Typst writes both warnings and errors to stderr; surface only the
-		// real error lines to the user. The full stderr still goes to the
-		// dev terminal (println below) for debugging.
-		let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-		let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-		eprintln!("typst stderr:\n{stderr}");
-		if !stdout.trim().is_empty() {
-			eprintln!("typst stdout:\n{stdout}");
-		}
-
-		let user_message = extract_typst_errors(&stderr)
-			.or_else(|| {
-				let trimmed = stderr.trim();
-				if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
-			})
-			.unwrap_or_else(|| stdout.trim().to_string());
-		return Err(PdfError::Typst(user_message));
-	}
+	run_typst(app, &[
+		"compile",
+		"--root",
+		&work_dir_str,
+		"--font-path",
+		&fonts_dir_str,
+		&template_str,
+		&output_str,
+	])
+	.await?;
 
 	// 7. Optional owner-password encryption. A blank/whitespace password
 	//    is treated as "no protection" — the JS side only sends one when
@@ -237,6 +219,69 @@ async fn render_pdf(
 	}
 
 	Ok(())
+}
+
+/// Stage a Full-page background for Typst. The payload's `page.background` is
+/// `{ ext }` (app/lib/page-settings.ts) — the artwork always lives at
+/// `<business folder>/stationery/background.<ext>`. Copy it into the work dir
+/// as `stationery-background.<ext>` and add `file` (what common.typ's
+/// page-background reads). No business folder, an extension that isn't a
+/// plain word, or a missing file all turn `background` into null: the page
+/// renders without artwork rather than failing. Pages without a background
+/// (every other Stationery mode) are left untouched.
+/// scripts/verify-pdf-render.ts mirrors this — keep the two in step.
+pub(crate) fn stage_background(data: &mut Value, business_folder: Option<&Path>, work_dir: &Path) -> std::io::Result<()> {
+	let Some(bg) = data.pointer_mut("/page/background") else { return Ok(()) };
+	if bg.is_null() {
+		return Ok(());
+	}
+	let ext = bg.get("ext").and_then(|v| v.as_str()).unwrap_or("").to_string();
+	let plain = crate::tenants::is_plain_ext(&ext);
+	let src = business_folder
+		.filter(|_| plain)
+		.map(|f| f.join(crate::tenants::STATIONERY_DIR).join(format!("background.{ext}")))
+		.filter(|p| p.is_file());
+	match src {
+		Some(src) => {
+			let name = format!("stationery-background.{ext}");
+			std::fs::copy(&src, work_dir.join(&name))?;
+			if let Some(obj) = bg.as_object_mut() {
+				obj.insert("file".into(), Value::String(name));
+			}
+		}
+		None => *bg = Value::Null,
+	}
+	Ok(())
+}
+
+/// Run the bundled Typst sidecar with `args`. On failure, surface only the
+/// real error lines to the user (Typst writes warnings and errors to stderr);
+/// the full stderr / stdout still go to the dev terminal for debugging. The
+/// one spawn path for every render — PDFs and the PDF-background preview.
+async fn run_typst(app: &AppHandle, args: &[&str]) -> Result<(), PdfError> {
+	let output = app
+		.shell()
+		.sidecar("typst")?
+		.args(args)
+		.output()
+		.await
+		.map_err(|e| PdfError::Typst(format!("spawn failed: {e}")))?;
+	if output.status.success() {
+		return Ok(());
+	}
+	let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+	let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+	eprintln!("typst stderr:\n{stderr}");
+	if !stdout.trim().is_empty() {
+		eprintln!("typst stdout:\n{stdout}");
+	}
+	let user_message = extract_typst_errors(&stderr)
+		.or_else(|| {
+			let trimmed = stderr.trim();
+			if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+		})
+		.unwrap_or_else(|| stdout.trim().to_string());
+	Err(PdfError::Typst(user_message))
 }
 
 /// Pull just the `error:` lines (and any wrapped continuation lines) out of
@@ -421,9 +466,116 @@ pub fn open_path(path: String) -> Result<(), String> {
 	Ok(())
 }
 
+/// The Typst file that draws a PDF background's first page as an image, on a
+/// page exactly its size (written by `stage_artwork_preview`).
+const ARTWORK_PREVIEW_TYP: &str = "artwork-preview.typ";
+const ARTWORK_PREVIEW_SRC: &str = "#set page(width: auto, height: auto, margin: 0pt)\n#image(\"artwork.pdf\")\n";
+
+/// Stage the OPEN business's PDF background (`stationery/background.pdf`) for
+/// a PNG preview: copy it into `work_dir` as `artwork.pdf` beside a template
+/// that draws its first page at its own size. Returns the template's path, or
+/// None when there is no business or no PDF background.
+pub(crate) fn stage_artwork_preview(business_folder: Option<&Path>, work_dir: &Path) -> std::io::Result<Option<PathBuf>> {
+	let Some(src) = business_folder
+		.map(|f| f.join(crate::tenants::STATIONERY_DIR).join("background.pdf"))
+		.filter(|p| p.is_file())
+	else {
+		return Ok(None);
+	};
+	std::fs::create_dir_all(work_dir)?;
+	std::fs::copy(&src, work_dir.join("artwork.pdf"))?;
+	let template = work_dir.join(ARTWORK_PREVIEW_TYP);
+	std::fs::write(&template, ARTWORK_PREVIEW_SRC)?;
+	Ok(Some(template))
+}
+
+/// PNG bytes of the open business's PDF background (its first page) — the
+/// webview can't draw a PDF in an <img>, so the Stationery thumbnail and
+/// editor show this instead. Rendered by the bundled Typst at `ppi`
+/// (clamped to 20–150, plenty for a screen preview).
+#[tauri::command]
+pub async fn render_stationery_artwork_png(app: AppHandle, ppi: u32) -> Result<Vec<u8>, PdfError> {
+	let work_dir = app.path().app_local_data_dir()?.join("pdf-work").join("artwork-preview");
+	let folder = crate::tenants::active_folder(&app).ok().flatten();
+	let template = stage_artwork_preview(folder.as_deref(), &work_dir)?
+		.ok_or_else(|| PdfError::Typst("This business has no PDF background.".into()))?;
+	let output = work_dir.join("artwork.png");
+	let path_str = |p: &Path| p.to_str().map(str::to_string).ok_or_else(|| PdfError::Typst("non-UTF-8 path in app data dir".into()));
+	let (root, template, out) = (path_str(&work_dir)?, path_str(&template)?, path_str(&output)?);
+	let ppi = ppi.clamp(20, 150).to_string();
+	run_typst(&app, &["compile", "--root", &root, "--format", "png", "--ppi", &ppi, &template, &out]).await?;
+	Ok(std::fs::read(&output)?)
+}
+
 #[cfg(test)]
 mod tests {
-	use super::layout_template;
+	use super::{layout_template, stage_artwork_preview, stage_background};
+	use serde_json::json;
+	use std::path::PathBuf;
+
+	fn temp_dir(tag: &str) -> PathBuf {
+		let d = std::env::temp_dir().join(format!("sakoram-pdf-{tag}-{}", uuid::Uuid::new_v4()));
+		std::fs::create_dir_all(&d).unwrap();
+		d
+	}
+
+	/// A business folder holding `stationery/background.<ext>`.
+	fn folder_with_background(tag: &str, ext: &str, bytes: &[u8]) -> PathBuf {
+		let folder = temp_dir(tag);
+		std::fs::create_dir_all(folder.join("stationery")).unwrap();
+		std::fs::write(folder.join("stationery").join(format!("background.{ext}")), bytes).unwrap();
+		folder
+	}
+
+	#[test]
+	fn background_artwork_is_copied_beside_the_template_and_named_for_typst() {
+		let folder = folder_with_background("stage", "svg", b"<svg/>");
+		let work = temp_dir("stage-work");
+		let mut data = json!({ "page": { "stationery": "background", "background": { "ext": "svg" } } });
+		stage_background(&mut data, Some(&folder), &work).unwrap();
+		assert_eq!(data["page"]["background"], json!({ "ext": "svg", "file": "stationery-background.svg" }));
+		assert_eq!(std::fs::read(work.join("stationery-background.svg")).unwrap(), b"<svg/>");
+	}
+
+	#[test]
+	fn a_missing_artwork_file_renders_without_a_background() {
+		let folder = temp_dir("stage-missing");
+		let work = temp_dir("stage-missing-work");
+		let mut data = json!({ "page": { "background": { "ext": "pdf" } } });
+		stage_background(&mut data, Some(&folder), &work).unwrap();
+		assert!(data["page"]["background"].is_null());
+	}
+
+	#[test]
+	fn no_open_business_renders_without_a_background() {
+		let work = temp_dir("stage-nofolder-work");
+		let mut data = json!({ "page": { "background": { "ext": "png" } } });
+		stage_background(&mut data, None, &work).unwrap();
+		assert!(data["page"]["background"].is_null());
+	}
+
+	#[test]
+	fn pages_without_a_background_are_left_alone() {
+		let folder = folder_with_background("stage-none", "svg", b"<svg/>");
+		let work = temp_dir("stage-none-work");
+		for page in [json!({ "stationery": "builtin", "background": null }), json!({ "stationery": "builtin" })] {
+			let mut data = json!({ "page": page.clone() });
+			stage_background(&mut data, Some(&folder), &work).unwrap();
+			assert_eq!(data["page"], page);
+		}
+		let mut no_page = json!({ "title": "x" });
+		stage_background(&mut no_page, Some(&folder), &work).unwrap();
+		assert_eq!(no_page, json!({ "title": "x" }));
+	}
+
+	#[test]
+	fn an_extension_that_is_not_a_plain_word_is_refused() {
+		let folder = folder_with_background("stage-ext", "svg", b"<svg/>");
+		let work = temp_dir("stage-ext-work");
+		let mut data = json!({ "page": { "background": { "ext": "svg/../../business.db" } } });
+		stage_background(&mut data, Some(&folder), &work).unwrap();
+		assert!(data["page"]["background"].is_null());
+	}
 
 	#[test]
 	fn each_layout_renders_its_own_template() {
@@ -438,5 +590,25 @@ mod tests {
 		for key in [Some("letterhead"), Some("bogus"), None] {
 			assert_eq!(layout_template(key).0, "doc-classic.typ");
 		}
+	}
+
+	#[test]
+	fn a_pdf_background_is_staged_beside_a_template_that_draws_it() {
+		let folder = folder_with_background("artwork-preview", "pdf", b"%PDF-1.7 fake");
+		let work = temp_dir("artwork-preview-work").join("nested");
+		let template = stage_artwork_preview(Some(&folder), &work).unwrap().expect("staged");
+		assert_eq!(std::fs::read(work.join("artwork.pdf")).unwrap(), b"%PDF-1.7 fake");
+		let src = std::fs::read_to_string(&template).unwrap();
+		assert!(template.starts_with(&work));
+		assert!(src.contains("image(\"artwork.pdf\")"));
+	}
+
+	#[test]
+	fn no_pdf_background_means_nothing_to_preview() {
+		let svg = folder_with_background("artwork-preview-svg", "svg", b"<svg/>");
+		let work = temp_dir("artwork-preview-none");
+		assert!(stage_artwork_preview(Some(&svg), &work).unwrap().is_none());
+		assert!(stage_artwork_preview(None, &work).unwrap().is_none());
+		assert!(!work.join("artwork.pdf").exists());
 	}
 }

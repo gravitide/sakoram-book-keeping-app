@@ -174,6 +174,8 @@ is no longer encoded in filenames):
   ├─ logos/logo.<ext>                    ← square identity logo (sidebar, tenant switcher, hero); the CROPPED derivative
   ├─ logos/logo-original.<ext>           ← untouched upload, source for Re-crop (local-only, not in backups)
   ├─ pdf-header.<ext>                    ← optional wide letterhead logo printed on PDFs
+  ├─ stationery/background.<ext>         ← Full-page background artwork (svg | pdf | png | jpg); fixed name, the DB stores only the ext
+  ├─ stationery/background-original.<ext> ← untouched raster upload for Re-crop (travels in BOTH backups, unlike logo originals)
   └─ business.db.enc + business.vault.json   ← only when encrypted (decrypt-on-unlock working file is business.db)
 ```
 
@@ -296,6 +298,8 @@ Off by default; unencrypted businesses are unaffected.
   actually exists at the derived location. It runs there, not in
   `open_tenant`, because an encrypted business has no db at Open time. If you
   add another path column, add it to that function — nothing else will.
+  Stationery artwork deliberately has NO path column (fixed names under
+  `stationery/`, only the extension in `pdf_stationery`), so it needs none.
 - **Any file op on a business folder goes through a Rust command, never the fs
   plugin.** The plugin's scopes are `$APPDATA` / `$APPLOCALDATA` / `$HOME`;
   business folders live on any drive. `remove()` on a `D:\` path fails, and the
@@ -336,7 +340,7 @@ Spec/plan: `docs/superpowers/{specs,plans}/2026-09-19-google-drive-backup*`.
   hand: `Sakoram Backups/<Business name>/{snapshots/<stem>.zip + .manifest.json,
   attachments/<type>/<id>/<uuid>.<ext>}`. The snapshot zip holds `business.db`
   (or `business.db.enc` + `business.vault.json`), `business.json`, `logos/*`,
-  `pdf-header*` and `backup-manifest.json` — **not** attachments, which upload
+  `stationery/*`, `pdf-header*` and `backup-manifest.json` — **not** attachments, which upload
   once each and are reused by later backups (diffed on size + Drive's native
   `md5Checksum`).
 - **Lookup is by `appProperties`, never by name or folder walk**: `skKind`
@@ -527,7 +531,7 @@ sakoram_app/
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
 │  │     ├─ company.vue               ← business info, address, bank, signatures, defaults, logo
-│  │     ├─ pdf.vue                   ← Paper & layout (paper size + Layout picker, then the Colour card) · Stationery (mode picker; Pre-printed paper bands; Built-in-only header logo + header/footer text cards) · Font. Every card has a sidebar anchor.
+│  │     ├─ pdf.vue                   ← Paper & layout (paper size + Layout picker, then the Colour card) · Stationery (mode picker; Pre-printed paper bands; a to-scale thumbnail of the current page (`StationeryPage`) + **Edit stationery** (`StationeryEditorModal`) for Full-page background / Pre-printed paper — **Preview page**, the same editor read-only, under Built-in; `StationeryBackgroundCard` — upload / aspect-locked crop + ~300 DPI downscale / live-text SVG warning / Remove — while Full-page background; Built-in-only header logo + header/footer text cards) · Font. Every card has a sidebar anchor.
 │  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), light/dark/system toggle, zoom (6 discrete steps)
 │  │     ├─ payroll.vue               ← cycle template (period_start_day / period_end_day / pay_day)
 │  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + a pointer card to the Pre-printed paper bands (they live on the Stationery at /settings/pdf#stationery since 0056) + a "Stationery artwork" coming-soon placeholder (#artwork). (Signatures moved to /settings/company#signatures — they're shared across letters + quote/invoice "Prepared by".)
@@ -545,6 +549,8 @@ sakoram_app/
 │  │  ├─ CategoryFormModal.vue        ← create/edit category (8-color × 16-icon picker)
 │  │  ├─ CurrencyPicker.vue           ← onboarding + Settings → Business details currency dropdown. Built-in CURRENCIES list plus a "Custom currency…" option that reveals Code + Symbol inputs; emits both v-models so parents just bind code + symbol-override.
 │  │  ├─ BusinessBankFormModal.vue    ← create/edit modal for managed bank accounts (label + bank fields + 8-swatch colour tag; new banks pre-pick the least-used swatch). Auto-marks the first bank as default so freshly-created accounts immediately seed new quotes / invoices.
+│  │  ├─ StationeryEditorModal.vue    ← full-window Stationery editor: page to scale with mm rulers, artwork, four draggable / arrow-key margin guides, grey placeholder content, the informational 5 mm printer band, zoom, and "Preview sample invoice" (always two pages). Edits a DRAFT; Apply hands the margins to /settings/pdf's form (saved with Save changes). Under Built-in it opens as a preview ("Preview page"): the Layout's margins (`safeAreaMargins`) as the Safe area, no guides, no Apply. Holds NO geometry — every rule is in `app/lib/stationery-geometry.ts`
+│  │  ├─ StationeryPage.vue           ← one to-scale sheet (artwork / pre-printed bands, Safe area, placeholder bars, optional printer band); the thumbnail and the editor both draw it, the editor's guides sit in its slot
 │  │  ├─ BankColorDot.vue             ← the bank-account colour marker (business_banks.color → themeHex dot, grey fallback) rendered in front of bank identities everywhere
 │  │  ├─ NewQuoteModal.vue            ← "New quote" form-in-a-modal (client + project title) — replaces /quotes/new
 │  │  ├─ NewInvoiceModal.vue          ← "New invoice" form-in-a-modal — replaces /invoices/new
@@ -595,7 +601,7 @@ sakoram_app/
 │  ├─ help/                           ← in-app help library. `index.ts` is the topic registry (slug, title, summary, category, icon, lazy component); one `.vue` per topic under `topics/`. See "Why help topics are Vue components" decision below.
 │  ├─ lib/
 │  │  ├─ db.ts                        ← getDb() (lazy, reads active tenant URL), select/execute
-│  │  ├─ demo-seed.ts                 ← createDemoBusiness() — a SHOWCASE business, not a stress test (since v0.164.0): 8 clients / 6 vendors, one quote + invoice + bill per status, a credit note (one invoice lands `credited`), recurring templates with one of each already due, 2 bank accounts, 4 employees × 3 months of payslips, 2 signatures + 3 letters, a bank-statement import with matched + unmatched rows, 4 attachments — all within the last ~6 months. Seeds in seconds through the stores (no direct SQL); SeedProgress callback still feeds the overlay's stage label. Add a new feature → add one row of it here.
+│  │  ├─ demo-seed.ts                 ← createDemoBusiness() — a SHOWCASE business, not a stress test (since v0.164.0): 8 clients / 6 vendors, one quote + invoice + bill per status, a credit note (one invoice lands `credited`), recurring templates with one of each already due, 2 bank accounts, 4 employees × 3 months of payslips, 2 signatures + 3 letters, a bank-statement import with matched + unmatched rows, 4 attachments — all within the last ~6 months. Its PDFs print on a bundled sample letterhead (Full-page background: `app/assets/stationery/demo-letterhead.svg`, outlined shapes only, written to the folder via `save_business_asset`; Safe area + PDF accent in `app/lib/demo-letterhead.ts`, render-checked as `invoice-classic-demo-letterhead*`). Seeds in seconds through the stores (no direct SQL); SeedProgress callback still feeds the overlay's stage label. Add a new feature → add one row of it here.
 │  │  ├─ money.ts                     ← toCents, formatMoney/formatLKR, computeLineTotals (integer math). Plus the runtime currency registry: built-in CURRENCIES map + registerCurrency() / isBuiltinCurrency() helpers so user-defined currencies (slotted in by the settings store on load from company_settings.currency_symbol_override) work everywhere formatMoney does.
 │  │  ├─ numbering.ts                 ← allocateDocumentNumber (single-statement atomic)
 │  │  ├─ pdf.ts                       ← preview/commit/legacy export helpers; PdfCommand union
@@ -771,7 +777,9 @@ bun run verify:pdf                       # renders every PDF template through th
                                          # REAL builders and compares sha256 against
                                          # scripts/pdf-render-baselines.json. --update
                                          # re-captures (only after looking: --keep <dir>
-                                         # writes the PDFs + a PNG per page). Also
+                                         # writes the PDFs + a PNG per page; --only
+                                         # <text> renders just matching cases,
+                                         # never with --update). Also
                                          # checks "Page N of M" on every multi-page
                                          # case. Needs the sidecar in
                                          # src-tauri/binaries or SAKORAM_TYPST_BIN.
@@ -1600,7 +1608,7 @@ dynamically — adding a column to a migration auto-flows into export.
 0051_pdf_logo_controls.sql              ← `company_settings.pdf_logo_scale` (INTEGER, default 100 — percent, UI 50..150 step 5) + `pdf_logo_crop` (TEXT JSON {x,y,w,h} in source px, NULL for SVG/uncropped). Header-logo revamp: raster uploads keep the untouched original at `pdf-header-original.<ext>` (business-folder root) and a hand-rolled canvas cropper (`ImageCropModal.vue` + pure `app/lib/crop-rect.ts`) writes the `pdf-header.<ext>` derivative the PDFs render; "Re-crop" reopens the original with the stored rect via the `read_business_asset` command (bytes, because asset:// URLs are cross-origin and taint the canvas). SVG passes through uncropped (stays vector). All 9 template logo sites now render through `header-logo(data, base-h)` in common.typ — baseline × scale with a fixed 55mm width clamp via measure() so banner crops shrink instead of colliding with the title (note: Typst rejects length×length, so ratios must be parenthesised — `h * (m.width / m.height)`). voucher/report/statement gained a SELECTIVE `#import "common.typ": header-logo` (a wildcard would shadow their local label/faint — the payslip landmine from #315) + common.typ as a render companion. The upload tile + crop stage are fixed white in both themes: they preview against the PDF's actual background. SCHEMA_VERSION → 51.
 0052_pdf_header_footer_text.sql         ← `company_settings.pdf_header_custom` / `pdf_header_text` / `pdf_footer_custom` / `pdf_footer_text`. Opt-in rich-text page chrome: when a flag is on, the stored TipTap JSON replaces the built-in header block (printed opposite the logo) or the footer line. Flags default 0 so existing tenants render byte-identically — proven by sha256 over all 5 doc templates before/after. `{business_name}` / `{address}` / `{city}` / `{phone}` / `{email}` / `{website}` / `{tax_id}` tokens are substituted over the BLOCK TREE by `app/lib/pdf-tokens.ts` (so a token inside a bold run stays bold); unknown tokens render literally so typos are visible. `app/lib/pdf-chrome.ts` turns settings into the `header_blocks` / `footer_blocks` payload arrays for all 9 builders and caps the footer at 3 blocks — the page footer is a FIXED region repeated on every page. `render-blocks` gained a `spacing` param (default 8pt = unchanged) and **`footer-content` MOVED below it** in common.typ (definition-order rule — it now calls render-blocks). Header text reaches the 5 doc-* templates + payslip via `doc-header`; voucher/report/statement/letter get the footer only (bespoke headers). Letterhead skips header text by design. `RichTextEditor` gained a `minimal` prop (marks + align only) and an exposed `insertText()` for the Insert-field menu. SCHEMA_VERSION → 52.
 0053_logo_crop.sql                      ← `company_settings.logo_crop` (TEXT JSON {x,y,w,h} in source px, NULL for SVG/uncropped) — the square-identity-logo mirror of `pdf_logo_crop`. Raster uploads now keep the untouched original at `logos/logo-original.<ext>` and the CROPPED derivative at `logos/logo.<ext>`; `save_business_asset`/`read_business_asset` gained a `logo-original` kind (the stale-ext sweep keys on `file_stem`, and `logo-original` != `logo`, so the pair never collide). `ImageCropModal` gained `aspect` (1 = square; omitted keeps the wide PDF letterhead free-form) plus `title`/`hint` props — its copy was hardcoded to the PDF header and leaked into the logo modal. Aspect math lives in the pure `fullRect(w,h,aspect)` / `resizeRect(...,aspect)`; clamping at an image edge shrinks BOTH axes so the ratio survives. **The sharp edge: cropping emits PNG, so a JPEG upload lands as `logo.png` — `tenants.setLogoFile` must get the extension of the file ACTUALLY written**, because welcome + Businesses read `tenants.json` directly, not the DB. The logo now renders on a WHITE PLATE (sidebar / welcome / Businesses / uploader tile) but only when a logo is set — the empty-state icon keeps the muted bg, since a white square holding a grey icon reads as a broken image in dark mode. Originals are local-only: `data_io` bundles the derivative alone (same as `pdf-header-original`), so Re-crop falls back to cropping the derivative after a backup import. SCHEMA_VERSION → 53.
-0054_pdf_paper_size.sql                 ← `company_settings.pdf_paper_size` (TEXT NOT NULL DEFAULT 'a4', CHECK a4 | a5 | us-letter | us-legal — the stored value IS the Typst paper name). Picked on /settings/pdf. `buildPageSettings` emits `page.paper` + `page.margin_scale` (paper width / 210 mm); `page-setup` multiplies the Layout's A4 margins by it (18 mm → ~12.7 mm on A5) only when `page.margins` is null — Stationery / pre-printed margins are never scaled, type sizes never change. Statement stays landscape (flipped). Payslip's 30 % amount column switches to `auto` below A4 width. `verify:pdf` renders every template at A5 / Letter / Legal; A4 hashes unchanged. SCHEMA_VERSION → 54.
+0054_pdf_paper_size.sql                 ← `company_settings.pdf_paper_size` (TEXT NOT NULL DEFAULT 'a4', CHECK a4 | a5 | us-letter | us-legal — the stored value IS the Typst paper name). Picked on /settings/pdf. `buildPageSettings` emits `page.paper` + `page.margin_scale` (paper width / 210 mm); `page-setup` multiplies the Layout's A4 margins by it (18 mm → ~12.7 mm on A5) only when `page.margins` is null — Stationery / pre-printed margins are never scaled, type sizes never change. Statement stays landscape (flipped) on Built-in stationery (portrait under every other mode since phase 2). Payslip's 30 % amount column switches to `auto` below A4 width. `verify:pdf` renders every template at A5 / Letter / Legal; A4 hashes unchanged. SCHEMA_VERSION → 54.
 0055_pdf_layout_stationery.sql          ← Layout + Stationery replace `pdf_template` (ADR 0001). `pdf_layout` (classic | modern | minimal | compact, CHECK; `app/lib/pdf-layouts.ts` ↔ `layout_template` in pdf.rs), `pdf_stationery_mode` (builtin | background | header_footer | preprinted, CHECK, default builtin — only builtin + preprinted render; `resolveStationeryMode` reads the others as builtin until they land) and `pdf_stationery` (JSON holding EVERY mode's settings so switching modes loses nothing; NULL = defaults; Zod in `app/lib/stationery.ts`, field-by-field `.catch` so malformed JSON degrades to defaults). A `letterhead` business moved to Classic + Pre-printed paper; Pre-printed paper's bands were seeded from `letter_preprinted_{top,bottom}_margin_mm` (sides 18). `doc-letterhead.typ` and the `letterhead` branches in common.typ are gone. /settings/pdf regrouped into Paper & layout · Stationery (Built-in's logo + header/footer text cards only while Built-in) · Font. SCHEMA_VERSION → 55.
 0056_drop_letter_preprinted_margins.sql ← drops `company_settings.letter_preprinted_{top,bottom}_margin_mm`. A letter's paper choice is now "use stationery" (business Stationery + Paper size) or "pre-printed paper", and the latter reserves the business-wide Pre-printed paper bands (`pdf_stationery` → `preprinted`, seeded from these columns by 0055) even while the active mode is Built-in; its "Page N of M" sits inside the Safe area. /settings/letters lost its margin inputs (pointer card to /settings/pdf#stationery); /settings/pdf shows the Pre-printed bands under every mode. SCHEMA_VERSION → 56.
 ```
@@ -2701,6 +2709,18 @@ surface flagged in the same audit was deleted in v0.164.1.)
   widths, the 55 mm logo clamp) is NOT scaled, so check the A5 render. Don't hand-write `paper:` / Stationery margins in a template or a
   builder, and add `page-setup` to the SELECTIVE import list of
   voucher/report/statement/letter. `bun run verify:pdf` proves byte identity.
+- **Landscape is granted by `page.allow_landscape`, not asked for.** The
+  statement passes `flipped: true`; `page-geometry` only turns the sheet when
+  the page block allows it, which is Built-in only — pre-printed paper and
+  artwork are portrait, so under every other Stationery the statement renders
+  PORTRAIT (user decision). Don't check the mode name in a template. The
+  portrait statement adapts to its Safe-area width (`adaptive` in
+  statement.typ: three tiles a row and a folded 5-column table below 140 mm —
+  an A5 Safe area); the landscape path is the untouched original code so
+  Built-in hashes never move. It measures with `context` + `page.width`, NOT
+  `layout()` — `layout()` content can't break across pages and pushed the
+  table onto page 2. `verify:pdf` checks every statement's MediaBoxes against
+  `allow_landscape`.
 - **"Page N of M" belongs to `page-setup`, never to a template's footer.**
   `page.page_numbers` (always true today) makes `page-setup` wrap the
   template's footer with `page-number-footer`, which PLACES the number just
@@ -2728,6 +2748,44 @@ surface flagged in the same audit was deleted in v0.164.1.)
   name, so a new Stationery mode needs no template edits for suppression. The Layout key travels as
   `layout` (was `template`); `pdf-layouts.test.ts` fails if `PDF_LAYOUTS` and
   `layout_template` in pdf.rs disagree.
+- **Full-page background artwork travels by FORMAT, never by path.**
+  `page.background` is `{ ext }` (or null); `render_pdf` resolves the OPEN
+  business's folder (`tenants::active_folder`), and `stage_background` copies
+  `stationery/background.<ext>` into the work dir as
+  `stationery-background.<ext>` and adds `file` — a missing file turns
+  `background` into null rather than failing. `page-setup` adds Typst's
+  `background:` key ONLY when there is artwork (so every other render stays
+  byte-identical) via `page-background`, which uses `fit: "cover"`; a PDF
+  contributes its first page only. `verify-pdf-render.ts` mirrors the staging
+  (fixtures in `scripts/fixtures/stationery/`, whose PDF has a red page 2 that
+  must never show) and fails a background case whose render doesn't change
+  when the artwork is taken out. Because no path is stored, a moved folder
+  needs no `relocate_stored_paths` entry — don't add one. All artwork file ops
+  go through `save_business_asset` / `read_business_asset` /
+  `remove_business_asset` (kinds `stationery-background[-original]`), never the
+  fs plugin — call them through the typed wrappers in `app/lib/business-assets.ts`,
+  whose `BusinessAssetKind` mirrors `asset_slot` in tenants.rs (add a kind to
+  both). Asset extensions are checked by `tenants::is_plain_ext` on both the
+  write and the render side. Export bundles and Drive snapshots both carry `stationery/*`.
+- **The Stationery editor holds no geometry.** mm ↔ px at any zoom, margin
+  drag / nudge limits (margins never cross: the Safe area keeps
+  `MIN_SAFE_AREA_MM`; each band ≤ `MAX_BAND_MM`), snapping (whole mm, side
+  margins to each other), ruler ticks, placeholder bars, the printer band and
+  the Built-in Layout margins all live in `app/lib/stationery-geometry.ts`
+  (vitest). The printer band is INFORMATION only — nothing snaps to it or is
+  refused for crossing it. `LAYOUT_MARGINS_MM` there mirrors `layout-config`
+  in common.typ — change both. The preview artwork comes from
+  `useStationeryArtwork` (one shared, ref-counted blob URL; a PDF background
+  is rendered to PNG by Typst through `render_stationery_artwork_png`, since
+  an `<img>` can't show a PDF). A same-format re-upload leaves the stored
+  JSON identical, so the uploader calls its `reload()`.
+- **The Stationery preview sample is exactly two pages, everywhere.**
+  `sampleStationeryPreviewPayload` (sample-pdf.ts) sizes its line count from
+  the Safe area's height so the invoice lands at ~1.5 pages; `verify:pdf`
+  renders it on every Layout × Paper size × Stationery (incl. shallow, deep
+  and wide margins) as `checkOnly` cases (page count, no baseline) and fails
+  on anything but two pages. If a template change makes it fail,
+  recalibrate `SAMPLE_FIXED_MM` / `SAMPLE_LINE_MM` — don't drop the check.
 - **Every Typst template with a bespoke footer must read `footer_blocks`.** The
   builders always send it; `voucher.typ` / `report.typ` / `statement.typ`
   hard-coded their footer line and silently ignored the custom footer for

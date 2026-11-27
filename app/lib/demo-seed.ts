@@ -19,7 +19,8 @@
 // (one already due), two bank accounts, a statement import to
 // reconcile, letters with signatures, and a few attachments — all dated
 // within the last ~6 months so the dashboard, calendar and report
-// presets light up. It seeds in seconds. (The earlier 200-client /
+// presets light up. Its PDFs print on a bundled sample letterhead (Full-page
+// background). It seeds in seconds. (The earlier 200-client /
 // 800-invoice bulk fill that exercised list paging was retired in
 // v0.164.0; if a stress fixture is ever wanted again, build it as a
 // separate script, not into the demo.)
@@ -30,6 +31,9 @@ import type { VendorRow } from "~/stores/vendors";
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir, appLocalDataDir, join } from "@tauri-apps/api/path";
 import { BaseDirectory, writeFile } from "@tauri-apps/plugin-fs";
+import demoLetterheadSvg from "~/assets/stationery/demo-letterhead.svg?raw";
+import { saveBusinessAsset } from "~/lib/business-assets";
+import { DEMO_LETTERHEAD_ACCENT, demoLetterheadSettings } from "~/lib/demo-letterhead";
 import { peekNextSequence } from "~/lib/numbering";
 import { useBankStatementsStore } from "~/stores/bank_statements";
 import { buildCategorySnapshot, useBillCategoriesStore } from "~/stores/bill_categories";
@@ -136,8 +140,27 @@ const seedSettings = async () => {
 		// stays off — none of the demo salaries clear the relief anyway.
 		statutory_auto_compute: 1,
 		paye_auto_compute: 0,
-		payslip_show_signatures: 1
+		payslip_show_signatures: 1,
+		// PDF accent in the sample letterhead's green (see seedLetterhead).
+		pdf_theme_color: DEMO_LETTERHEAD_ACCENT
 	});
+};
+
+// The demo's PDFs print on a sample letterhead (Full-page background) so the
+// Stationery feature is visible out of the box. The artwork goes into the
+// business folder first; the settings only switch over once it is there, so a
+// failed write leaves the demo on Built-in stationery rather than pointing at
+// a missing file.
+const seedLetterhead = async (tenantId: string) => {
+	try {
+		const bytes = Array.from(new TextEncoder().encode(demoLetterheadSvg));
+		await saveBusinessAsset(tenantId, "stationery-background", "svg", bytes);
+		const store = useSettingsStore();
+		await store.save(demoLetterheadSettings(store.settings?.pdf_stationery));
+	} catch (e) {
+		// A missing letterhead shouldn't sink the whole demo.
+		console.warn("seed: demo letterhead failed", e);
+	}
 };
 
 interface BankIds {
@@ -784,6 +807,7 @@ export const createDemoBusiness = async (
 	// earlier one (vouchers → documents, statement → vouchers).
 	step("Setting up the business");
 	await seedSettings();
+	await seedLetterhead(t.id);
 	const banks = await seedBanks();
 	await seedSignatures();
 

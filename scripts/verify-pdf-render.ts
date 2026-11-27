@@ -39,6 +39,10 @@
 // Rust side's logo_path → logo_file copy is mirrored here), because the
 // wordmark fallback alone once hid a template that failed whenever a logo was
 // set (see the "definition order" landmine in CLAUDE.md).
+//
+// Full-page background cases render with REAL artwork in each format the app
+// accepts (SVG, PNG, PDF — scripts/fixtures/stationery/), staged the way the
+// Rust renderer stages it (stage_background in pdf.rs).
 
 import type { Buffer } from "node:buffer";
 import type { LetterRow } from "../app/stores/letters";
@@ -54,13 +58,14 @@ import { dirname, join } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { buildBillPdfPayload } from "../app/lib/bill-pdf.ts";
+import { DEMO_LETTERHEAD_ACCENT, demoLetterheadSettings } from "../app/lib/demo-letterhead.ts";
 import { buildInvoicePdfPayload } from "../app/lib/invoice-pdf.ts";
 import { buildLetterPdfPayload } from "../app/lib/letter-pdf.ts";
 import { CURRENCIES } from "../app/lib/money.ts";
 import { buildPayslipPdfPayload } from "../app/lib/payslip-pdf.ts";
 import { buildQuotePdfPayload } from "../app/lib/quote-pdf.ts";
 import { buildAgedReceivablesPdfPayload, buildCashFlowPdfPayload, buildPnlPdfPayload } from "../app/lib/report-pdf.ts";
-import { sampleInvoicePayload } from "../app/lib/sample-pdf.ts";
+import { sampleInvoicePayload, sampleStationeryPreviewPayload } from "../app/lib/sample-pdf.ts";
 import { buildCustomerStatementPdfPayload } from "../app/lib/statement-pdf.ts";
 import { buildVoucherPdfPayload } from "../app/lib/voucher-pdf.ts";
 import { pdfPageTexts } from "./pdf-text.ts";
@@ -69,6 +74,15 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const TEMPLATES = join(REPO, "src-tauri/templates");
 const FONTS = join(REPO, "src-tauri/fonts");
 const LOGO = join(REPO, "src-tauri/icons/128x128.png");
+// Stands in for the business folder: Full-page background artwork is read from
+// <folder>/stationery/background.<ext>, exactly as the app reads it.
+const BUSINESS_FOLDER = join(REPO, "scripts/fixtures");
+// The demo business's bundled letterhead, staged into a throwaway business
+// folder exactly where the demo seed writes it (stationery/background.svg).
+const DEMO_FOLDER = mkdtempSync(join(tmpdir(), "sakoram-demo-folder-"));
+mkdirSync(join(DEMO_FOLDER, "stationery"));
+copyFileSync(join(REPO, "app/assets/stationery/demo-letterhead.svg"), join(DEMO_FOLDER, "stationery/background.svg"));
+process.on("exit", () => rmSync(DEMO_FOLDER, { recursive: true, force: true }));
 const BASELINES = join(REPO, "scripts/pdf-render-baselines.json");
 const CREATION_TIMESTAMP = "1767225600"; // 2026-01-01T00:00:00Z
 
@@ -76,6 +90,15 @@ const args = process.argv.slice(2);
 const UPDATE = args.includes("--update");
 const keepIdx = args.indexOf("--keep");
 const KEEP_DIR = keepIdx >= 0 ? args[keepIdx + 1] : undefined;
+// --only <text>: render just the cases whose name contains <text> (for
+// iterating on one template). Never with --update — that would drop every
+// other baseline.
+const onlyIdx = args.indexOf("--only");
+const ONLY = onlyIdx >= 0 ? args[onlyIdx + 1] : undefined;
+if (ONLY !== undefined && UPDATE) {
+	console.error("✗ --only can't be combined with --update (it would drop every other baseline)");
+	process.exit(1);
+}
 
 // --- typst binary ----------------------------------------------------------
 
@@ -170,7 +193,19 @@ const settingsFor = (overrides: Partial<CompanySettingsRow> = {}): CompanySettin
 });
 
 const noLogo = { pdf_header_logo_path: null };
+// The demo business: its bundled letterhead, Safe area and PDF accent.
+const demoSettings = () => settingsFor({ ...demoLetterheadSettings(null), pdf_theme_color: DEMO_LETTERHEAD_ACCENT });
 const preprintedPaper = { pdf_stationery_mode: "preprinted" };
+// Full-page background with artwork of the given format. Its margins (44 / 22,
+// sides 20) differ from both the defaults and the Pre-printed bands above, so
+// the cases prove the background's own margins bound the Safe area.
+const fullPageBackground = (ext: "svg" | "png" | "jpg" | "pdf" | null = "svg") => ({
+	pdf_stationery_mode: "background",
+	pdf_stationery: JSON.stringify({
+		preprinted: { top: 48, right: 16, bottom: 24, left: 16 },
+		background: { ext, paper: "a4", crop: null, live_text: false, margins: { top: 44, right: 20, bottom: 22, left: 20 } }
+	})
+});
 const customChrome = {
 	pdf_header_custom: 1,
 	pdf_header_text: richText("{business_name}", "{address}, {city}", "Tax ID {tax_id}"),
@@ -477,6 +512,19 @@ interface Case {
 	 * numbered render can only ever differ from it by the numbers.
 	 */
 	multipage?: true
+	/** Must render to exactly this many pages (on top of `multipage`). */
+	pages?: number
+	/**
+	 * Only the checks run — page count, page numbers, identity, artwork — with
+	 * no stored baseline and no `~unnumbered` twin. For wide grids that guard
+	 * a property (the Stationery preview sample is always two pages) rather
+	 * than pixels.
+	 */
+	checkOnly?: true
+	/** Where Full-page background artwork is read from (default: the fixtures folder). */
+	businessFolder?: string
+	/** Must render byte-identically to this other case. */
+	sameAs?: string
 }
 
 // Mirrors layout_template() in src-tauri/src/pdf.rs: unknown keys → classic.
@@ -499,6 +547,18 @@ const MULTIPAGE_ON_OTHER_PAPER = new Set([
 	"payslip-compact-a5",
 	...OTHER_PAPERS.flatMap((paper) => [`report-pnl-${paper}`, `statement-${paper}`])
 ]);
+
+const ALL_PAPERS = ["a4", ...OTHER_PAPERS] as const;
+const bands = (preprinted: object) => ({ pdf_stationery_mode: "preprinted", pdf_stationery: JSON.stringify({ preprinted }) });
+// The Stationery the preview sample must stay two pages on.
+const STATIONERY_PREVIEW_STATIONERY: [string, Partial<CompanySettingsRow>][] = [
+	["builtin", {}],
+	["background", fullPageBackground()],
+	["background-wide-sides", { pdf_stationery_mode: "background", pdf_stationery: JSON.stringify({ background: { ext: "svg", paper: "a4", crop: null, live_text: false, margins: { top: 40, right: 40, bottom: 25, left: 40 } } }) }],
+	["preprinted", preprintedPaper],
+	["preprinted-shallow", bands({ top: 5, right: 5, bottom: 5, left: 5 })],
+	["preprinted-deep", bands({ top: 60, right: 18, bottom: 30, left: 18 })]
+];
 
 const cases: Case[] = [
 	// The four Layouts, each with a real logo.
@@ -578,7 +638,12 @@ const cases: Case[] = [
 	{ name: "payslip-minimal-preprinted", template: "payslip.typ", payload: payslip(settingsFor({ ...preprintedPaper, pdf_layout: "minimal" })) },
 	{ name: "voucher-preprinted", template: "voucher.typ", payload: voucher(settingsFor({ ...preprintedPaper, ...customChrome })) },
 	{ name: "report-pnl-preprinted", template: "report.typ", payload: pnl(settingsFor({ ...preprintedPaper, ...customChrome })), multipage: true },
-	{ name: "statement-preprinted", template: "statement.typ", payload: statement(settingsFor({ ...preprintedPaper, ...customChrome })), multipage: true },
+	// Statements turn landscape on Built-in only; on pre-printed paper (and a
+	// full-page background, below) the sheet stays portrait — and the taller
+	// sheet fits on one page what landscape A4 spills onto two.
+	{ name: "statement-preprinted", template: "statement.typ", payload: statement(settingsFor({ ...preprintedPaper, ...customChrome })) },
+	// The narrowest portrait Safe area a statement meets: the 7-column table must still fit.
+	{ name: "statement-preprinted-a5", template: "statement.typ", payload: statement(settingsFor({ ...preprintedPaper, pdf_paper_size: "a5" })), multipage: true },
 	// A letter NOT individually set to pre-printed still follows the business.
 	{ name: "letter-business-preprinted", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false), settings: settingsFor({ ...preprintedPaper }) }) },
 	// …and one set to pre-printed reserves those same bands (same hash as the
@@ -587,6 +652,72 @@ const cases: Case[] = [
 	{ name: "letter-business-preprinted-multipage", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false, 20), settings: settingsFor({ ...preprintedPaper }) }), multipage: true },
 	// Stationery bands are never scaled with the paper.
 	{ ...docCase("invoice-classic-preprinted-a5", invoice(settingsFor({ ...preprintedPaper, pdf_paper_size: "a5" }))), multipage: true },
+
+	// Full-page background Stationery, every template, with real artwork
+	// behind every page. As on Pre-printed paper the business's logo, header
+	// text and footer are set (customChrome) and must all be dropped: the
+	// artwork IS the identity. Margins 44 / 22, sides 20.
+	// Minimal is the airiest Layout and spills onto page 2.
+	...LAYOUTS.map((key): Case => {
+		const c = docCase(`invoice-${key}-background`, invoice(settingsFor({ ...fullPageBackground(), ...customChrome, pdf_layout: key })));
+		return key === "minimal" ? { ...c, multipage: true } : c;
+	}),
+	// Each upload format. The PDF fixture's second page is solid red: a
+	// background is the first page only, so red must never appear.
+	docCase("invoice-classic-background-png", invoice(settingsFor({ ...fullPageBackground("png") }))),
+	docCase("invoice-classic-background-jpg", invoice(settingsFor({ ...fullPageBackground("jpg") }))),
+	docCase("invoice-classic-background-pdf", invoice(settingsFor({ ...fullPageBackground("pdf") }))),
+	// Repeats on every page.
+	{ ...docCase("invoice-classic-background-multipage", invoice(settingsFor({ ...fullPageBackground("pdf") }), 30)), multipage: true },
+	// Mode chosen, nothing uploaded yet: the margins still apply, no artwork.
+	docCase("invoice-classic-background-no-artwork", invoice(settingsFor({ ...fullPageBackground(null) }))),
+	// Artwork recorded but its file is gone (folder emptied by hand): renders
+	// without it rather than failing. Same output as the case above.
+	{ ...docCase("invoice-classic-background-file-missing", invoice(settingsFor({ ...fullPageBackground("svg") }))), businessFolder: join(REPO, "scripts/fixtures/no-such-folder"), sameAs: "invoice-classic-background-no-artwork" },
+	// Artwork prepared for A4 on A5 covers the smaller sheet; margins unscaled.
+	{ ...docCase("invoice-classic-background-a5", invoice(settingsFor({ ...fullPageBackground(), pdf_paper_size: "a5" }))), multipage: true },
+	docCase("quote-classic-background", buildQuotePdfPayload({ row: docRow as never, lines: docLines(3), settings: settingsFor({ ...fullPageBackground() }), currency })),
+	docCase("bill-classic-background", buildBillPdfPayload({ row: docRow as never, lines: docLines(2) as never, settings: settingsFor({ ...fullPageBackground("png") }), currency, paidCents: 2000000 })),
+	docCase("sample-classic-background", sampleInvoicePayload(settingsFor({ ...fullPageBackground() }), currency, "classic")),
+	...LAYOUTS.map((key): Case => ({ name: `payslip-${key}-background`, template: "payslip.typ", payload: payslip(settingsFor({ ...fullPageBackground(), ...customChrome, pdf_layout: key })) })),
+	// The bespoke templates (their own page-setup call, not doc-header) with
+	// raster and PDF artwork too, not only SVG.
+	{ name: "payslip-classic-background-png", template: "payslip.typ", payload: payslip(settingsFor({ ...fullPageBackground("png") })) },
+	{ name: "payslip-classic-background-pdf", template: "payslip.typ", payload: payslip(settingsFor({ ...fullPageBackground("pdf") })) },
+	{ name: "voucher-background", template: "voucher.typ", payload: voucher(settingsFor({ ...fullPageBackground(), ...customChrome })) },
+	{ name: "voucher-background-png", template: "voucher.typ", payload: voucher(settingsFor({ ...fullPageBackground("png") })) },
+	{ name: "voucher-background-jpg", template: "voucher.typ", payload: voucher(settingsFor({ ...fullPageBackground("jpg") })) },
+	{ name: "voucher-background-pdf", template: "voucher.typ", payload: voucher(settingsFor({ ...fullPageBackground("pdf") })) },
+	{ name: "statement-background-pdf", template: "statement.typ", payload: statement(settingsFor({ ...fullPageBackground("pdf") })) },
+	{ name: "report-pnl-background", template: "report.typ", payload: pnl(settingsFor({ ...fullPageBackground("pdf"), ...customChrome })), multipage: true },
+	{ name: "statement-background", template: "statement.typ", payload: statement(settingsFor({ ...fullPageBackground(), ...customChrome })) },
+	{ name: "statement-background-a5", template: "statement.typ", payload: statement(settingsFor({ ...fullPageBackground("png"), pdf_paper_size: "a5" })), multipage: true },
+	{ name: "letter-background", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false), settings: settingsFor({ ...fullPageBackground() }) }) },
+	{ name: "letter-background-pdf", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false), settings: settingsFor({ ...fullPageBackground("pdf") }) }) },
+	{ name: "letter-background-multipage", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(false, 20), settings: settingsFor({ ...fullPageBackground("png") }) }), multipage: true },
+	// A letter set to pre-printed paper keeps its blank bands and draws no
+	// artwork, even while the business uses a Full-page background.
+	{ name: "letter-preprinted-on-business-background", template: "letter.typ", payload: buildLetterPdfPayload({ row: letterRow(true), settings: settingsFor({ ...fullPageBackground() }) }), sameAs: "letter-preprinted-on-business-preprinted" },
+
+	// The Stationery editor's "Preview sample invoice" is exactly two pages —
+	// the continuation page, repeated Stationery and "Page 2 of 2" are what it
+	// exists to show. Three with stored baselines…
+	{ ...docCase("stationery-preview-classic", sampleStationeryPreviewPayload(settingsFor(), currency, "classic")), multipage: true, pages: 2 },
+	{ ...docCase("stationery-preview-modern-background", sampleStationeryPreviewPayload(settingsFor({ ...fullPageBackground("pdf"), pdf_layout: "modern" }), currency, "modern")), multipage: true, pages: 2 },
+	{ ...docCase("stationery-preview-compact-preprinted-a5", sampleStationeryPreviewPayload(settingsFor({ ...preprintedPaper, pdf_layout: "compact", pdf_paper_size: "a5" }), currency, "compact")), multipage: true, pages: 2 },
+	// …and the property on every Layout × Paper size × Stationery, including
+	// shallow, deep and wide Safe areas (checkOnly: page count, no hash).
+	...STATIONERY_PREVIEW_STATIONERY.flatMap(([label, overrides]) => ALL_PAPERS.flatMap((paper) => LAYOUTS.map((key): Case => ({
+		...docCase(`stationery-preview-grid-${key}-${label}-${paper}`, sampleStationeryPreviewPayload(settingsFor({ ...overrides, pdf_layout: key, pdf_paper_size: paper }), currency, key)),
+		multipage: true,
+		pages: 2,
+		checkOnly: true
+	})))),
+
+	// The demo business's PDFs: an invoice on the bundled sample letterhead
+	// with the demo's own Safe area (one page, and one that runs on).
+	{ ...docCase("invoice-classic-demo-letterhead", invoice(demoSettings())), businessFolder: DEMO_FOLDER },
+	{ ...docCase("invoice-classic-demo-letterhead-multipage", invoice(demoSettings(), 30)), businessFolder: DEMO_FOLDER, multipage: true },
 
 	// Every template on the three non-A4 sheets. Built-in Layout margins scale
 	// with paper width; Pre-printed paper bands (letters included) do not.
@@ -614,7 +745,15 @@ const unnumbered = (c: Case): Case => ({
 	payload: { ...c.payload, page: { ...(c.payload.page as object), page_numbers: false } }
 });
 
-const allCases = cases.flatMap((c) => (c.multipage ? [c, unnumbered(c)] : [c]));
+const allCases = cases.flatMap((c) => (c.multipage && !c.checkOnly ? [c, unnumbered(c)] : [c]))
+	.filter((c) => ONLY === undefined || c.name.includes(ONLY));
+
+// Two cases with one name would share (and fight over) one baseline.
+const duplicateNames = allCases.map((c) => c.name).filter((name, i, all) => all.indexOf(name) !== i);
+if (duplicateNames.length) {
+	console.error(`✗ duplicate case names: ${[...new Set(duplicateNames)].join(", ")}`);
+	process.exit(1);
+}
 
 // --- render ----------------------------------------------------------------
 
@@ -631,6 +770,25 @@ interface Rendered {
 	pageNumbers: PageNumber[]
 }
 
+interface PageBlock {
+	background?: { ext: string, file?: string } | null
+	[key: string]: unknown
+}
+
+// Mirror stage_background() in src-tauri/src/pdf.rs: the page block names only
+// the artwork format; the file is <business folder>/stationery/background.<ext>.
+// Copy it beside the template as stationery-background.<ext> and add `file`;
+// a missing file renders without artwork (background null).
+const stageBackground = (page: PageBlock | undefined, folder: string, work: string): PageBlock | undefined => {
+	if (!page?.background) return page;
+	const { ext } = page.background;
+	const src = join(folder, "stationery", `background.${ext}`);
+	if (!/^[a-z0-9]{1,5}$/i.test(ext) || !existsSync(src)) return { ...page, background: null };
+	const file = `stationery-background.${ext}`;
+	copyFileSync(src, join(work, file));
+	return { ...page, background: { ...page.background, file } };
+};
+
 const render = (c: Case): Rendered => {
 	const work = mkdtempSync(join(tmpdir(), "sakoram-pdf-"));
 	try {
@@ -645,6 +803,7 @@ const render = (c: Case): Rendered => {
 		} else {
 			data.logo_file = null;
 		}
+		data.page = stageBackground(data.page as PageBlock | undefined, c.businessFolder ?? BUSINESS_FOLDER, work);
 		writeFileSync(join(work, "data.json"), JSON.stringify(data, null, 2));
 		copyFileSync(join(TEMPLATES, "common.typ"), join(work, "common.typ"));
 		copyFileSync(join(TEMPLATES, c.template), join(work, c.template));
@@ -704,6 +863,7 @@ const pageNumberProblem = (c: Case, r: Rendered): string | null => {
 			? `declared multipage but rendered ${pages} page — lengthen the fixture`
 			: `rendered ${pages} pages — mark the case \`multipage: true\``;
 	}
+	if (c.pages !== undefined && pages !== c.pages) return `rendered ${pages} pages, must be exactly ${c.pages}`;
 	const numbered = (c.payload.page as { page_numbers?: boolean } | undefined)?.page_numbers === true;
 	const expected = numbered && pages > 1
 		? Array.from({ length: pages }, (_, i) => ({ page: i + 1, total: pages }))
@@ -739,7 +899,32 @@ const identityProblem = (c: Case, r: Rendered): string | null => {
 	return null;
 };
 
+// The statement asks for a landscape sheet; page-setup grants it on Built-in
+// only (page.allow_landscape). Under any other Stationery the paper or artwork
+// is portrait, so every page must be too. Read from the PDF's own MediaBoxes.
+const orientationProblem = (c: Case, r: Rendered): string | null => {
+	if (c.template !== "statement.typ") return null;
+	const landscape = (c.payload.page as { allow_landscape?: boolean } | undefined)?.allow_landscape === true;
+	const boxes = [...r.pdf.toString("latin1").matchAll(/\/MediaBox\s*\[\s*[\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)\s*\]/g)];
+	if (!boxes.length) return "no /MediaBox found — can't check the orientation";
+	const wrong = boxes.filter(([, w, h]) => (Number(w) > Number(h)) !== landscape);
+	return wrong.length ? `${wrong.length} page(s) are ${landscape ? "portrait" : "landscape"}; this Stationery wants ${landscape ? "landscape" : "portrait"}` : null;
+};
+
 const sha256 = (buf: Buffer) => createHash("sha256").update(buf).digest("hex");
+
+// A case with Full-page background artwork on disk must actually show it: the
+// same document with the artwork taken out has to render differently. (A hash
+// alone would happily bless a render where the artwork silently went missing.)
+const hasArtwork = (c: Case) => {
+	const bg = (c.payload.page as PageBlock | undefined)?.background;
+	return Boolean(bg && existsSync(join(c.businessFolder ?? BUSINESS_FOLDER, "stationery", `background.${bg.ext}`)));
+};
+const artworkProblem = (c: Case, hash: string): string | null => {
+	if (!hasArtwork(c)) return null;
+	const without = { ...c, name: `${c.name}~no-artwork`, payload: { ...c.payload, page: { ...(c.payload.page as object), background: null } } };
+	return sha256(render(without).pdf) === hash ? "the background artwork did not change the page — is page-setup drawing it?" : null;
+};
 
 interface Baselines {
 	typst: string
@@ -778,10 +963,18 @@ for (const c of allCases) {
 	if (KEEP_DIR) writeFileSync(join(KEEP_DIR, `${c.name}.pdf`), pdf);
 
 	// Checked in both modes: --update must not bless a wrong page count.
-	const problem = pageNumberProblem(c, rendered) ?? identityProblem(c, rendered);
+	const problem = pageNumberProblem(c, rendered) ?? identityProblem(c, rendered) ?? orientationProblem(c, rendered) ?? artworkProblem(c, hash)
+		// (Under --only the other case may simply not have rendered.)
+		?? (c.sameAs && (ONLY === undefined || c.sameAs in hashes) && hashes[c.sameAs] !== hash ? `should render exactly like ${c.sameAs}` : null);
 	if (problem) {
 		console.error(`✗ ${c.name} (${c.template}): ${problem}`);
 		failures++;
+		continue;
+	}
+
+	if (c.checkOnly) {
+		delete hashes[c.name];
+		console.log(`✓ ${c.name}  (checks only)`);
 		continue;
 	}
 
@@ -809,7 +1002,7 @@ for (const c of allCases) {
 	}
 }
 
-if (!UPDATE) {
+if (!UPDATE && ONLY === undefined) {
 	for (const name of Object.keys(stored!.hashes)) {
 		if (!(name in hashes) && !allCases.some((c) => c.name === name)) {
 			console.error(`✗ stale baseline with no matching case: ${name}`);
