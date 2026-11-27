@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { backgroundFormatOf, backgroundMimeOf, backgroundPixelSize, downscaleSize, isRasterBackground, matchesPaperAspect, svgHasLiveText } from "./stationery-artwork";
+import { backgroundFormatOf, backgroundMimeOf, backgroundPixelSize, downscaleSize, isRasterBackground, matchesPaperAspect, svgAspect, svgHasLiveText } from "./stationery-artwork";
 
 describe("backgroundPixelSize", () => {
 	// About 300 DPI at the paper size — the spec's 2480 × 3508 for A4.
@@ -110,5 +110,32 @@ describe("backgroundMimeOf", () => {
 describe("isRasterBackground", () => {
 	it("is true for PNG and JPEG, which are cropped and downscaled; false for SVG and PDF, which stay vector", () => {
 		expect(["png", "jpg", "svg", "pdf"].map((e) => isRasterBackground(e as never))).toEqual([true, true, false, false]);
+	});
+});
+
+describe("svgAspect", () => {
+	it("reads the proportions from the root element's width and height", () => {
+		expect(svgAspect('<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="30mm" viewBox="0 0 10 10"/>')).toBe(7);
+		expect(svgAspect("<svg width='400' height='100'></svg>")).toBe(4);
+	});
+
+	it("converts mixed units", () => {
+		expect(svgAspect('<svg width="1in" height="25.4mm"/>')).toBeCloseTo(1);
+		expect(svgAspect('<svg width="72pt" height="96px"/>')).toBeCloseTo(1);
+	});
+
+	it("falls back to the viewBox when the size is missing or relative", () => {
+		expect(svgAspect('<svg viewBox="0 0 210 15"/>')).toBe(14);
+		expect(svgAspect('<svg width="100%" height="100%" viewBox="0,0,300,100"/>')).toBe(3);
+	});
+
+	it("skips a leading XML declaration and comments", () => {
+		expect(svgAspect('<?xml version="1.0"?><!-- <svg width="1" height="9"/> --><svg viewBox="0 0 20 10"/>')).toBe(2);
+	});
+
+	it("gives null when nothing says how big it is", () => {
+		expect(svgAspect("<svg/>")).toBeNull();
+		expect(svgAspect('<svg viewBox="0 0 0 10"/>')).toBeNull();
+		expect(svgAspect("not an svg")).toBeNull();
 	});
 });

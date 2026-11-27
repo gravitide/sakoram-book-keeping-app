@@ -83,3 +83,31 @@ export function backgroundMimeOf(ext: string): string {
 export function isRasterBackground(ext: BackgroundExt): boolean {
 	return ext === "png" || ext === "jpg";
 }
+
+// CSS absolute units in px (96 per inch), for an SVG sized in mixed units.
+const SVG_UNIT_PX: Record<string, number> = { "": 1, "px": 1, "in": 96, "cm": 96 / 2.54, "mm": 96 / 25.4, "pt": 96 / 72, "pc": 16 };
+
+const svgLength = (value: string | undefined): number | null => {
+	const m = value?.trim().match(/^([\d.]+)\s*([a-z]*)$/i);
+	const unit = m ? SVG_UNIT_PX[m[2]!.toLowerCase()] : undefined;
+	const n = m ? Number(m[1]) : Number.NaN;
+	return unit !== undefined && Number.isFinite(n) && n > 0 ? n * unit : null;
+};
+
+/**
+ * An SVG's width / height, read from its root element: the `width` and
+ * `height` attributes when both are absolute lengths, otherwise the
+ * `viewBox`. null when neither says (a Header & footer image then falls back
+ * to the size the browser decodes it at).
+ */
+export function svgAspect(svg: string): number | null {
+	const root = svg.replace(/<!--[\s\S]*?-->/g, "").match(/<svg\b[^>]*>/i)?.[0];
+	if (!root) return null;
+	const attr = (name: string) => root.match(new RegExp(`\\s${name}\\s*=\\s*["']([^"']*)["']`, "i"))?.[1];
+	const w = svgLength(attr("width"));
+	const h = svgLength(attr("height"));
+	if (w && h) return w / h;
+	const box = attr("viewBox")?.trim().split(/[\s,]+/).map(Number);
+	if (box?.length === 4 && box[2]! > 0 && box[3]! > 0) return box[2]! / box[3]!;
+	return null;
+}
