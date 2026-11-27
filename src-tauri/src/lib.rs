@@ -90,6 +90,7 @@ pub fn run() {
 			pdf::export_statement_pdf,
 			pdf::export_letter_pdf,
 			pdf::render_stationery_artwork_png,
+			pdf::render_document_page_png,
 			pdf::copy_file,
 			pdf::open_path,
 			tenants::list_tenants,

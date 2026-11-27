@@ -112,7 +112,7 @@ async fn render_pdf(
 	app: &AppHandle,
 	template_name: &str,
 	template_src: &str,
-	mut data: Value,
+	data: Value,
 	output_path: PathBuf,
 	protect_password: Option<String>,
 	// Additional files written into the work dir before compiling — e.g. a
@@ -120,14 +120,66 @@ async fn render_pdf(
 	// that need no companions (voucher / payslip / report / statement).
 	extra_files: &[(&str, &str)],
 ) -> Result<(), PdfError> {
-	debug_assert!(template_name.ends_with(".typ"));
-
 	// 1. Working directory under app local data.
 	let work_dir = app
 		.path()
 		.app_local_data_dir()?
 		.join("pdf-work");
-	std::fs::create_dir_all(&work_dir)?;
+	let business_folder = crate::tenants::active_folder(app).ok().flatten();
+	let template_path = stage_render(&work_dir, business_folder.as_deref(), template_name, template_src, data, extra_files)?;
+
+	// 5. Invoke the typst sidecar.
+	let (work_dir_str, fonts_dir_str) = (path_str(&work_dir)?, fonts_dir(app)?);
+	let (template_str, output_str) = (path_str(&template_path)?, path_str(&output_path)?);
+	run_typst(app, &[
+		"compile",
+		"--root",
+		&work_dir_str,
+		"--font-path",
+		&fonts_dir_str,
+		&template_str,
+		&output_str,
+	])
+	.await?;
+
+	// 6. Optional owner-password encryption. A blank/whitespace password
+	//    is treated as "no protection" — the JS side only sends one when
+	//    the document type's toggle is on and a password is configured.
+	if let Some(pw) = protect_password {
+		if !pw.trim().is_empty() {
+			encrypt_pdf(&output_path, &pw)?;
+		}
+	}
+
+	Ok(())
+}
+
+/// A path as the UTF-8 string the Typst CLI is handed.
+fn path_str(p: &Path) -> Result<String, PdfError> {
+	p.to_str().map(str::to_string).ok_or_else(|| PdfError::Typst("non-UTF-8 path in app data dir".into()))
+}
+
+/// The bundled fonts dir. In dev this is src-tauri/fonts; in production it
+/// lands inside the .app/.exe resource dir. Either way Typst gets it via
+/// --font-path, so the bundled faces render regardless of what's installed.
+fn fonts_dir(app: &AppHandle) -> Result<String, PdfError> {
+	path_str(&app.path().resource_dir()?.join("fonts"))
+}
+
+/// Stage one render in `work_dir`: the logo, the Stationery artwork from
+/// `business_folder`, `data.json`, any companion files (common.typ) and the
+/// template itself. Returns the template's path. Shared by every PDF render
+/// and the Settings page's live page preview, so both see the same inputs.
+pub(crate) fn stage_render(
+	work_dir: &Path,
+	business_folder: Option<&Path>,
+	template_name: &str,
+	template_src: &str,
+	mut data: Value,
+	extra_files: &[(&str, &str)],
+) -> Result<PathBuf, PdfError> {
+	debug_assert!(template_name.ends_with(".typ"));
+	std::fs::create_dir_all(work_dir)?;
 
 	// 2. Copy the logo (if any) into the work dir so we can reference it
 	//    by a path relative to --root. The frontend sends the absolute
@@ -159,15 +211,13 @@ async fn render_pdf(
 	// 2b. Full-page background artwork (if the page block asks for one) from
 	//     the OPEN business's folder. The DB stores only its format, never a
 	//     path, so a moved folder needs no rewrite.
-	let business_folder = crate::tenants::active_folder(app).ok().flatten();
-	stage_background(&mut data, business_folder.as_deref(), &work_dir)?;
+	stage_background(&mut data, business_folder, work_dir)?;
 	// 2c. Header & footer images, the same way (stationery/header.<ext>,
 	//     stationery/footer.<ext>).
-	stage_header_footer(&mut data, business_folder.as_deref(), &work_dir)?;
+	stage_header_footer(&mut data, business_folder, work_dir)?;
 
 	// 3. Write data.json
-	let data_path = work_dir.join("data.json");
-	std::fs::write(&data_path, serde_json::to_vec_pretty(&data)?)?;
+	std::fs::write(work_dir.join("data.json"), serde_json::to_vec_pretty(&data)?)?;
 
 	// 4. Write any companion files (e.g. common.typ) the template imports,
 	//    then the template itself (overwrite each render so edits pick up).
@@ -176,52 +226,7 @@ async fn render_pdf(
 	}
 	let template_path = work_dir.join(template_name);
 	std::fs::write(&template_path, template_src)?;
-
-	// 5. Resolve the bundled fonts dir. In dev this is src-tauri/fonts; in
-	//    production it lands inside the .app/.exe resource dir. Either way
-	//    we hand the absolute path to typst via --font-path so it can
-	//    discover Miriam Libre regardless of what's on the user's system.
-	let fonts_dir = app.path().resource_dir()?.join("fonts");
-	let fonts_dir_str = fonts_dir
-		.to_str()
-		.ok_or_else(|| PdfError::Typst("non-UTF-8 fonts path".into()))?
-		.to_string();
-
-	// 6. Invoke the typst sidecar.
-	let work_dir_str = work_dir
-		.to_str()
-		.ok_or_else(|| PdfError::Typst("non-UTF-8 path in app data dir".into()))?
-		.to_string();
-	let template_str = template_path
-		.to_str()
-		.ok_or_else(|| PdfError::Typst("non-UTF-8 template path".into()))?
-		.to_string();
-	let output_str = output_path
-		.to_str()
-		.ok_or_else(|| PdfError::Typst("non-UTF-8 output path".into()))?
-		.to_string();
-
-	run_typst(app, &[
-		"compile",
-		"--root",
-		&work_dir_str,
-		"--font-path",
-		&fonts_dir_str,
-		&template_str,
-		&output_str,
-	])
-	.await?;
-
-	// 7. Optional owner-password encryption. A blank/whitespace password
-	//    is treated as "no protection" — the JS side only sends one when
-	//    the document type's toggle is on and a password is configured.
-	if let Some(pw) = protect_password {
-		if !pw.trim().is_empty() {
-			encrypt_pdf(&output_path, &pw)?;
-		}
-	}
-
-	Ok(())
+	Ok(template_path)
 }
 
 /// Stage a Full-page background for Typst. The payload's `page.background` is
@@ -561,9 +566,37 @@ pub async fn render_stationery_artwork_png(app: AppHandle, ppi: u32, artwork: Op
 	Ok(std::fs::read(&output)?)
 }
 
+/// A fresh work dir for one page-preview render, so overlapping renders (the
+/// Settings page re-renders as the user edits) never share files.
+fn page_preview_dir(base: &Path) -> PathBuf {
+	base.join("pdf-work").join("page-preview").join(uuid::Uuid::new_v4().to_string())
+}
+
+/// PNG bytes of page 1 of a quote / invoice / bill payload, rendered exactly
+/// as its PDF would be (same Layout template, staging and Stationery artwork
+/// from the open business's folder) — the live preview on /settings/pdf,
+/// built from the unsaved form. `ppi` is clamped to 20–150.
+#[tauri::command]
+pub async fn render_document_page_png(app: AppHandle, data: Value, ppi: u32) -> Result<Vec<u8>, PdfError> {
+	let (name, src) = layout_template(data.get("layout").and_then(|v| v.as_str()));
+	let work_dir = page_preview_dir(&app.path().app_local_data_dir()?);
+	let folder = crate::tenants::active_folder(&app).ok().flatten();
+	let result = async {
+		let template = stage_render(&work_dir, folder.as_deref(), name, src, data, &[("common.typ", COMMON_TEMPLATE)])?;
+		let output = work_dir.join("page.png");
+		let (root, fonts, template, out) = (path_str(&work_dir)?, fonts_dir(&app)?, path_str(&template)?, path_str(&output)?);
+		let ppi = ppi.clamp(20, 150).to_string();
+		run_typst(&app, &["compile", "--root", &root, "--font-path", &fonts, "--format", "png", "--pages", "1", "--ppi", &ppi, &template, &out]).await?;
+		Ok(std::fs::read(&output)?)
+	}
+	.await;
+	let _ = std::fs::remove_dir_all(&work_dir);
+	result
+}
+
 #[cfg(test)]
 mod tests {
-	use super::{layout_template, stage_artwork_preview, stage_background, stage_header_footer};
+	use super::{layout_template, page_preview_dir, stage_artwork_preview, stage_background, stage_header_footer, stage_render};
 	use serde_json::json;
 	use std::path::PathBuf;
 
@@ -720,6 +753,44 @@ mod tests {
 		let mut none = json!({ "page": { "header_footer": { "header": { "ext": "svg" }, "footer": null } } });
 		stage_header_footer(&mut none, None, &work).unwrap();
 		assert!(none["page"]["header_footer"]["header"].is_null());
+	}
+
+	#[test]
+	fn a_render_is_staged_with_its_logo_artwork_data_and_companions() {
+		let folder = folder_with_background("render", "svg", b"<svg/>");
+		let logo = folder.join("pdf-header.png");
+		std::fs::write(&logo, b"PNG").unwrap();
+		let work = temp_dir("render-work").join("nested");
+		let data = json!({
+			"layout": "classic",
+			"logo_path": logo.to_str().unwrap(),
+			"page": { "stationery": "background", "background": { "ext": "svg" } }
+		});
+		let template = stage_render(&work, Some(&folder), "doc-classic.typ", "// doc", data, &[("common.typ", "// common")]).unwrap();
+		assert_eq!(template, work.join("doc-classic.typ"));
+		assert_eq!(std::fs::read_to_string(&template).unwrap(), "// doc");
+		assert_eq!(std::fs::read_to_string(work.join("common.typ")).unwrap(), "// common");
+		assert_eq!(std::fs::read(work.join("logo.png")).unwrap(), b"PNG");
+		assert_eq!(std::fs::read(work.join("stationery-background.svg")).unwrap(), b"<svg/>");
+		let staged: serde_json::Value = serde_json::from_slice(&std::fs::read(work.join("data.json")).unwrap()).unwrap();
+		assert_eq!(staged["logo_file"], "logo.png");
+		assert_eq!(staged["page"]["background"]["file"], "stationery-background.svg");
+	}
+
+	#[test]
+	fn a_render_without_a_logo_tells_typst_so() {
+		let work = temp_dir("render-nologo");
+		stage_render(&work, None, "doc-classic.typ", "", json!({ "logo_path": "Z:/no/such/logo.png" }), &[]).unwrap();
+		let staged: serde_json::Value = serde_json::from_slice(&std::fs::read(work.join("data.json")).unwrap()).unwrap();
+		assert!(staged["logo_file"].is_null());
+	}
+
+	#[test]
+	fn every_page_preview_gets_its_own_work_dir() {
+		let base = temp_dir("page-preview");
+		let (a, b) = (page_preview_dir(&base), page_preview_dir(&base));
+		assert_ne!(a, b);
+		assert!(a.starts_with(base.join("pdf-work").join("page-preview")));
 	}
 
 	#[test]
