@@ -26,11 +26,16 @@
 // rule. Templates read `data.page.chrome` rather than the mode, so a new mode
 // doesn't have to touch every template.
 //
+// The Layout is decided here too (`buildLayoutAndPage`): a Built-in choice
+// only, Classic under every other Stationery (ADR 0001 amendment).
+//
 // Pure, store-free, relative imports only: vitest and the render-check script
 // (scripts/verify-pdf-render.ts) both import it.
 
+import type { PdfLayoutKey } from "./pdf-layouts";
 import type { ArtworkExt, HeaderFooterImage, HeaderFooterPair, StationeryMarginsMm, StationeryMode } from "./stationery";
 import type { CompanySettingsRow } from "~/stores/settings";
+import { resolveLayoutKey } from "./pdf-layouts";
 import { parseStationery, resolveStationeryMode } from "./stationery";
 import { headerFooterMargins } from "./stationery-geometry";
 
@@ -184,6 +189,24 @@ const backgroundFor = (mode: StationeryMode, settings: PageSettingsSource | null
 	const { ext } = parseStationery(settings?.pdf_stationery).background;
 	return ext ? { ext } : null;
 };
+
+/**
+ * `layout` + `page` for a document payload, decided together — the ONE place
+ * the Layout rule lives (ADR 0001 amendment): the business's own Layout under
+ * Built-in stationery, Classic under every other mode (and for a letter on
+ * pre-printed paper), because the artwork or the printed paper is the design.
+ * The stored Layout is never touched, so switching back to Built-in restores
+ * it. `layout` defaults to the stored one; the settings page passes its
+ * unsaved pick. Every builder whose template reads `data.layout` uses this.
+ */
+export function buildLayoutAndPage(
+	settings: (PageSettingsSource & Partial<Pick<CompanySettingsRow, "pdf_layout">>) | null,
+	override?: PageSettingsOverride,
+	layout: string | null | undefined = settings?.pdf_layout
+): { layout: PdfLayoutKey, page: PageSettings } {
+	const page = buildPageSettings(settings, override);
+	return { layout: page.stationery === "builtin" ? resolveLayoutKey(layout) : "classic", page };
+}
 
 export function buildPageSettings(settings: PageSettingsSource | null, override?: PageSettingsOverride): PageSettings {
 	const paper = resolvePaperSize(settings?.pdf_paper_size);

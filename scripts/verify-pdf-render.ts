@@ -692,11 +692,14 @@ const cases: Case[] = [
 	// bespoke templates keep their own content. The Stationery's bands
 	// (48 / 24 mm, sides 16) bound the Safe area, and "Page N of M" sits inside
 	// it, at its bottom edge.
-	// The bands take 77 mm of A4, so Classic and Minimal spill onto page 2.
-	...LAYOUTS.map((key): Case => {
-		const c = docCase(`invoice-${key}-preprinted`, invoice(settingsFor({ ...preprintedPaper, pdf_layout: key })));
-		return key === "classic" || key === "minimal" ? { ...c, multipage: true } : c;
-	}),
+	// The bands take 77 mm of A4, so the invoice spills onto page 2.
+	// Layout is a Built-in choice only (ADR 0001 amendment): whatever Layout is
+	// stored, every other Stationery renders Classic, byte for byte.
+	...LAYOUTS.map((key): Case => ({
+		...docCase(`invoice-${key}-preprinted`, invoice(settingsFor({ ...preprintedPaper, pdf_layout: key }))),
+		multipage: true,
+		...(key === "classic" ? {} : { sameAs: "invoice-classic-preprinted" })
+	})),
 	{ ...docCase("invoice-classic-preprinted-custom-chrome", invoice(settingsFor({ ...preprintedPaper, ...customChrome }))), multipage: true },
 	{ ...docCase("invoice-classic-preprinted-multipage", invoice(settingsFor({ ...preprintedPaper }), 30)), multipage: true },
 	{ ...docCase("invoice-compact-preprinted-multipage", invoice(settingsFor({ ...preprintedPaper, ...customChrome, pdf_layout: "compact" }), 40)), multipage: true },
@@ -726,11 +729,11 @@ const cases: Case[] = [
 	// behind every page. As on Pre-printed paper the business's logo, header
 	// text and footer are set (customChrome) and must all be dropped: the
 	// artwork IS the identity. Margins 44 / 22, sides 20.
-	// Minimal is the airiest Layout and spills onto page 2.
-	...LAYOUTS.map((key): Case => {
-		const c = docCase(`invoice-${key}-background`, invoice(settingsFor({ ...fullPageBackground(), ...customChrome, pdf_layout: key })));
-		return key === "minimal" ? { ...c, multipage: true } : c;
-	}),
+	// Every stored Layout renders Classic here (ADR 0001 amendment).
+	...LAYOUTS.map((key): Case => ({
+		...docCase(`invoice-${key}-background`, invoice(settingsFor({ ...fullPageBackground(), ...customChrome, pdf_layout: key }))),
+		...(key === "classic" ? {} : { sameAs: "invoice-classic-background" })
+	})),
 	// Each upload format. The PDF fixture's second page is solid red: a
 	// background is the first page only, so red must never appear.
 	docCase("invoice-classic-background-png", invoice(settingsFor({ ...fullPageBackground("png") }))),
@@ -748,7 +751,7 @@ const cases: Case[] = [
 	docCase("quote-classic-background", buildQuotePdfPayload({ row: docRow as never, lines: docLines(3), settings: settingsFor({ ...fullPageBackground() }), currency })),
 	docCase("bill-classic-background", buildBillPdfPayload({ row: docRow as never, lines: docLines(2) as never, settings: settingsFor({ ...fullPageBackground("png") }), currency, paidCents: 2000000 })),
 	docCase("sample-classic-background", sampleInvoicePayload(settingsFor({ ...fullPageBackground() }), currency, "classic")),
-	...LAYOUTS.map((key): Case => ({ name: `payslip-${key}-background`, template: "payslip.typ", payload: payslip(settingsFor({ ...fullPageBackground(), ...customChrome, pdf_layout: key })) })),
+	...LAYOUTS.map((key): Case => ({ name: `payslip-${key}-background`, template: "payslip.typ", payload: payslip(settingsFor({ ...fullPageBackground(), ...customChrome, pdf_layout: key })), ...(key === "classic" ? {} : { sameAs: "payslip-classic-background" }) })),
 	// The bespoke templates (their own page-setup call, not doc-header) with
 	// raster and PDF artwork too, not only SVG.
 	{ name: "payslip-classic-background-png", template: "payslip.typ", payload: payslip(settingsFor({ ...fullPageBackground("png") })) },
@@ -772,7 +775,8 @@ const cases: Case[] = [
 	// and footer image on every page at their stored place and the content
 	// kept out of their bands. The business's own logo, header text and
 	// footer are set (customChrome) and must all be dropped.
-	...LAYOUTS.map((key) => docCase(`invoice-${key}-header-footer`, invoice(settingsFor({ ...headerFooterImages(), ...customChrome, pdf_layout: key })))),
+	// Every stored Layout renders Classic here (ADR 0001 amendment).
+	...LAYOUTS.map((key): Case => ({ ...docCase(`invoice-${key}-header-footer`, invoice(settingsFor({ ...headerFooterImages(), ...customChrome, pdf_layout: key }))), ...(key === "classic" ? {} : { sameAs: "invoice-classic-header-footer" }) })),
 	// Raster header, PDF footer (whose red second page must never show).
 	docCase("invoice-classic-header-footer-raster", invoice(settingsFor({ ...headerFooterImages("png", "pdf") }))),
 	// Both images repeat on every page.
@@ -802,7 +806,7 @@ const cases: Case[] = [
 	{ name: "statement-header-footer-refit-a5", template: "statement.typ", payload: statement(settingsFor({ ...refitted(headerFooterImages(), "a5") })), multipage: true },
 	docCase("quote-classic-header-footer", buildQuotePdfPayload({ row: docRow as never, lines: docLines(3), settings: settingsFor({ ...headerFooterImages() }), currency })),
 	docCase("bill-classic-header-footer", buildBillPdfPayload({ row: docRow as never, lines: docLines(2) as never, settings: settingsFor({ ...headerFooterImages("png", "pdf") }), currency, paidCents: 2000000 })),
-	...LAYOUTS.map((key): Case => ({ name: `payslip-${key}-header-footer`, template: "payslip.typ", payload: payslip(settingsFor({ ...headerFooterImages(), ...customChrome, pdf_layout: key })) })),
+	...LAYOUTS.map((key): Case => ({ name: `payslip-${key}-header-footer`, template: "payslip.typ", payload: payslip(settingsFor({ ...headerFooterImages(), ...customChrome, pdf_layout: key })), ...(key === "classic" ? {} : { sameAs: "payslip-classic-header-footer" }) })),
 	{ name: "voucher-header-footer", template: "voucher.typ", payload: voucher(settingsFor({ ...headerFooterImages(), ...customChrome })) },
 	{ name: "voucher-header-footer-raster", template: "voucher.typ", payload: voucher(settingsFor({ ...headerFooterImages("png", "pdf") })) },
 	{ name: "report-pnl-header-footer", template: "report.typ", payload: pnl(settingsFor({ ...headerFooterImages(), ...customChrome })), multipage: true },
@@ -861,7 +865,9 @@ const cases: Case[] = [
 const unnumbered = (c: Case): Case => ({
 	...c,
 	name: `${c.name}~unnumbered`,
-	payload: { ...c.payload, page: { ...(c.payload.page as object), page_numbers: false } }
+	payload: { ...c.payload, page: { ...(c.payload.page as object), page_numbers: false } },
+	// A twin matches its counterpart's twin, not the numbered render.
+	...(c.sameAs ? { sameAs: `${c.sameAs}~unnumbered` } : {})
 });
 
 const allCases = cases.flatMap((c) => (c.multipage && !c.checkOnly ? [c, unnumbered(c)] : [c]))

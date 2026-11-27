@@ -9,9 +9,8 @@ import type { InvoiceLineRow, InvoiceRow } from "~/stores/invoices";
 import type { BankSnapshot, ClientSnapshot } from "~/stores/quotes";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { formatLKR, formatQty, formatRate } from "./money";
-import { buildPageSettings } from "./page-settings";
+import { buildLayoutAndPage } from "./page-settings";
 import { buildFooterBlocks, buildHeaderBlocks } from "./pdf-chrome";
-import { resolveLayoutKey } from "./pdf-layouts";
 import { richTextToBlocks } from "./rich-text";
 import { pdfThemeHex } from "./theme";
 
@@ -67,8 +66,7 @@ export const buildInvoicePdfPayload = ({ row: inv, lines, settings, currency, pa
 		kind: "invoice",
 		number: inv.number,
 		title,
-		layout: resolveLayoutKey(settings?.pdf_layout),
-		page: buildPageSettings(settings),
+		...buildLayoutAndPage(settings),
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,
