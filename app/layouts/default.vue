@@ -394,11 +394,9 @@
 	// compile time, no runtime fetch). Wide PNG, rendered in the About modal.
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import { useHelpWindow } from "~/composables/useHelpWindow";
-	import { usePdfSettingsMode } from "~/composables/usePdfSettingsMode";
 	import { applyPrimaryColor } from "~/lib/color-ramp";
 	import { FONT_LICENCE_NAME, FONT_LICENCE_URL, FONT_LICENCES } from "~/lib/font-licences";
 	import { pdfSettingsSections } from "~/lib/pdf-settings-sections";
-	import { resolveStationeryMode } from "~/lib/stationery";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
 
@@ -619,9 +617,6 @@
 	interface NavChild { to: string, label: string, icon: string, sections?: NavSection[] | (() => NavSection[]) }
 	interface NavItem { to?: string, key?: string, label: string, icon?: string, divider?: boolean, children?: NavChild[], action?: () => void, heading?: boolean }
 
-	// /settings/pdf's live Stationery mode (its middle anchor is named after it).
-	const pdfMode = usePdfSettingsMode();
-
 	const nav: NavItem[] = [
 		{ to: "/", label: "Dashboard", icon: "i-lucide-layout-dashboard" },
 		{ to: "/calendar", label: "Calendar", icon: "i-lucide-calendar-days" },
@@ -729,10 +724,8 @@
 					to: "/settings/pdf",
 					label: "PDF",
 					icon: "i-lucide-file-text",
-					// The page's three sections: Page, the picked Stationery mode's
-					// options (named after it — the page shares its live, maybe
-					// unsaved pick; the saved one until it has mounted), Font.
-					sections: () => pdfSettingsSections(pdfMode.value ?? resolveStationeryMode(settings.settings?.pdf_stationery_mode))
+					// The page's three sections: Page, Design, Font.
+					sections: pdfSettingsSections()
 				},
 				{
 					to: "/settings/letters",

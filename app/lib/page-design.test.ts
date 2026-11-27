@@ -1,6 +1,6 @@
 import type { DesignItem, PageDesign } from "./page-design";
 import { describe, expect, it } from "vitest";
-import { formatMm, ITEM_ID_PATTERN, itemOnPage, newItemId, parsePageDesign, scaleDesign } from "./page-design";
+import { formatMm, imageFileIds, ITEM_ID_PATTERN, itemOnPage, newItemId, parsePageDesign, scaleDesign, withLogoSlots } from "./page-design";
 import { PAPER_SIZES, resolvePaperSize } from "./paper-sizes";
 
 const STYLE = { font: "Akt", size: 10, bold: false, italic: false, color: "#111827", align: "left" } as const;
@@ -105,5 +105,28 @@ describe("formatMm", () => {
 		expect(formatMm(18)).toBe("18");
 		expect(formatMm(20.26)).toBe("20.3");
 		expect(formatMm(60.452)).toBe("60.5");
+	});
+});
+
+describe("withLogoSlots", () => {
+	it("turns the company-logo spot into a copied file of that format", () => {
+		const d = withLogoSlots(A4_DESIGN, "png");
+		expect(d.items[0]).toMatchObject({ id: "logo00000001", src: { kind: "file", ext: "png" } });
+		expect(d.items.slice(1)).toEqual(A4_DESIGN.items.slice(1));
+	});
+
+	it("leaves an empty slot when the business has no logo", () => {
+		expect(withLogoSlots(A4_DESIGN, null).items[0]).toMatchObject({ id: "logo00000001", src: null });
+	});
+});
+
+describe("imageFileIds", () => {
+	it("lists the items whose image is a file in the business folder", () => {
+		expect(imageFileIds(A4_DESIGN)).toEqual(["bgimage00001"]);
+		expect(imageFileIds(withLogoSlots(A4_DESIGN, "svg"))).toEqual(["logo00000001", "bgimage00001"]);
+	});
+
+	it("is empty without a design", () => {
+		expect(imageFileIds(null)).toEqual([]);
 	});
 });

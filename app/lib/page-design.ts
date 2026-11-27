@@ -150,3 +150,21 @@ export function itemOnPage(rule: PagesRule, page: number): boolean {
 
 /** Millimetres for display: a tenth at most, no trailing ".0". */
 export const formatMm = (mm: number): string => String(Math.round(mm * 10) / 10);
+
+/**
+ * A template's company-logo spots, once the logo has been copied in as a file
+ * of format `logoExt` (under each spot's own item id) — or emptied when the
+ * business has no logo.
+ */
+export function withLogoSlots(design: PageDesign, logoExt: ImageExt | null): PageDesign {
+	const items = design.items.map((item): DesignItem => {
+		if (item.type !== "image" || item.src?.kind !== "company_logo") return item;
+		return { ...item, src: logoExt ? { kind: "file", ext: logoExt } : null };
+	});
+	return { ...design, items };
+}
+
+/** The ids of the items whose image is a file in the business folder (stationery/item-<id>.<ext>). */
+export function imageFileIds(design: PageDesign | null): string[] {
+	return (design?.items ?? []).filter((i) => i.type === "image" && i.src?.kind === "file").map((i) => i.id);
+}

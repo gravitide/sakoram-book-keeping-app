@@ -13,12 +13,17 @@
 // Pure, store-free, relative imports only; the canvas work lives in
 // useRasterArtwork and the cards.
 
+import type { ImageExt as ArtworkExt } from "./page-design";
 import type { PaperSize } from "./page-settings";
-import type { ArtworkExt } from "./stationery";
 import { resolvePaperSize } from "./page-settings";
 
 const DPI = 300;
 const MM_PER_INCH = 25.4;
+
+/** PNG and JPEG: cropped and downscaled on upload. SVG and PDF stay vector. */
+export function isRasterArtwork(ext: ArtworkExt): boolean {
+	return ext === "png" || ext === "jpg";
+}
 
 export interface PixelSize {
 	w: number

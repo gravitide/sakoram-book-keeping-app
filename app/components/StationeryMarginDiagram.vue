@@ -41,10 +41,10 @@
 <script setup lang="ts">
 	// A compact picture of the Safe area's four margins (mm from each page
 	// edge), shown under "Adjust margins & placement" on /settings/pdf.
-	import type { StationeryMarginsMm } from "~/lib/stationery";
-	import { formatMm } from "~/lib/stationery-geometry";
+	import type { MarginsMm } from "~/lib/page-design";
+	import { formatMm } from "~/lib/page-design";
 
-	defineProps<{ margins: StationeryMarginsMm }>();
+	defineProps<{ margins: MarginsMm }>();
 
 	const mm = (value: number) => `${formatMm(value)} mm`;
 </script>
