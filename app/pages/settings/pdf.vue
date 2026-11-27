@@ -390,15 +390,19 @@
 								:locked="artworkLock"
 								@artwork="onBackgroundArtwork"
 							>
-								<StationeryAdjustRow
-									heading="Safe area"
-									description="The space kept clear between your content and each edge of the page."
-									label="Adjust margins &amp; placement"
-									:margins="activeStationeryMargins"
-									:attention="activeModeNeedsCheck"
-									@adjust="openEditor"
-								/>
-								<PdfColorRow v-model="form.pdf_theme_color" :hint="COLOR_HINT" />
+								<template #safe-area>
+									<StationeryAdjustRow
+										heading="Safe area"
+										description="The space kept clear between your content and each edge of the page."
+										label="Adjust margins &amp; placement"
+										:margins="activeStationeryMargins"
+										:attention="activeModeNeedsCheck"
+										@adjust="openEditor"
+									/>
+								</template>
+								<template #colour>
+									<PdfColorRow v-model="form.pdf_theme_color" :hint="COLOR_HINT" />
+								</template>
 							</StationeryBackgroundCard>
 
 							<StationeryHeaderFooterCard

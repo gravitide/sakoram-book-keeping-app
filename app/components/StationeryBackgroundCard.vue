@@ -4,141 +4,154 @@
 		title="Full-page background"
 		subtitle="One page-sized artwork drawn behind every page. SVG and PDF stay sharp at any size; PNG and JPEG are cropped to the paper at print resolution."
 	>
-		<!-- Two columns: the artwork on the paper (left), and everything you do
-			with it on the right — the file, then the Safe area and the colour
-			(the page's slot), as three labelled groups. Below md they stack. -->
-		<div class="grid grid-cols-1 md:grid-cols-[auto_minmax(0,1fr)] gap-x-8 gap-y-6 items-start">
-			<!-- The artwork, to scale on the paper. White in both themes: it
-				previews against the paper. Dashed only while it is an empty drop
-				target; with artwork in place it is just the sheet. -->
-			<div class="flex flex-col items-center gap-2 justify-self-center md:justify-self-start">
-				<div
-					class="relative w-44 rounded-md overflow-hidden bg-white transition"
-					:class="[
-						artwork.ext ? 'border' : 'border-2 border-dashed',
-						locked ? 'border-(--ui-border-accented) cursor-not-allowed opacity-60' : dragOver ? 'border-(--ui-primary) scale-[1.01] cursor-pointer' : 'border-(--ui-border-accented) hover:border-(--ui-primary)/60 cursor-pointer'
-					]"
-					:aria-disabled="locked ? true : undefined"
-					:style="{ aspectRatio: `${paperInfo.widthMm} / ${paperInfo.heightMm}` }"
-					role="button"
-					tabindex="0"
-					aria-label="Upload a full-page background"
-					@click="pick"
-					@keydown.enter.prevent="pick"
-					@keydown.space.prevent="pick"
-					@dragover.prevent="dragOver = !locked"
-					@dragenter.prevent="dragOver = !locked"
-					@dragleave.prevent="dragOver = false"
-					@drop.prevent="onDrop"
-				>
-					<input
-						ref="fileInput"
-						type="file"
-						accept=".svg,.pdf,.png,.jpg,.jpeg,image/svg+xml,application/pdf,image/png,image/jpeg"
-						class="hidden"
-						@change="onFileChange"
-					>
-					<img
-						v-if="artworkPreview.url.value"
-						:src="artworkPreview.url.value"
-						alt="Full-page background"
-						class="absolute inset-0 w-full h-full object-cover"
-					>
-					<div
-						v-else-if="artwork.ext === 'pdf'"
-						class="absolute inset-0 flex flex-col items-center justify-center gap-1 text-zinc-500"
-					>
-						<UIcon name="i-lucide-file-text" class="size-8" />
-						<span class="text-[11px]">PDF background (first page)</span>
-					</div>
-					<div
-						v-else
-						class="absolute inset-0 flex flex-col items-center justify-center gap-1 text-zinc-400 px-3 text-center"
-					>
-						<UIcon name="i-lucide-upload" class="size-6" />
-						<span class="text-[11px]">Drop an SVG, PDF, PNG or JPEG, or click to choose</span>
-					</div>
-					<div v-if="busy" class="absolute inset-0 bg-white/70 flex items-center justify-center">
-						<UIcon name="i-lucide-loader-circle" class="size-6 animate-spin text-zinc-500" />
-					</div>
-				</div>
-				<div class="text-[11px] text-(--ui-text-muted)">
-					{{ paperInfo.label }}
-				</div>
-			</div>
-
-			<div class="flex flex-col gap-6 min-w-0">
-				<div class="space-y-3">
-					<div class="text-sm font-medium">
+		<!-- Three inset panels, like the Header & footer images card: the artwork
+			(sheet + its buttons) on the left, then the Safe area and the colour
+			(the page's named slots) on the right. Below md the panels stack. -->
+		<div class="grid grid-cols-1 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-3 items-start">
+			<section :class="PANEL" aria-labelledby="bg-artwork-heading">
+				<div class="flex flex-wrap items-baseline gap-x-2 mb-3">
+					<h3 id="bg-artwork-heading" class="text-sm font-medium">
 						Artwork
-					</div>
-					<div class="flex flex-wrap gap-2">
-						<UButton
-							icon="i-lucide-upload"
-							size="sm"
-							variant="soft"
-							:loading="busy"
-							:disabled="!!locked"
-							@click="pick"
-						>
-							{{ artwork.ext ? "Replace" : "Upload" }}
-						</UButton>
-						<UButton
-							v-if="canRecrop"
-							icon="i-lucide-crop"
-							size="sm"
-							variant="soft"
-							:color="review?.recrop ? 'warning' : 'neutral'"
-							:disabled="busy || !!locked"
-							@click="openRecrop"
-						>
-							Re-crop
-						</UButton>
-						<UButton
-							v-if="artwork.ext"
-							icon="i-lucide-trash-2"
-							size="sm"
-							variant="soft"
-							color="error"
-							:disabled="busy || !!locked"
-							@click="remove"
-						>
-							Remove
-						</UButton>
-					</div>
-
-					<p v-if="locked" class="text-xs text-(--ui-warning)">
-						{{ locked }} The background saves the moment it changes, for the paper it was made for.
-					</p>
-					<p v-if="!artwork.ext" class="text-xs text-(--ui-text-muted)">
-						No background yet — documents print with blank margins until you upload one.
-					</p>
-					<UAlert
-						v-else-if="review?.recrop"
-						color="warning"
-						variant="subtle"
-						icon="i-lucide-crop"
-						:title="`Re-crop for ${paperInfo.label}`"
-						:description="`This image was cropped to ${paperLabel(review.preparedFor)}'s shape, so on ${paperInfo.label} it is scaled to cover the page and its edges are cut off. Re-crop starts from your original upload.`"
-					/>
-					<p v-else-if="review" class="text-xs text-(--ui-warning)">
-						This artwork was prepared for {{ paperLabel(review.preparedFor) }} — it is scaled to cover {{ paperInfo.label }}, so its edges may be cut off. Check it in the Stationery editor (Apply keeps it), or upload artwork made for {{ paperInfo.label }}.
-					</p>
-
-					<UAlert
-						v-if="artwork.ext === 'svg' && artwork.live_text"
-						color="warning"
-						variant="subtle"
-						icon="i-lucide-type"
-						title="Convert the text to outlines"
-						description="This SVG still contains live text. The PDF uses only Sakoram's bundled fonts, so your letterhead's lettering may come out in a different typeface. In your design app, convert text to outlines (paths) and upload it again."
-					/>
+					</h3>
+					<span class="text-xs text-(--ui-text-muted)">Drawn behind every page</span>
 				</div>
+				<div class="flex flex-wrap items-start gap-4">
+					<!-- The artwork, to scale on the paper. White in both themes: it
+						previews against the paper. Dashed only while it is an empty
+						drop target; with artwork in place it is just the sheet. -->
+					<div class="flex flex-col items-center gap-2">
+						<div
+							class="relative w-36 rounded-md overflow-hidden bg-white transition"
+							:class="[
+								artwork.ext ? 'border' : 'border-2 border-dashed',
+								locked ? 'border-(--ui-border-accented) cursor-not-allowed opacity-60' : dragOver ? 'border-(--ui-primary) scale-[1.01] cursor-pointer' : 'border-(--ui-border-accented) hover:border-(--ui-primary)/60 cursor-pointer'
+							]"
+							:aria-disabled="locked ? true : undefined"
+							:style="{ aspectRatio: `${paperInfo.widthMm} / ${paperInfo.heightMm}` }"
+							role="button"
+							tabindex="0"
+							aria-label="Upload a full-page background"
+							@click="pick"
+							@keydown.enter.prevent="pick"
+							@keydown.space.prevent="pick"
+							@dragover.prevent="dragOver = !locked"
+							@dragenter.prevent="dragOver = !locked"
+							@dragleave.prevent="dragOver = false"
+							@drop.prevent="onDrop"
+						>
+							<input
+								ref="fileInput"
+								type="file"
+								accept=".svg,.pdf,.png,.jpg,.jpeg,image/svg+xml,application/pdf,image/png,image/jpeg"
+								class="hidden"
+								@change="onFileChange"
+							>
+							<img
+								v-if="artworkPreview.url.value"
+								:src="artworkPreview.url.value"
+								alt="Full-page background"
+								class="absolute inset-0 w-full h-full object-cover"
+							>
+							<div
+								v-else-if="artwork.ext === 'pdf'"
+								class="absolute inset-0 flex flex-col items-center justify-center gap-1 text-zinc-500"
+							>
+								<UIcon name="i-lucide-file-text" class="size-8" />
+								<span class="text-[11px]">PDF background (first page)</span>
+							</div>
+							<div
+								v-else
+								class="absolute inset-0 flex flex-col items-center justify-center gap-1 text-zinc-400 px-3 text-center"
+							>
+								<UIcon name="i-lucide-upload" class="size-6" />
+								<span class="text-[11px]">Drop an SVG, PDF, PNG or JPEG, or click to choose</span>
+							</div>
+							<div v-if="busy" class="absolute inset-0 bg-white/70 flex items-center justify-center">
+								<UIcon name="i-lucide-loader-circle" class="size-6 animate-spin text-zinc-500" />
+							</div>
+						</div>
+						<div class="text-[11px] text-(--ui-text-muted)">
+							{{ paperInfo.label }}
+						</div>
+					</div>
 
-				<!-- The page's own controls for this mode, beside the artwork they
-					frame: the way into the Stationery editor (the Safe area) and
-					the PDF colour. -->
-				<slot />
+					<div class="flex flex-col gap-3 min-w-0 flex-1">
+						<div>
+							<div class="flex flex-wrap gap-2">
+								<UButton
+									icon="i-lucide-upload"
+									size="sm"
+									variant="soft"
+									:loading="busy"
+									:disabled="!!locked"
+									@click="pick"
+								>
+									{{ artwork.ext ? "Replace" : "Upload" }}
+								</UButton>
+								<UButton
+									v-if="canRecrop"
+									icon="i-lucide-crop"
+									size="sm"
+									variant="soft"
+									:color="review?.recrop ? 'warning' : 'neutral'"
+									:disabled="busy || !!locked"
+									@click="openRecrop"
+								>
+									Re-crop
+								</UButton>
+								<UButton
+									v-if="artwork.ext"
+									icon="i-lucide-trash-2"
+									size="sm"
+									variant="soft"
+									color="error"
+									:disabled="busy || !!locked"
+									@click="remove"
+								>
+									Remove
+								</UButton>
+							</div>
+
+							<p v-if="locked" class="text-xs text-(--ui-warning)">
+								{{ locked }} The background saves the moment it changes, for the paper it was made for.
+							</p>
+							<p v-if="!artwork.ext" class="text-xs text-(--ui-text-muted)">
+								No background yet — documents print with blank margins until you upload one.
+							</p>
+							<UAlert
+								v-else-if="review?.recrop"
+								color="warning"
+								variant="subtle"
+								icon="i-lucide-crop"
+								:title="`Re-crop for ${paperInfo.label}`"
+								:description="`This image was cropped to ${paperLabel(review.preparedFor)}'s shape, so on ${paperInfo.label} it is scaled to cover the page and its edges are cut off. Re-crop starts from your original upload.`"
+							/>
+							<p v-else-if="review" class="text-xs text-(--ui-warning)">
+								This artwork was prepared for {{ paperLabel(review.preparedFor) }} — it is scaled to cover {{ paperInfo.label }}, so its edges may be cut off. Check it in the Stationery editor (Apply keeps it), or upload artwork made for {{ paperInfo.label }}.
+							</p>
+
+							<UAlert
+								v-if="artwork.ext === 'svg' && artwork.live_text"
+								color="warning"
+								variant="subtle"
+								icon="i-lucide-type"
+								title="Convert the text to outlines"
+								description="This SVG still contains live text. The PDF uses only Sakoram's bundled fonts, so your letterhead's lettering may come out in a different typeface. In your design app, convert text to outlines (paths) and upload it again."
+							/>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- The page's own controls for this mode, each in its own panel: the
+				way into the Stationery editor (the Safe area) and the PDF colour. -->
+			<div class="flex flex-col gap-3 min-w-0">
+				<section v-if="$slots['safe-area']" :class="PANEL">
+					<slot name="safe-area" />
+				</section>
+				<section v-if="$slots.colour" :class="PANEL">
+					<slot name="colour" />
+				</section>
 			</div>
 		</div>
 
@@ -191,10 +204,16 @@
 		 */
 		locked?: string | null
 	}>();
+
 	const emit = defineEmits<{
 		/** The artwork was saved for this sheet, or removed (null). */
 		artwork: [paper: PaperSize | null]
 	}>();
+
+	// One inset panel per group (Artwork · Safe area · Colour), lightly tinted
+	// so the three read as separate jobs inside the one card — the same panels
+	// as StationeryHeaderFooterCard.
+	const PANEL = "rounded-md border border-(--ui-border) bg-(--ui-bg-elevated)/50 p-4";
 
 	const ASSETS = { asset: "stationery-background", original: "stationery-background-original" } as const;
 
