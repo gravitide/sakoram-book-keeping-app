@@ -546,12 +546,20 @@ fn page_preview_dir(base: &Path) -> PathBuf {
 	base.join("pdf-work").join("page-preview").join(uuid::Uuid::new_v4().to_string())
 }
 
-/// PNG bytes of page 1 of a quote / invoice / bill payload, rendered exactly
-/// as its PDF would be (same Layout template, staging and Stationery artwork
-/// from the open business's folder) — the live preview on /settings/pdf,
-/// built from the unsaved form. `ppi` is clamped to 20–150.
+/// Typst's `--pages` value for the live preview: the asked-for page, 1 by
+/// default (0 counts as no page).
+fn page_arg(page: Option<u32>) -> String {
+	page.filter(|p| *p > 0).unwrap_or(1).to_string()
+}
+
+/// PNG bytes of one page (`page`, default 1) of a quote / invoice / bill
+/// payload, rendered exactly as its PDF would be (same Layout template,
+/// staging and design images from the open business's folder) — the live
+/// previews on /settings/pdf and in the page designer, built from unsaved
+/// edits. `ppi` is clamped to 20–150. A page past the end renders nothing
+/// and errors.
 #[tauri::command]
-pub async fn render_document_page_png(app: AppHandle, data: Value, ppi: u32) -> Result<Vec<u8>, PdfError> {
+pub async fn render_document_page_png(app: AppHandle, data: Value, ppi: u32, page: Option<u32>) -> Result<Vec<u8>, PdfError> {
 	let (name, src) = layout_template(data.get("layout").and_then(|v| v.as_str()));
 	let work_dir = page_preview_dir(&app.path().app_local_data_dir()?);
 	let folder = crate::tenants::active_folder(&app).ok().flatten();
@@ -560,7 +568,8 @@ pub async fn render_document_page_png(app: AppHandle, data: Value, ppi: u32) -> 
 		let output = work_dir.join("page.png");
 		let (root, fonts, template, out) = (path_str(&work_dir)?, fonts_dir(&app)?, path_str(&template)?, path_str(&output)?);
 		let ppi = ppi.clamp(20, 150).to_string();
-		run_typst(&app, &["compile", "--root", &root, "--font-path", &fonts, "--format", "png", "--pages", "1", "--ppi", &ppi, &template, &out]).await?;
+		let pages = page_arg(page);
+		run_typst(&app, &["compile", "--root", &root, "--font-path", &fonts, "--format", "png", "--pages", &pages, "--ppi", &ppi, &template, &out]).await?;
 		Ok(std::fs::read(&output)?)
 	}
 	.await;
@@ -711,6 +720,13 @@ mod tests {
 		stage_render(&work, None, "doc-classic.typ", "", json!({ "logo_path": "Z:/no/such/logo.png" }), &[]).unwrap();
 		let staged: serde_json::Value = serde_json::from_slice(&std::fs::read(work.join("data.json")).unwrap()).unwrap();
 		assert!(staged["logo_file"].is_null());
+	}
+
+	#[test]
+	fn the_live_preview_renders_the_page_it_is_asked_for() {
+		assert_eq!(super::page_arg(None), "1");
+		assert_eq!(super::page_arg(Some(2)), "2");
+		assert_eq!(super::page_arg(Some(0)), "1");
 	}
 
 	#[test]

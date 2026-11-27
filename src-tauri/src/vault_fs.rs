@@ -247,6 +247,8 @@ pub fn tenant_lock_state(app: AppHandle, sessions: State<'_, VaultSessions>, id:
 
 #[tauri::command]
 pub fn enable_tenant_encryption(app: AppHandle, sessions: State<'_, VaultSessions>, id: String, password: String) -> Result<String, String> {
+	// The designer must not outlive the database it edits (designer.rs).
+	crate::designer::close(&app);
     if password.trim().is_empty() {
         return Err("Password is required".into());
     }
@@ -271,6 +273,8 @@ pub fn unlock_tenant(app: AppHandle, sessions: State<'_, VaultSessions>, id: Str
 
 #[tauri::command]
 pub fn lock_tenant(app: AppHandle, sessions: State<'_, VaultSessions>, id: String) -> Result<(), String> {
+	// The designer must not outlive the database it edits (designer.rs).
+	crate::designer::close(&app);
     if let Some(dek) = sessions.get(&id) {
         let p = paths_for(&app, &id)?;
         lock_at(&p, &dek, id.as_bytes()).map_err(|e| e.to_string())?;
@@ -290,6 +294,8 @@ pub fn change_tenant_password(app: AppHandle, id: String, old_password: String, 
 
 #[tauri::command]
 pub fn disable_tenant_encryption(app: AppHandle, sessions: State<'_, VaultSessions>, id: String, password: String) -> Result<(), String> {
+	// The designer must not outlive the database it edits (designer.rs).
+	crate::designer::close(&app);
     let p = paths_for(&app, &id)?;
     // Authenticate via the password to recover the DEK, then decrypt + tear down.
     let dek = unlock_at(&p, &Secret::Password(password), id.as_bytes()).map_err(|e| e.to_string())?;
@@ -303,6 +309,8 @@ pub fn disable_tenant_encryption(app: AppHandle, sessions: State<'_, VaultSessio
 /// the session. Best-effort — a failure on one tenant doesn't abort the others
 /// (we're typically running this on app exit). Returns the ids it sealed.
 pub fn lock_all(app: &AppHandle, sessions: &VaultSessions) -> Vec<String> {
+	// The designer must not outlive the database it edits (designer.rs).
+	crate::designer::close(app);
     let mut sealed = Vec::new();
     for id in sessions.unlocked_ids() {
         if let Some(dek) = sessions.get(&id) {
