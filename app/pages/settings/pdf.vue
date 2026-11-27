@@ -410,15 +410,19 @@
 								:locked="artworkLock"
 								@placed="onImagePlaced"
 							>
-								<StationeryAdjustRow
-									heading="Safe area"
-									description="The space kept clear between your content and each edge of the page."
-									label="Adjust margins &amp; placement"
-									:margins="activeStationeryMargins"
-									:attention="activeModeNeedsCheck"
-									@adjust="openEditor"
-								/>
-								<PdfColorRow v-model="form.pdf_theme_color" :hint="COLOR_HINT" />
+								<template #safe-area>
+									<StationeryAdjustRow
+										heading="Safe area"
+										description="The space kept clear between your content and each edge of the page."
+										label="Adjust margins &amp; placement"
+										:margins="activeStationeryMargins"
+										:attention="activeModeNeedsCheck"
+										@adjust="openEditor"
+									/>
+								</template>
+								<template #colour>
+									<PdfColorRow v-model="form.pdf_theme_color" :hint="COLOR_HINT" />
+								</template>
 							</StationeryHeaderFooterCard>
 
 							<!-- Pre-printed paper: the business-wide bands (shared with
