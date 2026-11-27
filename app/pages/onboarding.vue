@@ -466,6 +466,7 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import CurrencyPicker from "~/components/CurrencyPicker.vue";
+	import { saveBusinessAsset } from "~/lib/business-assets";
 	import { resetDbCache } from "~/lib/db";
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
 	import { THEME_COLORS, themeHex } from "~/lib/theme";
@@ -747,12 +748,7 @@
 		try {
 			const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
 			const ext = (file.name.split(".").pop() ?? "png").toLowerCase();
-			const target = await invoke<string>("save_business_asset", {
-				id: tenantId,
-				kind: kind === "identity" ? "logo" : "pdf-header",
-				ext,
-				bytes
-			});
+			const target = await saveBusinessAsset(tenantId, kind === "identity" ? "logo" : "pdf-header", ext, bytes);
 
 			if (kind === "identity") {
 				await settingsStore.save({ logo_path: target });

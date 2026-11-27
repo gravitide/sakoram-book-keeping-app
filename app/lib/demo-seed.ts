@@ -32,6 +32,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { appDataDir, appLocalDataDir, join } from "@tauri-apps/api/path";
 import { BaseDirectory, writeFile } from "@tauri-apps/plugin-fs";
 import demoLetterheadSvg from "~/assets/stationery/demo-letterhead.svg?raw";
+import { saveBusinessAsset } from "~/lib/business-assets";
 import { DEMO_LETTERHEAD_ACCENT, demoLetterheadSettings } from "~/lib/demo-letterhead";
 import { peekNextSequence } from "~/lib/numbering";
 import { useBankStatementsStore } from "~/stores/bank_statements";
@@ -153,7 +154,7 @@ const seedSettings = async () => {
 const seedLetterhead = async (tenantId: string) => {
 	try {
 		const bytes = Array.from(new TextEncoder().encode(demoLetterheadSvg));
-		await invoke<string>("save_business_asset", { id: tenantId, kind: "stationery-background", ext: "svg", bytes });
+		await saveBusinessAsset(tenantId, "stationery-background", "svg", bytes);
 		const store = useSettingsStore();
 		await store.save(demoLetterheadSettings(store.settings?.pdf_stationery));
 	} catch (e) {

@@ -671,10 +671,10 @@
 	import type { PdfLayoutKey } from "~/lib/pdf-layouts";
 	import type { StationeryMarginsMm, StationeryMode } from "~/lib/stationery";
 	import type { CompanySettingsRow, SettingsUpdate } from "~/stores/settings";
-	import { invoke } from "@tauri-apps/api/core";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { useStationeryArtwork } from "~/composables/useStationeryArtwork";
+	import { readBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
 	import { PAPER_SIZES, resolvePaperSize } from "~/lib/page-settings";
 	import { blocksToPlainLines, buildHeaderBlocks } from "~/lib/pdf-chrome";
@@ -1047,12 +1047,7 @@
 	const saveDerivative = async (bytes: number[], ext: string, cropJson: string | null) => {
 		const tenantId = tenants.activeTenantId;
 		if (!tenantId) return;
-		const target = await invoke<string>("save_business_asset", {
-			id: tenantId,
-			kind: "pdf-header",
-			ext,
-			bytes
-		});
+		const target = await saveBusinessAsset(tenantId, "pdf-header", ext, bytes);
 		await store.save({ pdf_header_logo_path: target, pdf_logo_crop: cropJson });
 		form.pdf_header_logo_path = target;
 		refreshBaseline();
@@ -1077,12 +1072,7 @@
 			}
 
 			// Raster: keep the untouched original, then offer the crop.
-			await invoke<string>("save_business_asset", {
-				id: tenantId,
-				kind: "pdf-header-original",
-				ext,
-				bytes
-			});
+			await saveBusinessAsset(tenantId, "pdf-header-original", ext, bytes);
 			cropExt.value = ext;
 			cropBlob.value = new Blob([new Uint8Array(bytes)], { type: file.type || "image/png" });
 			cropInitial.value = null;
@@ -1141,11 +1131,11 @@
 			let ext = "png";
 			let bytes: number[] = [];
 			try {
-				[ext, bytes] = await invoke<[string, number[]]>("read_business_asset", { id: tenantId, kind: "pdf-header-original" });
+				[ext, bytes] = await readBusinessAsset(tenantId, "pdf-header-original");
 				cropSourceNote.value = undefined;
 			} catch {
 				// Original missing (pre-feature upload): crop the derivative itself.
-				[ext, bytes] = await invoke<[string, number[]]>("read_business_asset", { id: tenantId, kind: "pdf-header" });
+				[ext, bytes] = await readBusinessAsset(tenantId, "pdf-header");
 				cropSourceNote.value = "Original file not found — cropping the current header image instead.";
 			}
 			cropExt.value = ext;

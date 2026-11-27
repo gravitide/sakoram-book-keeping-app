@@ -56,6 +56,7 @@
 <script setup lang="ts">
 	import type { CropRect } from "~/lib/crop-rect";
 	import type { PixelSize } from "~/lib/stationery-artwork";
+	import { encodeImage } from "~/lib/canvas-image";
 	import { fullRect, moveRect, resizeRect } from "~/lib/crop-rect";
 	import { downscaleSize } from "~/lib/stationery-artwork";
 
@@ -221,14 +222,7 @@
 		try {
 			const r = rect.value;
 			const out = props.maxOutput ? downscaleSize(r.w, r.h, props.maxOutput) : { w: r.w, h: r.h };
-			const canvas = document.createElement("canvas");
-			canvas.width = out.w;
-			canvas.height = out.h;
-			const ctx = canvas.getContext("2d")!;
-			ctx.imageSmoothingQuality = "high";
-			ctx.drawImage(img.value, r.x, r.y, r.w, r.h, 0, 0, out.w, out.h);
-			const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, props.outputType ?? "image/png", 0.92));
-			if (!blob) throw new Error("crop export failed");
+			const blob = await encodeImage(img.value, out, props.outputType ?? "image/png", r);
 			openModel.value = false;
 			emit("cropped", { ...r }, blob);
 		} finally {

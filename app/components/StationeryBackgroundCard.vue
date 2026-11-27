@@ -128,6 +128,7 @@
 </template>
 
 <script setup lang="ts">
+	import type { BusinessAssetKind } from "~/lib/business-assets";
 	// Full-page background Stationery: upload / crop / downscale / remove the
 	// artwork. Its four Safe-area margins are set in the Stationery editor
 	// (StationeryEditorModal, opened from the Stationery section).
@@ -142,11 +143,12 @@
 	import type { CropRect } from "~/lib/crop-rect";
 	import type { PaperSize } from "~/lib/page-settings";
 	import type { BackgroundArtwork, BackgroundExt } from "~/lib/stationery";
-	import { invoke } from "@tauri-apps/api/core";
 	import { useStationeryArtwork } from "~/composables/useStationeryArtwork";
+	import { readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
+	import { encodeImage } from "~/lib/canvas-image";
 	import { resolvePaperSize } from "~/lib/page-settings";
 	import { clearBackgroundArtwork, parseStationery, setBackgroundArtwork } from "~/lib/stationery";
-	import { backgroundFormatOf, backgroundPixelSize, downscaleSize, isRasterBackground, matchesPaperAspect, svgHasLiveText } from "~/lib/stationery-artwork";
+	import { backgroundFormatOf, backgroundMimeOf, backgroundPixelSize, downscaleSize, isRasterBackground, matchesPaperAspect, svgHasLiveText } from "~/lib/stationery-artwork";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
 
@@ -169,8 +171,6 @@
 	const busy = ref(false);
 	const pick = () => fileInput.value?.click();
 
-	const mimeOf = (ext: string) => ({ svg: "image/svg+xml", pdf: "application/pdf", png: "image/png", jpg: "image/jpeg" }[ext] ?? "application/octet-stream");
-
 	const fail = (title: string, err: unknown) => toast.add({
 		title,
 		description: err instanceof Error ? err.message : String(err),
@@ -184,8 +184,11 @@
 	const artworkPreview = useStationeryArtwork();
 
 	// ---- saving --------------------------------------------------------
-	const saveAsset = (kind: string, ext: string, bytes: Uint8Array) =>
-		invoke<string>("save_business_asset", { id: tenants.activeTenantId, kind, ext, bytes: Array.from(bytes) });
+	const activeId = () => {
+		if (!tenants.activeTenantId) throw new Error("No active business.");
+		return tenants.activeTenantId;
+	};
+	const saveAsset = (kind: BusinessAssetKind, ext: string, bytes: Uint8Array) => saveBusinessAsset(activeId(), kind, ext, bytes);
 
 	const recordArtwork = async (next: BackgroundArtwork) => {
 		await store.save({ pdf_stationery: setBackgroundArtwork(store.settings?.pdf_stationery, next) });
@@ -209,14 +212,7 @@
 	// Whole image, downscaled to ~300 DPI at the paper size (never enlarged).
 	const downscaled = async (img: HTMLImageElement, ext: BackgroundExt): Promise<Uint8Array> => {
 		const out = downscaleSize(img.naturalWidth, img.naturalHeight, backgroundPixelSize(props.paper));
-		const canvas = document.createElement("canvas");
-		canvas.width = out.w;
-		canvas.height = out.h;
-		const ctx = canvas.getContext("2d")!;
-		ctx.imageSmoothingQuality = "high";
-		ctx.drawImage(img, 0, 0, out.w, out.h);
-		const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mimeOf(ext), 0.92));
-		if (!blob) throw new Error("Couldn't encode the image.");
+		const blob = await encodeImage(img, out, backgroundMimeOf(ext));
 		return new Uint8Array(await blob.arrayBuffer());
 	};
 
@@ -244,6 +240,17 @@
 		}
 	};
 
+	// Kept-alive page (like pdf.vue's editorOpen): leaving mid-crop must not
+	// bring back an open crop of an upload the user walked away from — or keep
+	// its bytes around to be written by a later Apply.
+	onDeactivated(() => {
+		cropOpen.value = false;
+		cropBlob.value = null;
+		cropInitial.value = null;
+		pendingOriginal.value = null;
+		dragOver.value = false;
+	});
+
 	const openRecrop = async () => {
 		if (!tenants.activeTenantId || !artwork.value.ext) return;
 		try {
@@ -251,15 +258,15 @@
 			let bytes: number[];
 			let initial = artwork.value.crop;
 			try {
-				[ext, bytes] = await invoke<[string, number[]]>("read_business_asset", { id: tenants.activeTenantId, kind: "stationery-background-original" });
+				[ext, bytes] = await readBusinessAsset(tenants.activeTenantId, "stationery-background-original");
 			} catch {
 				// No original (e.g. it was already the paper's shape): crop the artwork itself.
-				[ext, bytes] = await invoke<[string, number[]]>("read_business_asset", { id: tenants.activeTenantId, kind: "stationery-background" });
+				[ext, bytes] = await readBusinessAsset(tenants.activeTenantId, "stationery-background");
 				initial = null;
 			}
 			cropExt.value = backgroundFormatOf(`x.${ext}`) ?? "png";
 			pendingOriginal.value = null;
-			cropBlob.value = new Blob([new Uint8Array(bytes)], { type: mimeOf(cropExt.value) });
+			cropBlob.value = new Blob([new Uint8Array(bytes)], { type: backgroundMimeOf(cropExt.value) });
 			cropInitial.value = initial;
 			cropOpen.value = true;
 		} catch (err) {
@@ -285,14 +292,14 @@
 				// Vector (SVG / PDF): stored as uploaded, covering the page uncropped.
 				const liveText = ext === "svg" && svgHasLiveText(new TextDecoder().decode(bytes));
 				await saveAsset("stationery-background", ext, bytes);
-				await invoke("remove_business_asset", { id: tenants.activeTenantId, kind: "stationery-background-original" });
+				await removeBusinessAsset(tenants.activeTenantId, "stationery-background-original");
 				await recordArtwork({ ext, paper: props.paper, crop: null, live_text: liveText });
 				toast.add(liveText
 					? { title: "Background updated — its text isn't outlined", description: "See the note under the buttons.", color: "warning", icon: "i-lucide-type" }
 					: { title: "Background updated", color: "success", icon: "i-lucide-check" });
 				return;
 			}
-			const img = await loadImage(new Blob([bytes], { type: mimeOf(ext) }));
+			const img = await loadImage(new Blob([bytes], { type: backgroundMimeOf(ext) }));
 			if (matchesPaperAspect(img.naturalWidth, img.naturalHeight, props.paper)) {
 				await saveAsset("stationery-background-original", ext, bytes);
 				await saveAsset("stationery-background", ext, await downscaled(img, ext));
@@ -303,7 +310,7 @@
 			// Not the paper's shape: crop first (aspect-locked), saved on Apply.
 			cropExt.value = ext;
 			pendingOriginal.value = bytes;
-			cropBlob.value = new Blob([bytes], { type: mimeOf(ext) });
+			cropBlob.value = new Blob([bytes], { type: backgroundMimeOf(ext) });
 			cropInitial.value = null;
 			cropOpen.value = true;
 		} catch (err) {
@@ -331,8 +338,8 @@
 		if (!tenants.activeTenantId) return;
 		busy.value = true;
 		try {
-			await invoke("remove_business_asset", { id: tenants.activeTenantId, kind: "stationery-background" });
-			await invoke("remove_business_asset", { id: tenants.activeTenantId, kind: "stationery-background-original" });
+			await removeBusinessAsset(tenants.activeTenantId, "stationery-background");
+			await removeBusinessAsset(tenants.activeTenantId, "stationery-background-original");
 			await store.save({ pdf_stationery: clearBackgroundArtwork(store.settings?.pdf_stationery) });
 			toast.add({ title: "Background removed", color: "info", icon: "i-lucide-image-off" });
 		} catch (err) {

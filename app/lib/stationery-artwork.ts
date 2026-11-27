@@ -56,13 +56,27 @@ export function svgHasLiveText(svg: string): boolean {
 	return /<(?:[\w.-]+:)?(?:text|tspan|textpath)(?=[\s/>])/i.test(withoutComments);
 }
 
-const FORMATS: Record<string, BackgroundExt> = { svg: "svg", pdf: "pdf", png: "png", jpg: "jpg", jpeg: "jpg" };
+// The one table of background formats: each one's MIME type. Every other
+// spelling of an extension a user's file may carry is an alias of one of them.
+const MIME: Record<BackgroundExt, string> = { svg: "image/svg+xml", pdf: "application/pdf", png: "image/png", jpg: "image/jpeg" };
+const ALIASES: Record<string, BackgroundExt> = { jpeg: "jpg" };
+
+const formatOfExt = (ext: string): BackgroundExt | null => {
+	const e = ext.toLowerCase();
+	return ALIASES[e] ?? (Object.hasOwn(MIME, e) ? e as BackgroundExt : null);
+};
 
 /** The background format a file name's extension maps to, or null if it isn't one. */
 export function backgroundFormatOf(fileName: string): BackgroundExt | null {
 	const dot = fileName.lastIndexOf(".");
 	if (dot < 0) return null;
-	return FORMATS[fileName.slice(dot + 1).toLowerCase()] ?? null;
+	return formatOfExt(fileName.slice(dot + 1));
+}
+
+/** The MIME type for a background extension (any spelling), or a generic binary type. */
+export function backgroundMimeOf(ext: string): string {
+	const format = formatOfExt(ext);
+	return format ? MIME[format] : "application/octet-stream";
 }
 
 /** PNG and JPEG are cropped and downscaled on import; SVG and PDF are stored as they are. */

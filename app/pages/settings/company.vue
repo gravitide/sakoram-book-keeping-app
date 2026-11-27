@@ -480,10 +480,10 @@
 	import type { BusinessBankRow } from "~/stores/business_banks";
 	import type { LetterSignatureRow } from "~/stores/letter_signatures";
 	import type { SettingsUpdate } from "~/stores/settings";
-	import { invoke } from "@tauri-apps/api/core";
 	import { z } from "zod";
 	import CurrencyPicker from "~/components/CurrencyPicker.vue";
 	import ImageCropModal from "~/components/ImageCropModal.vue";
+	import { readBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
 	import { signaturePreview } from "~/lib/signature-preview";
 	import { useBusinessBanksStore } from "~/stores/business_banks";
 	import { useLetterSignaturesStore } from "~/stores/letter_signatures";
@@ -848,12 +848,7 @@
 	const saveLogoDerivative = async (bytes: number[], ext: string, cropJson: string | null) => {
 		const tenantId = tenants.activeTenantId;
 		if (!tenantId) return;
-		const target = await invoke<string>("save_business_asset", {
-			id: tenantId,
-			kind: "logo",
-			ext,
-			bytes
-		});
+		const target = await saveBusinessAsset(tenantId, "logo", ext, bytes);
 		await store.save({ logo_path: target, logo_crop: cropJson });
 		await tenants.setLogoFile(tenantId, `logo.${ext}`);
 		form.logo_path = target;
@@ -878,12 +873,7 @@
 			}
 
 			// Raster: keep the untouched original, then offer the crop.
-			await invoke<string>("save_business_asset", {
-				id: tenantId,
-				kind: "logo-original",
-				ext,
-				bytes
-			});
+			await saveBusinessAsset(tenantId, "logo-original", ext, bytes);
 			cropExt.value = ext;
 			cropBlob.value = new Blob([new Uint8Array(bytes)], { type: file.type || "image/png" });
 			cropInitial.value = null;
@@ -942,12 +932,12 @@
 			let ext = "png";
 			let bytes: number[] = [];
 			try {
-				[ext, bytes] = await invoke<[string, number[]]>("read_business_asset", { id: tenantId, kind: "logo-original" });
+				[ext, bytes] = await readBusinessAsset(tenantId, "logo-original");
 				cropSourceNote.value = undefined;
 			} catch {
 				// Original missing (uploaded before the cropper, or restored from
 				// a backup — originals are local-only): crop the derivative.
-				[ext, bytes] = await invoke<[string, number[]]>("read_business_asset", { id: tenantId, kind: "logo" });
+				[ext, bytes] = await readBusinessAsset(tenantId, "logo");
 				cropSourceNote.value = "Original file not found — cropping the current logo instead.";
 			}
 			cropExt.value = ext;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { backgroundFormatOf, backgroundPixelSize, downscaleSize, isRasterBackground, matchesPaperAspect, svgHasLiveText } from "./stationery-artwork";
+import { backgroundFormatOf, backgroundMimeOf, backgroundPixelSize, downscaleSize, isRasterBackground, matchesPaperAspect, svgHasLiveText } from "./stationery-artwork";
 
 describe("backgroundPixelSize", () => {
 	// About 300 DPI at the paper size — the spec's 2480 × 3508 for A4.
@@ -87,6 +87,23 @@ describe("backgroundFormatOf", () => {
 		expect(backgroundFormatOf("logo.gif")).toBeNull();
 		expect(backgroundFormatOf("letterhead")).toBeNull();
 		expect(backgroundFormatOf("letterhead.docx")).toBeNull();
+	});
+});
+
+describe("backgroundMimeOf", () => {
+	it.each([
+		["svg", "image/svg+xml"],
+		["pdf", "application/pdf"],
+		["png", "image/png"],
+		["jpg", "image/jpeg"],
+		["JPEG", "image/jpeg"]
+	] as const)("%s → %s", (ext, mime) => {
+		expect(backgroundMimeOf(ext)).toBe(mime);
+	});
+
+	it("is a generic binary type for anything that isn't a background format", () => {
+		expect(backgroundMimeOf("gif")).toBe("application/octet-stream");
+		expect(backgroundMimeOf("")).toBe("application/octet-stream");
 	});
 });
 
