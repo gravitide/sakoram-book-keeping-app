@@ -239,14 +239,6 @@ export function safeAreaMargins(mode: StationeryMode, layout: PdfLayoutKey, page
 	return mode === "builtin" ? layoutMarginsMm(layout, page) : { ...stationeryMargins };
 }
 
-/**
- * Whether the editor can move this mode's margins. Built-in has none of its
- * own (they belong to the Layout), so the editor opens as a preview there.
- */
-export function editsMargins(mode: StationeryMode): boolean {
-	return mode !== "builtin";
-}
-
 /** The printer band as four strips: top, bottom, then the two sides between them. */
 export function printerBandRects(page: PageDims): MmRect[] {
 	const b = PRINTER_BAND_MM;

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
 	CSS_PX_PER_MM,
 	dragMargin,
-	editsMargins,
 	fitMargins,
 	fitScale,
 	layoutMarginsMm,
@@ -235,17 +234,6 @@ describe("safeAreaMargins", () => {
 	it("is the Stationery's own margins, never scaled, under every other mode", () => {
 		expect(safeAreaMargins("background", "minimal", A5, own)).toEqual(own);
 		expect(safeAreaMargins("preprinted", "compact", A4, own)).toEqual(own);
-	});
-});
-
-describe("editsMargins", () => {
-	it("only the modes with margins of their own have guides to drag", () => {
-		expect(editsMargins("background")).toBe(true);
-		expect(editsMargins("preprinted")).toBe(true);
-	});
-
-	it("built-in is a preview: its margins belong to the Layout", () => {
-		expect(editsMargins("builtin")).toBe(false);
 	});
 });
 

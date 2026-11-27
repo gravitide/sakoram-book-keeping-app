@@ -3,29 +3,7 @@
 		<!-- select-none on the page root: static labels and copy aren't
 			selectable; form fields stay selectable via the input rule
 			in main.css. -->
-		<!-- Floating Preview. Page-level because header logo, header/footer text
-			and the Layout all want it, and all render through the same sample
-			invoice — one control beats a button on every card.
-			`h-0` keeps the wrapper out of the layout (the button overflows it) and
-			pointer-events are re-enabled only on the button, so it never blocks
-			the page beneath. Solid + shadow, with no surrounding panel: the
-			button is its own surface, and a wrapper card behind it just reads as
-			an unexplained dark box.
-			`items-start` is load-bearing — a flex container defaults to
-			align-items: stretch, so with h-0 the button would be stretched to
-			zero height and collapse into a squashed pill. -->
-		<div class="sticky top-3 z-20 h-0 max-w-5xl mx-auto flex items-start justify-end pointer-events-none">
-			<UButton
-				icon="i-lucide-eye"
-				class="pointer-events-auto shadow-lg"
-				:loading="invoicePreview.state.rendering"
-				@click="invoicePreview.open()"
-			>
-				Preview on PDF
-			</UButton>
-		</div>
-
-		<header class="mb-6 max-w-5xl mx-auto pr-44">
+		<header class="mb-6 max-w-5xl mx-auto">
 			<h1 class="text-2xl font-semibold">
 				PDF
 			</h1>
@@ -49,7 +27,7 @@
 					<SectionCard
 						icon="i-lucide-layout-template"
 						title="Paper &amp; layout"
-						subtitle="The sheet every PDF is printed on, and how your quotes, invoices, bills and payslips arrange their content on it. Your font, colour and stationery apply to every layout."
+						subtitle="The sheet every PDF is printed on, and — with Built-in stationery — how your quotes, invoices, bills and payslips arrange their content on it."
 					>
 						<div class="mb-5">
 							<div class="text-sm font-medium mb-1">
@@ -79,7 +57,19 @@
 								</button>
 							</div>
 						</div>
-						<div>
+						<!-- Layout is a Built-in choice only (ADR 0001 amendment): every
+							other Stationery renders Classic (page-settings.ts
+							buildLayoutAndPage). Hidden, not cleared, so switching back to
+							Built-in restores the stored pick. -->
+						<div v-if="form.pdf_stationery_mode !== 'builtin'">
+							<div class="text-sm font-medium mb-1">
+								Layout
+							</div>
+							<p class="text-xs text-(--ui-text-muted)">
+								{{ stationeryDesign }} the design, so documents use the Classic layout. The other layouts are available with Built-in stationery — your choice is kept for when you switch back.
+							</p>
+						</div>
+						<div v-else>
 							<div class="text-sm font-medium mb-2">
 								Layout
 							</div>
@@ -209,73 +199,93 @@
 							</button>
 						</div>
 
-						<!-- The current page, to scale, from the live (unsaved) form. -->
+						<!-- Page 1 of the sample invoice, rendered by Typst from the live
+							(unsaved) form ~500 ms after the last change (useLivePagePreview), with
+							the drawn page as the fallback if a render fails. -->
 						<div class="mt-5 flex flex-col sm:flex-row items-start gap-5">
-							<StationeryPage
-								class="shrink-0 rounded-sm ring-1 ring-(--ui-border) shadow-sm"
-								:paper="paperKey"
-								:mode="form.pdf_stationery_mode"
-								:layout="form.pdf_layout"
-								:margins="activeStationeryMargins"
-								:scale="scaleForWidth(resolvePaperSize(paperKey), 150)"
-								:artwork-url="artwork.url.value"
-								:artwork-ext="artwork.ext.value"
-								:images="thumbnailImages"
-								compact
-							/>
+							<div class="shrink-0" :style="{ width: `${PREVIEW_W_PX}px` }">
+								<StationeryPage
+									v-if="livePreview.error.value"
+									class="rounded-sm ring-1 ring-(--ui-border) shadow-sm"
+									:paper="paperKey"
+									:mode="form.pdf_stationery_mode"
+									:layout="form.pdf_layout"
+									:margins="activeStationeryMargins"
+									:scale="scaleForWidth(resolvePaperSize(paperKey), PREVIEW_W_PX)"
+									:artwork-url="artwork.url.value"
+									:artwork-ext="artwork.ext.value"
+									:images="thumbnailImages"
+									compact
+								/>
+								<div
+									v-else
+									class="relative overflow-hidden rounded-sm ring-1 ring-(--ui-border) shadow-sm bg-white"
+									:style="{ height: `${previewHeightPx}px` }"
+									role="img"
+									:aria-label="`Page 1 of a sample invoice on ${resolvePaperSize(paperKey).label}`"
+									:aria-busy="livePreview.loading.value"
+								>
+									<img
+										v-if="livePreview.url.value"
+										:src="livePreview.url.value"
+										alt=""
+										class="size-full object-contain transition-opacity"
+										:class="livePreview.loading.value ? 'opacity-60' : 'opacity-100'"
+									>
+									<div
+										v-if="livePreview.loading.value || !livePreview.url.value"
+										class="absolute inset-0 flex items-center justify-center"
+									>
+										<UIcon name="i-lucide-loader-circle" class="size-5 animate-spin text-zinc-400" />
+									</div>
+								</div>
+								<p v-if="livePreview.error.value" class="mt-1.5 text-xs text-(--ui-text-muted)">
+									Couldn't render the preview, so this is a drawing of the page.
+								</p>
+							</div>
 							<div class="space-y-3 min-w-0">
 								<p v-if="form.pdf_stationery_mode === 'builtin'" class="text-xs text-(--ui-text-muted)">
 									Your Layout's own margins frame the page. Set the header logo and the header &amp; footer text below.
 								</p>
 								<p v-else-if="form.pdf_stationery_mode === 'background'" class="text-xs text-(--ui-text-muted)">
-									Upload your artwork below, then set the Safe area in the editor. Your logo, header text and footer aren't printed — the artwork is your letterhead.
+									Upload your artwork below, then set the Safe area. Your logo, header text and footer aren't printed — the artwork is your letterhead.
 								</p>
 								<p v-else-if="form.pdf_stationery_mode === 'header_footer'" class="text-xs text-(--ui-text-muted)">
-									Upload your header and footer images below, then place them and set the Safe area in the editor. Your logo, header text and footer aren't printed — the images are your letterhead.
+									Upload your header and footer images below, then place them and set the Safe area. Your logo, header text and footer aren't printed — the images are your letterhead.
 								</p>
 								<p v-else class="text-xs text-(--ui-text-muted)">
-									Set the blank bands for your printed letterhead in the editor, or type the top and bottom bands below.
+									Your paper already carries your letterhead, so nothing is printed in its blank bands — no logo, header text or footer. Set how deep the top and bottom bands are; page numbers sit just above the bottom one.
 								</p>
-								<!-- Built-in has no margins of its own, so the editor opens
-									as a preview (page, Safe area, sample invoice) there. -->
-								<UButton
-									:icon="form.pdf_stationery_mode === 'builtin' ? 'i-lucide-scan-eye' : 'i-lucide-pencil-ruler'"
-									variant="soft"
-									size="sm"
-									@click="openEditor"
-								>
-									{{ form.pdf_stationery_mode === 'builtin' ? 'Preview page' : 'Edit stationery' }}
-								</UButton>
+								<div class="flex flex-wrap gap-2">
+									<UButton
+										icon="i-lucide-file-search"
+										variant="soft"
+										size="sm"
+										:loading="samplePreview.state.rendering"
+										@click="samplePreview.open()"
+									>
+										Preview as PDF
+									</UButton>
+									<UButton
+										v-if="form.pdf_stationery_mode !== 'builtin'"
+										icon="i-lucide-pencil-ruler"
+										variant="soft"
+										color="neutral"
+										size="sm"
+										@click="openEditor"
+									>
+										Adjust margins &amp; placement
+									</UButton>
+								</div>
+								<p class="text-xs text-(--ui-text-muted)">
+									The preview shows your changes before you save. Preview as PDF opens a two-page sample, so you can check the second page too.
+								</p>
 								<div class="text-xs text-(--ui-text-muted) tabular-nums">
 									{{ resolvePaperSize(paperKey).label }}
 									<template v-if="form.pdf_stationery_mode !== 'builtin'">
 										· margins {{ formatMm(activeStationeryMargins.top) }} / {{ formatMm(activeStationeryMargins.right) }} / {{ formatMm(activeStationeryMargins.bottom) }} / {{ formatMm(activeStationeryMargins.left) }} mm (top / right / bottom / left)
 									</template>
 								</div>
-							</div>
-						</div>
-
-						<!-- Pre-printed paper: only the two blank bands. Each mode keeps its
-							own settings, so switching back to Built-in and here again
-							finds the same numbers. Shown under every mode: a letter set to
-							"Pre-printed paper" reserves these bands whatever the active mode. -->
-						<div class="mt-5 pt-5 border-t border-(--ui-border) space-y-4">
-							<div class="text-sm font-medium">
-								Pre-printed paper bands
-							</div>
-							<p v-if="form.pdf_stationery_mode === 'preprinted'" class="text-xs text-(--ui-text-muted)">
-								Your paper already carries your letterhead, so nothing is printed in these bands — no logo, header text or footer. The document's title, number and accent rule stay, and page numbers sit just above the bottom band.
-							</p>
-							<p v-else class="text-xs text-(--ui-text-muted)">
-								Used by letters set to print on pre-printed paper, and by every document if you switch to Pre-printed paper.
-							</p>
-							<div class="flex flex-wrap gap-6">
-								<UFormField label="Top band (mm)" help="Clears your printed letterhead. Typically 40–60 mm.">
-									<UInputNumber v-model="form.preprinted_margins.top" :min="0" :max="MAX_BAND_MM" :step="1" class="w-40" />
-								</UFormField>
-								<UFormField label="Bottom band (mm)" help="Clears a printed footer, if any. Typically 15–30 mm.">
-									<UInputNumber v-model="form.preprinted_margins.bottom" :min="0" :max="MAX_BAND_MM" :step="1" class="w-40" />
-								</UFormField>
 							</div>
 						</div>
 					</SectionCard>
@@ -304,7 +314,6 @@
 						v-model:images="form.header_footer_images"
 						:mode="form.pdf_stationery_mode"
 						:paper="paperKey"
-						:layout="form.pdf_layout"
 						:settings="previewSettings"
 						@applied="onStationeryApplied"
 					/>
@@ -664,14 +673,14 @@
 		</UForm>
 
 		<PdfPreviewModal
-			v-model:open="invoicePreview.state.open"
-			:asset-url="invoicePreview.state.assetUrl"
-			:temp-path="invoicePreview.state.tempPath"
-			:suggested-file-name="invoicePreview.state.suggestedFileName"
-			:saving="invoicePreview.state.saving"
-			title="Invoice layout preview"
-			@save="invoicePreview.onSave"
-			@cancel="invoicePreview.onCancel"
+			v-model:open="samplePreview.state.open"
+			:asset-url="samplePreview.state.assetUrl"
+			:temp-path="samplePreview.state.tempPath"
+			:suggested-file-name="samplePreview.state.suggestedFileName"
+			:saving="samplePreview.state.saving"
+			title="Sample invoice"
+			@save="samplePreview.onSave"
+			@cancel="samplePreview.onCancel"
 		/>
 		<ImageCropModal
 			v-model:open="cropOpen"
@@ -692,6 +701,7 @@
 	import type { HeaderFooterRects, MmRect, PageImageView, PaperGeometry } from "~/lib/stationery-geometry";
 	import type { CompanySettingsRow, SettingsUpdate } from "~/stores/settings";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
+	import { useLivePagePreview } from "~/composables/useLivePagePreview";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { useStationeryArtwork } from "~/composables/useStationeryArtwork";
 	import { readBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
@@ -700,10 +710,10 @@
 	import { blocksToPlainLines, buildHeaderBlocks } from "~/lib/pdf-chrome";
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
 	import { PDF_TOKENS } from "~/lib/pdf-tokens";
-	import { sampleInvoicePayload } from "~/lib/sample-pdf";
+	import { sampleStationeryPreviewPayload } from "~/lib/sample-pdf";
 	import { BACKGROUND_DEFAULT_MARGINS, confirmPaperGeometry, HEADER_FOOTER_DEFAULT_MARGINS, modeNeedsReview, paperGeometryOf, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, serializeStationery, STATIONERY_MODES, stationeryReview, stationerySchema, withPaperGeometry } from "~/lib/stationery";
 	import { artworkPaperLock } from "~/lib/stationery-artwork";
-	import { formatMm, headerFooterMargins, IMAGE_EDGE, MAX_BAND_MM, refitPaperGeometry, scaleForWidth } from "~/lib/stationery-geometry";
+	import { formatMm, headerFooterMargins, IMAGE_EDGE, refitPaperGeometry, scaleForWidth } from "~/lib/stationery-geometry";
 	import { isHexColor, THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -943,13 +953,11 @@
 	}));
 	const previewClamped = computed(() => 12 * (form.pdf_logo_scale / 100) * logoAspect.value > 55);
 
-	// Live preview: render a sample invoice with the currently-selected Layout
-	// and Stationery through the real Typst pipeline (PdfPreviewModal).
-	// The whole point of a preview is to see edits BEFORE saving them. The
-	// sample*Payload builders read font / colour / logo scale off the settings
-	// row, which only updates on save — so overlay the live form values on top.
-	// (The Layout key is also passed separately, which is why it was once the
-	// one control that appeared to work.)
+	// The settings the previews render with (the live page preview, Preview as
+	// PDF and the Stationery editor's sample): the saved row with the live
+	// form on top. The whole point of a preview is to see edits BEFORE saving
+	// them, and the sample payload builders read font / colour / logo scale /
+	// Stationery off the settings row, which only updates on save.
 	const previewSettings = computed<CompanySettingsRow | null>(() => (store.settings
 		? {
 			...store.settings,
@@ -1003,16 +1011,43 @@
 
 	// Plain-text projection of the custom header for the paper mock. Marks are
 	// ignored — a faithful rich-text mock isn't worth the complexity when
-	// "Preview on PDF" renders the real thing.
+	// the Stationery section's live preview renders the real thing.
 	const previewHeaderLines = computed(() =>
 		blocksToPlainLines(buildHeaderBlocks(previewSettings.value)));
 
-	const invoicePreview = usePdfPreview({
+	// The sample both previews show: the Stationery editor's two-page invoice
+	// (sample-pdf.ts), on the live form's paper, Stationery, Layout (Built-in
+	// only — buildLayoutAndPage), font, colour and header / footer text.
+	const samplePayload = () => (previewSettings.value ? sampleStationeryPreviewPayload(previewSettings.value, currency.value, form.pdf_layout) : null);
+
+	// "Preview as PDF": the whole two-page sample in the PDF preview modal.
+	const samplePreview = usePdfPreview({
 		command: "export_invoice_pdf",
-		buildPayload: () => sampleInvoicePayload(previewSettings.value, currency.value, form.pdf_layout),
+		buildPayload: () => samplePayload() ?? {},
 		fileName: () => "sample-invoice.pdf",
-		title: "Invoice layout preview"
+		title: "Sample invoice"
 	});
+
+	// The live preview beside it: page 1 of the same sample, re-rendered ~500 ms
+	// after any change. Artwork and the header logo can change on disk without
+	// changing the payload (same path / format), so their loaded URLs and the
+	// logo crop are extra inputs.
+	const livePreview = useLivePagePreview(samplePayload, {
+		deps: () => [artwork.url.value, headerArt.url.value, footerArt.url.value, store.pdfHeaderLogoSrc, store.settings?.pdf_logo_crop]
+	});
+	const PREVIEW_W_PX = 220;
+	const previewHeightPx = computed(() => {
+		const paper = resolvePaperSize(paperKey.value);
+		return Math.round(PREVIEW_W_PX * (paper.heightMm / paper.widthMm));
+	});
+	// What the Layout note names as "the design" under each non-Built-in mode.
+	const DESIGN_SOURCE: Record<StationeryMode, string> = {
+		builtin: "",
+		background: "Your background artwork is",
+		header_footer: "Your header and footer images are",
+		preprinted: "Your pre-printed paper is"
+	};
+	const stationeryDesign = computed(() => DESIGN_SOURCE[form.pdf_stationery_mode]);
 
 	// Same curated list the Appearance page used. The Typst template falls
 	// through these for any missing glyph; free-text input lets the user pick
@@ -1082,6 +1117,16 @@
 	const refreshBaseline = () => {
 		baseline.value = formSnapshot.value;
 	};
+
+	// Kept-alive page: another page can save these settings while this one is
+	// cached (Settings → Letters saves the Pre-printed paper bands). Re-read
+	// them on the way back in — unless something here is unsaved, which is
+	// left alone — so a stale form can't save the old values over them.
+	onActivated(() => {
+		if (dirty.value) return;
+		hydrate();
+		refreshBaseline();
+	});
 
 	const onSubmit = async () => {
 		try {
