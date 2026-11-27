@@ -533,7 +533,7 @@ sakoram_app/
 │  │  └─ settings/
 │  │     ├─ index.vue                 ← redirect to /settings/company
 │  │     ├─ company.vue               ← business info, address, bank, signatures, defaults, logo
-│  │     ├─ pdf.vue                   ← Paper & layout (paper size + Layout picker, then the Colour card) · Stationery (mode picker; Pre-printed paper bands; a to-scale thumbnail of the current page (`StationeryPage`) + **Edit stationery** (`StationeryEditorModal`) for Full-page background / Header & footer images / Pre-printed paper — **Preview page**, the same editor read-only, under Built-in; `StationeryBackgroundCard` — upload / aspect-locked crop + ~300 DPI downscale / live-text SVG warning / Remove — while Full-page background; `StationeryHeaderFooterCard` — upload / free-form Crop / Remove per image, a new image placed full-width flush to its edge — while Header & footer images; picking a Paper size re-fits every mode's geometry on the form (`setPaper`); Built-in-only header logo + header/footer text cards) · Font. Every card has a sidebar anchor.
+│  │     ├─ pdf.vue                   ← Paper & layout (paper size + Layout picker, then the Colour card) · Stationery (mode picker; Pre-printed paper bands; a to-scale thumbnail of the current page (`StationeryPage`) + **Edit stationery** (`StationeryEditorModal`) for Full-page background / Header & footer images / Pre-printed paper — **Preview page**, the same editor read-only, under Built-in; `StationeryBackgroundCard` — upload / aspect-locked crop + ~300 DPI downscale / live-text SVG warning / Remove — while Full-page background; `StationeryHeaderFooterCard` — upload / free-form Crop / Remove per image, a new image placed full-width flush to its edge — while Header & footer images; picking a Paper size re-fits every mode's geometry on the form (`setPaper`) and opens the editor when the ACTIVE mode needs a check; both artwork cards are locked while that Paper size change is unsaved; Built-in-only header logo + header/footer text cards) · Font. Every card has a sidebar anchor.
 │  │     ├─ appearance.vue            ← UI font, theme color (8-swatch), light/dark/system toggle, zoom (6 discrete steps)
 │  │     ├─ payroll.vue               ← cycle template (period_start_day / period_end_day / pay_day)
 │  │     ├─ letters.vue               ← manage letter_categories (name-only lookup) + a pointer card to the Pre-printed paper bands (they live on the Stationery at /settings/pdf#stationery since 0056) + a "Stationery artwork" coming-soon placeholder (#artwork). (Signatures moved to /settings/company#signatures — they're shared across letters + quote/invoice "Prepared by".)
@@ -603,7 +603,7 @@ sakoram_app/
 │  ├─ help/                           ← in-app help library. `index.ts` is the topic registry (slug, title, summary, category, icon, lazy component); one `.vue` per topic under `topics/`. See "Why help topics are Vue components" decision below.
 │  ├─ lib/
 │  │  ├─ db.ts                        ← getDb() (lazy, reads active tenant URL), select/execute
-│  │  ├─ demo-seed.ts                 ← createDemoBusiness() — a SHOWCASE business, not a stress test (since v0.164.0): 8 clients / 6 vendors, one quote + invoice + bill per status, a credit note (one invoice lands `credited`), recurring templates with one of each already due, 2 bank accounts, 4 employees × 3 months of payslips, 2 signatures + 3 letters, a bank-statement import with matched + unmatched rows, 4 attachments — all within the last ~6 months. Its PDFs print on a bundled sample letterhead (Full-page background: `app/assets/stationery/demo-letterhead.svg`, outlined shapes only, written to the folder via `save_business_asset`; Safe area + PDF accent in `app/lib/demo-letterhead.ts`, render-checked as `invoice-classic-demo-letterhead*`). Seeds in seconds through the stores (no direct SQL); SeedProgress callback still feeds the overlay's stage label. Add a new feature → add one row of it here.
+│  │  ├─ demo-seed.ts                 ← createDemoBusiness() — a SHOWCASE business, not a stress test (since v0.164.0): 8 clients / 6 vendors, one quote + invoice + bill per status, a credit note (one invoice lands `credited`), recurring templates with one of each already due, 2 bank accounts, 4 employees × 3 months of payslips, 2 signatures + 3 letters, a bank-statement import with matched + unmatched rows, 4 attachments — all within the last ~6 months. Its PDFs print on a bundled sample letterhead (Full-page background: `app/assets/stationery/demo-letterhead.svg`, outlined shapes only, written to the folder via `save_business_asset`; Safe area + PDF accent in `app/lib/demo-letterhead.ts`, render-checked as `invoice-classic-demo-letterhead*`). The same letterhead is ALSO stored, not active, as Header & footer images (`demo-header.svg` / `demo-footer.svg`, placed with `defaultImageRect`), so switching the demo's mode shows a finished setup — render-checked as `invoice-classic-demo-header-footer*`). Seeds in seconds through the stores (no direct SQL); SeedProgress callback still feeds the overlay's stage label. Add a new feature → add one row of it here.
 │  │  ├─ money.ts                     ← toCents, formatMoney/formatLKR, computeLineTotals (integer math). Plus the runtime currency registry: built-in CURRENCIES map + registerCurrency() / isBuiltinCurrency() helpers so user-defined currencies (slotted in by the settings store on load from company_settings.currency_symbol_override) work everywhere formatMoney does.
 │  │  ├─ numbering.ts                 ← allocateDocumentNumber (single-statement atomic)
 │  │  ├─ pdf.ts                       ← preview/commit/legacy export helpers; PdfCommand union
@@ -2796,7 +2796,8 @@ surface flagged in the same audit was deleted in v0.164.1.)
   leaves the render unchanged.
 - **Changing the Paper size re-fits Stationery geometry ON THE FORM, at the
   pick** (`setPaper` in /settings/pdf → `refitPaperGeometry` in
-  stationery-geometry.ts) — not at render, not when the editor opens. So the
+  stationery-geometry.ts; `refitStationery` in stationery.ts is the same on
+  stored JSON) — not at render, not when the editor opens. So the
   form's geometry is always in the picked sheet's coordinates (thumbnail,
   editor and sample preview show what Save writes; an edit after the pick is
   never re-fitted twice), stored geometry always fits the stored sheet, and
@@ -2810,8 +2811,11 @@ surface flagged in the same audit was deleted in v0.164.1.)
   Every image and the background carry the `paper` they were placed /
   prepared on; a scaled one moves to the new sheet with it, a clamped one
   keeps the old one — and THAT mismatch is the "Check your stationery" state
-  (`stationeryReview`: editor banner, Header & footer card note, background
-  card note / Re-crop alert). Apply in the editor clears it
+  (`stationeryReview` in stationery.ts: editor banner, Header & footer card
+  note, background card note / Re-crop alert). When the pick leaves the
+  ACTIVE mode needing that check (`modeNeedsReview`), `setPaper` opens the
+  editor straight away, banner showing; another mode's artwork only gets its
+  card's note. Apply in the editor clears it
   (`confirmPaperGeometry`, via the editor's `applied` emit), except a raster
   background prepared for another SHAPE, which only a Re-crop clears
   (`ImageCropModal` reshapes the stored crop of the ORIGINAL with
@@ -2819,14 +2823,22 @@ surface flagged in the same audit was deleted in v0.164.1.)
   (`background_paper` / `header_footer_papers`); because the cards save
   artwork immediately, they report the sheet they saved for (`placed`,
   `artwork`) and the page patches form AND baseline — skip that and Save
-  writes back a stale sheet. `verify:pdf`'s `imagePlacementProblem` fails any
+  writes back a stale sheet. For the same reason both cards refuse every
+  artwork action (upload, crop, Re-crop, Remove) while the picked Paper size
+  isn't the SAVED one (`artworkPaperLock`: "Save or discard the paper size
+  change first") — artwork saved for an unsaved sheet would be left on the
+  wrong one by Discard. `verify:pdf`'s `imagePlacementProblem` fails any
   render whose images leave the page or crowd the Safe area.
 - **The Stationery editor holds no geometry.** mm ↔ px at any zoom, margin
   drag / nudge limits (margins never cross: the Safe area keeps
   `MIN_SAFE_AREA_MM`; each band ≤ `MAX_BAND_MM`), snapping (whole mm, side
   margins to each other), ruler ticks, placeholder bars, the printer band and
   the Built-in Layout margins all live in `app/lib/stationery-geometry.ts`
-  (vitest). The printer band is INFORMATION only — nothing snaps to it or is
+  (vitest). That module is PURE geometry — it never parses or serialises the
+  stored JSON and has no runtime import from stationery.ts (which imports it);
+  reading the stored Stationery into `PaperGeometry` and back, and the
+  review rules, live in stationery.ts. The two artwork cards share their
+  upload plumbing through `useRasterArtwork`. The printer band is INFORMATION only — nothing snaps to it or is
   refused for crossing it. `LAYOUT_MARGINS_MM` there mirrors `layout-config`
   in common.typ — change both. The preview artwork comes from
   `useStationeryArtwork(kind)` (one shared, ref-counted blob URL per kind —
