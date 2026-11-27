@@ -119,8 +119,11 @@
 					<SectionCard
 						icon="i-lucide-layout-template"
 						title="Design"
-						subtitle="What's printed around your documents. Start from a template — a page designer to move things around and add your own images and text is coming."
+						subtitle="What's printed around your documents. Start from a template, or open the page designer to move things around and add your own images."
 					>
+						<UButton class="mb-3" icon="i-lucide-pencil-ruler" @click="designer.open()">
+							Open page designer
+						</UButton>
 						<div class="grid grid-cols-1 sm:grid-cols-2 @container gap-2" role="group" aria-label="Starter templates">
 							<button
 								v-for="t in DESIGN_TEMPLATES"
@@ -339,6 +342,7 @@
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
 	import { useLivePagePreview } from "~/composables/useLivePagePreview";
 	import { usePageDesign } from "~/composables/usePageDesign";
+	import { usePageDesignerWindow } from "~/composables/usePageDesignerWindow";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { DESIGN_TEMPLATES } from "~/lib/design-templates";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
@@ -355,6 +359,7 @@
 	const store = useSettingsStore();
 	const toast = useToast();
 	const pageDesign = usePageDesign();
+	const designer = usePageDesignerWindow();
 
 	const SIDES: { key: keyof MarginsMm, label: string }[] = [
 		{ key: "top", label: "Top" },

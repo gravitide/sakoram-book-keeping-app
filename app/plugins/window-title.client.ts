@@ -16,6 +16,9 @@ import { useTenantsStore } from "~/stores/tenants";
 export default defineNuxtPlugin(() => {
 	const tenants = useTenantsStore();
 	const win = getCurrentWindow();
+	// Only the main window follows the business; Help and the page designer
+	// keep the title they were opened with.
+	if (win.label !== "main") return;
 
 	watch(
 		() => tenants.activeTenant?.name,

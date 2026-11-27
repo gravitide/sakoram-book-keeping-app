@@ -11,7 +11,9 @@
 // only orchestrates them with the Rust asset commands and the settings store.
 
 import type { DesignTemplateKey } from "~/lib/design-templates";
-import type { MarginsMm } from "~/lib/page-design";
+import type { MarginsMm, PageDesign } from "~/lib/page-design";
+import type { PaperSize } from "~/lib/page-settings";
+import type { PdfLayoutKey } from "~/lib/pdf-layouts";
 import { itemAssetKind, readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
 import { designTemplate } from "~/lib/design-templates";
 import { imageFileIds, parsePageDesign, withLogoSlots, withMargins } from "~/lib/page-design";
@@ -34,27 +36,33 @@ export function usePageDesign() {
 	 * Replace the business's design with a fresh copy of a starter template,
 	 * and set the Document style it comes with — unless `keepDocumentStyle`.
 	 */
+	/**
+	 * A fresh copy of a starter template on `paper`, its logo spots filled with
+	 * a copy of the company logo — WITHOUT saving it. The logo copies are
+	 * written to the business folder; their item ids are in `uploaded`, so a
+	 * caller that drops the design (the page designer's Discard) can remove them.
+	 */
+	async function prepareTemplate(key: DesignTemplateKey, paper: PaperSize): Promise<{ design: PageDesign, documentStyle: PdfLayoutKey | null, uploaded: string[] }> {
+		const id = tenantId();
+		const { design, documentStyle } = designTemplate(key, paper);
+		const spots = design.items.filter((i) => i.type === "image" && i.src?.kind === "company_logo");
+		if (spots.length === 0) return { design, documentStyle, uploaded: [] };
+		// A logo_path whose file is gone (moved, deleted by hand) counts as no
+		// logo: the template still applies, with an empty slot.
+		const logo = settings.settings?.logo_path ? await readBusinessAsset(id, "logo").catch(() => null) : null;
+		const plan = logoSpotPlan(logo ? logo[0] : null);
+		if (plan === "empty") return { design: withLogoSlots(design, null), documentStyle, uploaded: [] };
+		// "link": the spot keeps following the company logo (a format a design
+		// image can't be), which every PDF already prints as-is.
+		if (plan === "link") return { design, documentStyle, uploaded: [] };
+		for (const spot of spots) await saveBusinessAsset(id, itemAssetKind(spot.id), plan.copyAs, logo![1]);
+		return { design: withLogoSlots(design, plan.copyAs), documentStyle, uploaded: spots.map((s) => s.id) };
+	}
+
 	async function applyTemplate(key: DesignTemplateKey, { keepDocumentStyle = false } = {}): Promise<void> {
 		const id = tenantId();
 		const row = settings.settings;
-		const { design, documentStyle } = designTemplate(key, resolvePaperSize(row?.pdf_paper_size).key);
-
-		let next = design;
-		const spots = design.items.filter((i) => i.type === "image" && i.src?.kind === "company_logo");
-		if (spots.length > 0) {
-			// A logo_path whose file is gone (moved, deleted by hand) counts as no
-			// logo: the template still applies, with an empty slot.
-			const logo = row?.logo_path ? await readBusinessAsset(id, "logo").catch(() => null) : null;
-			const plan = logoSpotPlan(logo ? logo[0] : null);
-			if (plan === "empty") {
-				next = withLogoSlots(design, null);
-			} else if (plan !== "link") {
-				for (const spot of spots) await saveBusinessAsset(id, itemAssetKind(spot.id), plan.copyAs, logo![1]);
-				next = withLogoSlots(design, plan.copyAs);
-			}
-			// "link": the spot keeps following the company logo (a format a design
-			// image can't be), which every PDF already prints as-is.
-		}
+		const { design: next, documentStyle } = await prepareTemplate(key, resolvePaperSize(row?.pdf_paper_size).key);
 
 		const previous = parsePageDesign(row?.pdf_design);
 		await settings.save({
@@ -81,5 +89,5 @@ export function usePageDesign() {
 		await settings.save({ pdf_design: JSON.stringify(withMargins(stored, margins, paper)) });
 	}
 
-	return { applyTemplate, saveMargins };
+	return { prepareTemplate, applyTemplate, saveMargins };
 }
