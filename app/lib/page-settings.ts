@@ -13,9 +13,11 @@
 //   - `margins: {…}` — the Stationery owns the page: these four margins
 //     bound the Safe area and the Layout only arranges content inside them.
 //     That is every mode other than Built-in: Full-page background (its own
-//     margins, artwork behind every page) and Pre-printed paper (for the
-//     whole business or for one letter — both reserve the same business-wide
-//     Pre-printed paper bands).
+//     margins, artwork behind every page), Header & footer images (its own
+//     margins, each band pushed out of its image — stationery-geometry.ts
+//     headerFooterMargins) and Pre-printed paper (for the whole business or
+//     for one letter — both reserve the same business-wide Pre-printed paper
+//     bands).
 //
 // `chrome` is the matching suppression rule: only Built-in stationery draws
 // the business identity (logo / wordmark, custom header text, the business
@@ -27,9 +29,10 @@
 // Pure, store-free, relative imports only: vitest and the render-check script
 // (scripts/verify-pdf-render.ts) both import it.
 
-import type { BackgroundExt, StationeryMarginsMm, StationeryMode } from "./stationery";
+import type { BackgroundExt, HeaderFooterImage, StationeryMarginsMm, StationeryMode } from "./stationery";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { parseStationery, resolveStationeryMode } from "./stationery";
+import { headerFooterMargins } from "./stationery-geometry";
 
 // The Stationery's four margins are the only margins a page block carries.
 export type { StationeryMarginsMm } from "./stationery";
@@ -116,9 +119,32 @@ export interface PageSettings {
 	 * comes back as null, so a moved or emptied folder renders without it.
 	 */
 	background: PageBackground | null
+	/**
+	 * Header & footer images drawn on every page at their stored place, or
+	 * null (any other mode, or neither image added yet). Like the background,
+	 * only the format travels — the files are `stationery/header.<ext>` and
+	 * `stationery/footer.<ext>`; pdf.rs `stage_header_footer` copies them
+	 * beside the template and adds each `file` (a missing file drops just that
+	 * image). Positions are mm from the page's top-left corner.
+	 */
+	header_footer: PageHeaderFooter | null
 }
 
 export type PageNumberPosition = "footer" | "safe_area";
+
+/** One Header & footer image as the page block carries it. */
+export interface PageImage {
+	ext: BackgroundExt
+	x: number
+	y: number
+	w: number
+	h: number
+}
+
+export interface PageHeaderFooter {
+	header: PageImage | null
+	footer: PageImage | null
+}
 
 export interface PageBackground {
 	ext: BackgroundExt
@@ -138,10 +164,22 @@ export interface PageSettingsOverride {
 type PageSettingsKey = "pdf_paper_size" | "pdf_stationery_mode" | "pdf_stationery";
 type PageSettingsSource = Partial<Pick<CompanySettingsRow, PageSettingsKey>>;
 
-const marginsFor = (mode: StationeryMode, settings: PageSettingsSource | null): StationeryMarginsMm | null => {
+const marginsFor = (mode: StationeryMode, settings: PageSettingsSource | null, paper: PaperSizeOption): StationeryMarginsMm | null => {
 	if (mode === "builtin") return null;
 	const stored = parseStationery(settings?.pdf_stationery);
+	if (mode === "header_footer") {
+		const { header, footer, margins } = stored.header_footer;
+		return headerFooterMargins(paper, { header: header?.rect ?? null, footer: footer?.rect ?? null }, margins);
+	}
 	return { ...(mode === "background" ? stored.background.margins : stored.preprinted) };
+};
+
+const pageImage = (image: HeaderFooterImage | null): PageImage | null => (image ? { ext: image.ext, ...image.rect } : null);
+
+const headerFooterFor = (mode: StationeryMode, settings: PageSettingsSource | null): PageHeaderFooter | null => {
+	if (mode !== "header_footer") return null;
+	const { header, footer } = parseStationery(settings?.pdf_stationery).header_footer;
+	return header || footer ? { header: pageImage(header), footer: pageImage(footer) } : null;
 };
 
 const backgroundFor = (mode: StationeryMode, settings: PageSettingsSource | null): PageBackground | null => {
@@ -162,10 +200,11 @@ export function buildPageSettings(settings: PageSettingsSource | null, override?
 		margin_scale,
 		stationery,
 		chrome: builtin,
-		margins: marginsFor(stationery, settings),
+		margins: marginsFor(stationery, settings, paper),
 		page_numbers: true,
 		page_number_position: builtin ? "footer" : "safe_area",
 		allow_landscape: builtin,
-		background: backgroundFor(stationery, settings)
+		background: backgroundFor(stationery, settings),
+		header_footer: headerFooterFor(stationery, settings)
 	};
 }

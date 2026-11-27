@@ -19,7 +19,8 @@ const BUILTIN_A4 = {
 	page_numbers: true,
 	page_number_position: "footer",
 	allow_landscape: true,
-	background: null
+	background: null,
+	header_footer: null
 };
 
 const onStationery = (mode: string, stationery: object | string | null = null) => ({
@@ -46,7 +47,8 @@ describe("buildPageSettings", () => {
 			page_numbers: true,
 			page_number_position: "safe_area",
 			allow_landscape: false,
-			background: null
+			background: null,
+			header_footer: null
 		});
 	});
 
@@ -100,8 +102,8 @@ describe("stationery mode", () => {
 		expect(buildPageSettings(onStationery("preprinted", "{oops")).margins).toEqual({ top: 55, right: 18, bottom: 20, left: 18 });
 	});
 
-	it("a mode the app can't render yet falls back to Built-in", () => {
-		expect(buildPageSettings(onStationery("header_footer"))).toMatchObject({ stationery: "builtin", chrome: true, margins: null, background: null });
+	it("an unknown mode falls back to Built-in", () => {
+		expect(buildPageSettings(onStationery("letterhead"))).toMatchObject({ stationery: "builtin", chrome: true, margins: null, background: null, header_footer: null });
 	});
 });
 
@@ -118,7 +120,8 @@ describe("full-page background", () => {
 			page_numbers: true,
 			page_number_position: "safe_area",
 			allow_landscape: false,
-			background: { ext: "pdf" }
+			background: { ext: "pdf" },
+			header_footer: null
 		});
 	});
 
@@ -127,7 +130,8 @@ describe("full-page background", () => {
 			stationery: "background",
 			chrome: false,
 			margins: { top: 40, right: 18, bottom: 25, left: 18 },
-			background: null
+			background: null,
+			header_footer: null
 		});
 	});
 
@@ -140,7 +144,8 @@ describe("full-page background", () => {
 		expect(buildPageSettings(both, { preprinted: true })).toMatchObject({
 			stationery: "preprinted",
 			margins: { top: 60, right: 14, bottom: 25, left: 16 },
-			background: null
+			background: null,
+			header_footer: null
 		});
 	});
 
@@ -208,5 +213,63 @@ describe("orientation", () => {
 
 	it("a letter on pre-printed paper stays portrait under a Built-in business", () => {
 		expect(buildPageSettings(settings(60, 25), { preprinted: true }).allow_landscape).toBe(false);
+	});
+});
+
+describe("header & footer images", () => {
+	const header = { ext: "svg", aspect: 7, rect: { x: 0, y: 0, w: 210, h: 30 }, paper: "a4", crop: null, live_text: false };
+	const footer = { ext: "png", aspect: 14, rect: { x: 20, y: 282, w: 210, h: 15 }, paper: "a4", crop: null, live_text: false };
+	const both = { header_footer: { header, footer, margins: { top: 40, right: 15, bottom: 12, left: 15 } } };
+
+	it("draws both images at their stored place on every page and keeps the content out of their bands", () => {
+		expect(buildPageSettings(onStationery("header_footer", both))).toEqual({
+			paper: "a4",
+			margin_scale: 1,
+			stationery: "header_footer",
+			chrome: false,
+			// The top band already clears the header (30 + 4); the bottom one is
+			// pushed out of the footer (297 − 282 + 4 = 19).
+			margins: { top: 40, right: 15, bottom: 19, left: 15 },
+			page_numbers: true,
+			page_number_position: "safe_area",
+			allow_landscape: false,
+			background: null,
+			header_footer: {
+				header: { ext: "svg", x: 0, y: 0, w: 210, h: 30 },
+				footer: { ext: "png", x: 20, y: 282, w: 210, h: 15 }
+			}
+		});
+	});
+
+	it("with only one image, only that one is drawn", () => {
+		const one = { header_footer: { header: null, footer } };
+		expect(buildPageSettings(onStationery("header_footer", one)).header_footer).toEqual({ header: null, footer: { ext: "png", x: 20, y: 282, w: 210, h: 15 } });
+	});
+
+	it("still owns the page before any image is added: its own margins, nothing drawn", () => {
+		expect(buildPageSettings(onStationery("header_footer", null))).toMatchObject({
+			stationery: "header_footer",
+			chrome: false,
+			margins: { top: 20, right: 18, bottom: 20, left: 18 },
+			background: null,
+			header_footer: null
+		});
+	});
+
+	it("keeps every document portrait", () => {
+		expect(buildPageSettings(onStationery("header_footer", both)).allow_landscape).toBe(false);
+	});
+
+	it("a letter set to pre-printed paper reserves the Pre-printed bands and draws neither image", () => {
+		expect(buildPageSettings(onStationery("header_footer", both), { preprinted: true })).toMatchObject({
+			stationery: "preprinted",
+			margins: { top: 55, right: 18, bottom: 20, left: 18 },
+			header_footer: null
+		});
+	});
+
+	it("other modes never carry the images", () => {
+		expect(buildPageSettings(onStationery("background", both)).header_footer).toBeNull();
+		expect(buildPageSettings(onStationery("builtin", both)).header_footer).toBeNull();
 	});
 });
