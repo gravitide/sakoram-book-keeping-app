@@ -777,7 +777,9 @@ bun run verify:pdf                       # renders every PDF template through th
                                          # REAL builders and compares sha256 against
                                          # scripts/pdf-render-baselines.json. --update
                                          # re-captures (only after looking: --keep <dir>
-                                         # writes the PDFs + a PNG per page). Also
+                                         # writes the PDFs + a PNG per page; --only
+                                         # <text> renders just matching cases,
+                                         # never with --update). Also
                                          # checks "Page N of M" on every multi-page
                                          # case. Needs the sidecar in
                                          # src-tauri/binaries or SAKORAM_TYPST_BIN.
@@ -2761,7 +2763,10 @@ surface flagged in the same audit was deleted in v0.164.1.)
   needs no `relocate_stored_paths` entry — don't add one. All artwork file ops
   go through `save_business_asset` / `read_business_asset` /
   `remove_business_asset` (kinds `stationery-background[-original]`), never the
-  fs plugin. Export bundles and Drive snapshots both carry `stationery/*`.
+  fs plugin — call them through the typed wrappers in `app/lib/business-assets.ts`,
+  whose `BusinessAssetKind` mirrors `asset_slot` in tenants.rs (add a kind to
+  both). Asset extensions are checked by `tenants::is_plain_ext` on both the
+  write and the render side. Export bundles and Drive snapshots both carry `stationery/*`.
 - **The Stationery editor holds no geometry.** mm ↔ px at any zoom, margin
   drag / nudge limits (margins never cross: the Safe area keeps
   `MIN_SAFE_AREA_MM`; each band ≤ `MAX_BAND_MM`), snapping (whole mm, side
