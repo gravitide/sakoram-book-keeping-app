@@ -87,7 +87,7 @@
 	// positions what it returns.
 	import type { PaperSize } from "~/lib/page-settings";
 	import type { PdfLayoutKey } from "~/lib/pdf-layouts";
-	import type { BackgroundExt, HeaderFooterSlot, StationeryMarginsMm, StationeryMode } from "~/lib/stationery";
+	import type { ArtworkExt, HeaderFooterSlot, StationeryMarginsMm, StationeryMode } from "~/lib/stationery";
 	import type { MmRect, PageImageView } from "~/lib/stationery-geometry";
 	import { resolvePaperSize } from "~/lib/page-settings";
 	import { HEADER_FOOTER_SLOTS } from "~/lib/stationery";
@@ -107,7 +107,7 @@
 		/** CSS px per mm. */
 		scale: number
 		artworkUrl?: string | null
-		artworkExt?: BackgroundExt | null
+		artworkExt?: ArtworkExt | null
 		printerBand?: boolean
 		/** Thumbnail size: no captions. */
 		compact?: boolean

@@ -58,7 +58,7 @@
 						{{ images[slot] ? "Replace" : "Upload" }}
 					</UButton>
 					<UButton
-						v-if="images[slot] && isRasterBackground(images[slot]!.ext)"
+						v-if="images[slot] && isRasterArtwork(images[slot]!.ext)"
 						icon="i-lucide-crop"
 						size="sm"
 						variant="soft"
@@ -110,7 +110,7 @@
 			v-model:open="cropOpen"
 			:image-blob="cropBlob"
 			:initial-rect="cropInitial"
-			:max-output="backgroundPixelSize(paper)"
+			:max-output="artworkPixelSize(paper)"
 			:output-type="cropExt === 'jpg' ? 'image/jpeg' : 'image/png'"
 			:title="`Crop the ${cropSlot} image`"
 			hint="Choose the part of your image to print. Your original upload is kept, so you can crop again later."
@@ -134,21 +134,21 @@
 	//
 	// Image changes save immediately (like the background); the page's form
 	// learns about them through `placed`, so its unsaved edits survive.
-	import type { BusinessAssetKind } from "~/lib/business-assets";
+
+	import type { ArtworkAssets } from "~/composables/useRasterArtwork";
 	import type { CropRect } from "~/lib/crop-rect";
 	import type { PaperSize } from "~/lib/page-settings";
-	import type { BackgroundExt, HeaderFooterImage, HeaderFooterSlot, StationeryMarginsMm } from "~/lib/stationery";
-	import type { HeaderFooterRects, MmRect, StationeryReview } from "~/lib/stationery-geometry";
+	import type { ArtworkExt, HeaderFooterImage, HeaderFooterSlot, StationeryMarginsMm, StationeryReview } from "~/lib/stationery";
+	import type { HeaderFooterRects, MmRect } from "~/lib/stationery-geometry";
 	import { invoke } from "@tauri-apps/api/core";
+	import { useRasterArtwork } from "~/composables/useRasterArtwork";
 	import { useStationeryArtwork } from "~/composables/useStationeryArtwork";
-	import { readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
-	import { encodeImage } from "~/lib/canvas-image";
+	import { removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
 	import { resolvePaperSize } from "~/lib/page-settings";
-	import { HEADER_FOOTER_SLOTS, parseStationery, setHeaderFooterImage, setHeaderFooterMargins } from "~/lib/stationery";
-	import { backgroundFormatOf, backgroundMimeOf, backgroundPixelSize, downscaleSize, isRasterBackground, svgAspect, svgHasLiveText } from "~/lib/stationery-artwork";
-	import { clampImageRect, defaultImageRect, followImage } from "~/lib/stationery-geometry";
+	import { HEADER_FOOTER_SLOTS, isRasterArtwork, parseStationery, setHeaderFooterImage, setHeaderFooterMargins, HEADER_FOOTER_LABEL as SLOT_LABEL } from "~/lib/stationery";
+	import { artworkFormatOf, artworkMimeOf, artworkPixelSize, svgAspect, svgHasLiveText } from "~/lib/stationery-artwork";
+	import { croppedImageRect, defaultImageRect, followImage, IMAGE_EDGE } from "~/lib/stationery-geometry";
 	import { useSettingsStore } from "~/stores/settings";
-	import { useTenantsStore } from "~/stores/tenants";
 
 	const props = defineProps<{
 		/** The business's Paper size as currently picked on the page (maybe unsaved). */
@@ -173,14 +173,14 @@
 		placed: [slot: HeaderFooterSlot, rect: MmRect | null, margins: StationeryMarginsMm]
 	}>();
 
-	const SLOT_LABEL: Record<HeaderFooterSlot, string> = { header: "Header image", footer: "Footer image" };
-	const ASSET: Record<HeaderFooterSlot, BusinessAssetKind> = { header: "stationery-header", footer: "stationery-footer" };
-	const ORIGINAL: Record<HeaderFooterSlot, BusinessAssetKind> = { header: "stationery-header-original", footer: "stationery-footer-original" };
-	const EDGE = { header: "top", footer: "bottom" } as const;
+	const ASSETS: Record<HeaderFooterSlot, ArtworkAssets> = {
+		header: { asset: "stationery-header", original: "stationery-header-original" },
+		footer: { asset: "stationery-footer", original: "stationery-footer-original" }
+	};
 
 	const store = useSettingsStore();
-	const tenants = useTenantsStore();
 	const toast = useToast();
+	const { fail, activeId, loadImage, downscaled, saveRaster, saveDerivative, readCropSource } = useRasterArtwork();
 
 	const paperInfo = computed(() => resolvePaperSize(props.paper));
 	const images = computed(() => parseStationery(store.settings?.pdf_stationery).header_footer);
@@ -198,32 +198,6 @@
 		fileInput.value?.click();
 	};
 
-	const fail = (title: string, err: unknown) => toast.add({
-		title,
-		description: err instanceof Error ? err.message : String(err),
-		color: "error",
-		icon: "i-lucide-circle-alert"
-	});
-
-	const activeId = () => {
-		if (!tenants.activeTenantId) throw new Error("No active business.");
-		return tenants.activeTenantId;
-	};
-
-	const loadImage = (blob: Blob) => new Promise<HTMLImageElement>((resolve, reject) => {
-		const url = URL.createObjectURL(blob);
-		const img = new Image();
-		img.onload = () => {
-			URL.revokeObjectURL(url);
-			resolve(img);
-		};
-		img.onerror = () => {
-			URL.revokeObjectURL(url);
-			reject(new Error("That image couldn't be read."));
-		};
-		img.src = url;
-	});
-
 	/**
 	 * Record an image (or its removal) and save. Its band follows it from
 	 * `before`; only that one band is written back, so unsaved edits to the
@@ -232,7 +206,7 @@
 	const record = async (slot: HeaderFooterSlot, image: HeaderFooterImage | null, before: MmRect | null) => {
 		const followed = followImage(paperInfo.value, slot, before, image?.rect ?? null, props.margins);
 		const stored = parseStationery(store.settings?.pdf_stationery).header_footer.margins;
-		const edge = EDGE[slot];
+		const edge = IMAGE_EDGE[slot];
 		let json = setHeaderFooterImage(store.settings?.pdf_stationery, slot, image);
 		if (image) json = setHeaderFooterMargins(json, { ...stored, [edge]: followed[edge] });
 		await store.save({ pdf_stationery: json });
@@ -241,7 +215,7 @@
 	};
 
 	/** The proportions of an uploaded vector: an SVG's own size, a PDF's first page as Typst renders it. */
-	const vectorAspect = async (slot: HeaderFooterSlot, ext: BackgroundExt, bytes: Uint8Array): Promise<number> => {
+	const vectorAspect = async (slot: HeaderFooterSlot, ext: ArtworkExt, bytes: Uint8Array): Promise<number> => {
 		if (ext === "svg") {
 			const fromMarkup = svgAspect(new TextDecoder().decode(bytes));
 			if (fromMarkup) return fromMarkup;
@@ -255,7 +229,7 @@
 
 	const upload = async (slot: HeaderFooterSlot, file: File) => {
 		if (props.locked) return;
-		const ext = backgroundFormatOf(file.name);
+		const ext = artworkFormatOf(file.name);
 		if (!ext) {
 			toast.add({ title: "Use an SVG, PDF, PNG or JPEG file", color: "error", icon: "i-lucide-circle-alert" });
 			return;
@@ -267,18 +241,15 @@
 			const before = placeOf(slot);
 			let aspect: number;
 			let liveText = false;
-			if (isRasterBackground(ext)) {
-				const img = await loadImage(new Blob([bytes], { type: backgroundMimeOf(ext) }));
+			if (isRasterArtwork(ext)) {
+				const img = await loadImage(new Blob([bytes], { type: artworkMimeOf(ext) }));
 				aspect = img.naturalWidth / img.naturalHeight;
 				// ~300 DPI at full page width at most (never enlarged).
-				const out = downscaleSize(img.naturalWidth, img.naturalHeight, backgroundPixelSize(props.paper));
-				const derivative = await encodeImage(img, out, backgroundMimeOf(ext));
-				await saveBusinessAsset(id, ORIGINAL[slot], ext, bytes);
-				await saveBusinessAsset(id, ASSET[slot], ext, new Uint8Array(await derivative.arrayBuffer()));
+				await saveRaster(ASSETS[slot], ext, bytes, await downscaled(img, ext, props.paper));
 			} else {
 				liveText = ext === "svg" && svgHasLiveText(new TextDecoder().decode(bytes));
-				await saveBusinessAsset(id, ASSET[slot], ext, bytes);
-				await removeBusinessAsset(id, ORIGINAL[slot]);
+				await saveBusinessAsset(id, ASSETS[slot].asset, ext, bytes);
+				await removeBusinessAsset(id, ASSETS[slot].original);
 				aspect = await vectorAspect(slot, ext, bytes);
 			}
 			if (!Number.isFinite(aspect) || aspect <= 0) throw new Error("Couldn't tell how big that image is.");
@@ -311,31 +282,22 @@
 	// ---- crop ----------------------------------------------------------
 	// Free-form: a header or footer image has no fixed shape. Cropping
 	// changes its proportions, so it keeps its place and width and takes the
-	// new height (made to fit), its band following.
+	// new height (stationery-geometry.ts croppedImageRect), its band following.
 	const cropOpen = ref(false);
 	const cropSlot = ref<HeaderFooterSlot>("header");
 	const cropBlob = ref<Blob | null>(null);
 	const cropInitial = ref<CropRect | null>(null);
-	const cropExt = ref<BackgroundExt>("png");
+	const cropExt = ref<ArtworkExt>("png");
 
 	const openRecrop = async (slot: HeaderFooterSlot) => {
 		const image = images.value[slot];
-		if (props.locked || !image || !tenants.activeTenantId) return;
+		if (props.locked || !image) return;
 		try {
-			let ext: string;
-			let bytes: number[];
-			let initial = image.crop;
-			try {
-				[ext, bytes] = await readBusinessAsset(tenants.activeTenantId, ORIGINAL[slot]);
-			} catch {
-				// No original (e.g. after a backup from an older build): crop the image itself.
-				[ext, bytes] = await readBusinessAsset(tenants.activeTenantId, ASSET[slot]);
-				initial = null;
-			}
+			const source = await readCropSource(ASSETS[slot], image.crop);
 			cropSlot.value = slot;
-			cropExt.value = backgroundFormatOf(`x.${ext}`) ?? "png";
-			cropBlob.value = new Blob([new Uint8Array(bytes)], { type: backgroundMimeOf(cropExt.value) });
-			cropInitial.value = initial;
+			cropExt.value = source.ext;
+			cropBlob.value = source.blob;
+			cropInitial.value = source.initial;
 			cropOpen.value = true;
 		} catch (err) {
 			fail("Couldn't open crop", err);
@@ -348,10 +310,10 @@
 		if (!image) return;
 		busy.value = slot;
 		try {
-			await saveBusinessAsset(activeId(), ASSET[slot], cropExt.value, new Uint8Array(await blob.arrayBuffer()));
+			await saveDerivative(ASSETS[slot], cropExt.value, blob);
 			const aspect = crop.w / crop.h;
 			const place = placeOf(slot) ?? image.rect;
-			const rect = clampImageRect(paperInfo.value, slot, { ...place, h: place.w / aspect }, props.margins);
+			const rect = croppedImageRect(paperInfo.value, slot, place, aspect, props.margins);
 			// Re-placed on the sheet picked now.
 			await record(slot, { ...image, ext: cropExt.value, aspect, rect, paper: props.paper, crop: { ...crop } }, place);
 			toast.add({ title: `${SLOT_LABEL[slot]} cropped`, color: "success", icon: "i-lucide-check" });
@@ -373,11 +335,12 @@
 	// Remove deletes that image and its original only — the other image, and
 	// both bands, stay as they are. Switching modes never deletes anything.
 	const remove = async (slot: HeaderFooterSlot) => {
-		if (props.locked || !tenants.activeTenantId) return;
+		if (props.locked) return;
 		busy.value = slot;
 		try {
-			await removeBusinessAsset(tenants.activeTenantId, ASSET[slot]);
-			await removeBusinessAsset(tenants.activeTenantId, ORIGINAL[slot]);
+			const id = activeId();
+			await removeBusinessAsset(id, ASSETS[slot].asset);
+			await removeBusinessAsset(id, ASSETS[slot].original);
 			await record(slot, null, placeOf(slot));
 			toast.add({ title: `${SLOT_LABEL[slot]} removed`, color: "info", icon: "i-lucide-image-off" });
 		} catch (err) {

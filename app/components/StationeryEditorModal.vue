@@ -302,7 +302,7 @@
 	import { resolvePaperSize } from "~/lib/page-settings";
 	import { PDF_LAYOUTS } from "~/lib/pdf-layouts";
 	import { sampleStationeryPreviewPayload } from "~/lib/sample-pdf";
-	import { HEADER_FOOTER_SLOTS, parseStationery, setBackgroundMargins, setHeaderFooterGeometry, setPreprintedMargins, STATIONERY_MODES } from "~/lib/stationery";
+	import { HEADER_FOOTER_SLOTS, paperGeometryOf, parseStationery, setBackgroundMargins, setHeaderFooterGeometry, setPreprintedMargins, HEADER_FOOTER_LABEL as SLOT_LABEL, STATIONERY_MODES, stationeryReview } from "~/lib/stationery";
 	import {
 		bandFloors,
 		CSS_PX_PER_MM,
@@ -312,6 +312,7 @@
 		fitMargins,
 		fitScale,
 		followImage,
+		formatMm,
 		HEADER_FOOTER_GAP_MM,
 		headerFooterMargins,
 		marginGuides,
@@ -319,14 +320,12 @@
 		mmToPx,
 		nudgeImage,
 		nudgeMargin,
-		paperGeometryOf,
 		PRINTER_BAND_MM,
 		rectToPx,
 		resizeImage,
 		rulerTicks,
 		safeAreaMargins,
 		setMargin,
-		stationeryReview,
 		stepZoom
 	} from "~/lib/stationery-geometry";
 
@@ -342,7 +341,7 @@
 		/**
 		 * Apply was pressed: the user has seen this mode on this sheet, so the
 		 * settings page counts what the banner flagged as checked
-		 * (stationery-geometry.ts confirmPaperGeometry).
+		 * (stationery.ts confirmPaperGeometry).
 		 */
 		applied: []
 	}>();
@@ -354,7 +353,6 @@
 	const GUTTER_PX = 24;
 	const EDGES: MarginEdge[] = ["top", "bottom", "left", "right"];
 	const EDGE_LABEL: Record<MarginEdge, string> = { top: "Top", bottom: "Bottom", left: "Left", right: "Right" };
-	const SLOT_LABEL: Record<HeaderFooterSlot, string> = { header: "Header image", footer: "Footer image" };
 	const CORNERS: ImageCorner[] = ["nw", "ne", "sw", "se"];
 	const CORNER_CLASS: Record<ImageCorner, string> = {
 		nw: "-left-1.5 -top-1.5 cursor-nwse-resize",
@@ -376,7 +374,6 @@
 	// Built-in's read-only Safe area: the Layout's margins on this sheet.
 	const layoutMargins = computed(() => safeAreaMargins(props.mode, props.layout, paperInfo.value, margins.value));
 	const layoutLabel = computed(() => PDF_LAYOUTS.find((l) => l.key === props.layout)?.label ?? "");
-	const formatMm = (mm: number) => String(Math.round(mm * 10) / 10);
 	const artwork = useStationeryArtwork();
 	const currency = useActiveCurrency();
 

@@ -18,11 +18,11 @@
 
 import type { Ref } from "vue";
 import type { BusinessAssetKind } from "~/lib/business-assets";
-import type { BackgroundExt } from "~/lib/stationery";
+import type { ArtworkExt } from "~/lib/stationery";
 import { invoke } from "@tauri-apps/api/core";
 import { readBusinessAsset } from "~/lib/business-assets";
 import { parseStationery } from "~/lib/stationery";
-import { backgroundMimeOf } from "~/lib/stationery-artwork";
+import { artworkMimeOf } from "~/lib/stationery-artwork";
 import { useSettingsStore } from "~/stores/settings";
 import { useTenantsStore } from "~/stores/tenants";
 
@@ -71,7 +71,7 @@ export function useStationeryArtwork(kind: StationeryArtworkKind = "background")
 	const store = useSettingsStore();
 	const tenants = useTenantsStore();
 	const state = stateFor(kind);
-	const ext = computed<BackgroundExt | null>(() => artworkKey(store.settings?.pdf_stationery, kind).ext);
+	const ext = computed<ArtworkExt | null>(() => artworkKey(store.settings?.pdf_stationery, kind).ext);
 
 	const setUrl = (next: string | null) => {
 		if (state.url.value) URL.revokeObjectURL(state.url.value);
@@ -94,7 +94,7 @@ export function useStationeryArtwork(kind: StationeryArtworkKind = "background")
 				blob = new Blob([new Uint8Array(png)], { type: "image/png" });
 			} else {
 				const [readExt, bytes] = await readBusinessAsset(tenantId, ASSET_KIND[kind]);
-				blob = new Blob([new Uint8Array(bytes)], { type: backgroundMimeOf(readExt) });
+				blob = new Blob([new Uint8Array(bytes)], { type: artworkMimeOf(readExt) });
 			}
 			// A newer reload started while this one was reading: let it win.
 			if (mine === state.generation) setUrl(URL.createObjectURL(blob));

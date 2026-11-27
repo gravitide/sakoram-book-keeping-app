@@ -1,11 +1,12 @@
 // Changing the Paper size under custom Stationery: what happens to the
 // artwork, the Header & footer images and every mode's margins. The rules live
-// in stationery-geometry.ts (refitPaperGeometry and friends).
+// in stationery-geometry.ts (refitPaperGeometry) and stationery.ts (reading
+// it out of the stored JSON and back, and what the user should check).
 import type { PaperGeometry } from "./stationery-geometry";
 import { describe, expect, it } from "vitest";
 import { resolvePaperSize } from "./page-settings";
-import { MAX_BAND_MM, parseStationery } from "./stationery";
-import { confirmPaperGeometry, modeNeedsReview, paperGeometryOf, refitPaperGeometry, refitStationery, stationeryReview, withPaperGeometry } from "./stationery-geometry";
+import { confirmPaperGeometry, modeNeedsReview, paperGeometryOf, parseStationery, refitStationery, stationeryReview, withPaperGeometry } from "./stationery";
+import { MAX_BAND_MM, refitPaperGeometry } from "./stationery-geometry";
 
 const A4 = resolvePaperSize("a4");
 const A5 = resolvePaperSize("a5");

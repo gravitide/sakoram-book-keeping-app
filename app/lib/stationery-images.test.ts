@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
 	bandFloors,
 	clampImageRect,
+	croppedImageRect,
 	defaultImageRect,
 	dragImage,
 	dragMargin,
@@ -228,5 +229,16 @@ describe("clampImageRect", () => {
 	it("the safe area keeps its minimum height", () => {
 		const r = clampImageRect(A5, "footer", { x: 0, y: 60, w: 148, h: 150 }, { ...margins, top: 30 });
 		expect(210 - r.y + HEADER_FOOTER_GAP_MM + 30 + MIN_SAFE_AREA_MM).toBeLessThanOrEqual(210 + 1e-9);
+	});
+});
+
+describe("croppedImageRect", () => {
+	it("keeps a cropped image's place and width; the new proportions set its height", () => {
+		expect(croppedImageRect(A4, "header", header, 10, margins)).toEqual({ x: 0, y: 0, w: 210, h: 21 });
+		expect(croppedImageRect(A4, "header", { x: 30, y: 5, w: 100, h: 20 }, 4, margins)).toEqual({ x: 30, y: 5, w: 100, h: 25 });
+	});
+
+	it("a footer that grows taller is moved back onto the page", () => {
+		expect(croppedImageRect(A4, "footer", footer, 10, margins)).toEqual({ x: 0, y: 276, w: 210, h: 21 });
 	});
 });

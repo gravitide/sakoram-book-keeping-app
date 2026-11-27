@@ -701,9 +701,9 @@
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
 	import { PDF_TOKENS } from "~/lib/pdf-tokens";
 	import { sampleInvoicePayload } from "~/lib/sample-pdf";
-	import { BACKGROUND_DEFAULT_MARGINS, HEADER_FOOTER_DEFAULT_MARGINS, MAX_BAND_MM, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, serializeStationery, STATIONERY_MODES, stationeryModeToSave, stationerySchema } from "~/lib/stationery";
+	import { BACKGROUND_DEFAULT_MARGINS, confirmPaperGeometry, HEADER_FOOTER_DEFAULT_MARGINS, modeNeedsReview, paperGeometryOf, parseStationery, PREPRINTED_DEFAULT_MARGINS, resolveStationeryMode, serializeStationery, STATIONERY_MODES, stationeryReview, stationerySchema, withPaperGeometry } from "~/lib/stationery";
 	import { artworkPaperLock } from "~/lib/stationery-artwork";
-	import { confirmPaperGeometry, headerFooterMargins, modeNeedsReview, refitPaperGeometry, scaleForWidth, stationeryReview, withPaperGeometry } from "~/lib/stationery-geometry";
+	import { formatMm, headerFooterMargins, IMAGE_EDGE, MAX_BAND_MM, refitPaperGeometry, scaleForWidth } from "~/lib/stationery-geometry";
 	import { isHexColor, THEME_COLORS, themeHex } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
@@ -724,7 +724,7 @@
 	// artwork, which saves on upload — survive.
 	type PdfForm = Pick<SettingsUpdate, "pdf_header_logo_path" | "pdf_font" | "pdf_theme_color" | "pdf_paper_size" | "pdf_logo_scale" | "pdf_header_custom" | "pdf_header_text" | "pdf_footer_custom" | "pdf_footer_text"> & {
 		pdf_layout: PdfLayoutKey
-		// The RESOLVED mode the picker shows; onSubmit maps it back (stationeryModeToSave).
+		// The mode the picker shows (an unknown stored value reads as Built-in).
 		pdf_stationery_mode: StationeryMode
 		preprinted_margins: StationeryMarginsMm
 		background_margins: StationeryMarginsMm
@@ -793,7 +793,6 @@
 	));
 
 	const paperKey = computed(() => resolvePaperSize(form.pdf_paper_size).key);
-	const formatMm = (mm: number) => String(Math.round(mm * 10) / 10);
 
 	// What the cards and the editor flag for a check on the picked sheet.
 	const stationeryCheck = computed(() =>
@@ -1064,14 +1063,8 @@
 		form.pdf_layout = resolveLayoutKey(s.pdf_layout);
 		form.pdf_paper_size = resolvePaperSize(s.pdf_paper_size).key;
 		form.pdf_stationery_mode = resolveStationeryMode(s.pdf_stationery_mode);
-		const stationery = parseStationery(s.pdf_stationery);
-		form.preprinted_margins = { ...stationery.preprinted };
-		form.background_margins = { ...stationery.background.margins };
-		form.header_footer_margins = { ...stationery.header_footer.margins };
-		const rect = (r: MmRect | null | undefined) => (r ? { ...r } : null);
-		form.header_footer_images = { header: rect(stationery.header_footer.header?.rect), footer: rect(stationery.header_footer.footer?.rect) };
-		form.background_paper = stationery.background.paper;
-		form.header_footer_papers = { header: stationery.header_footer.header?.paper ?? null, footer: stationery.header_footer.footer?.paper ?? null };
+		// Stored geometry is already in the stored sheet's coordinates: no re-fit.
+		setFormGeometry(paperGeometryOf(parseStationery(s.pdf_stationery)));
 		form.pdf_logo_scale = s.pdf_logo_scale ?? 100;
 		form.pdf_header_custom = s.pdf_header_custom ?? 0;
 		form.pdf_header_text = s.pdf_header_text ?? null;
@@ -1097,8 +1090,7 @@
 				pdf_theme_color: form.pdf_theme_color,
 				pdf_layout: form.pdf_layout,
 				pdf_paper_size: form.pdf_paper_size,
-				// A stored mode the picker can't show yet survives unless another was picked.
-				pdf_stationery_mode: stationeryModeToSave(store.settings?.pdf_stationery_mode, form.pdf_stationery_mode),
+				pdf_stationery_mode: form.pdf_stationery_mode,
 				pdf_stationery: stationeryJson(),
 				pdf_logo_scale: form.pdf_logo_scale,
 				pdf_header_custom: form.pdf_header_custom,
@@ -1123,7 +1115,7 @@
 	// baseline, so it doesn't read as an unsaved change while any other
 	// unsaved edit on the page stays exactly as it was.
 	const onImagePlaced = (slot: HeaderFooterSlot, rect: MmRect | null, margins: StationeryMarginsMm) => {
-		const edge = slot === "header" ? "top" : "bottom";
+		const edge = IMAGE_EDGE[slot];
 		const apply = (f: PdfForm) => {
 			f.header_footer_images[slot] = rect ? { ...rect } : null;
 			// Placed (or re-cropped) on the sheet picked now — the card saved that.

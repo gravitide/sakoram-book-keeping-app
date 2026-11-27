@@ -131,7 +131,7 @@
 			:image-blob="cropBlob"
 			:initial-rect="cropInitial"
 			:aspect="paperInfo.widthMm / paperInfo.heightMm"
-			:max-output="backgroundPixelSize(paper)"
+			:max-output="artworkPixelSize(paper)"
 			:output-type="cropExt === 'jpg' ? 'image/jpeg' : 'image/png'"
 			title="Crop background to the page"
 			:hint="`Your image isn't ${paperInfo.label}-shaped. Choose the part that fills the page; the crop is locked to the paper's proportions. Your original upload is kept.`"
@@ -153,19 +153,16 @@
 	//
 	// Artwork changes save immediately (like the header logo).
 
-	import type { BusinessAssetKind } from "~/lib/business-assets";
 	import type { CropRect } from "~/lib/crop-rect";
 	import type { PaperSize } from "~/lib/page-settings";
-	import type { BackgroundArtwork, BackgroundExt } from "~/lib/stationery";
-	import type { StationeryReview } from "~/lib/stationery-geometry";
+	import type { ArtworkExt, BackgroundArtwork, StationeryReview } from "~/lib/stationery";
+	import { useRasterArtwork } from "~/composables/useRasterArtwork";
 	import { useStationeryArtwork } from "~/composables/useStationeryArtwork";
-	import { readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
-	import { encodeImage } from "~/lib/canvas-image";
+	import { removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
 	import { resolvePaperSize } from "~/lib/page-settings";
-	import { clearBackgroundArtwork, parseStationery, setBackgroundArtwork } from "~/lib/stationery";
-	import { backgroundFormatOf, backgroundMimeOf, backgroundPixelSize, downscaleSize, isRasterBackground, matchesPaperAspect, svgHasLiveText } from "~/lib/stationery-artwork";
+	import { clearBackgroundArtwork, isRasterArtwork, parseStationery, setBackgroundArtwork } from "~/lib/stationery";
+	import { artworkFormatOf, artworkMimeOf, artworkPixelSize, matchesPaperAspect, svgHasLiveText } from "~/lib/stationery-artwork";
 	import { useSettingsStore } from "~/stores/settings";
-	import { useTenantsStore } from "~/stores/tenants";
 
 	const props = defineProps<{
 		/** The business's Paper size as currently picked on the page (maybe unsaved). */
@@ -183,14 +180,16 @@
 		artwork: [paper: PaperSize | null]
 	}>();
 
+	const ASSETS = { asset: "stationery-background", original: "stationery-background-original" } as const;
+
 	const store = useSettingsStore();
-	const tenants = useTenantsStore();
 	const toast = useToast();
+	const { fail, activeId, loadImage, downscaled, saveRaster, saveDerivative, readCropSource } = useRasterArtwork();
 
 	const paperInfo = computed(() => resolvePaperSize(props.paper));
 	const paperLabel = (key: PaperSize) => resolvePaperSize(key).label;
 	const artwork = computed(() => parseStationery(store.settings?.pdf_stationery).background);
-	const canRecrop = computed(() => artwork.value.ext !== null && isRasterBackground(artwork.value.ext));
+	const canRecrop = computed(() => artwork.value.ext !== null && isRasterArtwork(artwork.value.ext));
 
 	const fileInput = useTemplateRef<HTMLInputElement>("fileInput");
 	const dragOver = ref(false);
@@ -199,57 +198,23 @@
 		if (!props.locked) fileInput.value?.click();
 	};
 
-	const fail = (title: string, err: unknown) => toast.add({
-		title,
-		description: err instanceof Error ? err.message : String(err),
-		color: "error",
-		icon: "i-lucide-circle-alert"
-	});
-
 	// ---- preview -------------------------------------------------------
 	// Shared with the Stationery thumbnail and editor: the file itself, or for
 	// a PDF its first page rendered to PNG by Typst.
 	const artworkPreview = useStationeryArtwork();
 
 	// ---- saving --------------------------------------------------------
-	const activeId = () => {
-		if (!tenants.activeTenantId) throw new Error("No active business.");
-		return tenants.activeTenantId;
-	};
-	const saveAsset = (kind: BusinessAssetKind, ext: string, bytes: Uint8Array) => saveBusinessAsset(activeId(), kind, ext, bytes);
-
 	const recordArtwork = async (next: BackgroundArtwork) => {
 		await store.save({ pdf_stationery: setBackgroundArtwork(store.settings?.pdf_stationery, next) });
 		emit("artwork", next.paper);
 		await artworkPreview.reload();
 	};
 
-	const loadImage = (blob: Blob) => new Promise<HTMLImageElement>((resolve, reject) => {
-		const url = URL.createObjectURL(blob);
-		const img = new Image();
-		img.onload = () => {
-			URL.revokeObjectURL(url);
-			resolve(img);
-		};
-		img.onerror = () => {
-			URL.revokeObjectURL(url);
-			reject(new Error("That image couldn't be read."));
-		};
-		img.src = url;
-	});
-
-	// Whole image, downscaled to ~300 DPI at the paper size (never enlarged).
-	const downscaled = async (img: HTMLImageElement, ext: BackgroundExt): Promise<Uint8Array> => {
-		const out = downscaleSize(img.naturalWidth, img.naturalHeight, backgroundPixelSize(props.paper));
-		const blob = await encodeImage(img, out, backgroundMimeOf(ext));
-		return new Uint8Array(await blob.arrayBuffer());
-	};
-
 	// ---- crop ----------------------------------------------------------
 	const cropOpen = ref(false);
 	const cropBlob = ref<Blob | null>(null);
 	const cropInitial = ref<CropRect | null>(null);
-	const cropExt = ref<BackgroundExt>("png");
+	const cropExt = ref<ArtworkExt>("png");
 	// The untouched upload waiting on a crop; written only once the crop is
 	// applied, so cancelling a fresh upload leaves the old background intact.
 	const pendingOriginal = ref<Uint8Array | null>(null);
@@ -257,8 +222,8 @@
 	const onCropped = async (rect: CropRect, blob: Blob) => {
 		busy.value = true;
 		try {
-			if (pendingOriginal.value) await saveAsset("stationery-background-original", cropExt.value, pendingOriginal.value);
-			await saveAsset("stationery-background", cropExt.value, new Uint8Array(await blob.arrayBuffer()));
+			if (pendingOriginal.value) await saveRaster(ASSETS, cropExt.value, pendingOriginal.value, blob);
+			else await saveDerivative(ASSETS, cropExt.value, blob);
 			await recordArtwork({ ext: cropExt.value, paper: props.paper, crop: rect, live_text: false });
 			toast.add({ title: "Background updated", color: "success", icon: "i-lucide-check" });
 		} catch (err) {
@@ -283,24 +248,16 @@
 	// Re-crop starts from the untouched ORIGINAL upload, with the stored crop
 	// reshaped to the picked paper (ImageCropModal → fitCropToAspect) — after
 	// a Paper size change to or from Letter / Legal that is how the artwork
-	// gets its new proportions back.
+	// gets its new proportions back. No original (it was already the paper's
+	// shape): crop the artwork itself.
 	const openRecrop = async () => {
-		if (props.locked || !tenants.activeTenantId || !artwork.value.ext) return;
+		if (props.locked || !artwork.value.ext) return;
 		try {
-			let ext: string;
-			let bytes: number[];
-			let initial = artwork.value.crop;
-			try {
-				[ext, bytes] = await readBusinessAsset(tenants.activeTenantId, "stationery-background-original");
-			} catch {
-				// No original (e.g. it was already the paper's shape): crop the artwork itself.
-				[ext, bytes] = await readBusinessAsset(tenants.activeTenantId, "stationery-background");
-				initial = null;
-			}
-			cropExt.value = backgroundFormatOf(`x.${ext}`) ?? "png";
+			const source = await readCropSource(ASSETS, artwork.value.crop);
+			cropExt.value = source.ext;
 			pendingOriginal.value = null;
-			cropBlob.value = new Blob([new Uint8Array(bytes)], { type: backgroundMimeOf(cropExt.value) });
-			cropInitial.value = initial;
+			cropBlob.value = source.blob;
+			cropInitial.value = source.initial;
 			cropOpen.value = true;
 		} catch (err) {
 			fail("Couldn't open crop", err);
@@ -310,33 +267,29 @@
 	// ---- upload --------------------------------------------------------
 	const upload = async (file: File) => {
 		if (props.locked) return;
-		if (!tenants.activeTenantId) {
-			toast.add({ title: "No active business", color: "error", icon: "i-lucide-circle-alert" });
-			return;
-		}
-		const ext = backgroundFormatOf(file.name);
+		const ext = artworkFormatOf(file.name);
 		if (!ext) {
 			toast.add({ title: "Use an SVG, PDF, PNG or JPEG file", color: "error", icon: "i-lucide-circle-alert" });
 			return;
 		}
 		busy.value = true;
 		try {
+			const id = activeId();
 			const bytes = new Uint8Array(await file.arrayBuffer());
-			if (!isRasterBackground(ext)) {
+			if (!isRasterArtwork(ext)) {
 				// Vector (SVG / PDF): stored as uploaded, covering the page uncropped.
 				const liveText = ext === "svg" && svgHasLiveText(new TextDecoder().decode(bytes));
-				await saveAsset("stationery-background", ext, bytes);
-				await removeBusinessAsset(tenants.activeTenantId, "stationery-background-original");
+				await saveBusinessAsset(id, ASSETS.asset, ext, bytes);
+				await removeBusinessAsset(id, ASSETS.original);
 				await recordArtwork({ ext, paper: props.paper, crop: null, live_text: liveText });
 				toast.add(liveText
 					? { title: "Background updated — its text isn't outlined", description: "See the note under the buttons.", color: "warning", icon: "i-lucide-type" }
 					: { title: "Background updated", color: "success", icon: "i-lucide-check" });
 				return;
 			}
-			const img = await loadImage(new Blob([bytes], { type: backgroundMimeOf(ext) }));
+			const img = await loadImage(new Blob([bytes], { type: artworkMimeOf(ext) }));
 			if (matchesPaperAspect(img.naturalWidth, img.naturalHeight, props.paper)) {
-				await saveAsset("stationery-background-original", ext, bytes);
-				await saveAsset("stationery-background", ext, await downscaled(img, ext));
+				await saveRaster(ASSETS, ext, bytes, await downscaled(img, ext, props.paper));
 				await recordArtwork({ ext, paper: props.paper, crop: null, live_text: false });
 				toast.add({ title: "Background updated", color: "success", icon: "i-lucide-check" });
 				return;
@@ -344,7 +297,7 @@
 			// Not the paper's shape: crop first (aspect-locked), saved on Apply.
 			cropExt.value = ext;
 			pendingOriginal.value = bytes;
-			cropBlob.value = new Blob([bytes], { type: backgroundMimeOf(ext) });
+			cropBlob.value = new Blob([bytes], { type: artworkMimeOf(ext) });
 			cropInitial.value = null;
 			cropOpen.value = true;
 		} catch (err) {
@@ -369,11 +322,12 @@
 
 	// Remove deletes the artwork and its original. Switching modes never does.
 	const remove = async () => {
-		if (props.locked || !tenants.activeTenantId) return;
+		if (props.locked) return;
 		busy.value = true;
 		try {
-			await removeBusinessAsset(tenants.activeTenantId, "stationery-background");
-			await removeBusinessAsset(tenants.activeTenantId, "stationery-background-original");
+			const id = activeId();
+			await removeBusinessAsset(id, ASSETS.asset);
+			await removeBusinessAsset(id, ASSETS.original);
 			await store.save({ pdf_stationery: clearBackgroundArtwork(store.settings?.pdf_stationery) });
 			emit("artwork", null);
 			toast.add({ title: "Background removed", color: "info", icon: "i-lucide-image-off" });

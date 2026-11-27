@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clearBackgroundArtwork, parseStationery, resolveStationeryMode, serializeStationery, setBackgroundArtwork, setBackgroundMargins, setHeaderFooterGeometry, setHeaderFooterImage, setHeaderFooterMargins, setPreprintedMargins, stationeryModeToSave } from "./stationery";
+import { clearBackgroundArtwork, parseStationery, resolveStationeryMode, serializeStationery, setBackgroundArtwork, setBackgroundMargins, setHeaderFooterGeometry, setHeaderFooterImage, setHeaderFooterMargins, setPreprintedMargins } from "./stationery";
 
 const DEFAULT_PREPRINTED = { top: 55, right: 18, bottom: 20, left: 18 };
 
@@ -52,25 +52,6 @@ describe("setPreprintedMargins", () => {
 
 	it("never saves a band the schema refuses — it falls back to the default instead", () => {
 		expect(parseStationery(setPreprintedMargins(null, { top: 999, right: Number.NaN, bottom: 20, left: 18 })).preprinted).toEqual(DEFAULT_PREPRINTED);
-	});
-});
-
-describe("stationeryModeToSave", () => {
-	it("keeps the stored mode when the user didn't pick another", () => {
-		expect(stationeryModeToSave("header_footer", "header_footer")).toBe("header_footer");
-	});
-
-	it("saves the mode the user picked", () => {
-		expect(stationeryModeToSave("background", "preprinted")).toBe("preprinted");
-		expect(stationeryModeToSave("builtin", "preprinted")).toBe("preprinted");
-		expect(stationeryModeToSave("preprinted", "builtin")).toBe("builtin");
-		expect(stationeryModeToSave("background", "builtin")).toBe("builtin");
-		expect(stationeryModeToSave("builtin", "background")).toBe("background");
-	});
-
-	it("saves the shown mode over anything the column wouldn't accept", () => {
-		expect(stationeryModeToSave(null, "builtin")).toBe("builtin");
-		expect(stationeryModeToSave("letterhead", "builtin")).toBe("builtin");
 	});
 });
 

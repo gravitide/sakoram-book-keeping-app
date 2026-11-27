@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { artworkPaperLock, backgroundFormatOf, backgroundMimeOf, backgroundPixelSize, downscaleSize, isRasterBackground, matchesPaperAspect, svgAspect, svgHasLiveText } from "./stationery-artwork";
+import { isRasterArtwork } from "./stationery";
+import { artworkFormatOf, artworkMimeOf, artworkPaperLock, artworkPixelSize, downscaleSize, matchesPaperAspect, svgAspect, svgHasLiveText } from "./stationery-artwork";
 
-describe("backgroundPixelSize", () => {
+describe("artworkPixelSize", () => {
 	// About 300 DPI at the paper size — the spec's 2480 × 3508 for A4.
 	it.each([
 		["a4", 2480, 3508],
@@ -9,7 +10,7 @@ describe("backgroundPixelSize", () => {
 		["us-letter", 2550, 3300],
 		["us-legal", 2550, 4200]
 	] as const)("%s → %d × %d px", (paper, w, h) => {
-		expect(backgroundPixelSize(paper)).toEqual({ w, h });
+		expect(artworkPixelSize(paper)).toEqual({ w, h });
 	});
 });
 
@@ -72,7 +73,7 @@ describe("svgHasLiveText", () => {
 	});
 });
 
-describe("backgroundFormatOf", () => {
+describe("artworkFormatOf", () => {
 	it.each([
 		["letterhead.svg", "svg"],
 		["Letterhead.PDF", "pdf"],
@@ -80,17 +81,17 @@ describe("backgroundFormatOf", () => {
 		["photo.jpg", "jpg"],
 		["photo.JPEG", "jpg"]
 	] as const)("%s → %s", (name, ext) => {
-		expect(backgroundFormatOf(name)).toBe(ext);
+		expect(artworkFormatOf(name)).toBe(ext);
 	});
 
 	it("refuses anything else", () => {
-		expect(backgroundFormatOf("logo.gif")).toBeNull();
-		expect(backgroundFormatOf("letterhead")).toBeNull();
-		expect(backgroundFormatOf("letterhead.docx")).toBeNull();
+		expect(artworkFormatOf("logo.gif")).toBeNull();
+		expect(artworkFormatOf("letterhead")).toBeNull();
+		expect(artworkFormatOf("letterhead.docx")).toBeNull();
 	});
 });
 
-describe("backgroundMimeOf", () => {
+describe("artworkMimeOf", () => {
 	it.each([
 		["svg", "image/svg+xml"],
 		["pdf", "application/pdf"],
@@ -98,18 +99,18 @@ describe("backgroundMimeOf", () => {
 		["jpg", "image/jpeg"],
 		["JPEG", "image/jpeg"]
 	] as const)("%s → %s", (ext, mime) => {
-		expect(backgroundMimeOf(ext)).toBe(mime);
+		expect(artworkMimeOf(ext)).toBe(mime);
 	});
 
 	it("is a generic binary type for anything that isn't a background format", () => {
-		expect(backgroundMimeOf("gif")).toBe("application/octet-stream");
-		expect(backgroundMimeOf("")).toBe("application/octet-stream");
+		expect(artworkMimeOf("gif")).toBe("application/octet-stream");
+		expect(artworkMimeOf("")).toBe("application/octet-stream");
 	});
 });
 
-describe("isRasterBackground", () => {
+describe("isRasterArtwork", () => {
 	it("is true for PNG and JPEG, which are cropped and downscaled; false for SVG and PDF, which stay vector", () => {
-		expect(["png", "jpg", "svg", "pdf"].map((e) => isRasterBackground(e as never))).toEqual([true, true, false, false]);
+		expect(["png", "jpg", "svg", "pdf"].map((e) => isRasterArtwork(e as never))).toEqual([true, true, false, false]);
 	});
 });
 

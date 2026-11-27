@@ -29,7 +29,7 @@
 // Pure, store-free, relative imports only: vitest and the render-check script
 // (scripts/verify-pdf-render.ts) both import it.
 
-import type { BackgroundExt, HeaderFooterImage, StationeryMarginsMm, StationeryMode } from "./stationery";
+import type { ArtworkExt, HeaderFooterImage, HeaderFooterPair, StationeryMarginsMm, StationeryMode } from "./stationery";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { parseStationery, resolveStationeryMode } from "./stationery";
 import { headerFooterMargins } from "./stationery-geometry";
@@ -134,20 +134,17 @@ export type PageNumberPosition = "footer" | "safe_area";
 
 /** One Header & footer image as the page block carries it. */
 export interface PageImage {
-	ext: BackgroundExt
+	ext: ArtworkExt
 	x: number
 	y: number
 	w: number
 	h: number
 }
 
-export interface PageHeaderFooter {
-	header: PageImage | null
-	footer: PageImage | null
-}
+export type PageHeaderFooter = HeaderFooterPair<PageImage>;
 
 export interface PageBackground {
-	ext: BackgroundExt
+	ext: ArtworkExt
 }
 
 /** Per-document override of the business's page settings. */

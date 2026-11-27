@@ -47,7 +47,7 @@
 // placed by the real geometry (defaultImageRect + followImage).
 
 import type { Buffer } from "node:buffer";
-import type { PaperSize } from "../app/lib/page-settings";
+import type { PageImage, PaperSize } from "../app/lib/page-settings";
 import type { HeaderFooterSlot } from "../app/lib/stationery";
 import type { MmRect } from "../app/lib/stationery-geometry";
 import type { LetterRow } from "../app/stores/letters";
@@ -73,7 +73,8 @@ import { buildQuotePdfPayload } from "../app/lib/quote-pdf.ts";
 import { buildAgedReceivablesPdfPayload, buildCashFlowPdfPayload, buildPnlPdfPayload } from "../app/lib/report-pdf.ts";
 import { sampleInvoicePayload, sampleStationeryPreviewPayload } from "../app/lib/sample-pdf.ts";
 import { buildCustomerStatementPdfPayload } from "../app/lib/statement-pdf.ts";
-import { defaultImageRect, followImage, HEADER_FOOTER_GAP_MM, refitStationery } from "../app/lib/stationery-geometry.ts";
+import { defaultImageRect, followImage, HEADER_FOOTER_GAP_MM } from "../app/lib/stationery-geometry.ts";
+import { refitStationery } from "../app/lib/stationery.ts";
 import { buildVoucherPdfPayload } from "../app/lib/voucher-pdf.ts";
 import { pdfPageTexts } from "./pdf-text.ts";
 
@@ -888,15 +889,12 @@ interface Rendered {
 	pageNumbers: PageNumber[]
 }
 
-interface PageImage {
-	ext: string
-	file?: string
-	[key: string]: unknown
-}
+// A page-block image once staged: the payload's own entry plus the file name Typst reads.
+type StagedImage = PageImage & { file?: string };
 
 interface PageBlock {
 	background?: { ext: string, file?: string } | null
-	header_footer?: { header: PageImage | null, footer: PageImage | null } | null
+	header_footer?: { header: StagedImage | null, footer: StagedImage | null } | null
 	[key: string]: unknown
 }
 
@@ -920,7 +918,7 @@ const stageBackground = (page: PageBlock | undefined, folder: string, work: stri
 // alone (null), leaving the other.
 const stageHeaderFooter = (page: PageBlock | undefined, folder: string, work: string): PageBlock | undefined => {
 	if (!page?.header_footer) return page;
-	const stage = (slot: HeaderFooterSlot, image: PageImage | null): PageImage | null => {
+	const stage = (slot: HeaderFooterSlot, image: StagedImage | null): StagedImage | null => {
 		if (!image) return null;
 		const src = join(folder, "stationery", `${slot}.${image.ext}`);
 		if (!/^[a-z0-9]{1,5}$/i.test(image.ext) || !existsSync(src)) return null;
