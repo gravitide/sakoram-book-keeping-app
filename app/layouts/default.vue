@@ -394,7 +394,6 @@
 	// compile time, no runtime fetch). Wide PNG, rendered in the About modal.
 	import sakoramLogo from "~/assets/sakoram-wordmark.svg?url";
 	import { useHelpWindow } from "~/composables/useHelpWindow";
-	import { applyPrimaryColor } from "~/lib/color-ramp";
 	import { FONT_LICENCE_NAME, FONT_LICENCE_URL, FONT_LICENCES } from "~/lib/font-licences";
 	import { pdfSettingsSections } from "~/lib/pdf-settings-sections";
 	import { useSettingsStore } from "~/stores/settings";
@@ -428,7 +427,6 @@
 	const tenants = useTenantsStore();
 	const router = useRouter();
 	const { sidebarCollapsed } = useUiState();
-	const appConfig = useAppConfig() as { ui: { colors: { primary: string } } };
 	const toast = useToast();
 
 	// Open an existing business folder from anywhere in the app: pick the
@@ -520,35 +518,9 @@
 		return sections;
 	});
 
-	// Apply the UI font by overriding Tailwind's `--font-sans` CSS variable
-	// at the :root level. We can't just write `font-family` on <html> because
-	// Tailwind v4's preflight rule `body { font-family: var(--font-sans) }`
-	// wins on specificity. Overriding the variable cascades through every
-	// element that uses it — including teleported overlays (popovers, modals,
-	// the calendar popup) which live outside the layout tree.
-	// Inter is bundled via @font-face in main.css, so it's always
-	// available regardless of what the user has installed on their machine.
-	// User-chosen fonts that AREN'T installed locally fall through to it
-	// instead of jumping straight to system-ui.
-	const appFontStack = computed(() => {
-		const f = settings.settings?.ui_font?.trim() || "Akt";
-		return `'${f}', 'Akt', 'Inter', system-ui, sans-serif`;
-	});
-
-	watch(appFontStack, (stack) => {
-		if (typeof document !== "undefined") {
-			document.documentElement.style.setProperty("--font-sans", stack);
-		}
-	}, { immediate: true });
-
-	// Apply theme color whenever settings load or change. A named preset flips
-	// NuxtUI's palette (it's reactive on appConfig.ui.colors.primary); a custom
-	// hex injects a generated ramp onto <html>. applyPrimaryColor handles both.
-	watch(
-		() => settings.settings?.theme_color,
-		(value) => applyPrimaryColor(appConfig, value),
-		{ immediate: true }
-	);
+	// The UI font, theme colour and light / dark — shared with the page
+	// designer's window (composables/useAppTheme.ts).
+	useAppTheme();
 
 	onMounted(() => {
 		settings.ensureLoaded().catch(() => { /* surfaced on dashboard */ });

@@ -9,3 +9,11 @@
 		</main>
 	</div>
 </template>
+
+<script setup lang="ts">
+	// Its own Nuxt app: apply the business's UI font, theme colour and light /
+	// dark here too, or the designer shows the defaults.
+	import { useAppTheme } from "~/composables/useAppTheme";
+
+	useAppTheme();
+</script>

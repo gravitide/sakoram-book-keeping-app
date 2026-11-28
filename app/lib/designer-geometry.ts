@@ -11,6 +11,7 @@
 
 import type { DesignItem, MarginsMm, PageDesign } from "./page-design";
 import type { PaperSize } from "./paper-sizes";
+import { itemOnPage } from "./page-design";
 import { resolvePaperSize } from "./paper-sizes";
 
 /** A CSS pixel is 1/96 inch, so this many px is one millimetre at 100 %. */
@@ -109,6 +110,50 @@ export function itemBox(item: DesignItem, measuredH?: number): MmRect {
 				: { x: item.x, y: item.y - t / 2, w: item.length, h: t };
 		}
 	}
+}
+
+/**
+ * Whether `box` overlaps the safe area (where the document prints), with a
+ * positive area: an edge resting on a margin doesn't count. The designer
+ * warns, but allows it (watermarks overlap on purpose).
+ */
+export function overlapsSafeArea(box: MmRect, design: PageDesign): boolean {
+	const { widthMm, heightMm } = resolvePaperSize(design.paper);
+	const m = design.margins;
+	const w = Math.min(box.x + box.w, widthMm - m.right) - Math.max(box.x, m.left);
+	const h = Math.min(box.y + box.h, heightMm - m.bottom) - Math.max(box.y, m.top);
+	return w > 0 && h > 0;
+}
+
+/**
+ * Whether the designer warns about this item overlapping the safe area. Not
+ * for a guide (never printed) or an item covering the whole page (a
+ * background is behind the document by design). Text uses its measured height.
+ */
+export function overlapWarning(item: DesignItem, design: PageDesign, measuredH?: number): boolean {
+	if (item.type === "image" && item.guide) return false;
+	const box = itemBox(item, measuredH);
+	const { widthMm, heightMm } = resolvePaperSize(design.paper);
+	if (box.w >= widthMm - 0.5 && box.h >= heightMm - 0.5) return false;
+	return overlapsSafeArea(box, design);
+}
+
+/**
+ * The empty image slot a drop at the point (mm) lands on. The topmost item
+ * drawn on `page` under the point decides, so a drop on a logo sitting over a
+ * page-size slot doesn't fill the slot. Null when that item isn't an empty
+ * slot, or nothing is there.
+ */
+export function slotAt(design: PageDesign, page: 1 | 2, xMm: number, yMm: number): string | null {
+	for (let k = design.items.length - 1; k >= 0; k--) {
+		const i = design.items[k]!;
+		// A locked item never takes the pointer, so a drop looks past it.
+		if (i.locked || !itemOnPage(i.pages, page)) continue;
+		const b = itemBox(i);
+		if (xMm < b.x || xMm > b.x + b.w || yMm < b.y || yMm > b.y + b.h) continue;
+		return i.type === "image" && i.src === null ? i.id : null;
+	}
+	return null;
 }
 
 /** The resize handles an item offers. */

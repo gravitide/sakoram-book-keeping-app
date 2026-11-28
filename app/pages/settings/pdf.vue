@@ -66,9 +66,12 @@
 							<p class="text-sm text-(--ui-text-muted) mt-3 max-w-prose">
 								Start from a template, then move things around, add your own images and set the safe area your documents stay inside — in the page designer, which opens in its own window.
 							</p>
-							<UButton class="mt-4" icon="i-lucide-pencil-ruler" @click="designer.open()">
-								Open page designer
-							</UButton>
+							<div class="mt-4 flex items-center gap-1">
+								<UButton icon="i-lucide-pencil-ruler" @click="designer.open()">
+									Open page designer
+								</UButton>
+								<HelpButton slug="page-designer" size="sm" />
+							</div>
 						</div>
 					</div>
 				</SectionCard>

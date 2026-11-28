@@ -12,12 +12,15 @@ import {
 	mmToPx,
 	moveItem,
 	nudgeItem,
+	overlapsSafeArea,
+	overlapWarning,
 	PRINTER_BAND_MM,
 	printerBandRects,
 	pxToMm,
 	resizeItem,
 	rulerTicks,
 	setMarginValue,
+	slotAt,
 	snapTargets,
 	snapValue,
 	stepActualZoom,
@@ -241,5 +244,61 @@ describe("actual-size zoom", () => {
 		expect(stepActualZoom(1, 1)).toBe(1.25);
 		expect(stepActualZoom(4, 1)).toBe(4);
 		expect(stepActualZoom(0.25, -1)).toBe(0.25);
+	});
+});
+
+describe("overlapsSafeArea", () => {
+	const d: PageDesign = { version: 1, paper: "a4", margins: { top: 40, right: 18, bottom: 25, left: 18 }, items: [] };
+
+	it("doesn't count an edge resting on a margin", () => {
+		expect(overlapsSafeArea({ x: 18, y: 10, w: 100, h: 30 }, d)).toBe(false);
+		expect(overlapsSafeArea({ x: 0, y: 280, w: 210, h: 10 }, d)).toBe(false);
+	});
+
+	it("counts a real overlap, a full-page background included", () => {
+		expect(overlapsSafeArea({ x: 18, y: 10, w: 100, h: 31 }, d)).toBe(true);
+		expect(overlapsSafeArea({ x: 0, y: 0, w: 210, h: 297 }, d)).toBe(true);
+	});
+});
+
+describe("slotAt", () => {
+	const pageSlot = image({ id: "slot00000001", x: 0, y: 0, w: 210, h: 297, src: null });
+	const logo = image({ id: "logo00000001", x: 168, y: 12, w: 24, h: 24, src: { kind: "file", ext: "png" } });
+
+	it("finds the empty slot under a point", () => {
+		expect(slotAt(design([pageSlot, logo]), 1, 100, 100)).toBe("slot00000001");
+	});
+
+	it("lets the topmost item decide: a drop on a logo above the slot doesn't fill the slot", () => {
+		expect(slotAt(design([pageSlot, logo]), 1, 170, 20)).toBeNull();
+	});
+
+	it("looks past a locked item (it never takes the pointer)", () => {
+		const lockedBg = image({ id: "bg0000000001", x: 0, y: 0, w: 210, h: 297, src: { kind: "file", ext: "png" }, locked: true });
+		expect(slotAt(design([pageSlot, lockedBg]), 1, 100, 100)).toBe("slot00000001");
+	});
+
+	it("ignores a slot that isn't drawn on that page", () => {
+		expect(slotAt(design([{ ...pageSlot, pages: "not_first" }]), 1, 100, 100)).toBeNull();
+	});
+});
+
+describe("overlapWarning", () => {
+	const d: PageDesign = { version: 1, paper: "a4", margins: { top: 40, right: 18, bottom: 25, left: 18 }, items: [] };
+
+	it("warns for a printed item over the safe area", () => {
+		expect(overlapWarning(image({ x: 60, y: 100, w: 80, h: 80 }), d)).toBe(true);
+	});
+
+	it("doesn't warn for a guide, a full-page background, or an item outside it", () => {
+		expect(overlapWarning(image({ x: 60, y: 100, w: 80, h: 80, guide: true }), d)).toBe(false);
+		expect(overlapWarning(image({ x: 0, y: 0, w: 210, h: 297 }), d)).toBe(false);
+		expect(overlapWarning(image({ x: 18, y: 10, w: 20, h: 20 }), d)).toBe(false);
+	});
+
+	it("uses a text box's measured height", () => {
+		const t = text({ x: 18, y: 30, w: 100 });
+		expect(overlapWarning(t, d)).toBe(false);
+		expect(overlapWarning(t, d, 15)).toBe(true);
 	});
 });

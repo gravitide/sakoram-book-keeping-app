@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isDesignerRoute, resolveTenantGuard } from "./tenant-route";
+import { designerWindowMayGo, isDesignerRoute, resolveTenantGuard } from "./tenant-route";
 
 describe("resolveTenantGuard", () => {
 	it("sends you to /welcome when no business is active", () => {
@@ -48,5 +48,17 @@ describe("isDesignerRoute", () => {
 		expect(isDesignerRoute("/designer/")).toBe(true);
 		expect(isDesignerRoute("/settings/pdf")).toBe(false);
 		expect(isDesignerRoute("/designers")).toBe(false);
+	});
+});
+
+describe("designerWindowMayGo", () => {
+	it("keeps the designer window on the designer (a help link must not take it away)", () => {
+		expect(designerWindowMayGo("/designer", "/help/invoices")).toBe(false);
+		expect(designerWindowMayGo("/designer", "/designer")).toBe(true);
+	});
+
+	it("leaves every other navigation alone", () => {
+		expect(designerWindowMayGo("/", "/designer")).toBe(true);
+		expect(designerWindowMayGo("/settings/pdf", "/help/invoices")).toBe(true);
 	});
 });

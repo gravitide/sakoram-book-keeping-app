@@ -63,6 +63,15 @@ export const HELP_TOPICS: HelpTopic[] = [
 		relatedSlugs: ["security", "bookkeeping-basics"],
 		component: () => import("./topics/backup-google-drive.vue")
 	},
+	{
+		slug: "page-designer",
+		title: "Designing your page",
+		summary: "Lay out your letterhead, footer and page numbers once, for every document: templates, images and backgrounds, text with company fields, the safe area, which pages things appear on, guide-only scans of pre-printed paper, and keyboard shortcuts.",
+		category: "general",
+		icon: "i-lucide-layout-template",
+		relatedSlugs: ["invoices", "bookkeeping-basics"],
+		component: () => import("./topics/page-designer.vue")
+	},
 	// Documents
 	{
 		slug: "invoices",

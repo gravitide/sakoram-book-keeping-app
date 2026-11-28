@@ -70,15 +70,6 @@
 					<UIcon name="i-lucide-loader-circle" class="size-4 animate-spin text-zinc-400" />
 				</div>
 
-				<!-- Where a dragged item was: the render still draws it there until
-					the next one lands, so it's papered over (see "ghosts"). -->
-				<div
-					v-for="c in ghostCovers"
-					:key="c.id"
-					class="absolute bg-white/90 pointer-events-none"
-					:style="c.style"
-				/>
-
 				<!-- The printer band: most printers can't print within 5 mm of the
 					edge. Information only — nothing snaps to it or is refused for
 					crossing it. -->
@@ -103,12 +94,16 @@
 					v-for="box in boxes"
 					:key="box.item.id"
 					role="group"
-					tabindex="0"
+					:tabindex="box.inert ? -1 : 0"
 					:aria-label="box.label"
 					class="group absolute outline-none touch-none cursor-move"
 					:class="[
 						box.item.id === selectedId ? `${box.coversPage ? 'z-20' : 'z-[35]'} ring-2 ring-(--ui-primary)` : 'z-10 ring-1 ring-transparent hover:ring-(--ui-primary)/60 focus-visible:ring-(--ui-primary)',
-						box.guide ? 'bg-(--ui-primary)/5' : ''
+						box.guide && !box.slot ? 'bg-(--ui-primary)/5' : '',
+						// An empty slot (a template's place for a background or scan) or a
+						// locked item never takes the pointer: clicks reach the page and
+						// what's in front. A file dropped on a slot is offered to fill it.
+						box.inert ? 'pointer-events-none' : ''
 					]"
 					:style="box.style"
 					@pointerdown="onItemPointerDown(box.item.id, 'move', $event)"
@@ -118,17 +113,35 @@
 					@keydown="onItemKey(box.item.id, $event)"
 					@dblclick="onItemDblClick(box.item)"
 				>
-					<!-- The item's own pixels, cut from the last render, riding along
-						with the box until a render with it in its new place arrives. -->
-					<div
-						v-if="box.ghost"
-						class="absolute inset-0 overflow-hidden pointer-events-none"
-						:style="box.ghost"
-					/>
+					<!-- The item itself, drawn here while it's dragged, until a render
+						with it in its new place arrives (see "ghosts"). -->
+					<template v-if="box.ghost">
+						<img
+							v-if="box.ghost.kind === 'image'"
+							:src="box.ghost.url"
+							alt=""
+							draggable="false"
+							class="absolute inset-0 size-full object-contain pointer-events-none"
+						>
+						<div v-else-if="box.ghost.kind === 'line'" class="absolute pointer-events-none" :style="box.ghost.style" />
+						<div v-else class="absolute inset-0 whitespace-pre-wrap break-words pointer-events-none" :style="box.ghost.style">
+							{{ box.ghost.content }}
+						</div>
+					</template>
 					<span
-						v-if="box.guide"
+						v-if="box.guide && !box.slot"
 						class="absolute top-1 left-1 rounded bg-(--ui-primary) px-1 text-[9px] font-medium text-white pointer-events-none"
-					>Guide</span>
+					>Guide · not printed</span>
+					<!-- Over the safe area: allowed (watermarks), but said. A press on it
+						still reaches the box, so it drags like the rest. -->
+					<span
+						v-if="box.overlap"
+						class="absolute top-1 right-1 flex rounded bg-amber-500 p-0.5 text-white"
+						title="Overlaps the safe area: the document prints on top of it"
+						aria-label="Overlaps the safe area"
+					>
+						<UIcon name="i-lucide-triangle-alert" class="size-3" />
+					</span>
 					<template v-if="box.item.id === selectedId">
 						<span
 							v-for="h in box.handles"
@@ -199,10 +212,10 @@
 	// own beyond the gesture in flight — every change is emitted (`change`,
 	// live; `commit`, once the gesture ends, for the undo history). Geometry
 	// and snapping: app/lib/designer-geometry.ts.
-	import type { Handle, MmRect } from "~/lib/designer-geometry";
+	import type { Handle } from "~/lib/designer-geometry";
 	import type { DesignItem, MarginsMm, PageDesign } from "~/lib/page-design";
 	import { updateItem } from "~/lib/design-draft";
-	import { dragMargin, fitScale, handlesFor, itemBox, mmToPx, moveItem, nudgeItem, printerBandRects, resizeItem, rulerTicks, SNAP_DISTANCE_PX } from "~/lib/designer-geometry";
+	import { dragMargin, fitScale, handlesFor, itemBox, mmToPx, moveItem, nudgeItem, overlapWarning, printerBandRects, resizeItem, rulerTicks, slotAt, SNAP_DISTANCE_PX } from "~/lib/designer-geometry";
 	import { formatMm, itemOnPage } from "~/lib/page-design";
 	import { resolveDesignLines } from "~/lib/page-design-text";
 	import { resolvePaperSize } from "~/lib/paper-sizes";
@@ -221,6 +234,10 @@
 		pan?: boolean
 		/** Company field values (tokenValuesFromSettings), for measuring text boxes. */
 		fieldValues: Record<string, string>
+		/** Each image item's file as a browser URL (not PDFs): what a dragged image shows. */
+		imageUrls?: Record<string, string>
+		/** The business's PDF colour, for a dragged Accent item. */
+		accentHex?: string
 	}>();
 	const emit = defineEmits<{
 		select: [id: string | null]
@@ -229,7 +246,8 @@
 		commit: [now?: boolean]
 		/** A text box or page number was double-clicked: open its editor. */
 		edit: [id: string]
-		drop: [file: File]
+		/** A file dropped on the page; `slotId`: the empty image slot it landed on, if any. */
+		drop: [file: File, slotId: string | null]
 		scale: [scale: number]
 	}>();
 
@@ -262,6 +280,8 @@
 		right: "right-full mr-1 top-1/2 -translate-y-1/2"
 	};
 	const KIND_LABEL: Record<DesignItem["type"], string> = { image: "Image", text: "Text", page_number: "Page number", line: "Line" };
+	const PT_TO_MM = 0.3528;
+	const PAGE_NUMBER_SAMPLE = { page_of_total: "Page 1 of 3", slash: "1 / 3", number: "1" } as const;
 
 	// ---- zoom -------------------------------------------------------------------
 	const viewportEl = useTemplateRef<HTMLElement>("viewportEl");
@@ -353,45 +373,63 @@
 
 	// ---- ghosts ---------------------------------------------------------------------
 	// The render only follows the committed design, and takes a moment. So a
-	// dragged item carries its pixels from the last render (a background-image
-	// crop of it, scaled when an image or line is resized; text is cut, not
-	// stretched), and its old spot is papered over, until a fresh render lands.
-	// Keyed by item: a second drag can start before the first one's render.
-	const ghosts = ref<Record<string, { from: MmRect, url: string }>>({});
+	// dragged item is drawn in its box by the page itself — the image's own file
+	// (imageUrls), its text in its font, or its line — never a cut of the render,
+	// which would carry whatever else sits in that box. Its old place shows until
+	// the fresh render (started on release) lands. Keyed by item: a second drag
+	// can start before the first one's render.
+	const ghosts = ref<Record<string, true>>({});
 	watch(() => props.renderUrl, () => {
 		// A new render shows the committed design: every finished drag is in it.
-		// The item being dragged right now is still at its drag-start place there.
 		const d = drag.value;
-		const keep = d?.kind === "item" && d.moved && props.renderUrl ? d : null;
-		ghosts.value = keep ? { [keep.id]: { from: itemBox(keep.item), url: props.renderUrl! } } : {};
+		ghosts.value = d?.kind === "item" && d.moved ? { [d.id]: true } : {};
 	});
-	const startGhost = (id: string, item: DesignItem) => {
-		if (ghosts.value[id] || !props.renderUrl) return;
-		ghosts.value = { ...ghosts.value, [id]: { from: itemBox(item), url: props.renderUrl } };
+	const startGhost = (id: string) => {
+		if (!ghosts.value[id]) ghosts.value = { ...ghosts.value, [id]: true };
 	};
-	const pxRect = (r: MmRect) => {
+	type GhostView
+		= | { kind: "image", url: string }
+			| { kind: "line", style: Record<string, string> }
+			| { kind: "text", content: string, style: Record<string, string | number> };
+	const colourOf = (c: string) => (c === "accent" ? props.accentHex ?? "#111827" : c);
+	const ghostView = (item: DesignItem): GhostView | null => {
+		if (!ghosts.value[item.id]) return null;
 		const s = scale.value;
-		return { left: `${r.x * s}px`, top: `${r.y * s}px`, width: `${r.w * s}px`, height: `${r.h * s}px` };
-	};
-	const ghostCovers = computed(() => Object.entries(ghosts.value).map(([id, g]) => ({ id, style: pxRect(g.from) })));
-	const ghostStyle = (item: DesignItem, now: MmRect) => {
-		const g = ghosts.value[item.id];
-		if (!g) return null;
-		const stretch = item.type === "image" || item.type === "line";
-		const sx = stretch && g.from.w > 0 ? now.w / g.from.w : 1;
-		const sy = stretch && g.from.h > 0 ? now.h / g.from.h : 1;
-		const s = scale.value;
+		if (item.type === "image") {
+			// A PDF image has no browser picture: just its outline moves.
+			const url = props.imageUrls?.[item.id];
+			return url ? { kind: "image", url } : null;
+		}
+		if (item.type === "line") {
+			const t = `${Math.max(1, item.thickness * PT_TO_MM * s)}px`;
+			const background = colourOf(item.color);
+			return {
+				kind: "line",
+				style: item.vertical
+					? { left: "50%", top: "0", bottom: "0", width: t, transform: "translateX(-50%)", background }
+					: { top: "50%", left: "0", right: "0", height: t, transform: "translateY(-50%)", background }
+			};
+		}
+		const st = item.style;
 		return {
-			backgroundImage: `url("${g.url}")`,
-			backgroundRepeat: "no-repeat",
-			backgroundSize: `${pagePx.value.w * sx}px ${pagePx.value.h * sy}px`,
-			backgroundPosition: `${-g.from.x * s * sx}px ${-g.from.y * s * sy}px`
+			kind: "text",
+			content: item.type === "text"
+				? resolveDesignLines(item.text, props.fieldValues, { keepEmpty: true }).map((l) => l.text).join("\n")
+				: PAGE_NUMBER_SAMPLE[item.format],
+			style: {
+				fontFamily: `"${st.font}", "Inter", sans-serif`,
+				fontSize: `${st.size * PT_TO_MM * s}px`,
+				fontWeight: st.bold ? 700 : 400,
+				fontStyle: st.italic ? "italic" : "normal",
+				textAlign: st.align,
+				lineHeight: 1.25,
+				color: colourOf(st.color)
+			}
 		};
 	};
 
 	// ---- measured text --------------------------------------------------------------
 	const MEASURE_PX_PER_MM = 10;
-	const PAGE_NUMBER_SAMPLE = { page_of_total: "Page 1 of 3", slash: "1 / 3", number: "1" } as const;
 	const measureItems = computed(() => props.design.items.flatMap((item) => {
 		if (item.type !== "text" && item.type !== "page_number") return [];
 		const st = item.style;
@@ -404,7 +442,7 @@
 			style: {
 				width: `${item.w * MEASURE_PX_PER_MM}px`,
 				fontFamily: `"${st.font}", "Inter", sans-serif`,
-				fontSize: `${st.size * 0.3528 * MEASURE_PX_PER_MM}px`,
+				fontSize: `${st.size * PT_TO_MM * MEASURE_PX_PER_MM}px`,
 				fontWeight: st.bold ? 700 : 400,
 				fontStyle: st.italic ? "italic" : "normal",
 				textAlign: st.align,
@@ -435,9 +473,13 @@
 			const b = itemBox(item, measured.value[item.id]);
 			const s = scale.value;
 			return {
-				ghost: ghostStyle(item, b),
+				ghost: ghostView(item),
 				item,
 				guide: item.type === "image" && item.guide,
+				slot: item.type === "image" && item.src === null,
+				/** Not selectable on the page: an empty slot, or a locked item. */
+				inert: (item.type === "image" && item.src === null) || Boolean(item.locked),
+				overlap: overlapWarning(item, props.design, measured.value[item.id]),
 				// A background: raising it over the guides would hide every one of them.
 				coversPage: b.w >= paper.value.widthMm - 0.5 && b.h >= paper.value.heightMm - 0.5,
 				handles: handlesFor(item),
@@ -491,7 +533,7 @@
 		const dx = (e.clientX - d.x) / scale.value;
 		const dy = (e.clientY - d.y) / scale.value;
 		if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 2) return;
-		if (!d.moved && d.kind === "item") startGhost(d.id, d.item);
+		if (!d.moved && d.kind === "item") startGhost(d.id);
 		d.moved = true;
 		if (d.kind === "guide") {
 			const axisDelta = d.side === "top" || d.side === "bottom" ? dy : dx;
@@ -540,7 +582,11 @@
 	const onDrop = (e: DragEvent) => {
 		dropOver.value = false;
 		const file = e.dataTransfer?.files?.[0];
-		if (file) emit("drop", file);
+		if (!file) return;
+		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		const x = (e.clientX - rect.left) / scale.value;
+		const y = (e.clientY - rect.top) / scale.value;
+		emit("drop", file, slotAt(props.design, props.page, x, y));
 	};
 </script>
 

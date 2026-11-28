@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isHexColor, THEME_COLORS, themeHex } from "./theme";
+import { isHexColor, THEME_COLORS, themeHex, uiFontStack } from "./theme";
 
 describe("isHexColor", () => {
 	it("accepts 6-digit and 3-digit hex, case-insensitively", () => {
@@ -50,5 +50,16 @@ describe("themeHex", () => {
 		expect(themeHex("nonsense")).toBe("#ef4444");
 		expect(themeHex(null)).toBe("#ef4444");
 		expect(themeHex(undefined)).toBe("#ef4444");
+	});
+});
+
+describe("uiFontStack", () => {
+	it("puts the chosen UI font first, then the bundled fallbacks", () => {
+		expect(uiFontStack("Inter Tight")).toBe("'Inter Tight', 'Akt', 'Inter', system-ui, sans-serif");
+	});
+
+	it("falls back to Akt when none is set", () => {
+		expect(uiFontStack(null)).toBe("'Akt', 'Akt', 'Inter', system-ui, sans-serif");
+		expect(uiFontStack("  ")).toBe("'Akt', 'Akt', 'Inter', system-ui, sans-serif");
 	});
 });

@@ -40,6 +40,7 @@
 				Preview as PDF
 			</UButton>
 			<div class="flex-1" />
+			<HelpButton slug="page-designer" size="sm" hide-related />
 			<span v-if="dirty" class="flex items-center gap-1.5 text-xs text-(--ui-text-muted)">
 				<span class="size-1.5 rounded-full bg-(--ui-warning)" aria-hidden="true" /> Unsaved changes
 			</span>
@@ -52,7 +53,19 @@
 		</div>
 
 		<div class="flex-1 min-h-0 flex">
-			<div class="flex-1 min-w-0">
+			<div class="flex-1 min-w-0 relative">
+				<!-- After a paper change: everything was scaled, so look it over. -->
+				<UAlert
+					v-if="paperNoteLabel"
+					class="absolute top-3 left-1/2 -translate-x-1/2 z-50 w-max max-w-[90%] shadow-md"
+					color="warning"
+					variant="subtle"
+					icon="i-lucide-scaling"
+					:title="`Check your design for ${paperNoteLabel}`"
+					description="Everything was scaled to fit the new paper."
+					close
+					@update:open="(o) => { if (!o) paperNote = null }"
+				/>
 				<PageDesignerCanvas
 					:design="shownDesign"
 					:selected-id="selectedId"
@@ -63,11 +76,13 @@
 					:zoom="zoom"
 					:pan="handTool"
 					:field-values="fieldValues"
+					:image-urls="imageUrls"
+					:accent-hex="accentHex"
 					@select="selectedId = $event"
 					@edit="editItem"
 					@change="live = $event"
 					@commit="commitLive"
-					@drop="pendingDrop = $event"
+					@drop="onCanvasDrop"
 					@scale="scale = $event"
 				/>
 			</div>
@@ -256,6 +271,33 @@
 						<!-- Actions, grouped by what they act on: the stacking order, the
 							image's file, then the item itself (copy / remove) as a quiet footer. -->
 						<div class="mt-4 space-y-3">
+							<UAlert
+								v-if="selectedOverlaps"
+								color="warning"
+								variant="subtle"
+								icon="i-lucide-triangle-alert"
+								:ui="{ title: 'text-xs font-normal' }"
+								title="Overlaps the safe area. The document prints on top of it, which is fine for a watermark."
+							/>
+							<div>
+								<div id="designer-pages" class="text-[11px] font-medium text-(--ui-text-muted) mb-1">
+									Pages
+								</div>
+								<div class="segmented" role="group" aria-labelledby="designer-pages">
+									<button
+										v-for="r in PAGES_OPTIONS"
+										:key="r.value"
+										type="button"
+										:aria-pressed="selected.pages === r.value"
+										@click="apply((d) => setItemPages(d, selected!.id, r.value))"
+									>
+										{{ r.label }}
+									</button>
+								</div>
+								<p v-if="!itemOnPage(selected.pages, page)" class="text-[11px] text-(--ui-text-muted) mt-1">
+									Not on page {{ page }}. Switch to Page {{ page === 1 ? 2 : 1 }} to see it on the page.
+								</p>
+							</div>
 							<div>
 								<div id="designer-layer" class="text-[11px] font-medium text-(--ui-text-muted) mb-1">
 									Layer
@@ -276,15 +318,27 @@
 									Image file
 								</div>
 								<div class="segmented" role="group" aria-labelledby="designer-image-file">
-									<button type="button" title="Swap in a different file, keeping the position and size" @click="replaceInput?.click()">
-										<UIcon name="i-lucide-replace" class="size-3.5" />
-										Replace…
+									<button
+										type="button"
+										:title="selected.src ? 'Swap in a different file, keeping the position and size' : 'Fill this empty slot; it keeps its place and size'"
+										@click="replaceInput?.click()"
+									>
+										<UIcon :name="selected.src ? 'i-lucide-replace' : 'i-lucide-image-plus'" class="size-3.5" />
+										{{ selected.src ? "Replace…" : "Choose image…" }}
 									</button>
 									<button v-if="selectedFileExt && isRasterArtwork(selectedFileExt)" type="button" title="Keep only part of the image" @click="cropSelected">
 										<UIcon name="i-lucide-crop" class="size-3.5" />
 										Crop…
 									</button>
 								</div>
+								<USwitch
+									class="mt-3"
+									size="sm"
+									:model-value="selected.guide"
+									label="Guide only — not printed"
+									description="For lining things up with pre-printed paper: shown here, never printed."
+									@update:model-value="apply((d) => setImageGuide(d, selected!.id, $event))"
+								/>
 							</div>
 							<div class="flex items-center justify-between pt-2 border-t border-(--ui-primary)/15">
 								<UButton
@@ -298,6 +352,9 @@
 								>
 									Duplicate
 								</UButton>
+								<UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-lock" title="Stop it being selected or moved on the page; unlock it from the Locked list" @click="lockSelected">
+									Lock
+								</UButton>
 								<UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" @click="deleteSelected">
 									Delete
 								</UButton>
@@ -307,6 +364,24 @@
 					<p v-else class="m-3 rounded-lg border border-dashed border-(--ui-border) p-3 text-xs text-(--ui-text-muted)">
 						Click something on the page to select it. Drag to move it; drag a handle to resize it.
 					</p>
+
+					<!-- Locked items can't be clicked on the page: this is where they
+						come back from. -->
+					<section v-if="lockedItems.length > 0" class="mx-3 mb-3" aria-labelledby="designer-locked">
+						<div id="designer-locked" class="flex items-center gap-1.5 px-1 mb-1 text-[11px] font-medium text-(--ui-text-muted)">
+							<UIcon name="i-lucide-lock" class="size-3" />
+							Locked
+						</div>
+						<ul class="rounded-lg border border-(--ui-border) divide-y divide-(--ui-border)">
+							<li v-for="l in lockedItems" :key="l.id" class="flex items-center gap-2 pl-2.5 pr-1 py-1">
+								<UIcon :name="l.icon" class="size-3.5 shrink-0 text-(--ui-text-muted)" />
+								<span class="flex-1 min-w-0 truncate text-xs">{{ l.label }}</span>
+								<UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-lock-open" @click="unlockItem(l.id)">
+									Unlock
+								</UButton>
+							</li>
+						</ul>
+					</section>
 
 					<!-- 3. Page settings: apply to the whole page and every document. -->
 					<div class="px-4 pt-3 pb-1 flex items-center gap-2">
@@ -356,39 +431,52 @@
 					</section>
 
 					<section class="px-4 py-3 border-t border-(--ui-border)" aria-labelledby="designer-document">
-						<h2 id="designer-document" class="text-sm font-semibold mb-2">
+						<h2 id="designer-document" class="text-sm font-semibold">
 							Document
 						</h2>
-						<div class="text-xs font-medium mb-1.5">
-							Document style
+						<p class="text-xs text-(--ui-text-muted) mt-0.5 mb-3">
+							How the app sets out each document inside the safe area.
+						</p>
+						<!-- The four Document styles as small pages, drawn in the accent
+							colour, so the choice is seen, not read. -->
+						<div id="designer-doc-style" class="text-[11px] font-medium text-(--ui-text-muted) mb-1.5">
+							Style
 						</div>
-						<div class="grid grid-cols-2 gap-1.5" role="group" aria-label="Document style">
+						<div class="grid grid-cols-4 gap-1.5" role="group" aria-labelledby="designer-doc-style">
 							<button
 								v-for="l in PDF_LAYOUTS"
 								:key="l.key"
 								type="button"
 								:title="l.description"
-								class="px-2 py-1.5 rounded-md border text-left text-xs font-medium transition"
-								:class="draft.layout === l.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border) hover:border-(--ui-primary)/50'"
+								class="flex flex-col gap-1 rounded-md border p-1 pb-1.5 transition focus-visible:outline-2 focus-visible:outline-(--ui-primary)"
+								:class="draft.layout === l.key ? 'border-(--ui-primary) bg-(--ui-primary)/10' : 'border-(--ui-border) hover:border-(--ui-border-accented)'"
 								:aria-pressed="draft.layout === l.key"
 								@click="apply((d) => d, { layout: l.key })"
 							>
-								{{ l.label }}
+								<PdfLayoutThumb :layout-key="l.key" :color="accentHex" />
+								<span
+									class="text-[11px] font-medium text-center"
+									:class="draft.layout === l.key ? 'text-(--ui-primary)' : ''"
+								>{{ l.label }}</span>
 							</button>
 						</div>
 						<div class="mt-4">
 							<PdfColorRow :model-value="draft.accent" @update:model-value="apply((d) => d, { accent: $event })" />
 						</div>
-						<UFormField label="Font" class="mt-4 pb-2">
+						<div class="mt-4 pb-2">
+							<div id="designer-doc-font" class="text-[11px] font-medium text-(--ui-text-muted) mb-1.5">
+								Font
+							</div>
 							<USelectMenu
 								:model-value="draft.font"
 								:items="fontOptions"
 								value-key="value"
 								label-key="label"
 								class="w-full"
+								aria-labelledby="designer-doc-font"
 								@update:model-value="apply((d) => d, { font: $event as string })"
 							/>
-						</UFormField>
+						</div>
 					</section>
 				</div>
 			</aside>
@@ -430,6 +518,20 @@
 		<UModal :open="pendingDrop !== null" title="Add this file as…" @update:open="(o) => { if (!o) pendingDrop = null }">
 			<template #body>
 				<div class="grid grid-cols-2 gap-3">
+					<!-- Dropped on an empty slot: filling it is the likely intent, but
+						never the only one (a page-size slot covers every drop point). -->
+					<button
+						v-if="pendingDropSlot"
+						type="button"
+						class="col-span-2 flex flex-col items-start gap-1 rounded-md border border-(--ui-primary)/60 bg-(--ui-primary)/5 p-3 text-left transition hover:border-(--ui-primary)"
+						@click="addDropped('slot')"
+					>
+						<UIcon name="i-lucide-square-dashed" class="size-5 text-(--ui-primary)" />
+						<span class="text-sm font-medium">A scan of your pre-printed paper</span>
+						<span class="text-xs text-(--ui-text-muted)">
+							Shown here so you can line things up with the printed parts. Never printed.
+						</span>
+					</button>
 					<button type="button" class="flex flex-col items-start gap-1 rounded-md border border-(--ui-border) p-3 text-left transition hover:border-(--ui-primary)" @click="addDropped('image')">
 						<UIcon name="i-lucide-image-plus" class="size-5 text-(--ui-primary)" />
 						<span class="text-sm font-medium">An image</span>
@@ -438,7 +540,7 @@
 					<button type="button" class="flex flex-col items-start gap-1 rounded-md border border-(--ui-border) p-3 text-left transition hover:border-(--ui-primary)" @click="addDropped('background')">
 						<UIcon name="i-lucide-wallpaper" class="size-5 text-(--ui-primary)" />
 						<span class="text-sm font-medium">A background</span>
-						<span class="text-xs text-(--ui-text-muted)">Letterhead artwork that covers the whole page, behind everything.</span>
+						<span class="text-xs text-(--ui-text-muted)">{{ hasBackground ? "Replaces your background. A design has one, covering the whole page." : "Letterhead artwork that covers the whole page, behind everything." }}</span>
 					</button>
 				</div>
 			</template>
@@ -490,7 +592,7 @@
 	//
 	// Spec: docs/superpowers/specs/2026-11-27-page-designer-design.md.
 	import type { DesignTemplateKey } from "~/lib/design-templates";
-	import type { DesignColor, DesignFont, DesignItem, ImageExt, MarginsMm, PageDesign, PageNumberFormat, TextStyle } from "~/lib/page-design";
+	import type { DesignColor, DesignFont, DesignItem, ImageExt, MarginsMm, PageDesign, PageNumberFormat, PagesRule, TextStyle } from "~/lib/page-design";
 	import type { PaperSize } from "~/lib/paper-sizes";
 	import type { PdfLayoutKey } from "~/lib/pdf-layouts";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
@@ -500,13 +602,13 @@
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { useTemplatePreviews } from "~/composables/useTemplatePreviews";
 	import { itemAssetKind, readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
-	import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, hasPageNumber, reorderItem, replaceImage, setLineVertical, setMargins, updateItem } from "~/lib/design-draft";
+	import { addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, fillSlot, hasPageNumber, isBackground, reorderItem, replaceImage, setBackground, setImageGuide, setItemLocked, setItemPages, setLineVertical, setMargins, updateItem } from "~/lib/design-draft";
 	import { canRedo, canUndo, historyAfterSave, record, redo, startHistory, undo } from "~/lib/design-history";
 	import { DESIGN_TEMPLATES } from "~/lib/design-templates";
-	import { ACTUAL_ZOOM_LEVELS, clampItem, CSS_PX_PER_MM, setMarginValue, stepActualZoom, zoomForActual } from "~/lib/designer-geometry";
+	import { ACTUAL_ZOOM_LEVELS, clampItem, CSS_PX_PER_MM, overlapWarning, setMarginValue, stepActualZoom, zoomForActual } from "~/lib/designer-geometry";
 	import { designerShortcutsAllowed } from "~/lib/designer-keys";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
-	import { DESIGN_FONTS, newItemId, parsePageDesign, scaleDesign } from "~/lib/page-design";
+	import { DESIGN_FONTS, itemOnPage, newItemId, parsePageDesign, scaleDesign } from "~/lib/page-design";
 	import { insertToken } from "~/lib/page-design-text";
 	import { effectiveDesign, PAPER_SIZES, resolvePaperSize } from "~/lib/page-settings";
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
@@ -523,6 +625,7 @@
 
 	const KIND_LABEL: Record<DesignItem["type"], string> = { image: "Image", text: "Text", page_number: "Page number", line: "Line" };
 	const KIND_ICON: Record<DesignItem["type"], string> = { image: "i-lucide-image", text: "i-lucide-type", page_number: "i-lucide-hash", line: "i-lucide-minus" };
+
 	const SIDES: { key: keyof MarginsMm, label: string }[] = [
 		{ key: "top", label: "Top" },
 		{ key: "bottom", label: "Bottom" },
@@ -635,9 +738,25 @@
 	};
 
 	// ---- page & document ------------------------------------------------------------
+	// "Check your design for <paper>": shown after a paper change until it's
+	// dismissed, saved, or undone back to another paper.
+	const paperNote = ref<PaperSize | null>(null);
+	const paperNoteLabel = computed(() =>
+		(paperNote.value && paperNote.value === draft.value.design.paper ? PAPER_SIZES.find((p) => p.key === paperNote.value)?.label ?? null : null));
 	const setPaper = (paper: PaperSize) => {
-		if (draft.value.design.paper !== paper) apply((d) => scaleDesign(d, paper));
+		if (draft.value.design.paper === paper) return;
+		apply((d) => scaleDesign(d, paper));
+		paperNote.value = paper;
 	};
+
+	// Which pages an item is drawn on.
+	const PAGES_OPTIONS: { value: PagesRule, label: string }[] = [
+		{ value: "every", label: "All pages" },
+		{ value: "first", label: "First page" },
+		{ value: "not_first", label: "Later pages" }
+	];
+	/** The selected item overlaps the safe area (the canvas badge's rule, on the estimated text height). */
+	const selectedOverlaps = computed(() => (selected.value ? overlapWarning(selected.value, shownDesign.value) : false));
 	const setMargin = (side: keyof MarginsMm, value: number | null | undefined) => {
 		if (typeof value !== "number" || !Number.isFinite(value)) return;
 		apply((d) => setMargins(d, setMarginValue(d.margins, side, value, d.paper)));
@@ -660,13 +779,17 @@
 	type AddAs = "image" | "background";
 	// A background covers the whole page (behind everything); an image is placed
 	// at the top of the safe area for the user to move and size.
+	// One background per design: a new one replaces the old (design-draft
+	// setBackground), and is locked, so it isn't selected.
 	const addFile = async (file: File, as: AddAs) => {
 		const added = await uploader.upload(file, draft.value.design.paper, { background: as === "background" });
 		if (!added) return;
 		uploaded.value = [...uploaded.value, added.id];
-		apply((d) => (as === "background" ? addBackground(d, added.id, added.ext) : addImage(d, added.id, added.ext, added.aspect)));
-		selectedId.value = added.id;
+		apply((d) => (as === "background" ? setBackground(d, added.id, added.ext) : addImage(d, added.id, added.ext, added.aspect)));
+		selectedId.value = as === "background" ? null : added.id;
 	};
+	/** The design has a background already: adding one replaces it. */
+	const hasBackground = computed(() => draft.value.design.items.some((i) => i.type === "image" && i.src !== null && isBackground(i, draft.value.design)));
 	const addAs = ref<AddAs>("image");
 	const pickFile = (as: AddAs) => {
 		addAs.value = as;
@@ -680,11 +803,6 @@
 	};
 	// A file dropped on the page: ask whether it's an image or a background.
 	const pendingDrop = shallowRef<File | null>(null);
-	const addDropped = async (as: AddAs) => {
-		const file = pendingDrop.value;
-		pendingDrop.value = null;
-		if (file) await addFile(file, as);
-	};
 	const swapSelected = (added: { id: string, ext: ImageExt, aspect: number } | null) => {
 		if (!added) return;
 		// Tracked first, so a file whose item is gone still gets cleaned up.
@@ -694,11 +812,52 @@
 		apply((d) => replaceImage(d, old.id, added.id, added.ext, added.aspect));
 		selectedId.value = added.id;
 	};
+	/** An empty slot filled with `file`: it keeps its box, pages rule and guide flag (design-draft fillSlot). */
+	async function fillSlotWith(file: File, slotId: string): Promise<void> {
+		const slot = draft.value.design.items.find((i) => i.id === slotId);
+		if (slot?.type !== "image") return;
+		const page = resolvePaperSize(draft.value.design.paper);
+		const coversPage = slot.w >= page.widthMm - 0.5 && slot.h >= page.heightMm - 0.5;
+		const added = await uploader.upload(file, draft.value.design.paper, { background: coversPage });
+		if (!added) return;
+		uploaded.value = [...uploaded.value, added.id];
+		// A background is locked as soon as it's in, like the Background tile's.
+		const lock = coversPage && !slot.guide;
+		apply((d) => {
+			const filled = fillSlot(d, slotId, added.id, added.ext);
+			return lock ? setItemLocked(filled, added.id, true) : filled;
+		});
+		selectedId.value = lock ? null : added.id;
+	}
+	/** The scan slot (Pre-printed paper) the pending drop landed on, if any: offered as a third choice. */
+	const pendingDropSlot = ref<string | null>(null);
+	const addDropped = async (as: AddAs | "slot") => {
+		const file = pendingDrop.value;
+		const slotId = pendingDropSlot.value;
+		pendingDrop.value = null;
+		pendingDropSlot.value = null;
+		if (!file) return;
+		if (as === "slot") {
+			if (slotId) await fillSlotWith(file, slotId);
+		} else {
+			await addFile(file, as);
+		}
+	};
+	// A dropped file always asks what it is; on an empty slot, filling the slot
+	// is offered first.
+	const onCanvasDrop = (file: File, slotId: string | null) => {
+		const slot = draft.value.design.items.find((i) => i.id === slotId);
+		pendingDropSlot.value = slot?.type === "image" && slot.guide ? slot.id : null;
+		pendingDrop.value = file;
+	};
 	const onReplaceInput = async (e: Event) => {
 		const input = e.target as HTMLInputElement;
 		const file = input.files?.[0];
 		input.value = "";
-		if (file) swapSelected(await uploader.upload(file, draft.value.design.paper));
+		if (!file) return;
+		const item = selected.value;
+		if (item?.type === "image" && item.src === null) await fillSlotWith(file, item.id);
+		else swapSelected(await uploader.upload(file, draft.value.design.paper));
 	};
 	const cropSelected = async () => {
 		if (!selected.value || !selectedFileExt.value) return;
@@ -762,9 +921,9 @@
 		: null));
 	const samplePayload = () => (draftSettings.value ? sampleStationeryPreviewPayload(draftSettings.value, currency.value, draft.value.layout) : null);
 	// The page view keeps a text line whose fields are all empty, faded, so it
-	// can still be seen and selected; Preview as PDF (samplePayload) prints
+	// can still be seen and selected, and draws guide-only images (never printed); Preview as PDF (samplePayload) prints
 	// exactly what documents will.
-	const designerPayload = () => (draftSettings.value ? sampleStationeryPreviewPayload(draftSettings.value, currency.value, draft.value.layout, { showEmptyFields: true }) : null);
+	const designerPayload = () => (draftSettings.value ? sampleStationeryPreviewPayload(draftSettings.value, currency.value, draft.value.layout, { showEmptyFields: true, showGuides: true }) : null);
 	const preview = useLivePagePreview(designerPayload, {
 		page: () => page.value,
 		ppiFn: () => Math.min(150, Math.max(20, Math.round(scale.value * 25.4 * (window.devicePixelRatio || 1)))),
@@ -778,6 +937,68 @@
 		buildPayload: () => samplePayload() ?? {},
 		fileName: () => "sample-invoice.pdf",
 		title: "Sample invoice"
+	});
+
+	// ---- locking ----------------------------------------------------------------------
+	// A locked item can't be selected, moved or edited on the page (a background
+	// is locked when added); the side panel's Locked list unlocks it.
+	const lockSelected = () => {
+		const id = selected.value?.id;
+		if (!id) return;
+		apply((d) => setItemLocked(d, id, true));
+		selectedId.value = null;
+	};
+	// Locked by an undo or redo while selected: let it go.
+	watch(() => selected.value?.locked, (locked) => {
+		if (locked) selectedId.value = null;
+	});
+	const unlockItem = (id: string) => {
+		apply((d) => setItemLocked(d, id, false));
+		selectedId.value = id;
+	};
+	/** A short name for a locked item in the list: what it is, or what it says. */
+	const lockedLabel = (item: DesignItem): string => {
+		if (item.type === "text") return item.text.split("\n")[0]?.trim() || "Text";
+		if (item.type !== "image") return KIND_LABEL[item.type];
+		const page = resolvePaperSize(shownDesign.value.paper);
+		if (item.w >= page.widthMm - 0.5 && item.h >= page.heightMm - 0.5) return item.guide ? "Guide scan" : "Background";
+		return item.guide ? "Guide image" : "Image";
+	};
+	const lockedItems = computed(() => shownDesign.value.items
+		.filter((i) => i.locked)
+		.map((i) => ({ id: i.id, icon: i.type === "image" && lockedLabel(i) === "Background" ? "i-lucide-wallpaper" : KIND_ICON[i.type], label: lockedLabel(i) }))
+		.reverse());
+
+	// ---- image files for the canvas ------------------------------------------------------
+	// A dragged image is drawn from its own file (PageDesignerCanvas ghosts), so
+	// each movable image's file is read once into a browser URL. Locked items and
+	// PDFs never need one.
+	const IMAGE_MIME: Partial<Record<ImageExt, string>> = { png: "image/png", jpg: "image/jpeg", svg: "image/svg+xml" };
+	const imageUrls = reactive<Record<string, string>>({});
+	const movableImages = computed(() => shownDesign.value.items.flatMap((i) =>
+		(i.type === "image" && i.src?.kind === "file" && !i.locked && IMAGE_MIME[i.src.ext] ? [{ id: i.id, mime: IMAGE_MIME[i.src.ext]! }] : [])));
+	watch(() => movableImages.value.map((m) => m.id).join(","), async () => {
+		const tenantId = tenants.activeTenantId;
+		if (!tenantId || !("__TAURI_INTERNALS__" in window)) return;
+		const wanted = movableImages.value;
+		for (const id of Object.keys(imageUrls)) {
+			if (!wanted.some((m) => m.id === id)) {
+				URL.revokeObjectURL(imageUrls[id]!);
+				delete imageUrls[id];
+			}
+		}
+		for (const m of wanted) {
+			if (imageUrls[m.id]) continue;
+			try {
+				const [, bytes] = await readBusinessAsset(tenantId, itemAssetKind(m.id));
+				imageUrls[m.id] = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: m.mime }));
+			} catch {
+				// No preview while dragging; the render still shows it.
+			}
+		}
+	}, { immediate: true });
+	onBeforeUnmount(() => {
+		for (const url of Object.values(imageUrls)) URL.revokeObjectURL(url);
 	});
 
 	// ---- text, page numbers and lines ------------------------------------------------
@@ -922,6 +1143,7 @@
 			// A fresh history: the files this save deleted can't be undone back.
 			// Anything typed while the save ran is kept (it shows as unsaved).
 			history.value = historyAfterSave(history.value, started, final);
+			paperNote.value = null;
 			if ("__TAURI_INTERNALS__" in window) {
 				const { emitTo } = await import("@tauri-apps/api/event");
 				await emitTo("main", "page-design:saved").catch(() => { /* main may be closing */ });

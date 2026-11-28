@@ -6,7 +6,7 @@
 				docs window is the right surface for serious reading
 				— this modal is the quick-reference. -->
 			<div class="max-h-[70vh] overflow-y-auto pr-1">
-				<HelpTopicView :topic="topic" />
+				<HelpTopicView :topic="topic" :hide-related="hideRelated" />
 			</div>
 		</template>
 		<template #footer>
@@ -41,6 +41,8 @@
 
 	const props = defineProps<{
 		topic: HelpTopic
+		/** No "See also" links (HelpTopicView). */
+		hideRelated?: boolean
 	}>();
 
 	const openModel = defineModel<boolean>("open", { default: false });

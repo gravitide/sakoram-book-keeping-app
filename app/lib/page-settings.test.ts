@@ -150,3 +150,15 @@ describe("buildPageSettings showEmptyFields (the designer)", () => {
 		expect(items[0]).toMatchObject({ type: "text", lines: [{ text: "Website", faded: true }] });
 	});
 });
+
+describe("buildPageSettings showGuides (the designer)", () => {
+	it("never prints a guide image in documents", () => {
+		expect(buildPageSettings(settings()).items.some((i) => i.id === "guidescan001")).toBe(false);
+	});
+
+	it("draws it in the designer, but still no empty slot", () => {
+		const items = buildPageSettings(settings(), { showGuides: true }).items;
+		expect(items).toContainEqual(expect.objectContaining({ type: "image", id: "guidescan001", src: "item", ext: "png" }));
+		expect(items.some((i) => i.id === "emptyslot001")).toBe(false);
+	});
+});
