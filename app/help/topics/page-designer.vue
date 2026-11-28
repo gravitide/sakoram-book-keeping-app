@@ -41,8 +41,8 @@
 					Pick a font, size, bold, italic, alignment and colour. The width is fixed and the text wraps.
 				</li>
 				<li>
-					<strong>Page number</strong>: one per design, shown on every page in the same spot, as "Page 1 of 3", "1 / 3"
-					or "1". It can hide itself on one-page documents. Without one, documents have no page numbers.
+					<strong>Page number</strong>: one per design, in the same spot on every page it's shown on, as "Page 1 of 3",
+					"1 / 3" or "1". It can hide itself on one-page documents. Without one, documents have no page numbers.
 				</li>
 				<li><strong>Line</strong>: a horizontal or vertical rule, with a thickness and a colour.</li>
 			</ul>
@@ -124,6 +124,10 @@
 				<strong>After the first</strong> (a smaller header on continuation pages, for example). Use the
 				<strong>Page 1 / Page 2</strong> switch in the toolbar to see each.
 			</p>
+			<p>
+				Zoom with the <strong>+</strong> and <strong>−</strong> buttons or the percentage menu; <strong>100%</strong> is the
+				paper's real size on screen.
+			</p>
 		</HelpSection>
 
 		<HelpSection title="Pre-printed paper" icon="i-lucide-scan">
@@ -158,7 +162,7 @@
 		{ keys: "Arrow keys", does: "Nudge the selected item 1 mm (hold Shift for 5 mm)" },
 		{ keys: "Ctrl+D", does: "Duplicate it" },
 		{ keys: "Delete", does: "Delete it" },
-		{ keys: "Ctrl+Z / Ctrl+Y", does: "Undo / redo, for as long as the window is open" },
+		{ keys: "Ctrl+Z / Ctrl+Y", does: "Undo / redo, back to the last save" },
 		{ keys: "H, or hold Space", does: "Hand tool: drag to move around the page (V goes back)" },
 		{ keys: "Ctrl+S", does: "Save" },
 		{ keys: "Esc", does: "Deselect" }

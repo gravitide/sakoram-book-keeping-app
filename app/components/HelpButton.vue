@@ -9,7 +9,7 @@
 			:aria-label="`Help: ${topic.title}`"
 			@click="open"
 		/>
-		<HelpModal v-model:open="modalOpen" :topic="topic" />
+		<HelpModal v-model:open="modalOpen" :topic="topic" :hide-related="hideRelated" />
 	</template>
 </template>
 
@@ -28,6 +28,8 @@
 		/// in `app/help/index.ts`. Renders nothing if missing.
 		slug: string
 		size?: "xs" | "sm" | "md"
+		/** No "See also" links in the modal: for a window that must not navigate (the page designer). */
+		hideRelated?: boolean
 	}>(), {
 		size: "sm"
 	});

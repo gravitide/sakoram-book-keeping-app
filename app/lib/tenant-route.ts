@@ -53,3 +53,12 @@ export function resolveTenantGuard(state: TenantGuardState, toPath: string): Gua
 export function isDesignerRoute(path: string): boolean {
 	return /^\/designer\/?$/.test(path);
 }
+
+/**
+ * Whether a navigation may happen: the designer window never leaves the
+ * designer (a help topic's link would otherwise turn it into another page,
+ * with the unsaved draft hidden behind it).
+ */
+export function designerWindowMayGo(fromPath: string, toPath: string): boolean {
+	return !isDesignerRoute(fromPath) || isDesignerRoute(toPath);
+}

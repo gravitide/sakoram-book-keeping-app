@@ -138,12 +138,19 @@ export function overlapWarning(item: DesignItem, design: PageDesign, measuredH?:
 	return overlapsSafeArea(box, design);
 }
 
-/** The topmost empty image slot drawn on `page` under the point (mm), or null. */
+/**
+ * The empty image slot a drop at the point (mm) lands on. The topmost item
+ * drawn on `page` under the point decides, so a drop on a logo sitting over a
+ * page-size slot doesn't fill the slot. Null when that item isn't an empty
+ * slot, or nothing is there.
+ */
 export function slotAt(design: PageDesign, page: 1 | 2, xMm: number, yMm: number): string | null {
 	for (let k = design.items.length - 1; k >= 0; k--) {
 		const i = design.items[k]!;
-		if (i.type !== "image" || i.src !== null || !itemOnPage(i.pages, page)) continue;
-		if (xMm >= i.x && xMm <= i.x + i.w && yMm >= i.y && yMm <= i.y + i.h) return i.id;
+		if (!itemOnPage(i.pages, page)) continue;
+		const b = itemBox(i);
+		if (xMm < b.x || xMm > b.x + b.w || yMm < b.y || yMm > b.y + b.h) continue;
+		return i.type === "image" && i.src === null ? i.id : null;
 	}
 	return null;
 }

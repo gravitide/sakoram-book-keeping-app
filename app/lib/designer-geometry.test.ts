@@ -265,9 +265,12 @@ describe("slotAt", () => {
 	const pageSlot = image({ id: "slot00000001", x: 0, y: 0, w: 210, h: 297, src: null });
 	const logo = image({ id: "logo00000001", x: 168, y: 12, w: 24, h: 24, src: { kind: "file", ext: "png" } });
 
-	it("finds the empty slot under a point, skipping images that have a file", () => {
+	it("finds the empty slot under a point", () => {
 		expect(slotAt(design([pageSlot, logo]), 1, 100, 100)).toBe("slot00000001");
-		expect(slotAt(design([pageSlot, logo]), 1, 170, 20)).toBe("slot00000001");
+	});
+
+	it("lets the topmost item decide: a drop on a logo above the slot doesn't fill the slot", () => {
+		expect(slotAt(design([pageSlot, logo]), 1, 170, 20)).toBeNull();
 	});
 
 	it("ignores a slot that isn't drawn on that page", () => {

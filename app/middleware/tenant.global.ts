@@ -8,10 +8,14 @@
 // populate the tenants store (which auto-migrates a legacy single-DB).
 
 import { useTerms } from "~/composables/useTerms";
-import { isDesignerRoute, resolveTenantGuard } from "~/lib/tenant-route";
+import { designerWindowMayGo, isDesignerRoute, resolveTenantGuard } from "~/lib/tenant-route";
 import { useTenantsStore } from "~/stores/tenants";
 
-export default defineNuxtRouteMiddleware(async (to) => {
+export default defineNuxtRouteMiddleware(async (to, from) => {
+	// The page designer's window never leaves the designer (a help topic's
+	// "See also" link would strand the unsaved draft behind another page).
+	if (!designerWindowMayGo(from.path, to.path)) return abortNavigation();
+
 	// First-run Terms gate — the OUTERMOST gate. Until the current Terms version
 	// is accepted, only /terms may render, and we must NOT fall through to the
 	// tenant guard below: on a fresh install (no active tenant) that guard

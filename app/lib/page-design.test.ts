@@ -158,3 +158,18 @@ describe("sameMargins", () => {
 		expect(sameMargins({ top: 48, right: 18, bottom: 26, left: 18 }, { top: 48.5, right: 18, bottom: 26, left: 18 })).toBe(false);
 	});
 });
+
+describe("scaleDesign keeps page-covering images covering the page", () => {
+	it("stretches a full-page background or slot to the new sheet", () => {
+		const a4: PageDesign = {
+			version: 1,
+			paper: "a4",
+			margins: { top: 20, right: 18, bottom: 20, left: 18 },
+			items: [{ type: "image", id: "slot00000001", x: 0, y: 0, w: 210, h: 297, pages: "every", src: null, guide: true }]
+		};
+		for (const to of ["us-letter", "a5", "us-legal"] as const) {
+			const page = resolvePaperSize(to);
+			expect(scaleDesign(a4, to).items[0]).toMatchObject({ x: 0, y: 0, w: page.widthMm, h: page.heightMm });
+		}
+	});
+});

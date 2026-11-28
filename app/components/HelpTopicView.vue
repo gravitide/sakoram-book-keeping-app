@@ -33,7 +33,7 @@
 
 		<!-- "See also" — related topics surfaced at the bottom. Only
 			rendered when the topic actually lists relatedSlugs. -->
-		<section v-if="relatedTopics.length > 0" class="pt-4 border-t border-(--ui-border)">
+		<section v-if="!hideRelated && relatedTopics.length > 0" class="pt-4 border-t border-(--ui-border)">
 			<h2 class="text-xs uppercase tracking-wide text-(--ui-text-muted) mb-2">
 				See also
 			</h2>
@@ -68,6 +68,8 @@
 
 	const props = defineProps<{
 		topic: HelpTopic
+		/** No "See also" links: shown where the window must not navigate (the page designer). */
+		hideRelated?: boolean
 	}>();
 
 	const topicComponent = shallowRef<Component | null>(null);

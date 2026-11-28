@@ -123,6 +123,11 @@ export function scaleDesign(design: PageDesign, to: PaperSize): PageDesign {
 	const items = design.items.map((item): DesignItem => {
 		switch (item.type) {
 			case "image":
+				// A background or full-page slot covers the new sheet too (its image
+				// is fitted inside, never stretched); anything else keeps its shape.
+				if (item.x <= 0.5 && item.y <= 0.5 && item.w >= from.widthMm - 0.5 && item.h >= from.heightMm - 0.5) {
+					return { ...item, x: 0, y: 0, w: target.widthMm, h: target.heightMm };
+				}
 				return { ...item, x: item.x * sx, y: item.y * sy, w: item.w * s, h: item.h * s };
 			case "text":
 				return { ...item, x: item.x * sx, y: item.y * sy, w: item.w * s, style: scaledStyle(item.style) };
