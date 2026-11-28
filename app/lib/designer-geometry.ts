@@ -147,7 +147,8 @@ export function overlapWarning(item: DesignItem, design: PageDesign, measuredH?:
 export function slotAt(design: PageDesign, page: 1 | 2, xMm: number, yMm: number): string | null {
 	for (let k = design.items.length - 1; k >= 0; k--) {
 		const i = design.items[k]!;
-		if (!itemOnPage(i.pages, page)) continue;
+		// A locked item never takes the pointer, so a drop looks past it.
+		if (i.locked || !itemOnPage(i.pages, page)) continue;
 		const b = itemBox(i);
 		if (xMm < b.x || xMm > b.x + b.w || yMm < b.y || yMm > b.y + b.h) continue;
 		return i.type === "image" && i.src === null ? i.id : null;

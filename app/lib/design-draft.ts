@@ -74,6 +74,11 @@ export function addLine(design: PageDesign, id: string): PageDesign {
 	return append(design, { type: "line", id, ...at, length: safe.w, vertical: false, thickness: 0.75, color: "accent", pages: "every" });
 }
 
+/** An item locked (the designer won't select, move or edit it on the page) or unlocked. */
+export function setItemLocked(design: PageDesign, id: string, locked: boolean): PageDesign {
+	return { ...design, items: design.items.map((i) => (i.id === id ? { ...i, locked } : i)) };
+}
+
 /** An item drawn on `pages`: every page, the first only, or every page after the first. */
 export function setItemPages(design: PageDesign, id: string, pages: PagesRule): PageDesign {
 	return { ...design, items: design.items.map((i) => (i.id === id ? { ...i, pages } : i)) };
@@ -120,10 +125,14 @@ export function addImage(design: PageDesign, id: string, ext: ImageExt, aspect: 
 	return { ...design, items: [...design.items, item] };
 }
 
-/** A full-page background image (file `item-<id>.<ext>`): covers the whole sheet, drawn behind everything else. */
+/**
+ * A full-page background image (file `item-<id>.<ext>`): covers the whole sheet,
+ * drawn behind everything else, and locked, so clicks on the page reach the
+ * things in front of it.
+ */
 export function addBackground(design: PageDesign, id: string, ext: ImageExt): PageDesign {
 	const { widthMm, heightMm } = resolvePaperSize(design.paper);
-	const item: DesignItem = { type: "image", id, x: 0, y: 0, w: widthMm, h: heightMm, pages: "every", src: { kind: "file", ext }, guide: false };
+	const item: DesignItem = { type: "image", id, x: 0, y: 0, w: widthMm, h: heightMm, pages: "every", src: { kind: "file", ext }, guide: false, locked: true };
 	return { ...design, items: [item, ...design.items] };
 }
 

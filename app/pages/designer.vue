@@ -350,6 +350,9 @@
 								>
 									Duplicate
 								</UButton>
+								<UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-lock" title="Stop it being selected or moved on the page; unlock it from the Locked list" @click="lockSelected">
+									Lock
+								</UButton>
 								<UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" @click="deleteSelected">
 									Delete
 								</UButton>
@@ -359,6 +362,24 @@
 					<p v-else class="m-3 rounded-lg border border-dashed border-(--ui-border) p-3 text-xs text-(--ui-text-muted)">
 						Click something on the page to select it. Drag to move it; drag a handle to resize it.
 					</p>
+
+					<!-- Locked items can't be clicked on the page: this is where they
+						come back from. -->
+					<section v-if="lockedItems.length > 0" class="mx-3 mb-3" aria-labelledby="designer-locked">
+						<div id="designer-locked" class="flex items-center gap-1.5 px-1 mb-1 text-[11px] font-medium text-(--ui-text-muted)">
+							<UIcon name="i-lucide-lock" class="size-3" />
+							Locked
+						</div>
+						<ul class="rounded-lg border border-(--ui-border) divide-y divide-(--ui-border)">
+							<li v-for="l in lockedItems" :key="l.id" class="flex items-center gap-2 pl-2.5 pr-1 py-1">
+								<UIcon :name="l.icon" class="size-3.5 shrink-0 text-(--ui-text-muted)" />
+								<span class="flex-1 min-w-0 truncate text-xs">{{ l.label }}</span>
+								<UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-lock-open" @click="unlockItem(l.id)">
+									Unlock
+								</UButton>
+							</li>
+						</ul>
+					</section>
 
 					<!-- 3. Page settings: apply to the whole page and every document. -->
 					<div class="px-4 pt-3 pb-1 flex items-center gap-2">
@@ -566,7 +587,7 @@
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { useTemplatePreviews } from "~/composables/useTemplatePreviews";
 	import { itemAssetKind, readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
-	import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, fillSlot, hasPageNumber, reorderItem, replaceImage, setImageGuide, setItemPages, setLineVertical, setMargins, updateItem } from "~/lib/design-draft";
+	import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, fillSlot, hasPageNumber, reorderItem, replaceImage, setImageGuide, setItemLocked, setItemPages, setLineVertical, setMargins, updateItem } from "~/lib/design-draft";
 	import { canRedo, canUndo, historyAfterSave, record, redo, startHistory, undo } from "~/lib/design-history";
 	import { DESIGN_TEMPLATES } from "~/lib/design-templates";
 	import { ACTUAL_ZOOM_LEVELS, clampItem, CSS_PX_PER_MM, overlapWarning, setMarginValue, stepActualZoom, zoomForActual } from "~/lib/designer-geometry";
@@ -589,6 +610,7 @@
 
 	const KIND_LABEL: Record<DesignItem["type"], string> = { image: "Image", text: "Text", page_number: "Page number", line: "Line" };
 	const KIND_ICON: Record<DesignItem["type"], string> = { image: "i-lucide-image", text: "i-lucide-type", page_number: "i-lucide-hash", line: "i-lucide-minus" };
+
 	const SIDES: { key: keyof MarginsMm, label: string }[] = [
 		{ key: "top", label: "Top" },
 		{ key: "bottom", label: "Bottom" },
@@ -895,6 +917,36 @@
 		fileName: () => "sample-invoice.pdf",
 		title: "Sample invoice"
 	});
+
+	// ---- locking ----------------------------------------------------------------------
+	// A locked item can't be selected, moved or edited on the page (a background
+	// is locked when added); the side panel's Locked list unlocks it.
+	const lockSelected = () => {
+		const id = selected.value?.id;
+		if (!id) return;
+		apply((d) => setItemLocked(d, id, true));
+		selectedId.value = null;
+	};
+	// Locked by an undo or redo while selected: let it go.
+	watch(() => selected.value?.locked, (locked) => {
+		if (locked) selectedId.value = null;
+	});
+	const unlockItem = (id: string) => {
+		apply((d) => setItemLocked(d, id, false));
+		selectedId.value = id;
+	};
+	/** A short name for a locked item in the list: what it is, or what it says. */
+	const lockedLabel = (item: DesignItem): string => {
+		if (item.type === "text") return item.text.split("\n")[0]?.trim() || "Text";
+		if (item.type !== "image") return KIND_LABEL[item.type];
+		const page = resolvePaperSize(shownDesign.value.paper);
+		if (item.w >= page.widthMm - 0.5 && item.h >= page.heightMm - 0.5) return item.guide ? "Guide scan" : "Background";
+		return item.guide ? "Guide image" : "Image";
+	};
+	const lockedItems = computed(() => shownDesign.value.items
+		.filter((i) => i.locked)
+		.map((i) => ({ id: i.id, icon: i.type === "image" && lockedLabel(i) === "Background" ? "i-lucide-wallpaper" : KIND_ICON[i.type], label: lockedLabel(i) }))
+		.reverse());
 
 	// ---- text, page numbers and lines ------------------------------------------------
 	const accentHex = computed(() => pdfThemeHex(draftSettings.value));

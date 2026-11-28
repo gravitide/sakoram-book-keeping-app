@@ -1,6 +1,6 @@
 import type { DesignItem, PageDesign } from "./page-design";
 import { describe, expect, it } from "vitest";
-import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, fillSlot, hasPageNumber, NEW_TEXT, reorderItem, replaceImage, setImageGuide, setItemPages, setLineVertical, setMargins, updateItem } from "./design-draft";
+import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, fillSlot, hasPageNumber, NEW_TEXT, reorderItem, replaceImage, setImageGuide, setItemLocked, setItemPages, setLineVertical, setMargins, updateItem } from "./design-draft";
 
 const blank: PageDesign = { version: 1, paper: "a4", margins: { top: 20, right: 18, bottom: 20, left: 18 }, items: [] };
 
@@ -96,9 +96,9 @@ describe("review fixes", () => {
 });
 
 describe("addBackground", () => {
-	it("covers the whole page, behind everything else", () => {
+	it("covers the whole page, behind everything else, locked", () => {
 		const d = addBackground(withItems(rule), "bgimage00001", "png");
-		expect(d.items[0]).toEqual({ type: "image", id: "bgimage00001", x: 0, y: 0, w: 210, h: 297, pages: "every", src: { kind: "file", ext: "png" }, guide: false });
+		expect(d.items[0]).toEqual({ type: "image", id: "bgimage00001", x: 0, y: 0, w: 210, h: 297, pages: "every", src: { kind: "file", ext: "png" }, guide: false, locked: true });
 		expect(d.items[1]).toEqual(rule);
 	});
 
@@ -188,5 +188,13 @@ describe("fillSlot", () => {
 	it("leaves an image that already has a file alone", () => {
 		const d = withItems(img("aaaaaa000001"));
 		expect(fillSlot(d, "aaaaaa000001", "bbbbbb000001", "png")).toBe(d);
+	});
+});
+
+describe("setItemLocked", () => {
+	it("locks and unlocks any kind of item", () => {
+		const locked = setItemLocked(withItems(rule), "rule00000001", true);
+		expect(locked.items[0]).toMatchObject({ locked: true });
+		expect(setItemLocked(locked, "rule00000001", false).items[0]).toMatchObject({ locked: false });
 	});
 });

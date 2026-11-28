@@ -273,6 +273,11 @@ describe("slotAt", () => {
 		expect(slotAt(design([pageSlot, logo]), 1, 170, 20)).toBeNull();
 	});
 
+	it("looks past a locked item (it never takes the pointer)", () => {
+		const lockedBg = image({ id: "bg0000000001", x: 0, y: 0, w: 210, h: 297, src: { kind: "file", ext: "png" }, locked: true });
+		expect(slotAt(design([pageSlot, lockedBg]), 1, 100, 100)).toBe("slot00000001");
+	});
+
 	it("ignores a slot that isn't drawn on that page", () => {
 		expect(slotAt(design([{ ...pageSlot, pages: "not_first" }]), 1, 100, 100)).toBeNull();
 	});

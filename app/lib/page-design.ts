@@ -29,11 +29,16 @@ export type ImageExt = "svg" | "pdf" | "png" | "jpg";
 /** A copied file, the business's company logo (only in an untouched default), or an empty slot. */
 export type ImageSource = { kind: "file", ext: ImageExt } | { kind: "company_logo" } | null;
 
+/**
+ * `locked` (any item, optional): the designer won't select, move or edit it on
+ * the page; it's unlocked from the side panel's Locked list. Printing ignores it.
+ */
 export type DesignItem
-	= | { type: "image", id: string, x: number, y: number, w: number, h: number, pages: PagesRule, src: ImageSource, guide: boolean }
+	= ({ type: "image", id: string, x: number, y: number, w: number, h: number, pages: PagesRule, src: ImageSource, guide: boolean }
 		| { type: "text", id: string, x: number, y: number, w: number, pages: PagesRule, text: string, style: TextStyle }
 		| { type: "page_number", id: string, x: number, y: number, w: number, pages: PagesRule, format: PageNumberFormat, hide_single: boolean, style: TextStyle }
-		| { type: "line", id: string, x: number, y: number, length: number, vertical: boolean, thickness: number, color: DesignColor, pages: PagesRule };
+		| { type: "line", id: string, x: number, y: number, length: number, vertical: boolean, thickness: number, color: DesignColor, pages: PagesRule })
+	& { locked?: boolean };
 
 export interface PageDesign { version: 1, paper: PaperSize, margins: MarginsMm, items: DesignItem[] }
 
@@ -55,6 +60,7 @@ const pos = z.number().min(0);
 const size = z.number().positive();
 const id = z.string().regex(ITEM_ID_PATTERN);
 const pages = z.enum(["every", "first", "not_first"]);
+const locked = z.boolean().optional();
 const color = z.union([z.literal("accent"), z.string().regex(/^#[0-9a-f]{6}$/i)]) as z.ZodType<DesignColor>;
 const style = z.object({
 	font: z.enum(DESIGN_FONTS as [DesignFont, ...DesignFont[]]),
@@ -71,10 +77,10 @@ const imageSrc = z.union([
 ]);
 
 const itemSchema = z.discriminatedUnion("type", [
-	z.object({ type: z.literal("image"), id, x: pos, y: pos, w: size, h: size, pages, src: imageSrc, guide: z.boolean() }),
-	z.object({ type: z.literal("text"), id, x: pos, y: pos, w: size, pages, text: z.string(), style }),
-	z.object({ type: z.literal("page_number"), id, x: pos, y: pos, w: size, pages, format: z.enum(["page_of_total", "slash", "number"]), hide_single: z.boolean(), style }),
-	z.object({ type: z.literal("line"), id, x: pos, y: pos, length: size, vertical: z.boolean(), thickness: size, color, pages })
+	z.object({ type: z.literal("image"), id, x: pos, y: pos, w: size, h: size, pages, src: imageSrc, guide: z.boolean(), locked }),
+	z.object({ type: z.literal("text"), id, x: pos, y: pos, w: size, pages, text: z.string(), style, locked }),
+	z.object({ type: z.literal("page_number"), id, x: pos, y: pos, w: size, pages, format: z.enum(["page_of_total", "slash", "number"]), hide_single: z.boolean(), style, locked }),
+	z.object({ type: z.literal("line"), id, x: pos, y: pos, length: size, vertical: z.boolean(), thickness: size, color, pages, locked })
 ]);
 
 const designSchema = z.object({

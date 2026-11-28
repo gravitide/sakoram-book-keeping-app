@@ -173,3 +173,20 @@ describe("scaleDesign keeps page-covering images covering the page", () => {
 		}
 	});
 });
+
+describe("parsePageDesign keeps the lock", () => {
+	it("reads an item's locked flag, and an item without one", () => {
+		const stored = JSON.stringify({
+			version: 1,
+			paper: "a4",
+			margins: { top: 20, right: 18, bottom: 20, left: 18 },
+			items: [
+				{ type: "image", id: "bg0000000001", x: 0, y: 0, w: 210, h: 297, pages: "every", src: { kind: "file", ext: "png" }, guide: false, locked: true },
+				{ type: "line", id: "rule00000001", x: 18, y: 40, length: 174, vertical: false, thickness: 1, color: "accent", pages: "every" }
+			]
+		});
+		const d = parsePageDesign(stored)!;
+		expect(d.items[0]).toMatchObject({ locked: true });
+		expect(d.items[1]!.locked).toBeUndefined();
+	});
+});

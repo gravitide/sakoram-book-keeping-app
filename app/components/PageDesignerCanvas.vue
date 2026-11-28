@@ -103,16 +103,16 @@
 					v-for="box in boxes"
 					:key="box.item.id"
 					role="group"
-					:tabindex="box.slot ? -1 : 0"
+					:tabindex="box.inert ? -1 : 0"
 					:aria-label="box.label"
 					class="group absolute outline-none touch-none cursor-move"
 					:class="[
 						box.item.id === selectedId ? `${box.coversPage ? 'z-20' : 'z-[35]'} ring-2 ring-(--ui-primary)` : 'z-10 ring-1 ring-transparent hover:ring-(--ui-primary)/60 focus-visible:ring-(--ui-primary)',
 						box.guide && !box.slot ? 'bg-(--ui-primary)/5' : '',
-						// An empty slot (a template's place for a background or scan) is
-						// invisible and never takes the pointer: clicks reach the page and
-						// what's on it. A file dropped there is offered to fill it.
-						box.slot ? 'pointer-events-none' : ''
+						// An empty slot (a template's place for a background or scan) or a
+						// locked item never takes the pointer: clicks reach the page and
+						// what's in front. A file dropped on a slot is offered to fill it.
+						box.inert ? 'pointer-events-none' : ''
 					]"
 					:style="box.style"
 					@pointerdown="onItemPointerDown(box.item.id, 'move', $event)"
@@ -454,6 +454,8 @@
 				item,
 				guide: item.type === "image" && item.guide,
 				slot: item.type === "image" && item.src === null,
+				/** Not selectable on the page: an empty slot, or a locked item. */
+				inert: (item.type === "image" && item.src === null) || Boolean(item.locked),
 				overlap: overlapWarning(item, props.design, measured.value[item.id]),
 				// A background: raising it over the guides would hide every one of them.
 				coversPage: b.w >= paper.value.widthMm - 0.5 && b.h >= paper.value.heightMm - 0.5,

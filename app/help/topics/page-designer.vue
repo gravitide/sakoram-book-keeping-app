@@ -84,6 +84,11 @@
 
 		<HelpSection title="Moving and sizing" icon="i-lucide-move">
 			<p>
+				<strong>Lock</strong> an item from its panel to stop it being clicked or moved on the page; a background is locked
+				as soon as you add it. Locked items are listed under <strong>Locked</strong> in the side panel, where
+				<strong>Unlock</strong> brings them back.
+			</p>
+			<p>
 				Click something to select it, drag it to move it, and drag a handle to resize it. Items snap to the page edges,
 				the centre, the safe area and each other; hold <strong>Alt</strong> while dragging to turn snapping off. The side
 				panel shows the exact position and size in millimetres.
