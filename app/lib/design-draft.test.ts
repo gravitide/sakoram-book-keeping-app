@@ -1,6 +1,6 @@
 import type { DesignItem, PageDesign } from "./page-design";
 import { describe, expect, it } from "vitest";
-import { addBackground, addImage, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, reorderItem, replaceImage, setMargins, updateItem } from "./design-draft";
+import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, hasPageNumber, NEW_TEXT, reorderItem, replaceImage, setLineVertical, setMargins, updateItem } from "./design-draft";
 
 const blank: PageDesign = { version: 1, paper: "a4", margins: { top: 20, right: 18, bottom: 20, left: 18 }, items: [] };
 
@@ -104,5 +104,54 @@ describe("addBackground", () => {
 
 	it("follows the design's paper", () => {
 		expect(addBackground({ ...blank, paper: "a5" }, "bgimage00001", "svg").items[0]).toMatchObject({ w: 148, h: 210 });
+	});
+});
+
+describe("adding text, a page number and lines", () => {
+	const page: PageDesign = { ...blank, margins: { top: 40, right: 18, bottom: 25, left: 18 } };
+
+	it("adds a text box at the top-left of the safe area, 80 mm wide, in the given font", () => {
+		const d = addText(page, "newtext00001", "Inter");
+		expect(d.items).toHaveLength(1);
+		expect(d.items[0]).toMatchObject({ type: "text", id: "newtext00001", x: 18, y: 40, w: 80, pages: "every", text: NEW_TEXT, style: { font: "Inter", size: 10, bold: false, italic: false, align: "left" } });
+		expect(NEW_TEXT).toBe("New text");
+	});
+
+	it("cascades a second new item 5 mm down and right instead of stacking it", () => {
+		const d = addText(addText(page, "newtext00001", "Akt"), "newtext00002", "Akt");
+		expect(d.items[1]).toMatchObject({ x: 23, y: 45 });
+	});
+
+	it("adds a page number at the bottom right, below the safe area", () => {
+		const d = addPageNumber(page, "pagenum00001", "Akt");
+		expect(d.items[0]).toMatchObject({ type: "page_number", x: 152, y: 288, w: 40, format: "page_of_total", hide_single: true });
+	});
+
+	it("never adds a second page number", () => {
+		const once = addPageNumber(page, "pagenum00001", "Akt");
+		expect(hasPageNumber(page)).toBe(false);
+		expect(hasPageNumber(once)).toBe(true);
+		expect(addPageNumber(once, "pagenum00002", "Akt")).toBe(once);
+	});
+
+	it("adds an accent line across the safe area at its top", () => {
+		const d = addLine(page, "newline00001");
+		expect(d.items[0]).toEqual({ type: "line", id: "newline00001", x: 18, y: 40, length: 174, vertical: false, thickness: 0.75, color: "accent", pages: "every" });
+	});
+});
+
+describe("setLineVertical", () => {
+	const low: DesignItem = { type: "line", id: "lowline00001", x: 18, y: 280, length: 174, vertical: false, thickness: 1, color: "accent", pages: "every" };
+
+	it("keeps a line turned vertical near the bottom on the page, from the same start", () => {
+		const d = setLineVertical(withItems(low), "lowline00001", true);
+		const line = d.items[0]!;
+		expect(line).toMatchObject({ vertical: true, x: 18, y: 280 });
+		expect(line.type === "line" && line.length <= 297 - 280).toBe(true);
+	});
+
+	it("keeps x and y when turned back", () => {
+		const d = setLineVertical(setLineVertical(withItems(rule), "rule00000001", true), "rule00000001", false);
+		expect(d.items[0]).toMatchObject({ vertical: false, x: 18, y: 40 });
 	});
 });
