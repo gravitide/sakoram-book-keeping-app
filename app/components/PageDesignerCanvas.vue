@@ -128,7 +128,7 @@
 					<!-- An empty image slot: prints nothing, invites a file. -->
 					<div
 						v-if="box.slot"
-						class="absolute inset-0 flex flex-col items-center justify-center gap-1 border border-dashed border-zinc-400 bg-zinc-50/60 text-zinc-500 pointer-events-none"
+						class="absolute inset-0 flex flex-col items-center justify-center gap-1 border border-dashed border-zinc-400 text-zinc-500 pointer-events-none"
 					>
 						<UIcon name="i-lucide-image-plus" class="size-5" />
 						<span class="text-xs font-medium">{{ box.guide ? "Drop a scan of your paper" : "Drop an image" }}</span>

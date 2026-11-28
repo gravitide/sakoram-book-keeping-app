@@ -482,6 +482,20 @@
 		<UModal :open="pendingDrop !== null" title="Add this file as…" @update:open="(o) => { if (!o) pendingDrop = null }">
 			<template #body>
 				<div class="grid grid-cols-2 gap-3">
+					<!-- Dropped on an empty slot: filling it is the likely intent, but
+						never the only one (a page-size slot covers every drop point). -->
+					<button
+						v-if="pendingDropSlot"
+						type="button"
+						class="col-span-2 flex flex-col items-start gap-1 rounded-md border border-(--ui-primary)/60 bg-(--ui-primary)/5 p-3 text-left transition hover:border-(--ui-primary)"
+						@click="addDropped('slot')"
+					>
+						<UIcon name="i-lucide-square-dashed" class="size-5 text-(--ui-primary)" />
+						<span class="text-sm font-medium">{{ pendingDropSlotIsGuide ? "The scan of your paper" : "Fill the empty slot" }}</span>
+						<span class="text-xs text-(--ui-text-muted)">
+							{{ pendingDropSlotIsGuide ? "Goes in the dashed slot: shown here to line things up against, never printed." : "Goes in the dashed slot, keeping its place and size." }}
+						</span>
+					</button>
 					<button type="button" class="flex flex-col items-start gap-1 rounded-md border border-(--ui-border) p-3 text-left transition hover:border-(--ui-primary)" @click="addDropped('image')">
 						<UIcon name="i-lucide-image-plus" class="size-5 text-(--ui-primary)" />
 						<span class="text-sm font-medium">An image</span>
@@ -748,11 +762,6 @@
 	};
 	// A file dropped on the page: ask whether it's an image or a background.
 	const pendingDrop = shallowRef<File | null>(null);
-	const addDropped = async (as: AddAs) => {
-		const file = pendingDrop.value;
-		pendingDrop.value = null;
-		if (file) await addFile(file, as);
-	};
 	const swapSelected = (added: { id: string, ext: ImageExt, aspect: number } | null) => {
 		if (!added) return;
 		// Tracked first, so a file whose item is gone still gets cleaned up.
@@ -774,10 +783,29 @@
 		apply((d) => fillSlot(d, slotId, added.id, added.ext));
 		selectedId.value = added.id;
 	};
-	// Dropped on an empty slot: fill it. Anywhere else: ask image or background.
+	/** The empty slot the pending drop landed on, if any: offered as a third choice. */
+	const pendingDropSlot = ref<string | null>(null);
+	const pendingDropSlotIsGuide = computed(() => {
+		const slot = draft.value.design.items.find((i) => i.id === pendingDropSlot.value);
+		return slot?.type === "image" && slot.guide;
+	});
+	const addDropped = async (as: AddAs | "slot") => {
+		const file = pendingDrop.value;
+		const slotId = pendingDropSlot.value;
+		pendingDrop.value = null;
+		pendingDropSlot.value = null;
+		if (!file) return;
+		if (as === "slot") {
+			if (slotId) await fillSlotWith(file, slotId);
+		} else {
+			await addFile(file, as);
+		}
+	};
+	// A dropped file always asks what it is; on an empty slot, filling the slot
+	// is offered first.
 	const onCanvasDrop = (file: File, slotId: string | null) => {
-		if (slotId) void fillSlotWith(file, slotId);
-		else pendingDrop.value = file;
+		pendingDropSlot.value = slotId;
+		pendingDrop.value = file;
 	};
 	const onReplaceInput = async (e: Event) => {
 		const input = e.target as HTMLInputElement;
