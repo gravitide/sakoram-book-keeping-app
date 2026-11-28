@@ -5,6 +5,7 @@ use tauri::{
 };
 use tauri::Manager;
 mod data_io;
+mod designer;
 mod drive;
 mod pdf;
 mod phone_upload;
@@ -66,6 +67,15 @@ pub fn run() {
 			if window.label() == "main" {
 				if let tauri::WindowEvent::Destroyed = event {
 					window.app_handle().exit(0);
+				}
+			}
+			// However the page designer closes (its own button, or designer::close
+			// on a business change), tell main it's gone: main's close guard
+			// (lock-on-close.client.ts) only defers to an OPEN designer.
+			if window.label() == designer::DESIGNER_LABEL {
+				if let tauri::WindowEvent::Destroyed = event {
+					use tauri::Emitter;
+					let _ = window.app_handle().emit_to("main", "page-designer:open", false);
 				}
 			}
 		})

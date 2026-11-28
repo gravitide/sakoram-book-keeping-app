@@ -550,6 +550,8 @@ pub async fn import_tenant_data(
 	target_parent: Option<String>,
 	passphrase: Option<String>,
 ) -> Result<tenants::Tenant, String> {
+	// The designer must not outlive the database it edits (designer.rs).
+	crate::designer::close(&app);
 	let in_path = PathBuf::from(input_path);
 	let manifest = peek_export_manifest(in_path.to_string_lossy().to_string()).await?;
 

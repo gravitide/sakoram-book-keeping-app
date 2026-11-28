@@ -798,6 +798,8 @@ pub async fn rename_tenant(app: AppHandle, id: String, name: String) -> Result<(
 /// locks open files). See `forget_tenant` to drop only the registry entry.
 #[tauri::command]
 pub async fn delete_tenant(app: AppHandle, id: String) -> Result<(), String> {
+	// The designer must not outlive the database it edits (designer.rs).
+	crate::designer::close(&app);
 	let mut reg = read_registry(&app)?;
 	let pos = reg.tenants.iter().position(|t| t.id == id).ok_or("Tenant not found")?;
 	let tenant = reg.tenants.remove(pos);
@@ -819,6 +821,8 @@ pub async fn delete_tenant(app: AppHandle, id: String) -> Result<(), String> {
 /// matched.
 #[tauri::command]
 pub async fn forget_tenant(app: AppHandle, id: String) -> Result<(), String> {
+	// The designer must not outlive the database it edits (designer.rs).
+	crate::designer::close(&app);
 	let mut reg = read_registry(&app)?;
 	let pos = reg.tenants.iter().position(|t| t.id == id).ok_or("Tenant not found")?;
 	let tenant = reg.tenants.remove(pos);
@@ -831,6 +835,8 @@ pub async fn forget_tenant(app: AppHandle, id: String) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn set_active_tenant(app: AppHandle, id: String) -> Result<(), String> {
+	// The designer must not outlive the database it edits (designer.rs).
+	crate::designer::close(&app);
 	let mut reg = read_registry(&app)?;
 	if !reg.tenants.iter().any(|t| t.id == id) {
 		return Err("Tenant not found".into());
@@ -844,6 +850,8 @@ pub async fn set_active_tenant(app: AppHandle, id: String) -> Result<(), String>
 /// The registry entry stays; only `active_tenant_id` is nulled.
 #[tauri::command]
 pub async fn clear_active_tenant(app: AppHandle) -> Result<(), String> {
+	// The designer must not outlive the database it edits (designer.rs).
+	crate::designer::close(&app);
 	let mut reg = read_registry(&app)?;
 	reg.active_tenant_id = None;
 	write_registry(&app, &reg)?;

@@ -43,3 +43,13 @@ export function resolveTenantGuard(state: TenantGuardState, toPath: string): Gua
 
 	return null;
 }
+
+/**
+ * The page designer window's route (app/pages/designer.vue). When the guard
+ * would redirect it — no business open, or the business locked — the window
+ * closes instead of turning into a second welcome / unlock screen
+ * (app/middleware/tenant.global.ts).
+ */
+export function isDesignerRoute(path: string): boolean {
+	return /^\/designer\/?$/.test(path);
+}

@@ -8,7 +8,7 @@
 // populate the tenants store (which auto-migrates a legacy single-DB).
 
 import { useTerms } from "~/composables/useTerms";
-import { resolveTenantGuard } from "~/lib/tenant-route";
+import { isDesignerRoute, resolveTenantGuard } from "~/lib/tenant-route";
 import { useTenantsStore } from "~/stores/tenants";
 
 export default defineNuxtRouteMiddleware(async (to) => {
@@ -45,5 +45,14 @@ export default defineNuxtRouteMiddleware(async (to) => {
 		},
 		to.path
 	);
-	if (result) return navigateTo(result.redirect);
+	if (!result) return;
+	// The page designer window never becomes a second welcome / unlock
+	// screen: without an open business it just closes (the main window
+	// shows where to go).
+	if (isDesignerRoute(to.path)) {
+		const { getCurrentWindow } = await import("@tauri-apps/api/window");
+		await getCurrentWindow().destroy().catch(() => { /* not in Tauri */ });
+		return abortNavigation();
+	}
+	return navigateTo(result.redirect);
 });

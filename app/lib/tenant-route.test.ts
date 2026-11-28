@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveTenantGuard } from "./tenant-route";
+import { isDesignerRoute, resolveTenantGuard } from "./tenant-route";
 
 describe("resolveTenantGuard", () => {
 	it("sends you to /welcome when no business is active", () => {
@@ -39,5 +39,14 @@ describe("resolveTenantGuard", () => {
 	it("falls back to /welcome if active but somehow no db url and not locked", () => {
 		const s = { activeId: "acme", activeLocked: false, hasDbUrl: false };
 		expect(resolveTenantGuard(s, "/invoices")).toEqual({ redirect: "/welcome" });
+	});
+});
+
+describe("isDesignerRoute", () => {
+	it("is the page designer window's route and only that", () => {
+		expect(isDesignerRoute("/designer")).toBe(true);
+		expect(isDesignerRoute("/designer/")).toBe(true);
+		expect(isDesignerRoute("/settings/pdf")).toBe(false);
+		expect(isDesignerRoute("/designers")).toBe(false);
 	});
 });

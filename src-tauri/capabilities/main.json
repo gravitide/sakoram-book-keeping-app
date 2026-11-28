@@ -4,7 +4,8 @@
 	"description": "Capabilities for the Sakoram app window",
 	"windows": [
 		"main",
-		"help-*"
+		"help-*",
+		"designer-*"
 	],
 	"permissions": [
 		"core:path:default",
