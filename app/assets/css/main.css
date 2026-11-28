@@ -337,6 +337,45 @@ textarea,
 	background: transparent;
 }
 
+/* One bordered row split into equal segments (the page designer's item
+   actions and style toggles). A pressed segment is tinted. */
+.segmented {
+	display: flex;
+	border: 1px solid var(--ui-border-accented);
+	border-radius: calc(var(--ui-radius) * 1.5);
+	background: var(--ui-bg);
+	overflow: hidden;
+}
+.segmented > button {
+	flex: 1 1 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.375rem;
+	padding: 0.375rem 0.5rem;
+	font-size: 0.75rem;
+	font-weight: 500;
+	color: var(--ui-text);
+	transition: background-color 120ms ease-out;
+}
+.segmented > button + button {
+	border-left: 1px solid var(--ui-border-accented);
+}
+.segmented > button:hover {
+	background: var(--ui-bg-elevated);
+}
+.segmented > button:active {
+	background: var(--ui-bg-accented);
+}
+.segmented > button:focus-visible {
+	outline: 2px solid var(--ui-primary);
+	outline-offset: -2px;
+}
+.segmented > button[aria-pressed="true"] {
+	background: color-mix(in oklab, var(--ui-primary) 12%, transparent);
+	color: var(--ui-primary);
+}
+
 .page-enter-active,
 .page-leave-active {
 	@apply transition-opacity ease-in-out duration-150;

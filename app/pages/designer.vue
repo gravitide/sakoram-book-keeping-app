@@ -838,38 +838,4 @@
 	.legend-printer-band {
 		background: repeating-linear-gradient(45deg, rgb(239 68 68 / 0.3) 0 2px, transparent 2px 4px);
 	}
-
-	/* One bordered row split into equal segments: the selected item's actions. */
-	.segmented {
-		display: flex;
-		border: 1px solid var(--ui-border-accented);
-		border-radius: calc(var(--ui-radius) * 1.5);
-		background: var(--ui-bg);
-		overflow: hidden;
-	}
-	.segmented > button {
-		flex: 1 1 0;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.375rem;
-		padding: 0.375rem 0.5rem;
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--ui-text);
-		transition: background-color 120ms ease-out;
-	}
-	.segmented > button + button {
-		border-left: 1px solid var(--ui-border-accented);
-	}
-	.segmented > button:hover {
-		background: var(--ui-bg-elevated);
-	}
-	.segmented > button:active {
-		background: var(--ui-bg-accented);
-	}
-	.segmented > button:focus-visible {
-		outline: 2px solid var(--ui-primary);
-		outline-offset: -2px;
-	}
 </style>
