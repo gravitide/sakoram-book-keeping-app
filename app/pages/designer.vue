@@ -458,9 +458,11 @@
 	const shownDesign = computed(() => live.value ?? draft.value.design);
 
 	/** Record one change: a new design (from the current one) and/or other draft fields. */
-	const apply = (fn: (d: PageDesign) => PageDesign, rest: Partial<Omit<Draft, "design">> = {}) => {
+	// `opts.merge`: consecutive changes with the same key are one undo step
+	// (typing in a text box, stepping a size).
+	const apply = (fn: (d: PageDesign) => PageDesign, rest: Partial<Omit<Draft, "design">> = {}, opts?: { merge?: string }) => {
 		const now = history.value.present;
-		history.value = record(history.value, { ...now, ...rest, design: fn(now.design) });
+		history.value = record(history.value, { ...now, ...rest, design: fn(now.design) }, opts);
 	};
 	// `now`: a finished pointer drag — render it straight away rather than after
 	// the usual pause (arrow-key nudges keep the pause, or holding a key would

@@ -45,3 +45,25 @@ describe("afterSave", () => {
 		expect(canRedo(h)).toBe(false);
 	});
 });
+
+describe("record with a merge key", () => {
+	it("merges consecutive records with the same merge key into one step", () => {
+		let h = startHistory("a");
+		h = record(h, "ab", { merge: "text:x" });
+		h = record(h, "abc", { merge: "text:x" });
+		expect(h.past).toEqual(["a"]);
+		expect(undo(h).present).toBe("a");
+		expect(redo(undo(h)).present).toBe("abc");
+	});
+
+	it("starts a new step for a different key, no key, or after undo", () => {
+		let h = record(startHistory("a"), "ab", { merge: "text:x" });
+		h = record(h, "abY", { merge: "text:y" });
+		expect(h.past).toEqual(["a", "ab"]);
+		h = record(h, "abYZ");
+		h = record(h, "abYZ!", { merge: "text:y" });
+		expect(h.past).toEqual(["a", "ab", "abY", "abYZ"]);
+		const u = record(undo(h), "q", { merge: "text:y" });
+		expect(u.past).toEqual(["a", "ab", "abY", "abYZ"]);
+	});
+});

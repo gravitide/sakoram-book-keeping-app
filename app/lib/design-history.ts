@@ -7,7 +7,11 @@
 //
 // Pure, store-free (vitest).
 
-export interface History<T> { past: T[], present: T, future: T[] }
+/**
+ * `merge`: the key of the last record, when it asked to be merged with the
+ * next one of the same key (a burst of typing in one text box is one step).
+ */
+export interface History<T> { past: T[], present: T, future: T[], merge?: string }
 
 /** How many steps back undo can go. */
 export const HISTORY_LIMIT = 100;
@@ -16,11 +20,17 @@ export function startHistory<T>(present: T): History<T> {
 	return { past: [], present, future: [] };
 }
 
-/** `next` as the new present; nothing when it equals the present. Clears the redo trail. */
-export function record<T>(h: History<T>, next: T): History<T> {
+/**
+ * `next` as the new present; nothing when it equals the present. Clears the
+ * redo trail. With `opts.merge`, a record right after one with the same key
+ * replaces the present instead of adding a step.
+ */
+export function record<T>(h: History<T>, next: T, opts?: { merge?: string }): History<T> {
 	if (JSON.stringify(next) === JSON.stringify(h.present)) return h;
+	const merge = opts?.merge;
+	if (merge !== undefined && merge === h.merge) return { past: h.past, present: next, future: [], merge };
 	const past = [...h.past, h.present];
-	return { past: past.slice(Math.max(0, past.length - HISTORY_LIMIT)), present: next, future: [] };
+	return { past: past.slice(Math.max(0, past.length - HISTORY_LIMIT)), present: next, future: [], merge };
 }
 
 export function undo<T>(h: History<T>): History<T> {
