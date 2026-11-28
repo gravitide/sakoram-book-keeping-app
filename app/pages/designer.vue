@@ -512,9 +512,9 @@
 						@click="addDropped('slot')"
 					>
 						<UIcon name="i-lucide-square-dashed" class="size-5 text-(--ui-primary)" />
-						<span class="text-sm font-medium">{{ pendingDropSlotIsGuide ? "The scan of your paper" : "Fill the empty slot" }}</span>
+						<span class="text-sm font-medium">A scan of your pre-printed paper</span>
 						<span class="text-xs text-(--ui-text-muted)">
-							{{ pendingDropSlotIsGuide ? "Goes in the template's place for it: shown here to line things up against, never printed." : "Goes in the template's place for it, covering the page." }}
+							Shown here so you can line things up with the printed parts. Never printed.
 						</span>
 					</button>
 					<button type="button" class="flex flex-col items-start gap-1 rounded-md border border-(--ui-border) p-3 text-left transition hover:border-(--ui-primary)" @click="addDropped('image')">
@@ -587,7 +587,7 @@
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { useTemplatePreviews } from "~/composables/useTemplatePreviews";
 	import { itemAssetKind, readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
-	import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, fillSlot, hasPageNumber, reorderItem, replaceImage, setImageGuide, setItemLocked, setItemPages, setLineVertical, setMargins, updateItem } from "~/lib/design-draft";
+	import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, emptyBackgroundSlot, fileCopyForDuplicate, filesToRemove, fillSlot, hasPageNumber, reorderItem, replaceImage, setImageGuide, setItemLocked, setItemPages, setLineVertical, setMargins, updateItem } from "~/lib/design-draft";
 	import { canRedo, canUndo, historyAfterSave, record, redo, startHistory, undo } from "~/lib/design-history";
 	import { DESIGN_TEMPLATES } from "~/lib/design-templates";
 	import { ACTUAL_ZOOM_LEVELS, clampItem, CSS_PX_PER_MM, overlapWarning, setMarginValue, stepActualZoom, zoomForActual } from "~/lib/designer-geometry";
@@ -765,6 +765,8 @@
 	// A background covers the whole page (behind everything); an image is placed
 	// at the top of the safe area for the user to move and size.
 	const addFile = async (file: File, as: AddAs) => {
+		const bgSlot = as === "background" ? emptyBackgroundSlot(draft.value.design) : null;
+		if (bgSlot) return fillSlotWith(file, bgSlot);
 		const added = await uploader.upload(file, draft.value.design.paper, { background: as === "background" });
 		if (!added) return;
 		uploaded.value = [...uploaded.value, added.id];
@@ -794,7 +796,7 @@
 		selectedId.value = added.id;
 	};
 	/** An empty slot filled with `file`: it keeps its box, pages rule and guide flag (design-draft fillSlot). */
-	const fillSlotWith = async (file: File, slotId: string) => {
+	async function fillSlotWith(file: File, slotId: string): Promise<void> {
 		const slot = draft.value.design.items.find((i) => i.id === slotId);
 		if (slot?.type !== "image") return;
 		const page = resolvePaperSize(draft.value.design.paper);
@@ -802,15 +804,16 @@
 		const added = await uploader.upload(file, draft.value.design.paper, { background: coversPage });
 		if (!added) return;
 		uploaded.value = [...uploaded.value, added.id];
-		apply((d) => fillSlot(d, slotId, added.id, added.ext));
-		selectedId.value = added.id;
-	};
-	/** The empty slot the pending drop landed on, if any: offered as a third choice. */
+		// A background is locked as soon as it's in, like the Background tile's.
+		const lock = coversPage && !slot.guide;
+		apply((d) => {
+			const filled = fillSlot(d, slotId, added.id, added.ext);
+			return lock ? setItemLocked(filled, added.id, true) : filled;
+		});
+		selectedId.value = lock ? null : added.id;
+	}
+	/** The scan slot (Pre-printed paper) the pending drop landed on, if any: offered as a third choice. */
 	const pendingDropSlot = ref<string | null>(null);
-	const pendingDropSlotIsGuide = computed(() => {
-		const slot = draft.value.design.items.find((i) => i.id === pendingDropSlot.value);
-		return slot?.type === "image" && slot.guide;
-	});
 	const addDropped = async (as: AddAs | "slot") => {
 		const file = pendingDrop.value;
 		const slotId = pendingDropSlot.value;
@@ -826,7 +829,8 @@
 	// A dropped file always asks what it is; on an empty slot, filling the slot
 	// is offered first.
 	const onCanvasDrop = (file: File, slotId: string | null) => {
-		pendingDropSlot.value = slotId;
+		const slot = draft.value.design.items.find((i) => i.id === slotId);
+		pendingDropSlot.value = slot?.type === "image" && slot.guide ? slot.id : null;
 		pendingDrop.value = file;
 	};
 	const onReplaceInput = async (e: Event) => {

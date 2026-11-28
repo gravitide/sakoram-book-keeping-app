@@ -74,6 +74,17 @@ export function addLine(design: PageDesign, id: string): PageDesign {
 	return append(design, { type: "line", id, ...at, length: safe.w, vertical: false, thickness: 0.75, color: "accent", pages: "every" });
 }
 
+/**
+ * A template's empty full-page background slot (Full-page background), if the
+ * design has one: a new background goes there instead of in a second item.
+ * Not a guide slot (Pre-printed paper's scan), which is offered by name.
+ */
+export function emptyBackgroundSlot(design: PageDesign): string | null {
+	const { widthMm, heightMm } = resolvePaperSize(design.paper);
+	const slot = design.items.find((i) => i.type === "image" && i.src === null && !i.guide && i.w >= widthMm - 0.5 && i.h >= heightMm - 0.5);
+	return slot?.id ?? null;
+}
+
 /** An item locked (the designer won't select, move or edit it on the page) or unlocked. */
 export function setItemLocked(design: PageDesign, id: string, locked: boolean): PageDesign {
 	return { ...design, items: design.items.map((i) => (i.id === id ? { ...i, locked } : i)) };

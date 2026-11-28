@@ -1,6 +1,6 @@
 import type { DesignItem, PageDesign } from "./page-design";
 import { describe, expect, it } from "vitest";
-import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, fillSlot, hasPageNumber, NEW_TEXT, reorderItem, replaceImage, setImageGuide, setItemLocked, setItemPages, setLineVertical, setMargins, updateItem } from "./design-draft";
+import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, emptyBackgroundSlot, fileCopyForDuplicate, filesToRemove, fillSlot, hasPageNumber, NEW_TEXT, reorderItem, replaceImage, setImageGuide, setItemLocked, setItemPages, setLineVertical, setMargins, updateItem } from "./design-draft";
 
 const blank: PageDesign = { version: 1, paper: "a4", margins: { top: 20, right: 18, bottom: 20, left: 18 }, items: [] };
 
@@ -196,5 +196,20 @@ describe("setItemLocked", () => {
 		const locked = setItemLocked(withItems(rule), "rule00000001", true);
 		expect(locked.items[0]).toMatchObject({ locked: true });
 		expect(setItemLocked(locked, "rule00000001", false).items[0]).toMatchObject({ locked: false });
+	});
+});
+
+describe("emptyBackgroundSlot", () => {
+	const bgSlot: DesignItem = { type: "image", id: "bgslot000001", x: 0, y: 0, w: 210, h: 297, pages: "every", src: null, guide: false };
+	const scanSlot: DesignItem = { ...bgSlot, id: "scanslot0001", guide: true };
+
+	it("finds a template's empty full-page background slot", () => {
+		expect(emptyBackgroundSlot(withItems(rule, bgSlot))).toBe("bgslot000001");
+	});
+
+	it("ignores a guide (scan) slot, a small slot, and a design without one", () => {
+		expect(emptyBackgroundSlot(withItems(scanSlot))).toBeNull();
+		expect(emptyBackgroundSlot(withItems({ ...bgSlot, w: 50, h: 50 }))).toBeNull();
+		expect(emptyBackgroundSlot(withItems(rule))).toBeNull();
 	});
 });

@@ -48,8 +48,8 @@
 			</ul>
 			<p>
 				You can also drop a file straight onto the page: Sakoram asks whether it's an image or a background. On the
-				Full-page background and Pre-printed paper templates it also offers to put the file in the template's place for
-				it: the background, or the scan of your paper.
+				Pre-printed paper template it also offers <strong>A scan of your pre-printed paper</strong>. A background added to the
+				Full-page background template takes the template's place for it.
 			</p>
 			<p>Use <strong>Insert field</strong> above a text box's text to add a company field:</p>
 			<div class="overflow-x-auto rounded-lg border border-(--ui-border) bg-(--ui-bg)">
