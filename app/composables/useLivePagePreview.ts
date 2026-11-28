@@ -65,7 +65,17 @@ export function useLivePagePreview(payload: () => Record<string, unknown> | null
 		else runner.schedule(args);
 	};
 
-	watch(key, (_, prev) => render(prev === undefined), { immediate: true });
+	// renderNextNow(): the next change renders without the debounce (a finished
+	// drag in the page designer — the user is waiting to see where it landed).
+	let nextNow = false;
+	const renderNextNow = () => {
+		nextNow = true;
+	};
+	watch(key, (_, prev) => {
+		const now = prev === undefined || nextNow;
+		nextNow = false;
+		render(now);
+	}, { immediate: true });
 
 	let firstActivation = true;
 	onActivated(() => {
@@ -85,5 +95,5 @@ export function useLivePagePreview(payload: () => Record<string, unknown> | null
 		setUrl(null);
 	});
 
-	return { url: readonly(url), loading: readonly(loading), error: readonly(error) };
+	return { url: readonly(url), loading: readonly(loading), error: readonly(error), renderNextNow };
 }

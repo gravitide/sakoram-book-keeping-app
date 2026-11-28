@@ -462,10 +462,15 @@
 		const now = history.value.present;
 		history.value = record(history.value, { ...now, ...rest, design: fn(now.design) });
 	};
-	const commitLive = () => {
+	// `now`: a finished pointer drag — render it straight away rather than after
+	// the usual pause (arrow-key nudges keep the pause, or holding a key would
+	// start a render per repeat).
+	const commitLive = (now?: boolean) => {
 		const next = live.value;
 		live.value = null;
-		if (next) apply(() => next);
+		if (!next) return;
+		if (now) renderLanded();
+		apply(() => next);
 	};
 	const doUndo = () => {
 		live.value = null;
@@ -637,8 +642,10 @@
 	const draftSettings = computed(() => (settings.settings
 		? {
 			...settings.settings,
-			pdf_design: JSON.stringify(shownDesign.value),
-			pdf_paper_size: shownDesign.value.paper,
+			// The committed design, not a drag in progress: the canvas moves the
+			// dragged item's pixels itself, and the render follows on release.
+			pdf_design: JSON.stringify(draft.value.design),
+			pdf_paper_size: draft.value.design.paper,
 			pdf_layout: draft.value.layout,
 			pdf_theme_color: draft.value.accent,
 			pdf_font: draft.value.font
@@ -650,6 +657,9 @@
 		ppiFn: () => Math.min(150, Math.max(20, Math.round(scale.value * 25.4 * (window.devicePixelRatio || 1)))),
 		deps: () => uploaded.value.length
 	});
+	function renderLanded() {
+		preview.renderNextNow();
+	}
 	const samplePreview = usePdfPreview({
 		command: "export_invoice_pdf",
 		buildPayload: () => samplePayload() ?? {},

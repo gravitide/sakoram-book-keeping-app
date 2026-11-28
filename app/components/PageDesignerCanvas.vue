@@ -1,7 +1,7 @@
 <template>
 	<!-- The page, to scale, with mm rulers. The real Typst render is the page;
 		HTML boxes for the items and guides for the safe area sit on top of it,
-		so a drag answers instantly while the render catches up (~0.5 s). The
+		so a drag answers instantly while the render catches up. The
 		viewport scrolls when zoomed in; the rulers stay pinned. -->
 	<div
 		ref="viewportEl"
@@ -70,6 +70,15 @@
 					<UIcon name="i-lucide-loader-circle" class="size-4 animate-spin text-zinc-400" />
 				</div>
 
+				<!-- Where a dragged item was: the render still draws it there until
+					the next one lands, so it's papered over (see "ghosts"). -->
+				<div
+					v-for="c in ghostCovers"
+					:key="c.id"
+					class="absolute bg-white/90 pointer-events-none"
+					:style="c.style"
+				/>
+
 				<!-- The printer band: most printers can't print within 5 mm of the
 					edge. Information only — nothing snaps to it or is refused for
 					crossing it. -->
@@ -105,6 +114,13 @@
 					@pointercancel="onPointerUp"
 					@keydown="onItemKey(box.item.id, $event)"
 				>
+					<!-- The item's own pixels, cut from the last render, riding along
+						with the box until a render with it in its new place arrives. -->
+					<div
+						v-if="box.ghost"
+						class="absolute inset-0 overflow-hidden pointer-events-none"
+						:style="box.ghost"
+					/>
 					<span
 						v-if="box.guide"
 						class="absolute top-1 left-1 rounded bg-(--ui-primary) px-1 text-[9px] font-medium text-white pointer-events-none"
@@ -165,7 +181,7 @@
 	// own beyond the gesture in flight — every change is emitted (`change`,
 	// live; `commit`, once the gesture ends, for the undo history). Geometry
 	// and snapping: app/lib/designer-geometry.ts.
-	import type { Handle } from "~/lib/designer-geometry";
+	import type { Handle, MmRect } from "~/lib/designer-geometry";
 	import type { DesignItem, MarginsMm, PageDesign } from "~/lib/page-design";
 	import { updateItem } from "~/lib/design-draft";
 	import { dragMargin, fitScale, handlesFor, itemBox, mmToPx, moveItem, nudgeItem, printerBandRects, resizeItem, rulerTicks, SNAP_DISTANCE_PX } from "~/lib/designer-geometry";
@@ -188,7 +204,8 @@
 	const emit = defineEmits<{
 		select: [id: string | null]
 		change: [design: PageDesign]
-		commit: []
+		/** `now`: a pointer drag ended — render it without the usual pause. */
+		commit: [now?: boolean]
 		drop: [file: File]
 		scale: [scale: number]
 	}>();
@@ -301,12 +318,57 @@
 		return item.type === "image" ? `${formatMm(b.w)} × ${formatMm(b.h)} mm` : `${formatMm(b.w)} mm wide`;
 	};
 
+	// The gesture in flight (see "gestures" below).
+	type Drag
+		= | { kind: "item", id: string, handle: Handle | "move", x: number, y: number, item: DesignItem, design: PageDesign, moved: boolean }
+			| { kind: "guide", side: keyof MarginsMm, x: number, y: number, design: PageDesign, moved: boolean };
+	const drag = ref<Drag | null>(null);
+
+	// ---- ghosts ---------------------------------------------------------------------
+	// The render only follows the committed design, and takes a moment. So a
+	// dragged item carries its pixels from the last render (a background-image
+	// crop of it, scaled when an image or line is resized; text is cut, not
+	// stretched), and its old spot is papered over, until a fresh render lands.
+	// Keyed by item: a second drag can start before the first one's render.
+	const ghosts = ref<Record<string, { from: MmRect, url: string }>>({});
+	watch(() => props.renderUrl, () => {
+		// A new render shows the committed design: every finished drag is in it.
+		// The item being dragged right now is still at its drag-start place there.
+		const d = drag.value;
+		const keep = d?.kind === "item" && d.moved && props.renderUrl ? d : null;
+		ghosts.value = keep ? { [keep.id]: { from: itemBox(keep.item), url: props.renderUrl! } } : {};
+	});
+	const startGhost = (id: string, item: DesignItem) => {
+		if (ghosts.value[id] || !props.renderUrl) return;
+		ghosts.value = { ...ghosts.value, [id]: { from: itemBox(item), url: props.renderUrl } };
+	};
+	const pxRect = (r: MmRect) => {
+		const s = scale.value;
+		return { left: `${r.x * s}px`, top: `${r.y * s}px`, width: `${r.w * s}px`, height: `${r.h * s}px` };
+	};
+	const ghostCovers = computed(() => Object.entries(ghosts.value).map(([id, g]) => ({ id, style: pxRect(g.from) })));
+	const ghostStyle = (item: DesignItem, now: MmRect) => {
+		const g = ghosts.value[item.id];
+		if (!g) return null;
+		const stretch = item.type === "image" || item.type === "line";
+		const sx = stretch && g.from.w > 0 ? now.w / g.from.w : 1;
+		const sy = stretch && g.from.h > 0 ? now.h / g.from.h : 1;
+		const s = scale.value;
+		return {
+			backgroundImage: `url("${g.url}")`,
+			backgroundRepeat: "no-repeat",
+			backgroundSize: `${pagePx.value.w * sx}px ${pagePx.value.h * sy}px`,
+			backgroundPosition: `${-g.from.x * s * sx}px ${-g.from.y * s * sy}px`
+		};
+	};
+
 	const boxes = computed(() => props.design.items
 		.filter((item) => itemOnPage(item.pages, props.page))
 		.map((item) => {
 			const b = itemBox(item);
 			const s = scale.value;
 			return {
+				ghost: ghostStyle(item, b),
 				item,
 				guide: item.type === "image" && item.guide,
 				handles: handlesFor(item),
@@ -330,10 +392,6 @@
 	}));
 
 	// ---- gestures -----------------------------------------------------------------
-	type Drag
-		= | { kind: "item", id: string, handle: Handle | "move", x: number, y: number, item: DesignItem, design: PageDesign, moved: boolean }
-			| { kind: "guide", side: keyof MarginsMm, x: number, y: number, design: PageDesign, moved: boolean };
-	const drag = ref<Drag | null>(null);
 	const draggingGuide = (side: keyof MarginsMm) => drag.value?.kind === "guide" && drag.value.side === side;
 	const threshold = (e: PointerEvent) => (e.altKey ? 0 : SNAP_DISTANCE_PX / scale.value);
 
@@ -364,6 +422,7 @@
 		const dx = (e.clientX - d.x) / scale.value;
 		const dy = (e.clientY - d.y) / scale.value;
 		if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 2) return;
+		if (!d.moved && d.kind === "item") startGhost(d.id, d.item);
 		d.moved = true;
 		if (d.kind === "guide") {
 			const axisDelta = d.side === "top" || d.side === "bottom" ? dy : dx;
@@ -377,7 +436,7 @@
 	};
 
 	const onPointerUp = () => {
-		if (drag.value?.moved) emit("commit");
+		if (drag.value?.moved) emit("commit", true);
 		drag.value = null;
 	};
 
