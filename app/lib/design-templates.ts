@@ -14,7 +14,7 @@
 //
 // Pure, store-free, relative imports only (vitest).
 
-import type { DesignColor, DesignItem, MarginsMm, PageDesign, TextStyle } from "./page-design";
+import type { DesignColor, DesignFont, DesignItem, MarginsMm, PageDesign, TextAlign, TextStyle } from "./page-design";
 import type { PaperSize } from "./paper-sizes";
 import type { PdfLayoutKey } from "./pdf-layouts";
 import { newItemId, scaleDesign } from "./page-design";
@@ -35,13 +35,15 @@ export const DEFAULT_DESIGN_TEMPLATE: DesignTemplateKey = "classic";
 
 // --- building blocks (A4 millimetres) --------------------------------------
 
-const INK = "#111827";
-const BODY = "#4b5563";
-const MUTED = "#6b7280";
-const HAIRLINE = "#e5e7eb";
+// Shared with the designer's new items and its colour swatches (design-draft.ts, DesignColorField).
+export const INK = "#111827";
+export const BODY = "#4b5563";
+export const MUTED = "#6b7280";
+export const HAIRLINE = "#e5e7eb";
 
-const style = (size: number, color: TextStyle["color"], align: TextStyle["align"] = "left", bold = false): TextStyle =>
-	({ font: "Akt", size, bold, italic: false, color, align });
+/** A text style: regular (or bold), upright, in `font` (Akt unless given). */
+export const textStyle = (size: number, color: DesignColor, align: TextAlign = "left", bold = false, font: DesignFont = "Akt"): TextStyle =>
+	({ font, size, bold, italic: false, color, align });
 
 const logo = (x: number, y: number, side: number): DesignItem =>
 	({ type: "image", id: newItemId(), x, y, w: side, h: side, pages: "every", src: { kind: "company_logo" }, guide: false });
@@ -53,7 +55,7 @@ const rule = (x: number, y: number, length: number, thickness: number, color: De
 	({ type: "line", id: newItemId(), x, y, length, vertical: false, thickness, color, pages: "every" });
 
 const pageNumber = (x: number, y: number, w: number, align: TextStyle["align"]): DesignItem =>
-	({ type: "page_number", id: newItemId(), x, y, w, pages: "every", format: "page_of_total", hide_single: true, style: style(7, MUTED, align) });
+	({ type: "page_number", id: newItemId(), x, y, w, pages: "every", format: "page_of_total", hide_single: true, style: textStyle(7, MUTED, align) });
 
 const pageSlot = (guide: boolean): DesignItem =>
 	({ type: "image", id: newItemId(), x: 0, y: 0, w: 210, h: 297, pages: "every", src: null, guide });
@@ -61,7 +63,7 @@ const pageSlot = (guide: boolean): DesignItem =>
 /** The Classic / Modern footer: hairline, contact line, page number. */
 const footer = (): DesignItem[] => [
 	rule(18, 281, 174, 0.5, HAIRLINE),
-	text(18, 284, 174, "{business_name} · {website} · {phone}", style(7.5, MUTED, "center")),
+	text(18, 284, 174, "{business_name} · {website} · {phone}", textStyle(7.5, MUTED, "center")),
 	pageNumber(142, 289, 50, "right")
 ];
 
@@ -75,8 +77,8 @@ function build(key: DesignTemplateKey): { margins: MarginsMm, items: DesignItem[
 				margins: margins(48, 26),
 				items: [
 					logo(168, 12, 24),
-					text(18, 13, 140, "{business_name}", style(14, INK, "left", true)),
-					text(18, 20, 140, "{address}, {city}\n{phone} · {email}\n{website}", style(8.5, BODY)),
+					text(18, 13, 140, "{business_name}", textStyle(14, INK, "left", true)),
+					text(18, 20, 140, "{address}, {city}\n{phone} · {email}\n{website}", textStyle(8.5, BODY)),
 					rule(18, 40, 174, 2, "accent"),
 					...footer()
 				]
@@ -87,8 +89,8 @@ function build(key: DesignTemplateKey): { margins: MarginsMm, items: DesignItem[
 				margins: margins(44, 26),
 				items: [
 					logo(18, 14, 14),
-					text(36, 14, 156, "{business_name}", style(14, INK, "left", true)),
-					text(36, 20.5, 156, "{address}, {city} · {phone}\n{email} · {website}", style(8.5, BODY)),
+					text(36, 14, 156, "{business_name}", textStyle(14, INK, "left", true)),
+					text(36, 20.5, 156, "{address}, {city} · {phone}\n{email} · {website}", textStyle(8.5, BODY)),
 					rule(18, 34, 174, 3, "accent"),
 					...footer()
 				]
@@ -99,8 +101,8 @@ function build(key: DesignTemplateKey): { margins: MarginsMm, items: DesignItem[
 				margins: margins(38, 22),
 				items: [
 					logo(18, 14, 12),
-					text(34, 16, 90, "{business_name}", style(14, INK)),
-					text(112, 14, 80, "{address}, {city}\n{phone}\n{email}\n{website}", style(8, MUTED, "right")),
+					text(34, 16, 90, "{business_name}", textStyle(14, INK)),
+					text(112, 14, 80, "{address}, {city}\n{phone}\n{email}\n{website}", textStyle(8, MUTED, "right")),
 					pageNumber(18, 286, 174, "center")
 				]
 			};
@@ -110,10 +112,10 @@ function build(key: DesignTemplateKey): { margins: MarginsMm, items: DesignItem[
 				margins: margins(30, 20),
 				items: [
 					logo(183, 10, 9),
-					text(18, 10, 160, "{business_name}", style(11, INK, "left", true)),
-					text(18, 15.5, 160, "{address}, {city} · {phone} · {email} · {website}", style(7.5, BODY)),
+					text(18, 10, 160, "{business_name}", textStyle(11, INK, "left", true)),
+					text(18, 15.5, 160, "{address}, {city} · {phone} · {email} · {website}", textStyle(7.5, BODY)),
 					rule(18, 22, 174, 1.5, "accent"),
-					text(18, 286, 124, "{business_name} · {website} · {phone}", style(7, MUTED)),
+					text(18, 286, 124, "{business_name} · {website} · {phone}", textStyle(7, MUTED)),
 					pageNumber(142, 286, 50, "right")
 				]
 			};

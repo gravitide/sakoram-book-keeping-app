@@ -62,7 +62,9 @@
 					:page="page"
 					:zoom="zoom"
 					:pan="handTool"
+					:field-values="fieldValues"
 					@select="selectedId = $event"
+					@edit="editItem"
 					@change="live = $event"
 					@commit="commitLive"
 					@drop="pendingDrop = $event"
@@ -114,13 +116,24 @@
 							</div>
 						</template>
 					</UPopover>
-					<div class="flex flex-col gap-2">
-						<UButton block variant="soft" class="justify-start" icon="i-lucide-image-plus" @click="pickFile('image')">
-							Add image
-						</UButton>
-						<UButton block variant="soft" class="justify-start" icon="i-lucide-wallpaper" @click="pickFile('background')">
-							Add background
-						</UButton>
+					<div>
+						<div id="designer-add" class="text-[11px] font-medium text-(--ui-text-muted) mb-1.5">
+							Add to the page
+						</div>
+						<div class="grid grid-cols-3 gap-1.5" role="group" aria-labelledby="designer-add">
+							<!-- The title sits on a wrapper: a disabled button shows no tooltip. -->
+							<span v-for="t in ADD_TILES" :key="t.kind" :title="tileTitle(t.kind)" class="flex">
+								<button
+									type="button"
+									class="flex-1 flex flex-col items-center justify-center gap-1 rounded-md border border-(--ui-border) bg-(--ui-bg) px-1 py-2 text-[11px] font-medium transition enabled:hover:border-(--ui-primary) enabled:hover:text-(--ui-primary) disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-(--ui-primary)"
+									:disabled="t.kind === 'page_number' && hasPageNumber(draft.design)"
+									@click="onAddTile(t.kind)"
+								>
+									<UIcon :name="t.icon" class="size-4" />
+									{{ t.label }}
+								</button>
+							</span>
+						</div>
 					</div>
 					<p class="text-xs text-(--ui-text-muted)">
 						Or drop a PNG, JPEG, SVG or PDF on the page. A background covers the whole page, behind everything.
@@ -156,6 +169,90 @@
 								<UInputNumber :model-value="round1(selected.length)" :min="5" :step="0.5" @update:model-value="setField('length', $event)" />
 							</UFormField>
 						</div>
+
+						<!-- What the item says and how it looks. -->
+						<div v-if="selected.type === 'text'" class="mt-4 space-y-3">
+							<div>
+								<div class="flex items-center justify-between mb-1">
+									<span id="designer-text-label" class="text-[11px] font-medium text-(--ui-text-muted)">Text</span>
+									<UDropdownMenu :items="fieldItems" :content="{ align: 'end', onCloseAutoFocus: onFieldMenuClosed }">
+										<UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-braces" trailing-icon="i-lucide-chevron-down">
+											Insert field
+										</UButton>
+									</UDropdownMenu>
+								</div>
+								<div ref="textEditorWrap">
+									<UTextarea
+										:model-value="selected.text"
+										autoresize
+										:rows="3"
+										:maxrows="10"
+										class="w-full"
+										aria-labelledby="designer-text-label"
+										@update:model-value="setText(String($event))"
+									/>
+								</div>
+								<p class="text-[11px] text-(--ui-text-muted) mt-1">
+									Fields fill in from Company settings. A line whose fields are all empty is left out of PDFs.
+								</p>
+							</div>
+							<DesignTextStyleFields :model-value="selected.style" :accent-hex="accentHex" @update:model-value="setStyle" />
+						</div>
+						<div v-else-if="selected.type === 'page_number'" class="mt-4 space-y-3">
+							<div>
+								<div id="designer-pn-format" class="text-[11px] font-medium text-(--ui-text-muted) mb-1">
+									Format
+								</div>
+								<div class="segmented" role="group" aria-labelledby="designer-pn-format">
+									<button
+										v-for="pf in PAGE_NUMBER_FORMATS"
+										:key="pf.value"
+										type="button"
+										class="tabular-nums"
+										:aria-pressed="selected.format === pf.value"
+										@click="setPageNumber({ format: pf.value })"
+									>
+										{{ pf.label }}
+									</button>
+								</div>
+							</div>
+							<USwitch
+								:model-value="selected.hide_single"
+								size="sm"
+								label="Hide on one-page documents"
+								@update:model-value="setPageNumber({ hide_single: $event })"
+							/>
+							<DesignTextStyleFields :model-value="selected.style" :accent-hex="accentHex" @update:model-value="setStyle" />
+						</div>
+						<div v-else-if="selected.type === 'line'" class="mt-4 space-y-3">
+							<div>
+								<div id="designer-line-direction" class="text-[11px] font-medium text-(--ui-text-muted) mb-1">
+									Direction
+								</div>
+								<div class="segmented" role="group" aria-labelledby="designer-line-direction">
+									<button type="button" :aria-pressed="!selected.vertical" @click="setVertical(false)">
+										<UIcon name="i-lucide-move-horizontal" class="size-3.5" />
+										Horizontal
+									</button>
+									<button type="button" :aria-pressed="selected.vertical" @click="setVertical(true)">
+										<UIcon name="i-lucide-move-vertical" class="size-3.5" />
+										Vertical
+									</button>
+								</div>
+							</div>
+							<div class="w-28">
+								<div class="text-[11px] font-medium text-(--ui-text-muted) mb-1">
+									Thickness (pt)
+								</div>
+								<UInputNumber :model-value="selected.thickness" :min="0.25" :max="12" :step="0.25" size="sm" @update:model-value="setThickness" />
+							</div>
+							<div>
+								<div class="text-[11px] font-medium text-(--ui-text-muted) mb-1">
+									Colour
+								</div>
+								<DesignColorField :model-value="selected.color" :accent-hex="accentHex" label="Line colour" @update:model-value="setLineColor" />
+							</div>
+						</div>
 						<!-- Actions, grouped by what they act on: the stacking order, the
 							image's file, then the item itself (copy / remove) as a quiet footer. -->
 						<div class="mt-4 space-y-3">
@@ -189,11 +286,16 @@
 									</button>
 								</div>
 							</div>
-							<p v-else class="text-xs text-(--ui-text-muted)">
-								Editing its text and style comes with the next update.
-							</p>
 							<div class="flex items-center justify-between pt-2 border-t border-(--ui-primary)/15">
-								<UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-copy" @click="duplicateSelected()">
+								<UButton
+									size="xs"
+									variant="ghost"
+									color="neutral"
+									icon="i-lucide-copy"
+									:disabled="selected.type === 'page_number'"
+									:title="selected.type === 'page_number' ? 'A design has one page number. It shows on every page.' : undefined"
+									@click="duplicateSelected()"
+								>
 									Duplicate
 								</UButton>
 								<UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" @click="deleteSelected">
@@ -388,7 +490,7 @@
 	//
 	// Spec: docs/superpowers/specs/2026-11-27-page-designer-design.md.
 	import type { DesignTemplateKey } from "~/lib/design-templates";
-	import type { DesignItem, ImageExt, MarginsMm, PageDesign } from "~/lib/page-design";
+	import type { DesignColor, DesignFont, DesignItem, ImageExt, MarginsMm, PageDesign, PageNumberFormat, TextStyle } from "~/lib/page-design";
 	import type { PaperSize } from "~/lib/paper-sizes";
 	import type { PdfLayoutKey } from "~/lib/pdf-layouts";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
@@ -398,17 +500,20 @@
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { useTemplatePreviews } from "~/composables/useTemplatePreviews";
 	import { itemAssetKind, readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
-	import { addBackground, addImage, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, reorderItem, replaceImage, setMargins, updateItem } from "~/lib/design-draft";
-	import { afterSave, canRedo, canUndo, record, redo, startHistory, undo } from "~/lib/design-history";
+	import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, hasPageNumber, reorderItem, replaceImage, setLineVertical, setMargins, updateItem } from "~/lib/design-draft";
+	import { canRedo, canUndo, historyAfterSave, record, redo, startHistory, undo } from "~/lib/design-history";
 	import { DESIGN_TEMPLATES } from "~/lib/design-templates";
 	import { ACTUAL_ZOOM_LEVELS, clampItem, CSS_PX_PER_MM, setMarginValue, stepActualZoom, zoomForActual } from "~/lib/designer-geometry";
 	import { designerShortcutsAllowed } from "~/lib/designer-keys";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
-	import { newItemId, parsePageDesign, scaleDesign } from "~/lib/page-design";
+	import { DESIGN_FONTS, newItemId, parsePageDesign, scaleDesign } from "~/lib/page-design";
+	import { insertToken } from "~/lib/page-design-text";
 	import { effectiveDesign, PAPER_SIZES, resolvePaperSize } from "~/lib/page-settings";
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
+	import { PDF_TOKENS, tokenValuesFromSettings } from "~/lib/pdf-tokens";
 	import { sampleStationeryPreviewPayload } from "~/lib/sample-pdf";
 	import { isRasterArtwork } from "~/lib/stationery-artwork";
+	import { pdfThemeHex } from "~/lib/theme";
 	import { useSettingsStore } from "~/stores/settings";
 	import { useTenantsStore } from "~/stores/tenants";
 
@@ -458,9 +563,11 @@
 	const shownDesign = computed(() => live.value ?? draft.value.design);
 
 	/** Record one change: a new design (from the current one) and/or other draft fields. */
-	const apply = (fn: (d: PageDesign) => PageDesign, rest: Partial<Omit<Draft, "design">> = {}) => {
+	// `opts.merge`: consecutive changes with the same key are one undo step
+	// (typing in a text box, stepping a size).
+	const apply = (fn: (d: PageDesign) => PageDesign, rest: Partial<Omit<Draft, "design">> = {}, opts?: { merge?: string }) => {
 		const now = history.value.present;
-		history.value = record(history.value, { ...now, ...rest, design: fn(now.design) });
+		history.value = record(history.value, { ...now, ...rest, design: fn(now.design) }, opts);
 	};
 	// `now`: a finished pointer drag — render it straight away rather than after
 	// the usual pause (arrow-key nudges keep the pause, or holding a key would
@@ -483,6 +590,8 @@
 
 	// ---- selection ------------------------------------------------------------------
 	const selectedId = ref<string | null>(null);
+	/** Company field values, for the canvas to measure text boxes the way they print. */
+	const fieldValues = computed(() => tokenValuesFromSettings(settings.settings));
 	const selected = computed(() => shownDesign.value.items.find((i) => i.id === selectedId.value) ?? null);
 	const selectedFileExt = computed<ImageExt | null>(() =>
 		(selected.value?.type === "image" && selected.value.src?.kind === "file" ? selected.value.src.ext : null));
@@ -499,7 +608,7 @@
 	};
 	const duplicateSelected = async () => {
 		const original = selected.value;
-		if (!original) return;
+		if (!original || original.type === "page_number") return;
 		const id = newItemId();
 		// Item ids name the image files: a copied image needs its own file.
 		const copy = fileCopyForDuplicate(original, id);
@@ -652,7 +761,11 @@
 		}
 		: null));
 	const samplePayload = () => (draftSettings.value ? sampleStationeryPreviewPayload(draftSettings.value, currency.value, draft.value.layout) : null);
-	const preview = useLivePagePreview(samplePayload, {
+	// The page view keeps a text line whose fields are all empty, faded, so it
+	// can still be seen and selected; Preview as PDF (samplePayload) prints
+	// exactly what documents will.
+	const designerPayload = () => (draftSettings.value ? sampleStationeryPreviewPayload(draftSettings.value, currency.value, draft.value.layout, { showEmptyFields: true }) : null);
+	const preview = useLivePagePreview(designerPayload, {
 		page: () => page.value,
 		ppiFn: () => Math.min(150, Math.max(20, Math.round(scale.value * 25.4 * (window.devicePixelRatio || 1)))),
 		deps: () => uploaded.value.length
@@ -666,6 +779,103 @@
 		fileName: () => "sample-invoice.pdf",
 		title: "Sample invoice"
 	});
+
+	// ---- text, page numbers and lines ------------------------------------------------
+	const accentHex = computed(() => pdfThemeHex(draftSettings.value));
+	/** New text takes the document font when it's one the canvas items can use. */
+	const designFont = computed<DesignFont>(() =>
+		((DESIGN_FONTS as readonly string[]).includes(draft.value.font) ? draft.value.font as DesignFont : "Akt"));
+
+	const textEditorWrap = useTemplateRef<HTMLElement>("textEditorWrap");
+	const textArea = () => textEditorWrap.value?.querySelector("textarea") ?? null;
+	const focusTextEditor = (selectAll: boolean) => nextTick(() => {
+		const ta = textArea();
+		if (!ta) return;
+		ta.focus();
+		if (selectAll) ta.select();
+	});
+	/** Double-clicked on the page: select it and, for text, put the caret in its editor. */
+	const editItem = (id: string) => {
+		selectedId.value = id;
+		if (shownDesign.value.items.find((i) => i.id === id)?.type === "text") void focusTextEditor(false);
+	};
+
+	type AddKind = "image" | "background" | "text" | "page_number" | "line";
+	const ADD_TILES: { kind: AddKind, label: string, icon: string }[] = [
+		{ kind: "image", label: "Image", icon: "i-lucide-image-plus" },
+		{ kind: "background", label: "Background", icon: "i-lucide-wallpaper" },
+		{ kind: "text", label: "Text", icon: "i-lucide-type" },
+		{ kind: "page_number", label: "Page number", icon: "i-lucide-hash" },
+		{ kind: "line", label: "Line", icon: "i-lucide-minus" }
+	];
+	const tileTitle = (kind: AddKind) => {
+		if (kind === "page_number" && hasPageNumber(draft.value.design)) return "There's already a page number. It shows on every page.";
+		return { image: "A logo, seal or signature", background: "Artwork that covers the whole page", text: "Text, with company fields", page_number: "\"Page 1 of 3\" on every page", line: "A rule across or down the page" }[kind];
+	};
+	const onAddTile = (kind: AddKind) => {
+		if (kind === "image" || kind === "background") return pickFile(kind);
+		const id = newItemId();
+		const font = designFont.value;
+		apply((d) => (kind === "text" ? addText(d, id, font) : kind === "page_number" ? addPageNumber(d, id, font) : addLine(d, id)));
+		selectedId.value = id;
+		// Typing replaces "New text".
+		if (kind === "text") void focusTextEditor(true);
+	};
+
+	/** Change the selected item (kept on the page). `merge`: one undo step per burst, per item. */
+	const changeSelected = (fn: (item: DesignItem) => DesignItem, merge?: string) => {
+		const id = selected.value?.id;
+		if (!id) return;
+		apply((d) => {
+			const item = d.items.find((i) => i.id === id);
+			return item ? updateItem(d, clampItem(fn(item), d)) : d;
+		}, {}, merge ? { merge: `${merge}:${id}` } : undefined);
+	};
+	const setText = (text: string) => changeSelected((i) => (i.type === "text" ? { ...i, text } : i), "text");
+	const setStyle = (style: TextStyle, merge?: string) =>
+		changeSelected((i) => (i.type === "text" || i.type === "page_number" ? { ...i, style } : i), merge);
+	const setPageNumber = (patch: { format?: PageNumberFormat, hide_single?: boolean }) =>
+		changeSelected((i) => (i.type === "page_number" ? { ...i, ...patch } : i));
+	const setVertical = (vertical: boolean) => {
+		const id = selected.value?.id;
+		if (id) apply((d) => setLineVertical(d, id, vertical));
+	};
+	const setThickness = (value: number | null | undefined) => {
+		if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return;
+		changeSelected((i) => (i.type === "line" ? { ...i, thickness: value } : i), "thickness");
+	};
+	const setLineColor = (color: DesignColor) => changeSelected((i) => (i.type === "line" ? { ...i, color } : i));
+
+	const PAGE_NUMBER_FORMATS: { value: PageNumberFormat, label: string }[] = [
+		{ value: "page_of_total", label: "Page 1 of 3" },
+		{ value: "slash", label: "1 / 3" },
+		{ value: "number", label: "1" }
+	];
+
+	// The menu hands focus back to its button after it closes (a moment after
+	// the item's onSelect), where Backspace would delete the whole text box:
+	// after an insert, put the caret back in the text, after the field.
+	let fieldCaret: number | null = null;
+	// Insert field: the token goes in at the caret (or over the selection).
+	const insertField = (token: string) => {
+		const item = selected.value;
+		if (!item || item.type !== "text") return;
+		const ta = textArea();
+		const start = ta?.selectionStart ?? item.text.length;
+		const { text, caret } = insertToken(item.text, start, ta?.selectionEnd ?? start, token);
+		changeSelected((i) => (i.type === "text" ? { ...i, text } : i));
+		fieldCaret = caret;
+	};
+	const onFieldMenuClosed = (e: Event) => {
+		if (fieldCaret === null) return;
+		e.preventDefault();
+		const caret = fieldCaret;
+		fieldCaret = null;
+		const el = textArea();
+		el?.focus();
+		el?.setSelectionRange(caret, caret);
+	};
+	const fieldItems = PDF_TOKENS.map((t) => ({ label: t.label, onSelect: () => insertField(t.token) }));
 
 	// The template picker: a thumbnail per template, rendered when it opens.
 	const templatesOpen = ref(false);
@@ -692,11 +902,12 @@
 
 	const save = async (): Promise<boolean> => {
 		saving.value = true;
+		const started = draft.value;
 		try {
 			// A never-chosen design still points at the company logo: copy it in
 			// now, as a template would (spec: a copy, not a link).
-			const filled = await pageDesign.fillLogoSpots(draft.value.design);
-			const final: Draft = { ...draft.value, design: filled.design };
+			const filled = await pageDesign.fillLogoSpots(started.design);
+			const final: Draft = { ...started, design: filled.design };
 			await settings.save({
 				pdf_design: JSON.stringify(final.design),
 				pdf_paper_size: final.design.paper,
@@ -709,7 +920,8 @@
 			uploaded.value = [];
 			baseline.value = final;
 			// A fresh history: the files this save deleted can't be undone back.
-			history.value = afterSave(final);
+			// Anything typed while the save ran is kept (it shows as unsaved).
+			history.value = historyAfterSave(history.value, started, final);
 			if ("__TAURI_INTERNALS__" in window) {
 				const { emitTo } = await import("@tauri-apps/api/event");
 				await emitTo("main", "page-design:saved").catch(() => { /* main may be closing */ });
@@ -822,39 +1034,5 @@
 <style scoped>
 	.legend-printer-band {
 		background: repeating-linear-gradient(45deg, rgb(239 68 68 / 0.3) 0 2px, transparent 2px 4px);
-	}
-
-	/* One bordered row split into equal segments: the selected item's actions. */
-	.segmented {
-		display: flex;
-		border: 1px solid var(--ui-border-accented);
-		border-radius: calc(var(--ui-radius) * 1.5);
-		background: var(--ui-bg);
-		overflow: hidden;
-	}
-	.segmented > button {
-		flex: 1 1 0;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.375rem;
-		padding: 0.375rem 0.5rem;
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--ui-text);
-		transition: background-color 120ms ease-out;
-	}
-	.segmented > button + button {
-		border-left: 1px solid var(--ui-border-accented);
-	}
-	.segmented > button:hover {
-		background: var(--ui-bg-elevated);
-	}
-	.segmented > button:active {
-		background: var(--ui-bg-accented);
-	}
-	.segmented > button:focus-visible {
-		outline: 2px solid var(--ui-primary);
-		outline-offset: -2px;
 	}
 </style>

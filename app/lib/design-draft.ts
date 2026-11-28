@@ -8,23 +8,92 @@
 //
 // Pure, store-free, relative imports only (vitest).
 
-import type { DesignItem, ImageExt, MarginsMm, PageDesign } from "./page-design";
+import type { DesignFont, DesignItem, ImageExt, MarginsMm, PageDesign } from "./page-design";
+import { INK, MUTED, textStyle } from "./design-templates";
 import { clampItem } from "./designer-geometry";
 import { imageFileIds } from "./page-design";
 import { resolvePaperSize } from "./paper-sizes";
 
 /** A newly added image's width, unless the safe area is narrower. */
 const NEW_IMAGE_MM = 60;
+/**
+ * How far inside the safe area a new item lands: never on a margin guide,
+ * whose grab strip would take the drag instead of the item.
+ */
+const NEW_ITEM_INSET_MM = 10;
 /** How far a duplicate is offset from its original. */
 const DUPLICATE_OFFSET_MM = 5;
+/** A new text box's width, unless the safe area is narrower. */
+const NEW_TEXT_MM = 80;
+/** A new page number's width; it sits this far above the paper's bottom edge. */
+const PAGE_NUMBER_W_MM = 40;
+const PAGE_NUMBER_FROM_BOTTOM_MM = 9;
+/** What a new text box says, selected in its editor so typing replaces it. */
+export const NEW_TEXT = "New text";
 
-/** A new image (file `item-<id>.<ext>`, proportions `aspect` = w / h), centred across the safe area at its top, drawn on top. */
+/** The safe area's top-left and width, on the design's own paper. */
+function safeArea(design: PageDesign) {
+	const { widthMm } = resolvePaperSize(design.paper);
+	const { left, right, top } = design.margins;
+	return { x: left, y: top, w: widthMm - left - right };
+}
+
+/** A new item's spot: (x, y), moved 5 mm down and right while another item already starts exactly there. */
+function freeSpot(design: PageDesign, x: number, y: number): { x: number, y: number } {
+	let at = { x, y };
+	while (design.items.some((i) => i.x === at.x && i.y === at.y)) at = { x: at.x + DUPLICATE_OFFSET_MM, y: at.y + DUPLICATE_OFFSET_MM };
+	return at;
+}
+
+const append = (design: PageDesign, item: DesignItem): PageDesign => ({ ...design, items: [...design.items, clampItem(item, design)] });
+
+/** A new text box just inside the safe area's top-left, on top, saying NEW_TEXT in `font`. */
+export function addText(design: PageDesign, id: string, font: DesignFont): PageDesign {
+	const safe = safeArea(design);
+	const at = freeSpot(design, safe.x + NEW_ITEM_INSET_MM, safe.y + NEW_ITEM_INSET_MM);
+	return append(design, { type: "text", id, ...at, w: Math.min(NEW_TEXT_MM, safe.w), pages: "every", text: NEW_TEXT, style: textStyle(10, INK, "left", false, font) });
+}
+
+/** Whether the design already has its (one) page number. */
+export function hasPageNumber(design: PageDesign): boolean {
+	return design.items.some((i) => i.type === "page_number");
+}
+
+/** A page number at the bottom right, below the safe area — or the design unchanged when it already has one. */
+export function addPageNumber(design: PageDesign, id: string, font: DesignFont): PageDesign {
+	if (hasPageNumber(design)) return design;
+	const { widthMm, heightMm } = resolvePaperSize(design.paper);
+	const at = freeSpot(design, widthMm - design.margins.right - PAGE_NUMBER_W_MM, heightMm - PAGE_NUMBER_FROM_BOTTOM_MM);
+	return append(design, { type: "page_number", id, ...at, w: PAGE_NUMBER_W_MM, pages: "every", format: "page_of_total", hide_single: true, style: textStyle(7, MUTED, "right", false, font) });
+}
+
+/** A thin Accent line across the safe area, just inside its top. */
+export function addLine(design: PageDesign, id: string): PageDesign {
+	const safe = safeArea(design);
+	const at = freeSpot(design, safe.x, safe.y + NEW_ITEM_INSET_MM);
+	return append(design, { type: "line", id, ...at, length: safe.w, vertical: false, thickness: 0.75, color: "accent", pages: "every" });
+}
+
+/** A line turned horizontal or vertical from the same start, shortened to fit the page that way. */
+export function setLineVertical(design: PageDesign, id: string, vertical: boolean): PageDesign {
+	const { widthMm, heightMm } = resolvePaperSize(design.paper);
+	return {
+		...design,
+		items: design.items.map((i) => {
+			if (i.id !== id || i.type !== "line" || i.vertical === vertical) return i;
+			const room = vertical ? heightMm - i.y : widthMm - i.x;
+			return clampItem({ ...i, vertical, length: Math.min(i.length, room) }, design);
+		})
+	};
+}
+
+/** A new image (file `item-<id>.<ext>`, proportions `aspect` = w / h), centred across the safe area just inside its top, drawn on top. */
 export function addImage(design: PageDesign, id: string, ext: ImageExt, aspect: number): PageDesign {
 	const { widthMm } = resolvePaperSize(design.paper);
 	const { left, right, top } = design.margins;
 	const safeW = widthMm - left - right;
 	const w = Math.min(NEW_IMAGE_MM, safeW);
-	const item: DesignItem = { type: "image", id, x: left + (safeW - w) / 2, y: top, w, h: w / aspect, pages: "every", src: { kind: "file", ext }, guide: false };
+	const item: DesignItem = { type: "image", id, x: left + (safeW - w) / 2, y: top + NEW_ITEM_INSET_MM, w, h: w / aspect, pages: "every", src: { kind: "file", ext }, guide: false };
 	return { ...design, items: [...design.items, item] };
 }
 
@@ -59,6 +128,8 @@ export function duplicateItem(design: PageDesign, id: string, newId: string): Pa
 	const at = design.items.findIndex((i) => i.id === id);
 	if (at < 0) return design;
 	const original = design.items[at]!;
+	// A design has one page number (it shows on every page).
+	if (original.type === "page_number") return design;
 	const copy = clampItem({ ...original, id: newId, x: original.x + DUPLICATE_OFFSET_MM, y: original.y + DUPLICATE_OFFSET_MM } as DesignItem, design);
 	return { ...design, items: [...design.items.slice(0, at + 1), copy, ...design.items.slice(at + 1)] };
 }

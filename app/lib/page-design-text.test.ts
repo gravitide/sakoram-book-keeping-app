@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveDesignText } from "./page-design-text";
+import { insertToken, resolveDesignLines, resolveDesignText } from "./page-design-text";
 
 const EMPTY = { business_name: "", address: "", city: "", phone: "", email: "", website: "", tax_id: "" };
 const values = (v: Partial<typeof EMPTY>) => ({ ...EMPTY, ...v });
@@ -37,5 +37,30 @@ describe("resolveDesignText", () => {
 
 	it("keeps a line where at least one field has a value", () => {
 		expect(resolveDesignText("{phone} | {email}", values({ email: "hi@x.lk" }))).toEqual(["hi@x.lk"]);
+	});
+});
+
+describe("resolveDesignLines", () => {
+	const v = values({ phone: "011 234", website: "" });
+
+	it("prints like resolveDesignText, none faded", () => {
+		expect(resolveDesignLines("{phone}\n{website}", v)).toEqual([{ text: "011 234", faded: false }]);
+	});
+
+	it("keeps a line whose fields are all empty, faded and labelled, when asked (the designer)", () => {
+		expect(resolveDesignLines("{phone}\n{website}", v, { keepEmpty: true })).toEqual([
+			{ text: "011 234", faded: false },
+			{ text: "Website", faded: true }
+		]);
+	});
+});
+
+describe("insertToken", () => {
+	it("inserts at the caret and puts the caret after the token", () => {
+		expect(insertToken("Call  today", 5, 5, "{phone}")).toEqual({ text: "Call {phone} today", caret: 12 });
+	});
+
+	it("replaces a selection", () => {
+		expect(insertToken("Web: xxx", 5, 8, "{website}")).toEqual({ text: "Web: {website}", caret: 14 });
 	});
 });

@@ -7,7 +7,11 @@
 //
 // Pure, store-free (vitest).
 
-export interface History<T> { past: T[], present: T, future: T[] }
+/**
+ * `merge`: the key of the last record, when it asked to be merged with the
+ * next one of the same key (a burst of typing in one text box is one step).
+ */
+export interface History<T> { past: T[], present: T, future: T[], merge?: string }
 
 /** How many steps back undo can go. */
 export const HISTORY_LIMIT = 100;
@@ -16,11 +20,28 @@ export function startHistory<T>(present: T): History<T> {
 	return { past: [], present, future: [] };
 }
 
-/** `next` as the new present; nothing when it equals the present. Clears the redo trail. */
-export function record<T>(h: History<T>, next: T): History<T> {
+/**
+ * `next` as the new present; nothing when it equals the present. Clears the
+ * redo trail. With `opts.merge`, a record right after one with the same key
+ * replaces the present instead of adding a step.
+ */
+export function record<T>(h: History<T>, next: T, opts?: { merge?: string }): History<T> {
 	if (JSON.stringify(next) === JSON.stringify(h.present)) return h;
+	const merge = opts?.merge;
+	if (merge !== undefined && merge === h.merge) return { past: h.past, present: next, future: [], merge };
 	const past = [...h.past, h.present];
-	return { past: past.slice(Math.max(0, past.length - HISTORY_LIMIT)), present: next, future: [] };
+	return { past: past.slice(Math.max(0, past.length - HISTORY_LIMIT)), present: next, future: [], merge };
+}
+
+/**
+ * The history once a Save has written `final` (the draft as it was when the
+ * save started, `saved`, with its logo spots filled). A fresh one, as
+ * afterSave — but when the user kept editing while the save ran (typing, with
+ * Ctrl+S in the text editor), what they typed is kept, not replaced.
+ */
+export function historyAfterSave<T>(h: History<T>, saved: T, final: T): History<T> {
+	if (JSON.stringify(h.present) === JSON.stringify(saved)) return afterSave(final);
+	return startHistory(h.present);
 }
 
 export function undo<T>(h: History<T>): History<T> {

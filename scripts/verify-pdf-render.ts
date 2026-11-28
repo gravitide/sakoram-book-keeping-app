@@ -231,6 +231,33 @@ const withPagesRules = (): Partial<CompanySettingsRow> => {
 	];
 	return withDesign({ ...design, items: [...design.items, ...extra] });
 };
+/**
+ * Classic with every text style the designer offers: a text box per font (one
+ * italic, one bold, one centred, one right-aligned, one in Accent), a vertical
+ * line, and its page number in `format` (a design holds only one).
+ */
+const withStyles = (format: "slash" | "number"): Partial<CompanySettingsRow> => {
+	const design = templateDesign("classic");
+	const look = { size: 9, bold: false, italic: false, color: "#111827", align: "left" } as const;
+	const fonts = ["Akt", "Inter", "Inter Tight", "Stack Sans Text", "Miriam Libre", "Amarna"] as const;
+	const variants = [{}, { italic: true }, { bold: true }, { align: "center" }, { align: "right" }, { color: "accent" }] as const;
+	const texts = fonts.map((font, i): DesignItem => ({
+		type: "text",
+		id: `styles${String(i + 1).padStart(4, "0")}`,
+		x: 18,
+		y: 230 + i * 6,
+		w: 120,
+		pages: "every",
+		text: `${font} — {business_name}`,
+		style: { ...look, ...variants[i], font }
+	}));
+	const extra: DesignItem[] = [
+		...texts,
+		{ type: "line", id: "stylesvline", x: 150, y: 230, length: 40, vertical: true, thickness: 1.5, color: "accent", pages: "every" }
+	];
+	const items = design.items.map((i): DesignItem => (i.type === "page_number" ? { ...i, format } : i));
+	return withDesign({ ...design, items: [...items, ...extra] });
+};
 // The demo business: its bundled letterhead in the background slot, and its accent.
 const demoSettings = () => settingsFor({ ...withDesign(DEMO.design), pdf_theme_color: DEMO_LETTERHEAD_ACCENT });
 // A business with no website, phone or email: those lines drop out of the
@@ -667,6 +694,12 @@ const cases: Case[] = [
 	{ ...docCase("stationery-preview-classic", sampleStationeryPreviewPayload(settingsFor(), currency, "classic")), multipage: true, pages: 2 },
 	{ ...docCase("stationery-preview-background-artwork", sampleStationeryPreviewPayload(settingsFor(withArtwork("pdf")), currency, "classic")), multipage: true, pages: 2 },
 	{ ...docCase("stationery-preview-compact-a5", sampleStationeryPreviewPayload(onTemplate("compact", { pdf_paper_size: "a5" }), currency, "compact")), multipage: true, pages: 2 },
+	// The designer's page view: a business with no website, phone or email
+	// keeps those letterhead lines, faded and labelled (showEmptyFields).
+	{ ...docCase("designer-faded-fields", sampleStationeryPreviewPayload(settingsFor(sparseDetails), currency, "classic", { showEmptyFields: true })), multipage: true, pages: 2 },
+	// Every text style, a vertical line, and the other page-number formats.
+	{ ...docCase("design-styles-slash", invoice(settingsFor(withStyles("slash")), 45)), multipage: true },
+	{ ...docCase("design-styles-number", invoice(settingsFor(withStyles("number")), 45)), multipage: true },
 	...TEMPLATE_KEYS.flatMap((tpl) => ALL_PAPERS.flatMap((paper) => LAYOUTS.map((key): Case => ({
 		...docCase(`stationery-preview-grid-${tpl}-${key}-${paper}`, sampleStationeryPreviewPayload(onTemplate(tpl, { pdf_layout: key, pdf_paper_size: paper }), currency, key)),
 		multipage: true,

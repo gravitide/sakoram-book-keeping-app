@@ -39,7 +39,7 @@
 
 			<!-- The page: white in both themes, it previews the paper. -->
 			<div
-				class="relative bg-white shadow-lg ring-1 ring-black/10 select-none"
+				class="relative isolate bg-white shadow-lg ring-1 ring-black/10 select-none"
 				:class="dropOver ? 'ring-2 ring-(--ui-primary)' : ''"
 				:style="{ width: `${pagePx.w}px`, height: `${pagePx.h}px` }"
 				@pointerdown.self="emit('select', null)"
@@ -95,7 +95,10 @@
 					:style="safeAreaStyle"
 				/>
 
-				<!-- Items: click to select, drag to move, handles to resize, arrows to nudge. -->
+				<!-- Items: click to select, drag to move, handles to resize, arrows to nudge.
+					The selected one sits above the safe-area guides (z-30), so it can
+					always be dragged even where a guide crosses it; the others sit
+					below, so a full-page background never blocks the guides (not even selected). -->
 				<div
 					v-for="box in boxes"
 					:key="box.item.id"
@@ -104,7 +107,7 @@
 					:aria-label="box.label"
 					class="group absolute outline-none touch-none cursor-move"
 					:class="[
-						box.item.id === selectedId ? 'z-20 ring-2 ring-(--ui-primary)' : 'z-10 ring-1 ring-transparent hover:ring-(--ui-primary)/60 focus-visible:ring-(--ui-primary)',
+						box.item.id === selectedId ? `${box.coversPage ? 'z-20' : 'z-[35]'} ring-2 ring-(--ui-primary)` : 'z-10 ring-1 ring-transparent hover:ring-(--ui-primary)/60 focus-visible:ring-(--ui-primary)',
 						box.guide ? 'bg-(--ui-primary)/5' : ''
 					]"
 					:style="box.style"
@@ -113,6 +116,7 @@
 					@pointerup="onPointerUp"
 					@pointercancel="onPointerUp"
 					@keydown="onItemKey(box.item.id, $event)"
+					@dblclick="onItemDblClick(box.item)"
 				>
 					<!-- The item's own pixels, cut from the last render, riding along
 						with the box until a render with it in its new place arrives. -->
@@ -130,7 +134,7 @@
 							v-for="h in box.handles"
 							:key="h"
 							class="absolute size-2.5 rounded-sm bg-white ring-1 ring-(--ui-primary)"
-							:class="HANDLE_CLASS[h]"
+							:class="handleClass(box.item, h)"
 							@pointerdown.stop="onItemPointerDown(box.item.id, h, $event)"
 						/>
 						<span class="absolute top-full mt-1 left-0 whitespace-nowrap rounded bg-(--ui-primary) px-1.5 py-0.5 text-[10px] font-medium text-white tabular-nums pointer-events-none">
@@ -172,6 +176,20 @@
 				</div>
 			</div>
 		</div>
+
+		<!-- Text measured as the page will wrap it (fonts, size, width at 10 px
+			per mm), so a text box's outline is as tall as its text. Never seen. -->
+		<div class="invisible absolute left-0 top-0 size-0 overflow-hidden pointer-events-none" aria-hidden="true">
+			<div
+				v-for="m in measureItems"
+				:key="m.id"
+				:ref="(el) => setMeasureEl(m.id, el as HTMLElement | null)"
+				class="absolute left-0 top-0 whitespace-pre-wrap break-words"
+				:style="m.style"
+			>
+				{{ m.content }}
+			</div>
+		</div>
 	</div>
 </template>
 
@@ -186,6 +204,7 @@
 	import { updateItem } from "~/lib/design-draft";
 	import { dragMargin, fitScale, handlesFor, itemBox, mmToPx, moveItem, nudgeItem, printerBandRects, resizeItem, rulerTicks, SNAP_DISTANCE_PX } from "~/lib/designer-geometry";
 	import { formatMm, itemOnPage } from "~/lib/page-design";
+	import { resolveDesignLines } from "~/lib/page-design-text";
 	import { resolvePaperSize } from "~/lib/paper-sizes";
 
 	const props = defineProps<{
@@ -200,12 +219,16 @@
 		zoom: number
 		/** The hand tool: a drag pans the view instead of selecting or moving. */
 		pan?: boolean
+		/** Company field values (tokenValuesFromSettings), for measuring text boxes. */
+		fieldValues: Record<string, string>
 	}>();
 	const emit = defineEmits<{
 		select: [id: string | null]
 		change: [design: PageDesign]
 		/** `now`: a pointer drag ended — render it without the usual pause. */
 		commit: [now?: boolean]
+		/** A text box or page number was double-clicked: open its editor. */
+		edit: [id: string]
 		drop: [file: File]
 		scale: [scale: number]
 	}>();
@@ -221,6 +244,10 @@
 		e: "top-1/2 -translate-y-1/2 -right-1.5 cursor-ew-resize",
 		end: "top-1/2 -translate-y-1/2 -right-1.5 cursor-ew-resize"
 	};
+	// A vertical line ends at its bottom.
+	const END_VERTICAL_CLASS = "left-1/2 -translate-x-1/2 -bottom-1.5 cursor-ns-resize";
+	const handleClass = (item: DesignItem, h: Handle) =>
+		(h === "end" && item.type === "line" && item.vertical ? END_VERTICAL_CLASS : HANDLE_CLASS[h]);
 	const SIDES: { side: keyof MarginsMm, label: string, axis: "x" | "y" }[] = [
 		{ side: "top", label: "Top", axis: "y" },
 		{ side: "bottom", label: "Bottom", axis: "y" },
@@ -362,15 +389,57 @@
 		};
 	};
 
+	// ---- measured text --------------------------------------------------------------
+	const MEASURE_PX_PER_MM = 10;
+	const PAGE_NUMBER_SAMPLE = { page_of_total: "Page 1 of 3", slash: "1 / 3", number: "1" } as const;
+	const measureItems = computed(() => props.design.items.flatMap((item) => {
+		if (item.type !== "text" && item.type !== "page_number") return [];
+		const st = item.style;
+		const content = item.type === "text"
+			? resolveDesignLines(item.text, props.fieldValues, { keepEmpty: true }).map((l) => l.text).join("\n")
+			: PAGE_NUMBER_SAMPLE[item.format];
+		return [{
+			id: item.id,
+			content,
+			style: {
+				width: `${item.w * MEASURE_PX_PER_MM}px`,
+				fontFamily: `"${st.font}", "Inter", sans-serif`,
+				fontSize: `${st.size * 0.3528 * MEASURE_PX_PER_MM}px`,
+				fontWeight: st.bold ? 700 : 400,
+				fontStyle: st.italic ? "italic" : "normal",
+				textAlign: st.align,
+				lineHeight: 1.25
+			}
+		}];
+	}));
+	const measureEls = new Map<string, HTMLElement>();
+	const setMeasureEl = (id: string, el: HTMLElement | null) => {
+		if (el) measureEls.set(id, el);
+		else measureEls.delete(id);
+	};
+	const measured = ref<Record<string, number>>({});
+	const readMeasured = () => {
+		const next: Record<string, number> = {};
+		for (const [id, el] of measureEls) next[id] = el.offsetHeight / MEASURE_PX_PER_MM;
+		measured.value = next;
+	};
+	// Only re-read when what's measured changes (not on every drag move).
+	watch(() => JSON.stringify(measureItems.value), readMeasured, { flush: "post", immediate: true });
+	onMounted(() => {
+		void document.fonts?.ready.then(readMeasured);
+	});
+
 	const boxes = computed(() => props.design.items
 		.filter((item) => itemOnPage(item.pages, props.page))
 		.map((item) => {
-			const b = itemBox(item);
+			const b = itemBox(item, measured.value[item.id]);
 			const s = scale.value;
 			return {
 				ghost: ghostStyle(item, b),
 				item,
 				guide: item.type === "image" && item.guide,
+				// A background: raising it over the guides would hide every one of them.
+				coversPage: b.w >= paper.value.widthMm - 0.5 && b.h >= paper.value.heightMm - 0.5,
 				handles: handlesFor(item),
 				size: sizeLabel(item),
 				label: `${KIND_LABEL[item.type]}, ${sizeLabel(item)}, ${formatMm(item.x)} mm from the left, ${formatMm(item.y)} mm from the top`,
@@ -438,6 +507,10 @@
 	const onPointerUp = () => {
 		if (drag.value?.moved) emit("commit", true);
 		drag.value = null;
+	};
+
+	const onItemDblClick = (item: DesignItem) => {
+		if (item.type === "text" || item.type === "page_number") emit("edit", item.id);
 	};
 
 	const ARROWS: Record<string, "up" | "down" | "left" | "right"> = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };

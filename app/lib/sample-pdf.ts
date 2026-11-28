@@ -5,7 +5,7 @@
 // without touching the database. Theme colour / font / logo / business contact
 // come from the live settings so the preview reflects the user's branding.
 
-import type { PageSettings } from "./page-settings";
+import type { PageSettings, PageSettingsOverride } from "./page-settings";
 import type { PdfLayoutKey } from "./pdf-layouts";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { computeLineTotals, formatMoney, formatQty } from "./money";
@@ -32,10 +32,10 @@ const SAMPLE_FORMATTED = {
 	total_no_symbol: "276,120.00"
 };
 
-function base(settings: CompanySettingsRow | null, currency: SampleCurrency, layoutKey: PdfLayoutKey) {
+function base(settings: CompanySettingsRow | null, currency: SampleCurrency, layoutKey: PdfLayoutKey, override?: PageSettingsOverride) {
 	return {
 		// The picked Document style, on the business's page design.
-		...buildLayoutAndPage(settings, undefined, layoutKey),
+		...buildLayoutAndPage(settings, override, layoutKey),
 		theme_color: pdfThemeHex(settings),
 		font_family: settings?.pdf_font ?? "Akt",
 		currency_code: currency.code,
@@ -142,8 +142,9 @@ const previewLines = (count: number) => Array.from({ length: count }, (_, i) => 
  * The Stationery editor's sample: an itemised invoice on the business's own
  * paper, Stationery and branding, always exactly two pages long (see above).
  */
-export function sampleStationeryPreviewPayload(settings: CompanySettingsRow | null, currency: SampleCurrency, layoutKey: PdfLayoutKey) {
-	const common = base(settings, currency, layoutKey);
+/** `opts.showEmptyFields`: the page designer's view (page-settings.ts PageSettingsOverride). */
+export function sampleStationeryPreviewPayload(settings: CompanySettingsRow | null, currency: SampleCurrency, layoutKey: PdfLayoutKey, opts: { showEmptyFields?: boolean } = {}) {
+	const common = base(settings, currency, layoutKey, opts);
 	const lines = previewLines(previewLineCount(common.page));
 	const noSym = (c: number) => formatMoney(c, { code: currency.code, withSymbol: false });
 	const sym = (c: number) => `${currency.symbol} ${noSym(c)}`;

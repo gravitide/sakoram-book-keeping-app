@@ -317,6 +317,11 @@
 // Which pages an item is drawn on. Mirrors itemOnPage in page-design.ts.
 #let design-item-on-page(rule, n) = if rule == "first" { n == 1 } else if rule == "not_first" { n > 1 } else { true }
 
+// Italic, slanted: no bundled font ships an italic face (Typst would quietly
+// draw it upright), so each line is skewed about its own centre, as a browser
+// does for a font without one.
+#let design-slant(item, line) = if item.italic { box(skew(ax: -12deg, line)) } else { line }
+
 // A text box / page number: a block of the item's width, the item's font
 // first with the bundled fallbacks after.
 #let design-text(item, body) = {
@@ -325,7 +330,6 @@
     font: (item.font, "Inter", "Inter Tight", "Miriam Libre"),
     size: item.size * 1pt,
     weight: if item.bold { "bold" } else { "regular" },
-    style: if item.italic { "italic" } else { "normal" },
     fill: rgb(item.color),
     body,
   )))
@@ -346,11 +350,12 @@
         image(item.file, width: item.w * 1mm, height: item.h * 1mm, fit: "contain")
       }
     } else if item.type == "text" {
-      design-text(item, item.lines.map(l => [#l]).join(linebreak()))
+      // A faded line: one PDFs leave out (all its fields empty), kept by the designer.
+      design-text(item, item.lines.map(l => design-slant(item, if l.faded { text(fill: rgb(item.color).transparentize(65%), l.text) } else [#l.text])).join(linebreak()))
     } else if item.type == "page_number" {
       if not (item.hide_single and total == 1) {
         let label = if item.format == "slash" [#n / #total] else if item.format == "number" [#n] else [Page #n of #total]
-        [#design-text(item, label)#metadata((page: n, total: total))<sakoram-page-number>]
+        [#design-text(item, design-slant(item, label))#metadata((page: n, total: total))<sakoram-page-number>]
       }
     } else if item.type == "line" {
       line(length: item.length * 1mm, angle: if item.vertical { 90deg } else { 0deg }, stroke: item.thickness * 1pt + rgb(item.color))

@@ -92,14 +92,16 @@ export function rulerTicks(lengthMm: number, scale: number): RulerTick[] {
 const textHeight = (lines: number, sizePt: number) => Math.max(1, lines) * sizePt * PT_MM * LINE_HEIGHT;
 
 /** Where an item sits on the page (its grab box). Text height is an estimate from its line count. */
-export function itemBox(item: DesignItem): MmRect {
+export function itemBox(item: DesignItem, measuredH?: number): MmRect {
+	// The canvas measures a text box's real wrapped height; without that, one line per typed line.
+	const measured = measuredH !== undefined && measuredH > 0 ? measuredH : null;
 	switch (item.type) {
 		case "image":
 			return { x: item.x, y: item.y, w: item.w, h: item.h };
 		case "text":
-			return { x: item.x, y: item.y, w: item.w, h: textHeight(item.text.split("\n").length, item.style.size) };
+			return { x: item.x, y: item.y, w: item.w, h: measured ?? textHeight(item.text.split("\n").length, item.style.size) };
 		case "page_number":
-			return { x: item.x, y: item.y, w: item.w, h: textHeight(1, item.style.size) };
+			return { x: item.x, y: item.y, w: item.w, h: measured ?? textHeight(1, item.style.size) };
 		default: {
 			const t = Math.max(item.thickness * PT_MM, MIN_LINE_BOX_MM);
 			return item.vertical

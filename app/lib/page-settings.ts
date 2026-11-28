@@ -21,12 +21,13 @@
 // (scripts/verify-pdf-render.ts) both import it.
 
 import type { DesignItem, ImageExt, MarginsMm, PageDesign, PageNumberFormat, PagesRule, TextAlign } from "./page-design";
+import type { DesignLine } from "./page-design-text";
 import type { PaperSize } from "./paper-sizes";
 import type { PdfLayoutKey } from "./pdf-layouts";
 import type { CompanySettingsRow } from "~/stores/settings";
 import { DEFAULT_DESIGN_TEMPLATE, designTemplate } from "./design-templates";
 import { parsePageDesign, scaleDesign } from "./page-design";
-import { resolveDesignText } from "./page-design-text";
+import { resolveDesignLines } from "./page-design-text";
 import { resolvePaperSize } from "./paper-sizes";
 import { resolveLayoutKey } from "./pdf-layouts";
 import { tokenValuesFromSettings } from "./pdf-tokens";
@@ -42,7 +43,7 @@ interface TextLook { font: string, size: number, bold: boolean, italic: boolean,
 export type PageItemPayload
 	= | (ItemBase & { type: "image", w: number, h: number, src: "item", ext: ImageExt })
 		| (ItemBase & { type: "image", w: number, h: number, src: "company_logo" })
-		| (ItemBase & TextLook & { type: "text", w: number, lines: string[] })
+		| (ItemBase & TextLook & { type: "text", w: number, lines: DesignLine[] })
 		| (ItemBase & TextLook & { type: "page_number", w: number, format: PageNumberFormat, hide_single: boolean })
 		| (ItemBase & { type: "line", length: number, vertical: boolean, thickness: number, color: string });
 
@@ -58,6 +59,8 @@ export interface PageSettings {
 export interface PageSettingsOverride {
 	/** A letter on pre-printed paper: print none of the design, keep its safe area. */
 	omitItems?: boolean
+	/** The page designer: keep the text lines whose fields are all empty, faded, instead of leaving them out. */
+	showEmptyFields?: boolean
 }
 
 type Settings = Partial<CompanySettingsRow> | null;
@@ -79,7 +82,7 @@ export function effectiveDesign(settings: Settings): PageDesign {
 	return stored ? scaleDesign(stored, paper) : designTemplate(DEFAULT_DESIGN_TEMPLATE, paper, defaultIds()).design;
 }
 
-function payloadFor(item: DesignItem, values: Record<string, string>, accent: string, hasLogo: boolean): PageItemPayload | null {
+function payloadFor(item: DesignItem, values: Record<string, string>, accent: string, hasLogo: boolean, keepEmpty: boolean): PageItemPayload | null {
 	const colour = (c: string) => (c === "accent" ? accent : c);
 	const { id, x, y, pages } = item;
 	switch (item.type) {
@@ -90,7 +93,7 @@ function payloadFor(item: DesignItem, values: Record<string, string>, accent: st
 				? { type: "image", id, x, y, w: item.w, h: item.h, pages, src: "company_logo" }
 				: { type: "image", id, x, y, w: item.w, h: item.h, pages, src: "item", ext: item.src.ext };
 		case "text": {
-			const lines = resolveDesignText(item.text, values);
+			const lines = resolveDesignLines(item.text, values, { keepEmpty });
 			if (lines.length === 0) return null;
 			return { type: "text", id, x, y, w: item.w, pages, lines, ...item.style, color: colour(item.style.color) };
 		}
@@ -108,7 +111,7 @@ export function buildPageSettings(settings: Settings, override?: PageSettingsOve
 	const hasLogo = Boolean(settings?.logo_path);
 	const items = override?.omitItems
 		? []
-		: design.items.map((item) => payloadFor(item, values, accent, hasLogo)).filter((i): i is PageItemPayload => i !== null);
+		: design.items.map((item) => payloadFor(item, values, accent, hasLogo, Boolean(override?.showEmptyFields))).filter((i): i is PageItemPayload => i !== null);
 	return { paper: design.paper, margins: { ...design.margins }, items };
 }
 
