@@ -67,7 +67,7 @@
 					@edit="editItem"
 					@change="live = $event"
 					@commit="commitLive"
-					@drop="pendingDrop = $event"
+					@drop="onCanvasDrop"
 					@scale="scale = $event"
 				/>
 			</div>
@@ -276,9 +276,13 @@
 									Image file
 								</div>
 								<div class="segmented" role="group" aria-labelledby="designer-image-file">
-									<button type="button" title="Swap in a different file, keeping the position and size" @click="replaceInput?.click()">
-										<UIcon name="i-lucide-replace" class="size-3.5" />
-										Replace…
+									<button
+										type="button"
+										:title="selected.src ? 'Swap in a different file, keeping the position and size' : 'Fill this empty slot; it keeps its place and size'"
+										@click="replaceInput?.click()"
+									>
+										<UIcon :name="selected.src ? 'i-lucide-replace' : 'i-lucide-image-plus'" class="size-3.5" />
+										{{ selected.src ? "Replace…" : "Choose image…" }}
 									</button>
 									<button v-if="selectedFileExt && isRasterArtwork(selectedFileExt)" type="button" title="Keep only part of the image" @click="cropSelected">
 										<UIcon name="i-lucide-crop" class="size-3.5" />
@@ -500,7 +504,7 @@
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { useTemplatePreviews } from "~/composables/useTemplatePreviews";
 	import { itemAssetKind, readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
-	import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, hasPageNumber, reorderItem, replaceImage, setLineVertical, setMargins, updateItem } from "~/lib/design-draft";
+	import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, fillSlot, hasPageNumber, reorderItem, replaceImage, setLineVertical, setMargins, updateItem } from "~/lib/design-draft";
 	import { canRedo, canUndo, historyAfterSave, record, redo, startHistory, undo } from "~/lib/design-history";
 	import { DESIGN_TEMPLATES } from "~/lib/design-templates";
 	import { ACTUAL_ZOOM_LEVELS, clampItem, CSS_PX_PER_MM, setMarginValue, stepActualZoom, zoomForActual } from "~/lib/designer-geometry";
@@ -694,11 +698,31 @@
 		apply((d) => replaceImage(d, old.id, added.id, added.ext, added.aspect));
 		selectedId.value = added.id;
 	};
+	/** An empty slot filled with `file`: it keeps its box, pages rule and guide flag (design-draft fillSlot). */
+	const fillSlotWith = async (file: File, slotId: string) => {
+		const slot = draft.value.design.items.find((i) => i.id === slotId);
+		if (slot?.type !== "image") return;
+		const page = resolvePaperSize(draft.value.design.paper);
+		const coversPage = slot.w >= page.widthMm - 0.5 && slot.h >= page.heightMm - 0.5;
+		const added = await uploader.upload(file, draft.value.design.paper, { background: coversPage });
+		if (!added) return;
+		uploaded.value = [...uploaded.value, added.id];
+		apply((d) => fillSlot(d, slotId, added.id, added.ext));
+		selectedId.value = added.id;
+	};
+	// Dropped on an empty slot: fill it. Anywhere else: ask image or background.
+	const onCanvasDrop = (file: File, slotId: string | null) => {
+		if (slotId) void fillSlotWith(file, slotId);
+		else pendingDrop.value = file;
+	};
 	const onReplaceInput = async (e: Event) => {
 		const input = e.target as HTMLInputElement;
 		const file = input.files?.[0];
 		input.value = "";
-		if (file) swapSelected(await uploader.upload(file, draft.value.design.paper));
+		if (!file) return;
+		const item = selected.value;
+		if (item?.type === "image" && item.src === null) await fillSlotWith(file, item.id);
+		else swapSelected(await uploader.upload(file, draft.value.design.paper));
 	};
 	const cropSelected = async () => {
 		if (!selected.value || !selectedFileExt.value) return;

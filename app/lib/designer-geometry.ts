@@ -125,6 +125,19 @@ export function overlapsSafeArea(box: MmRect, design: PageDesign): boolean {
 	return w > 0 && h > 0;
 }
 
+/**
+ * Whether the designer warns about this item overlapping the safe area. Not
+ * for a guide (never printed) or an item covering the whole page (a
+ * background is behind the document by design). Text uses its measured height.
+ */
+export function overlapWarning(item: DesignItem, design: PageDesign, measuredH?: number): boolean {
+	if (item.type === "image" && item.guide) return false;
+	const box = itemBox(item, measuredH);
+	const { widthMm, heightMm } = resolvePaperSize(design.paper);
+	if (box.w >= widthMm - 0.5 && box.h >= heightMm - 0.5) return false;
+	return overlapsSafeArea(box, design);
+}
+
 /** The topmost empty image slot drawn on `page` under the point (mm), or null. */
 export function slotAt(design: PageDesign, page: 1 | 2, xMm: number, yMm: number): string | null {
 	for (let k = design.items.length - 1; k >= 0; k--) {

@@ -125,10 +125,28 @@
 						class="absolute inset-0 overflow-hidden pointer-events-none"
 						:style="box.ghost"
 					/>
+					<!-- An empty image slot: prints nothing, invites a file. -->
+					<div
+						v-if="box.slot"
+						class="absolute inset-0 flex flex-col items-center justify-center gap-1 border border-dashed border-zinc-400 bg-zinc-50/60 text-zinc-500 pointer-events-none"
+					>
+						<UIcon name="i-lucide-image-plus" class="size-5" />
+						<span class="text-xs font-medium">{{ box.guide ? "Drop a scan of your paper" : "Drop an image" }}</span>
+					</div>
 					<span
 						v-if="box.guide"
 						class="absolute top-1 left-1 rounded bg-(--ui-primary) px-1 text-[9px] font-medium text-white pointer-events-none"
-					>Guide</span>
+					>Guide · not printed</span>
+					<!-- Over the safe area: allowed (watermarks), but said. A press on it
+						still reaches the box, so it drags like the rest. -->
+					<span
+						v-if="box.overlap"
+						class="absolute top-1 right-1 flex rounded bg-amber-500 p-0.5 text-white"
+						title="Overlaps the safe area: the document prints on top of it"
+						aria-label="Overlaps the safe area"
+					>
+						<UIcon name="i-lucide-triangle-alert" class="size-3" />
+					</span>
 					<template v-if="box.item.id === selectedId">
 						<span
 							v-for="h in box.handles"
@@ -202,7 +220,7 @@
 	import type { Handle, MmRect } from "~/lib/designer-geometry";
 	import type { DesignItem, MarginsMm, PageDesign } from "~/lib/page-design";
 	import { updateItem } from "~/lib/design-draft";
-	import { dragMargin, fitScale, handlesFor, itemBox, mmToPx, moveItem, nudgeItem, printerBandRects, resizeItem, rulerTicks, SNAP_DISTANCE_PX } from "~/lib/designer-geometry";
+	import { dragMargin, fitScale, handlesFor, itemBox, mmToPx, moveItem, nudgeItem, overlapWarning, printerBandRects, resizeItem, rulerTicks, slotAt, SNAP_DISTANCE_PX } from "~/lib/designer-geometry";
 	import { formatMm, itemOnPage } from "~/lib/page-design";
 	import { resolveDesignLines } from "~/lib/page-design-text";
 	import { resolvePaperSize } from "~/lib/paper-sizes";
@@ -229,7 +247,8 @@
 		commit: [now?: boolean]
 		/** A text box or page number was double-clicked: open its editor. */
 		edit: [id: string]
-		drop: [file: File]
+		/** A file dropped on the page; `slotId`: the empty image slot it landed on, if any. */
+		drop: [file: File, slotId: string | null]
 		scale: [scale: number]
 	}>();
 
@@ -438,6 +457,8 @@
 				ghost: ghostStyle(item, b),
 				item,
 				guide: item.type === "image" && item.guide,
+				slot: item.type === "image" && item.src === null,
+				overlap: overlapWarning(item, props.design, measured.value[item.id]),
 				// A background: raising it over the guides would hide every one of them.
 				coversPage: b.w >= paper.value.widthMm - 0.5 && b.h >= paper.value.heightMm - 0.5,
 				handles: handlesFor(item),
@@ -540,7 +561,11 @@
 	const onDrop = (e: DragEvent) => {
 		dropOver.value = false;
 		const file = e.dataTransfer?.files?.[0];
-		if (file) emit("drop", file);
+		if (!file) return;
+		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		const x = (e.clientX - rect.left) / scale.value;
+		const y = (e.clientY - rect.top) / scale.value;
+		emit("drop", file, slotAt(props.design, props.page, x, y));
 	};
 </script>
 

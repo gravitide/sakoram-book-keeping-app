@@ -13,6 +13,7 @@ import {
 	moveItem,
 	nudgeItem,
 	overlapsSafeArea,
+	overlapWarning,
 	PRINTER_BAND_MM,
 	printerBandRects,
 	pxToMm,
@@ -271,5 +272,25 @@ describe("slotAt", () => {
 
 	it("ignores a slot that isn't drawn on that page", () => {
 		expect(slotAt(design([{ ...pageSlot, pages: "not_first" }]), 1, 100, 100)).toBeNull();
+	});
+});
+
+describe("overlapWarning", () => {
+	const d: PageDesign = { version: 1, paper: "a4", margins: { top: 40, right: 18, bottom: 25, left: 18 }, items: [] };
+
+	it("warns for a printed item over the safe area", () => {
+		expect(overlapWarning(image({ x: 60, y: 100, w: 80, h: 80 }), d)).toBe(true);
+	});
+
+	it("doesn't warn for a guide, a full-page background, or an item outside it", () => {
+		expect(overlapWarning(image({ x: 60, y: 100, w: 80, h: 80, guide: true }), d)).toBe(false);
+		expect(overlapWarning(image({ x: 0, y: 0, w: 210, h: 297 }), d)).toBe(false);
+		expect(overlapWarning(image({ x: 18, y: 10, w: 20, h: 20 }), d)).toBe(false);
+	});
+
+	it("uses a text box's measured height", () => {
+		const t = text({ x: 18, y: 30, w: 100 });
+		expect(overlapWarning(t, d)).toBe(false);
+		expect(overlapWarning(t, d, 15)).toBe(true);
 	});
 });
