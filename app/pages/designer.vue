@@ -156,31 +156,51 @@
 								<UInputNumber :model-value="round1(selected.length)" :min="5" :step="0.5" @update:model-value="setField('length', $event)" />
 							</UFormField>
 						</div>
-						<div class="flex flex-col gap-1.5 mt-3">
-							<UButton block size="sm" class="justify-start" variant="soft" color="neutral" icon="i-lucide-bring-to-front" @click="apply((d) => reorderItem(d, selected!.id, 'forward'))">
-								Bring forward
-							</UButton>
-							<UButton block size="sm" class="justify-start" variant="soft" color="neutral" icon="i-lucide-send-to-back" @click="apply((d) => reorderItem(d, selected!.id, 'backward'))">
-								Send back
-							</UButton>
-							<UButton block size="sm" class="justify-start" variant="soft" color="neutral" icon="i-lucide-copy" @click="duplicateSelected()">
-								Duplicate
-							</UButton>
-							<UButton block size="sm" class="justify-start" variant="soft" color="error" icon="i-lucide-trash-2" @click="deleteSelected">
-								Delete
-							</UButton>
-							<template v-if="selected.type === 'image'">
-								<UButton block size="sm" class="justify-start" variant="soft" icon="i-lucide-replace" @click="replaceInput?.click()">
-									Replace…
+						<!-- Actions, grouped by what they act on: the stacking order, the
+							image's file, then the item itself (copy / remove) as a quiet footer. -->
+						<div class="mt-4 space-y-3">
+							<div>
+								<div id="designer-layer" class="text-[11px] font-medium text-(--ui-text-muted) mb-1">
+									Layer
+								</div>
+								<div class="segmented" role="group" aria-labelledby="designer-layer">
+									<button type="button" title="Bring forward — in front of the item above it" @click="apply((d) => reorderItem(d, selected!.id, 'forward'))">
+										<UIcon name="i-lucide-bring-to-front" class="size-3.5" />
+										Forward
+									</button>
+									<button type="button" title="Send back — behind the item below it" @click="apply((d) => reorderItem(d, selected!.id, 'backward'))">
+										<UIcon name="i-lucide-send-to-back" class="size-3.5" />
+										Back
+									</button>
+								</div>
+							</div>
+							<div v-if="selected.type === 'image'">
+								<div id="designer-image-file" class="text-[11px] font-medium text-(--ui-text-muted) mb-1">
+									Image file
+								</div>
+								<div class="segmented" role="group" aria-labelledby="designer-image-file">
+									<button type="button" title="Swap in a different file, keeping the position and size" @click="replaceInput?.click()">
+										<UIcon name="i-lucide-replace" class="size-3.5" />
+										Replace…
+									</button>
+									<button v-if="selectedFileExt && isRasterArtwork(selectedFileExt)" type="button" title="Keep only part of the image" @click="cropSelected">
+										<UIcon name="i-lucide-crop" class="size-3.5" />
+										Crop…
+									</button>
+								</div>
+							</div>
+							<p v-else class="text-xs text-(--ui-text-muted)">
+								Editing its text and style comes with the next update.
+							</p>
+							<div class="flex items-center justify-between pt-2 border-t border-(--ui-primary)/15">
+								<UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-copy" @click="duplicateSelected()">
+									Duplicate
 								</UButton>
-								<UButton v-if="selectedFileExt && isRasterArtwork(selectedFileExt)" block size="sm" class="justify-start" variant="soft" icon="i-lucide-crop" @click="cropSelected">
-									Crop…
+								<UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" @click="deleteSelected">
+									Delete
 								</UButton>
-							</template>
+							</div>
 						</div>
-						<p v-if="selected.type !== 'image'" class="text-xs text-(--ui-text-muted) mt-3">
-							Editing its text and style comes with the next update.
-						</p>
 					</section>
 					<p v-else class="m-3 rounded-lg border border-dashed border-(--ui-border) p-3 text-xs text-(--ui-text-muted)">
 						Click something on the page to select it. Drag to move it; drag a handle to resize it.
@@ -792,5 +812,39 @@
 <style scoped>
 	.legend-printer-band {
 		background: repeating-linear-gradient(45deg, rgb(239 68 68 / 0.3) 0 2px, transparent 2px 4px);
+	}
+
+	/* One bordered row split into equal segments: the selected item's actions. */
+	.segmented {
+		display: flex;
+		border: 1px solid var(--ui-border-accented);
+		border-radius: calc(var(--ui-radius) * 1.5);
+		background: var(--ui-bg);
+		overflow: hidden;
+	}
+	.segmented > button {
+		flex: 1 1 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.375rem;
+		padding: 0.375rem 0.5rem;
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--ui-text);
+		transition: background-color 120ms ease-out;
+	}
+	.segmented > button + button {
+		border-left: 1px solid var(--ui-border-accented);
+	}
+	.segmented > button:hover {
+		background: var(--ui-bg-elevated);
+	}
+	.segmented > button:active {
+		background: var(--ui-bg-accented);
+	}
+	.segmented > button:focus-visible {
+		outline: 2px solid var(--ui-primary);
+		outline-offset: -2px;
 	}
 </style>
