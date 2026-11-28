@@ -103,12 +103,16 @@
 					v-for="box in boxes"
 					:key="box.item.id"
 					role="group"
-					tabindex="0"
+					:tabindex="box.slot ? -1 : 0"
 					:aria-label="box.label"
 					class="group absolute outline-none touch-none cursor-move"
 					:class="[
 						box.item.id === selectedId ? `${box.coversPage ? 'z-20' : 'z-[35]'} ring-2 ring-(--ui-primary)` : 'z-10 ring-1 ring-transparent hover:ring-(--ui-primary)/60 focus-visible:ring-(--ui-primary)',
-						box.guide ? 'bg-(--ui-primary)/5' : ''
+						box.guide && !box.slot ? 'bg-(--ui-primary)/5' : '',
+						// An empty slot (a template's place for a background or scan) is
+						// invisible and never takes the pointer: clicks reach the page and
+						// what's on it. A file dropped there is offered to fill it.
+						box.slot ? 'pointer-events-none' : ''
 					]"
 					:style="box.style"
 					@pointerdown="onItemPointerDown(box.item.id, 'move', $event)"
@@ -125,16 +129,8 @@
 						class="absolute inset-0 overflow-hidden pointer-events-none"
 						:style="box.ghost"
 					/>
-					<!-- An empty image slot: prints nothing, invites a file. -->
-					<div
-						v-if="box.slot"
-						class="absolute inset-0 flex flex-col items-center justify-center gap-1 border border-dashed border-zinc-400 text-zinc-500 pointer-events-none"
-					>
-						<UIcon name="i-lucide-image-plus" class="size-5" />
-						<span class="text-xs font-medium">{{ box.guide ? "Drop a scan of your paper" : "Drop an image" }}</span>
-					</div>
 					<span
-						v-if="box.guide"
+						v-if="box.guide && !box.slot"
 						class="absolute top-1 left-1 rounded bg-(--ui-primary) px-1 text-[9px] font-medium text-white pointer-events-none"
 					>Guide · not printed</span>
 					<!-- Over the safe area: allowed (watermarks), but said. A press on it

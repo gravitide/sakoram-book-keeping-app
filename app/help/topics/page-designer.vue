@@ -47,8 +47,9 @@
 				<li><strong>Line</strong>: a horizontal or vertical rule, with a thickness and a colour.</li>
 			</ul>
 			<p>
-				You can also drop a file straight onto the page: Sakoram asks whether it's an image or a background. Drop it on an
-				empty slot (the dashed "Drop an image" boxes some templates have) and it fills that slot.
+				You can also drop a file straight onto the page: Sakoram asks whether it's an image or a background. On the
+				Full-page background and Pre-printed paper templates it also offers to put the file in the template's place for
+				it: the background, or the scan of your paper.
 			</p>
 			<p>Use <strong>Insert field</strong> above a text box's text to add a company field:</p>
 			<div class="overflow-x-auto rounded-lg border border-(--ui-border) bg-(--ui-bg)">

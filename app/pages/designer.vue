@@ -493,7 +493,7 @@
 						<UIcon name="i-lucide-square-dashed" class="size-5 text-(--ui-primary)" />
 						<span class="text-sm font-medium">{{ pendingDropSlotIsGuide ? "The scan of your paper" : "Fill the empty slot" }}</span>
 						<span class="text-xs text-(--ui-text-muted)">
-							{{ pendingDropSlotIsGuide ? "Goes in the dashed slot: shown here to line things up against, never printed." : "Goes in the dashed slot, keeping its place and size." }}
+							{{ pendingDropSlotIsGuide ? "Goes in the template's place for it: shown here to line things up against, never printed." : "Goes in the template's place for it, covering the page." }}
 						</span>
 					</button>
 					<button type="button" class="flex flex-col items-start gap-1 rounded-md border border-(--ui-border) p-3 text-left transition hover:border-(--ui-primary)" @click="addDropped('image')">
