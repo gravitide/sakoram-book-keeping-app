@@ -123,6 +123,8 @@ export function duplicateItem(design: PageDesign, id: string, newId: string): Pa
 	const at = design.items.findIndex((i) => i.id === id);
 	if (at < 0) return design;
 	const original = design.items[at]!;
+	// A design has one page number (it shows on every page).
+	if (original.type === "page_number") return design;
 	const copy = clampItem({ ...original, id: newId, x: original.x + DUPLICATE_OFFSET_MM, y: original.y + DUPLICATE_OFFSET_MM } as DesignItem, design);
 	return { ...design, items: [...design.items.slice(0, at + 1), copy, ...design.items.slice(at + 1)] };
 }

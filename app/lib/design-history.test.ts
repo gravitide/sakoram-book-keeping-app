@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { afterSave, canRedo, canUndo, HISTORY_LIMIT, record, redo, startHistory, undo } from "./design-history";
+import { afterSave, canRedo, canUndo, HISTORY_LIMIT, historyAfterSave, record, redo, startHistory, undo } from "./design-history";
 
 describe("design history", () => {
 	it("undoes and redoes a change", () => {
@@ -65,5 +65,22 @@ describe("record with a merge key", () => {
 		expect(h.past).toEqual(["a", "ab", "abY", "abYZ"]);
 		const u = record(undo(h), "q", { merge: "text:y" });
 		expect(u.past).toEqual(["a", "ab", "abY", "abYZ"]);
+	});
+});
+
+describe("historyAfterSave", () => {
+	it("starts afresh on the saved draft when nothing changed during the save", () => {
+		const h = record(startHistory("a"), "ab");
+		const after = historyAfterSave(h, "ab", "ab+logo");
+		expect(after.present).toBe("ab+logo");
+		expect(canUndo(after)).toBe(false);
+	});
+
+	it("keeps what was typed while the save ran", () => {
+		const during = record(record(startHistory("a"), "ab"), "abc", { merge: "text:x" });
+		const after = historyAfterSave(during, "ab", "ab+logo");
+		expect(after.present).toBe("abc");
+		expect(canUndo(after)).toBe(false);
+		expect(after.merge).toBeUndefined();
 	});
 });

@@ -175,7 +175,7 @@
 							<div>
 								<div class="flex items-center justify-between mb-1">
 									<span id="designer-text-label" class="text-[11px] font-medium text-(--ui-text-muted)">Text</span>
-									<UDropdownMenu :items="fieldItems" :content="{ align: 'end' }">
+									<UDropdownMenu :items="fieldItems" :content="{ align: 'end', onCloseAutoFocus: onFieldMenuClosed }">
 										<UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-braces" trailing-icon="i-lucide-chevron-down">
 											Insert field
 										</UButton>
@@ -501,12 +501,13 @@
 	import { useTemplatePreviews } from "~/composables/useTemplatePreviews";
 	import { itemAssetKind, readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
 	import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, hasPageNumber, reorderItem, replaceImage, setLineVertical, setMargins, updateItem } from "~/lib/design-draft";
-	import { afterSave, canRedo, canUndo, record, redo, startHistory, undo } from "~/lib/design-history";
+	import { canRedo, canUndo, historyAfterSave, record, redo, startHistory, undo } from "~/lib/design-history";
 	import { DESIGN_TEMPLATES } from "~/lib/design-templates";
 	import { ACTUAL_ZOOM_LEVELS, clampItem, CSS_PX_PER_MM, setMarginValue, stepActualZoom, zoomForActual } from "~/lib/designer-geometry";
 	import { designerShortcutsAllowed } from "~/lib/designer-keys";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
 	import { DESIGN_FONTS, newItemId, parsePageDesign, scaleDesign } from "~/lib/page-design";
+	import { insertToken } from "~/lib/page-design-text";
 	import { effectiveDesign, PAPER_SIZES, resolvePaperSize } from "~/lib/page-settings";
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
 	import { PDF_TOKENS, tokenValuesFromSettings } from "~/lib/pdf-tokens";
@@ -607,7 +608,7 @@
 	};
 	const duplicateSelected = async () => {
 		const original = selected.value;
-		if (!original) return;
+		if (!original || original.type === "page_number") return;
 		const id = newItemId();
 		// Item ids name the image files: a copied image needs its own file.
 		const copy = fileCopyForDuplicate(original, id);
@@ -851,20 +852,28 @@
 		{ value: "number", label: "1" }
 	];
 
+	// The menu hands focus back to its button after it closes (a moment after
+	// the item's onSelect), where Backspace would delete the whole text box:
+	// after an insert, put the caret back in the text, after the field.
+	let fieldCaret: number | null = null;
 	// Insert field: the token goes in at the caret (or over the selection).
 	const insertField = (token: string) => {
 		const item = selected.value;
 		if (!item || item.type !== "text") return;
 		const ta = textArea();
 		const start = ta?.selectionStart ?? item.text.length;
-		const end = ta?.selectionEnd ?? start;
-		const text = item.text.slice(0, start) + token + item.text.slice(end);
+		const { text, caret } = insertToken(item.text, start, ta?.selectionEnd ?? start, token);
 		changeSelected((i) => (i.type === "text" ? { ...i, text } : i));
-		void nextTick(() => {
-			const el = textArea();
-			el?.focus();
-			el?.setSelectionRange(start + token.length, start + token.length);
-		});
+		fieldCaret = caret;
+	};
+	const onFieldMenuClosed = (e: Event) => {
+		if (fieldCaret === null) return;
+		e.preventDefault();
+		const caret = fieldCaret;
+		fieldCaret = null;
+		const el = textArea();
+		el?.focus();
+		el?.setSelectionRange(caret, caret);
 	};
 	const fieldItems = PDF_TOKENS.map((t) => ({ label: t.label, onSelect: () => insertField(t.token) }));
 
@@ -893,11 +902,12 @@
 
 	const save = async (): Promise<boolean> => {
 		saving.value = true;
+		const started = draft.value;
 		try {
 			// A never-chosen design still points at the company logo: copy it in
 			// now, as a template would (spec: a copy, not a link).
-			const filled = await pageDesign.fillLogoSpots(draft.value.design);
-			const final: Draft = { ...draft.value, design: filled.design };
+			const filled = await pageDesign.fillLogoSpots(started.design);
+			const final: Draft = { ...started, design: filled.design };
 			await settings.save({
 				pdf_design: JSON.stringify(final.design),
 				pdf_paper_size: final.design.paper,
@@ -910,7 +920,8 @@
 			uploaded.value = [];
 			baseline.value = final;
 			// A fresh history: the files this save deleted can't be undone back.
-			history.value = afterSave(final);
+			// Anything typed while the save ran is kept (it shows as unsaved).
+			history.value = historyAfterSave(history.value, started, final);
 			if ("__TAURI_INTERNALS__" in window) {
 				const { emitTo } = await import("@tauri-apps/api/event");
 				await emitTo("main", "page-design:saved").catch(() => { /* main may be closing */ });

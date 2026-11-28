@@ -155,3 +155,11 @@ describe("setLineVertical", () => {
 		expect(d.items[0]).toMatchObject({ vertical: false, x: 18, y: 40 });
 	});
 });
+
+describe("duplicateItem on a page number", () => {
+	it("refuses: a design has one page number (Ctrl+D included)", () => {
+		const pn: DesignItem = { type: "page_number", id: "pagenum00001", x: 152, y: 288, w: 40, pages: "every", format: "page_of_total", hide_single: true, style: { font: "Akt", size: 7, bold: false, italic: false, color: "#6b7280", align: "right" } };
+		const d = withItems(pn);
+		expect(duplicateItem(d, "pagenum00001", "pagenum00002")).toBe(d);
+	});
+});

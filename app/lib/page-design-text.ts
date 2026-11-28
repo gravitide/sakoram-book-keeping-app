@@ -53,6 +53,11 @@ export function resolveDesignLines(text: string, values: Record<string, string>,
 	return lines;
 }
 
+/** `token` typed into `text` over the selection [start, end); the caret goes right after it. */
+export function insertToken(text: string, start: number, end: number, token: string): { text: string, caret: number } {
+	return { text: text.slice(0, start) + token + text.slice(end), caret: start + token.length };
+}
+
 /** The lines a text box prints, given the business's field values (tokenValuesFromSettings). */
 export function resolveDesignText(text: string, values: Record<string, string>): string[] {
 	return resolveDesignLines(text, values).map((l) => l.text);

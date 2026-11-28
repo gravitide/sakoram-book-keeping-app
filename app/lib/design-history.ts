@@ -33,6 +33,17 @@ export function record<T>(h: History<T>, next: T, opts?: { merge?: string }): Hi
 	return { past: past.slice(Math.max(0, past.length - HISTORY_LIMIT)), present: next, future: [], merge };
 }
 
+/**
+ * The history once a Save has written `final` (the draft as it was when the
+ * save started, `saved`, with its logo spots filled). A fresh one, as
+ * afterSave — but when the user kept editing while the save ran (typing, with
+ * Ctrl+S in the text editor), what they typed is kept, not replaced.
+ */
+export function historyAfterSave<T>(h: History<T>, saved: T, final: T): History<T> {
+	if (JSON.stringify(h.present) === JSON.stringify(saved)) return afterSave(final);
+	return startHistory(h.present);
+}
+
 export function undo<T>(h: History<T>): History<T> {
 	if (h.past.length === 0) return h;
 	return { past: h.past.slice(0, -1), present: h.past[h.past.length - 1]!, future: [h.present, ...h.future] };
