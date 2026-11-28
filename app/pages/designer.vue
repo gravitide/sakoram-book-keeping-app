@@ -40,6 +40,7 @@
 				Preview as PDF
 			</UButton>
 			<div class="flex-1" />
+			<HelpButton slug="page-designer" size="sm" />
 			<span v-if="dirty" class="flex items-center gap-1.5 text-xs text-(--ui-text-muted)">
 				<span class="size-1.5 rounded-full bg-(--ui-warning)" aria-hidden="true" /> Unsaved changes
 			</span>
