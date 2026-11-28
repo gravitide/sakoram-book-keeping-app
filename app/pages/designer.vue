@@ -10,6 +10,16 @@
 				Fit
 			</UButton>
 			<UButton icon="i-lucide-zoom-in" variant="ghost" color="neutral" size="sm" aria-label="Zoom in" @click="zoom = stepZoom(zoom, 1)" />
+			<UButton
+				icon="i-lucide-hand"
+				size="sm"
+				:variant="handTool ? 'soft' : 'ghost'"
+				:color="handTool ? 'primary' : 'neutral'"
+				:aria-pressed="handTool"
+				aria-label="Hand tool"
+				title="Hand tool (H) — drag to move around the page. Or hold Space."
+				@click="handTool = !handTool"
+			/>
 			<span class="text-xs text-(--ui-text-muted) tabular-nums w-28">{{ actualSizePercent }}% of actual size</span>
 			<USeparator orientation="vertical" class="h-6 mx-1" />
 			<div class="flex rounded-md ring-1 ring-(--ui-border) overflow-hidden" role="group" aria-label="Page shown">
@@ -50,6 +60,7 @@
 					:error="preview.error.value"
 					:page="page"
 					:zoom="zoom"
+					:pan="handTool"
 					@select="selectedId = $event"
 					@change="live = $event"
 					@commit="commitLive"
@@ -582,6 +593,8 @@
 	// ---- preview ----------------------------------------------------------------------
 	const page = ref<1 | 2>(1);
 	const zoom = ref(1);
+	/** The hand tool: dragging pans the view (PageDesignerCanvas). */
+	const handTool = ref(false);
 	const scale = ref(CSS_PX_PER_MM);
 	const actualSizePercent = computed(() => Math.round((scale.value / CSS_PX_PER_MM) * 100));
 
@@ -745,6 +758,10 @@
 				e.preventDefault();
 				deleteSelected();
 			}
+		} else if (!mod && key === "h") {
+			handTool.value = !handTool.value;
+		} else if (!mod && key === "v") {
+			handTool.value = false;
 		} else if (e.key === "Escape") {
 			selectedId.value = null;
 		}

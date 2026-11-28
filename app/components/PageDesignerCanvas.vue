@@ -6,10 +6,17 @@
 	<div
 		ref="viewportEl"
 		class="relative flex h-full min-h-0 min-w-0 overflow-auto bg-(--ui-bg-elevated)"
+		:class="panning ? (panDrag ? 'cursor-grabbing' : 'cursor-grab') : ''"
+		@pointerdown.capture="onPanStart"
+		@pointermove="onPanMove"
+		@pointerup="onPanEnd"
+		@pointercancel="onPanEnd"
 		@pointerdown.self="emit('select', null)"
 	>
+		<!-- While panning, nothing on the page takes the pointer: a drag anywhere moves the view. -->
 		<div
 			class="grid m-auto shrink-0"
+			:class="panning ? 'pointer-events-none' : ''"
 			:style="{
 				gridTemplateColumns: `${RULER_PX}px ${pagePx.w}px`,
 				gridTemplateRows: `${RULER_PX}px ${pagePx.h}px`,
@@ -175,6 +182,8 @@
 		page: 1 | 2
 		/** Relative to "fit the page in the window" (designer-geometry ZOOM_LEVELS). */
 		zoom: number
+		/** The hand tool: a drag pans the view instead of selecting or moving. */
+		pan?: boolean
 	}>();
 	const emit = defineEmits<{
 		select: [id: string | null]
@@ -223,6 +232,54 @@
 		observer.observe(el);
 	});
 	onBeforeUnmount(() => observer?.disconnect());
+
+	// ---- panning ------------------------------------------------------------------
+	// The hand tool (the toolbar's toggle, H), Space held down, or a middle-button
+	// drag: the view follows the pointer, like grabbing the paper.
+	const spaceHeld = ref(false);
+	const panning = computed(() => props.pan || spaceHeld.value);
+	const panDrag = ref<{ x: number, y: number, left: number, top: number } | null>(null);
+	const isTyping = (t: EventTarget | null) => {
+		const el = t as HTMLElement | null;
+		return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable || !!el.closest?.("[role=dialog]"));
+	};
+	const onSpace = (e: KeyboardEvent) => {
+		if (e.code !== "Space" || isTyping(e.target)) return;
+		e.preventDefault(); // no page scroll / button press while held
+		spaceHeld.value = e.type === "keydown";
+	};
+	const onBlur = () => {
+		spaceHeld.value = false;
+	};
+	onMounted(() => {
+		window.addEventListener("keydown", onSpace);
+		window.addEventListener("keyup", onSpace);
+		window.addEventListener("blur", onBlur);
+	});
+	onBeforeUnmount(() => {
+		window.removeEventListener("keydown", onSpace);
+		window.removeEventListener("keyup", onSpace);
+		window.removeEventListener("blur", onBlur);
+	});
+
+	const onPanStart = (e: PointerEvent) => {
+		const el = viewportEl.value;
+		if (!el || !(e.button === 1 || (e.button === 0 && panning.value))) return;
+		e.preventDefault();
+		e.stopPropagation(); // the page's items never see this press
+		el.setPointerCapture(e.pointerId);
+		panDrag.value = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop };
+	};
+	const onPanMove = (e: PointerEvent) => {
+		const el = viewportEl.value;
+		const d = panDrag.value;
+		if (!el || !d) return;
+		el.scrollLeft = d.left - (e.clientX - d.x);
+		el.scrollTop = d.top - (e.clientY - d.y);
+	};
+	const onPanEnd = () => {
+		panDrag.value = null;
+	};
 
 	const paper = computed(() => resolvePaperSize(props.design.paper));
 	const scale = computed(() => fitScale(paper.value, viewport.value, GUTTER_PX + RULER_PX) * props.zoom);
