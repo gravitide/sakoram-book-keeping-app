@@ -39,7 +39,7 @@
 
 			<!-- The page: white in both themes, it previews the paper. -->
 			<div
-				class="relative bg-white shadow-lg ring-1 ring-black/10 select-none"
+				class="relative isolate bg-white shadow-lg ring-1 ring-black/10 select-none"
 				:class="dropOver ? 'ring-2 ring-(--ui-primary)' : ''"
 				:style="{ width: `${pagePx.w}px`, height: `${pagePx.h}px` }"
 				@pointerdown.self="emit('select', null)"
@@ -95,7 +95,10 @@
 					:style="safeAreaStyle"
 				/>
 
-				<!-- Items: click to select, drag to move, handles to resize, arrows to nudge. -->
+				<!-- Items: click to select, drag to move, handles to resize, arrows to nudge.
+					The selected one sits above the safe-area guides (z-30), so it can
+					always be dragged even where a guide crosses it; the others sit
+					below, so a full-page background never blocks the guides (not even selected). -->
 				<div
 					v-for="box in boxes"
 					:key="box.item.id"
@@ -104,7 +107,7 @@
 					:aria-label="box.label"
 					class="group absolute outline-none touch-none cursor-move"
 					:class="[
-						box.item.id === selectedId ? 'z-20 ring-2 ring-(--ui-primary)' : 'z-10 ring-1 ring-transparent hover:ring-(--ui-primary)/60 focus-visible:ring-(--ui-primary)',
+						box.item.id === selectedId ? `${box.coversPage ? 'z-20' : 'z-[35]'} ring-2 ring-(--ui-primary)` : 'z-10 ring-1 ring-transparent hover:ring-(--ui-primary)/60 focus-visible:ring-(--ui-primary)',
 						box.guide ? 'bg-(--ui-primary)/5' : ''
 					]"
 					:style="box.style"
@@ -435,6 +438,8 @@
 				ghost: ghostStyle(item, b),
 				item,
 				guide: item.type === "image" && item.guide,
+				// A background: raising it over the guides would hide every one of them.
+				coversPage: b.w >= paper.value.widthMm - 0.5 && b.h >= paper.value.heightMm - 0.5,
 				handles: handlesFor(item),
 				size: sizeLabel(item),
 				label: `${KIND_LABEL[item.type]}, ${sizeLabel(item)}, ${formatMm(item.x)} mm from the left, ${formatMm(item.y)} mm from the top`,

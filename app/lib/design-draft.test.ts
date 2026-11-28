@@ -10,10 +10,10 @@ const rule: DesignItem = { type: "line", id: "rule00000001", x: 18, y: 40, lengt
 const withItems = (...items: DesignItem[]): PageDesign => ({ ...blank, items });
 
 describe("addImage", () => {
-	it("places a new image 60 mm wide, centred across the safe area at its top, on top of everything", () => {
+	it("places a new image 60 mm wide, centred across the safe area 10 mm below its top (off the guide), on top of everything", () => {
 		const d = addImage(withItems(rule), "newimage0001", "svg", 2);
 		expect(d.items).toHaveLength(2);
-		expect(d.items[1]).toEqual({ type: "image", id: "newimage0001", x: 75, y: 20, w: 60, h: 30, pages: "every", src: { kind: "file", ext: "svg" }, guide: false });
+		expect(d.items[1]).toEqual({ type: "image", id: "newimage0001", x: 75, y: 30, w: 60, h: 30, pages: "every", src: { kind: "file", ext: "svg" }, guide: false });
 	});
 
 	it("never makes it wider than the safe area", () => {
@@ -110,16 +110,16 @@ describe("addBackground", () => {
 describe("adding text, a page number and lines", () => {
 	const page: PageDesign = { ...blank, margins: { top: 40, right: 18, bottom: 25, left: 18 } };
 
-	it("adds a text box at the top-left of the safe area, 80 mm wide, in the given font", () => {
+	it("adds a text box 10 mm inside the safe area's top-left (off the guides), 80 mm wide, in the given font", () => {
 		const d = addText(page, "newtext00001", "Inter");
 		expect(d.items).toHaveLength(1);
-		expect(d.items[0]).toMatchObject({ type: "text", id: "newtext00001", x: 18, y: 40, w: 80, pages: "every", text: NEW_TEXT, style: { font: "Inter", size: 10, bold: false, italic: false, align: "left" } });
+		expect(d.items[0]).toMatchObject({ type: "text", id: "newtext00001", x: 28, y: 50, w: 80, pages: "every", text: NEW_TEXT, style: { font: "Inter", size: 10, bold: false, italic: false, align: "left" } });
 		expect(NEW_TEXT).toBe("New text");
 	});
 
 	it("cascades a second new item 5 mm down and right instead of stacking it", () => {
 		const d = addText(addText(page, "newtext00001", "Akt"), "newtext00002", "Akt");
-		expect(d.items[1]).toMatchObject({ x: 23, y: 45 });
+		expect(d.items[1]).toMatchObject({ x: 33, y: 55 });
 	});
 
 	it("adds a page number at the bottom right, below the safe area", () => {
@@ -134,9 +134,9 @@ describe("adding text, a page number and lines", () => {
 		expect(addPageNumber(once, "pagenum00002", "Akt")).toBe(once);
 	});
 
-	it("adds an accent line across the safe area at its top", () => {
+	it("adds an accent line across the safe area, 10 mm below its top (off the guide)", () => {
 		const d = addLine(page, "newline00001");
-		expect(d.items[0]).toEqual({ type: "line", id: "newline00001", x: 18, y: 40, length: 174, vertical: false, thickness: 0.75, color: "accent", pages: "every" });
+		expect(d.items[0]).toEqual({ type: "line", id: "newline00001", x: 18, y: 50, length: 174, vertical: false, thickness: 0.75, color: "accent", pages: "every" });
 	});
 });
 

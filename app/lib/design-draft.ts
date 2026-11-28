@@ -16,6 +16,11 @@ import { resolvePaperSize } from "./paper-sizes";
 
 /** A newly added image's width, unless the safe area is narrower. */
 const NEW_IMAGE_MM = 60;
+/**
+ * How far inside the safe area a new item lands: never on a margin guide,
+ * whose grab strip would take the drag instead of the item.
+ */
+const NEW_ITEM_INSET_MM = 10;
 /** How far a duplicate is offset from its original. */
 const DUPLICATE_OFFSET_MM = 5;
 /** A new text box's width, unless the safe area is narrower. */
@@ -42,10 +47,10 @@ function freeSpot(design: PageDesign, x: number, y: number): { x: number, y: num
 
 const append = (design: PageDesign, item: DesignItem): PageDesign => ({ ...design, items: [...design.items, clampItem(item, design)] });
 
-/** A new text box at the top-left of the safe area, on top, saying NEW_TEXT in `font`. */
+/** A new text box just inside the safe area's top-left, on top, saying NEW_TEXT in `font`. */
 export function addText(design: PageDesign, id: string, font: DesignFont): PageDesign {
 	const safe = safeArea(design);
-	const at = freeSpot(design, safe.x, safe.y);
+	const at = freeSpot(design, safe.x + NEW_ITEM_INSET_MM, safe.y + NEW_ITEM_INSET_MM);
 	return append(design, { type: "text", id, ...at, w: Math.min(NEW_TEXT_MM, safe.w), pages: "every", text: NEW_TEXT, style: textStyle(10, INK, "left", false, font) });
 }
 
@@ -62,10 +67,10 @@ export function addPageNumber(design: PageDesign, id: string, font: DesignFont):
 	return append(design, { type: "page_number", id, ...at, w: PAGE_NUMBER_W_MM, pages: "every", format: "page_of_total", hide_single: true, style: textStyle(7, MUTED, "right", false, font) });
 }
 
-/** A thin Accent line across the safe area at its top. */
+/** A thin Accent line across the safe area, just inside its top. */
 export function addLine(design: PageDesign, id: string): PageDesign {
 	const safe = safeArea(design);
-	const at = freeSpot(design, safe.x, safe.y);
+	const at = freeSpot(design, safe.x, safe.y + NEW_ITEM_INSET_MM);
 	return append(design, { type: "line", id, ...at, length: safe.w, vertical: false, thickness: 0.75, color: "accent", pages: "every" });
 }
 
@@ -82,13 +87,13 @@ export function setLineVertical(design: PageDesign, id: string, vertical: boolea
 	};
 }
 
-/** A new image (file `item-<id>.<ext>`, proportions `aspect` = w / h), centred across the safe area at its top, drawn on top. */
+/** A new image (file `item-<id>.<ext>`, proportions `aspect` = w / h), centred across the safe area just inside its top, drawn on top. */
 export function addImage(design: PageDesign, id: string, ext: ImageExt, aspect: number): PageDesign {
 	const { widthMm } = resolvePaperSize(design.paper);
 	const { left, right, top } = design.margins;
 	const safeW = widthMm - left - right;
 	const w = Math.min(NEW_IMAGE_MM, safeW);
-	const item: DesignItem = { type: "image", id, x: left + (safeW - w) / 2, y: top, w, h: w / aspect, pages: "every", src: { kind: "file", ext }, guide: false };
+	const item: DesignItem = { type: "image", id, x: left + (safeW - w) / 2, y: top + NEW_ITEM_INSET_MM, w, h: w / aspect, pages: "every", src: { kind: "file", ext }, guide: false };
 	return { ...design, items: [...design.items, item] };
 }
 
