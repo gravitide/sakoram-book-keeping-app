@@ -43,6 +43,14 @@ export const THEME_COLORS: ReadonlyArray<{ value: ThemeColor, label: string, hex
  * Exported because the settings page needs the same rule to decide whether
  * the custom-colour row is the active selection.
  */
+/**
+ * The CSS font stack for the app's UI font (company_settings.ui_font): the
+ * chosen font, then the bundled Akt and Inter (always there), then the
+ * system's. Akt when none is chosen.
+ */
+export const uiFontStack = (font: string | null | undefined): string =>
+	`'${font?.trim() || "Akt"}', 'Akt', 'Inter', system-ui, sans-serif`;
+
 export const isHexColor = (v: string | null | undefined): boolean =>
 	typeof v === "string" && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(v.trim());
 
