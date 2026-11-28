@@ -102,11 +102,11 @@
 							</div>
 						</template>
 					</UPopover>
-					<div class="grid grid-cols-2 gap-2">
-						<UButton block variant="soft" icon="i-lucide-image-plus" @click="pickFile('image')">
+					<div class="flex flex-col gap-2">
+						<UButton block variant="soft" class="justify-start" icon="i-lucide-image-plus" @click="pickFile('image')">
 							Add image
 						</UButton>
-						<UButton block variant="soft" icon="i-lucide-wallpaper" @click="pickFile('background')">
+						<UButton block variant="soft" class="justify-start" icon="i-lucide-wallpaper" @click="pickFile('background')">
 							Add background
 						</UButton>
 					</div>
@@ -144,24 +144,24 @@
 								<UInputNumber :model-value="round1(selected.length)" :min="5" :step="0.5" @update:model-value="setField('length', $event)" />
 							</UFormField>
 						</div>
-						<div class="grid grid-cols-2 gap-1.5 mt-3">
-							<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-bring-to-front" @click="apply((d) => reorderItem(d, selected!.id, 'forward'))">
+						<div class="flex flex-col gap-1.5 mt-3">
+							<UButton block size="sm" class="justify-start" variant="soft" color="neutral" icon="i-lucide-bring-to-front" @click="apply((d) => reorderItem(d, selected!.id, 'forward'))">
 								Bring forward
 							</UButton>
-							<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-send-to-back" @click="apply((d) => reorderItem(d, selected!.id, 'backward'))">
+							<UButton block size="sm" class="justify-start" variant="soft" color="neutral" icon="i-lucide-send-to-back" @click="apply((d) => reorderItem(d, selected!.id, 'backward'))">
 								Send back
 							</UButton>
-							<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-copy" @click="duplicateSelected()">
+							<UButton block size="sm" class="justify-start" variant="soft" color="neutral" icon="i-lucide-copy" @click="duplicateSelected()">
 								Duplicate
 							</UButton>
-							<UButton size="xs" variant="soft" color="error" icon="i-lucide-trash-2" @click="deleteSelected">
+							<UButton block size="sm" class="justify-start" variant="soft" color="error" icon="i-lucide-trash-2" @click="deleteSelected">
 								Delete
 							</UButton>
 							<template v-if="selected.type === 'image'">
-								<UButton size="xs" variant="soft" icon="i-lucide-replace" @click="replaceInput?.click()">
+								<UButton block size="sm" class="justify-start" variant="soft" icon="i-lucide-replace" @click="replaceInput?.click()">
 									Replace…
 								</UButton>
-								<UButton v-if="selectedFileExt && isRasterArtwork(selectedFileExt)" size="xs" variant="soft" icon="i-lucide-crop" @click="cropSelected">
+								<UButton v-if="selectedFileExt && isRasterArtwork(selectedFileExt)" block size="sm" class="justify-start" variant="soft" icon="i-lucide-crop" @click="cropSelected">
 									Crop…
 								</UButton>
 							</template>
