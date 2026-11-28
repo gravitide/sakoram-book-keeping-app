@@ -5,11 +5,13 @@
 			<UButton icon="i-lucide-undo-2" variant="ghost" color="neutral" size="sm" :disabled="!canUndo(history)" aria-label="Undo" title="Undo (Ctrl+Z)" @click="doUndo" />
 			<UButton icon="i-lucide-redo-2" variant="ghost" color="neutral" size="sm" :disabled="!canRedo(history)" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" @click="doRedo" />
 			<USeparator orientation="vertical" class="h-6 mx-1" />
-			<UButton icon="i-lucide-zoom-out" variant="ghost" color="neutral" size="sm" aria-label="Zoom out" @click="zoom = stepZoom(zoom, -1)" />
-			<UButton variant="ghost" color="neutral" size="sm" @click="zoom = 1">
-				Fit
-			</UButton>
-			<UButton icon="i-lucide-zoom-in" variant="ghost" color="neutral" size="sm" aria-label="Zoom in" @click="zoom = stepZoom(zoom, 1)" />
+			<UButton icon="i-lucide-zoom-out" variant="ghost" color="neutral" size="sm" aria-label="Zoom out" @click="zoomTo(stepActualZoom(actualSize, -1))" />
+			<UDropdownMenu :items="zoomItems" :content="{ align: 'start' }">
+				<UButton variant="ghost" color="neutral" size="sm" trailing-icon="i-lucide-chevron-down" class="tabular-nums w-24 justify-between" aria-label="Zoom level">
+					{{ actualSizePercent }}%
+				</UButton>
+			</UDropdownMenu>
+			<UButton icon="i-lucide-zoom-in" variant="ghost" color="neutral" size="sm" aria-label="Zoom in" @click="zoomTo(stepActualZoom(actualSize, 1))" />
 			<UButton
 				icon="i-lucide-hand"
 				size="sm"
@@ -20,7 +22,6 @@
 				title="Hand tool (H) — drag to move around the page. Or hold Space."
 				@click="handTool = !handTool"
 			/>
-			<span class="text-xs text-(--ui-text-muted) tabular-nums w-28">{{ actualSizePercent }}% of actual size</span>
 			<USeparator orientation="vertical" class="h-6 mx-1" />
 			<div class="flex rounded-md ring-1 ring-(--ui-border) overflow-hidden" role="group" aria-label="Page shown">
 				<button
@@ -380,7 +381,7 @@
 	import { addBackground, addImage, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, reorderItem, replaceImage, setMargins, updateItem } from "~/lib/design-draft";
 	import { afterSave, canRedo, canUndo, record, redo, startHistory, undo } from "~/lib/design-history";
 	import { DESIGN_TEMPLATES } from "~/lib/design-templates";
-	import { clampItem, CSS_PX_PER_MM, setMarginValue, stepZoom } from "~/lib/designer-geometry";
+	import { ACTUAL_ZOOM_LEVELS, clampItem, CSS_PX_PER_MM, setMarginValue, stepActualZoom, zoomForActual } from "~/lib/designer-geometry";
 	import { designerShortcutsAllowed } from "~/lib/designer-keys";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
 	import { newItemId, parsePageDesign, scaleDesign } from "~/lib/page-design";
@@ -596,7 +597,22 @@
 	/** The hand tool: dragging pans the view (PageDesignerCanvas). */
 	const handTool = ref(false);
 	const scale = ref(CSS_PX_PER_MM);
-	const actualSizePercent = computed(() => Math.round((scale.value / CSS_PX_PER_MM) * 100));
+	/** The page shown as a fraction of actual size (1 = 100 %). */
+	const actualSize = computed(() => scale.value / CSS_PX_PER_MM);
+	const actualSizePercent = computed(() => Math.round(actualSize.value * 100));
+	// The canvas zooms relative to "fit"; its px-per-mm at fit is scale / zoom.
+	const zoomTo = (actual: number) => {
+		zoom.value = zoomForActual(actual, scale.value / zoom.value);
+	};
+	const zoomItems = computed(() => [
+		[{ label: "Fit page", icon: "i-lucide-maximize", onSelect: () => {
+			zoom.value = 1;
+		} }],
+		ACTUAL_ZOOM_LEVELS.map((level) => ({
+			label: `${Math.round(level * 100)}%${level === 1 ? " (actual size)" : ""}`,
+			onSelect: () => zoomTo(level)
+		}))
+	]);
 
 	const draftSettings = computed(() => (settings.settings
 		? {

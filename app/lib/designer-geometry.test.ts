@@ -1,6 +1,7 @@
 import type { DesignItem, PageDesign } from "./page-design";
 import { describe, expect, it } from "vitest";
 import {
+	ACTUAL_ZOOM_LEVELS,
 	clampItem,
 	CSS_PX_PER_MM,
 	dragMargin,
@@ -19,7 +20,9 @@ import {
 	setMarginValue,
 	snapTargets,
 	snapValue,
-	stepZoom
+	stepActualZoom,
+	stepZoom,
+	zoomForActual
 } from "./designer-geometry";
 
 const A4 = { widthMm: 210, heightMm: 297 };
@@ -209,5 +212,25 @@ describe("printerBandRects", () => {
 			{ x: 0, y: 5, w: 5, h: 287 },
 			{ x: 205, y: 5, w: 5, h: 287 }
 		]);
+	});
+});
+
+describe("actual-size zoom", () => {
+	it("offers the usual percentages, 100 % among them", () => {
+		expect(ACTUAL_ZOOM_LEVELS).toEqual([0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]);
+	});
+
+	it("turns a percentage of actual size into the canvas zoom (relative to fit)", () => {
+		// Fit draws 2 px per mm; 100 % is a CSS mm (96 / 25.4 px).
+		expect(zoomForActual(1, 2) * 2).toBeCloseTo(CSS_PX_PER_MM);
+		expect(zoomForActual(0.5, 2) * 2).toBeCloseTo(CSS_PX_PER_MM / 2);
+	});
+
+	it("steps to the next level from wherever the zoom is now", () => {
+		expect(stepActualZoom(0.87, 1)).toBe(1);
+		expect(stepActualZoom(0.87, -1)).toBe(0.75);
+		expect(stepActualZoom(1, 1)).toBe(1.25);
+		expect(stepActualZoom(4, 1)).toBe(4);
+		expect(stepActualZoom(0.25, -1)).toBe(0.25);
 	});
 });

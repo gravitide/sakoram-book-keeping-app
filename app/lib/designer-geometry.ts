@@ -285,3 +285,19 @@ export function printerBandRects(page: PageDims): MmRect[] {
 		{ x: page.widthMm - b, y: b, w: b, h: page.heightMm - 2 * b }
 	];
 }
+
+// ---- zoom as a percentage of actual size ----------------------------------------
+
+/** The zoom dropdown's levels, as a fraction of actual size (1 = 100 %: a CSS millimetre per mm). */
+export const ACTUAL_ZOOM_LEVELS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4] as const;
+
+/** The canvas zoom (relative to fit) that shows the page at `actual` × actual size, given fit's px per mm. */
+export function zoomForActual(actual: number, fitPxPerMm: number): number {
+	return (actual * CSS_PX_PER_MM) / fitPxPerMm;
+}
+
+/** The next actual-size level up (+1) or down (−1) from `actual`; stays put at either end. */
+export function stepActualZoom(actual: number, direction: 1 | -1): number {
+	const levels = direction > 0 ? ACTUAL_ZOOM_LEVELS : [...ACTUAL_ZOOM_LEVELS].reverse();
+	return levels.find((z) => (direction > 0 ? z > actual + 1e-6 : z < actual - 1e-6)) ?? actual;
+}
