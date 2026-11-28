@@ -431,39 +431,52 @@
 					</section>
 
 					<section class="px-4 py-3 border-t border-(--ui-border)" aria-labelledby="designer-document">
-						<h2 id="designer-document" class="text-sm font-semibold mb-2">
+						<h2 id="designer-document" class="text-sm font-semibold">
 							Document
 						</h2>
-						<div class="text-xs font-medium mb-1.5">
-							Document style
+						<p class="text-xs text-(--ui-text-muted) mt-0.5 mb-3">
+							How the app sets out each document inside the safe area.
+						</p>
+						<!-- The four Document styles as small pages, drawn in the accent
+							colour, so the choice is seen, not read. -->
+						<div id="designer-doc-style" class="text-[11px] font-medium text-(--ui-text-muted) mb-1.5">
+							Style
 						</div>
-						<div class="grid grid-cols-2 gap-1.5" role="group" aria-label="Document style">
+						<div class="grid grid-cols-4 gap-1.5" role="group" aria-labelledby="designer-doc-style">
 							<button
 								v-for="l in PDF_LAYOUTS"
 								:key="l.key"
 								type="button"
 								:title="l.description"
-								class="px-2 py-1.5 rounded-md border text-left text-xs font-medium transition"
-								:class="draft.layout === l.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border) hover:border-(--ui-primary)/50'"
+								class="flex flex-col gap-1 rounded-md border p-1 pb-1.5 transition focus-visible:outline-2 focus-visible:outline-(--ui-primary)"
+								:class="draft.layout === l.key ? 'border-(--ui-primary) bg-(--ui-primary)/10' : 'border-(--ui-border) hover:border-(--ui-border-accented)'"
 								:aria-pressed="draft.layout === l.key"
 								@click="apply((d) => d, { layout: l.key })"
 							>
-								{{ l.label }}
+								<PdfLayoutThumb :layout-key="l.key" :color="accentHex" />
+								<span
+									class="text-[11px] font-medium text-center"
+									:class="draft.layout === l.key ? 'text-(--ui-primary)' : ''"
+								>{{ l.label }}</span>
 							</button>
 						</div>
 						<div class="mt-4">
 							<PdfColorRow :model-value="draft.accent" @update:model-value="apply((d) => d, { accent: $event })" />
 						</div>
-						<UFormField label="Font" class="mt-4 pb-2">
+						<div class="mt-4 pb-2">
+							<div id="designer-doc-font" class="text-[11px] font-medium text-(--ui-text-muted) mb-1.5">
+								Font
+							</div>
 							<USelectMenu
 								:model-value="draft.font"
 								:items="fontOptions"
 								value-key="value"
 								label-key="label"
 								class="w-full"
+								aria-labelledby="designer-doc-font"
 								@update:model-value="apply((d) => d, { font: $event as string })"
 							/>
-						</UFormField>
+						</div>
 					</section>
 				</div>
 			</aside>
