@@ -53,172 +53,210 @@
 					@select="selectedId = $event"
 					@change="live = $event"
 					@commit="commitLive"
-					@drop="addFile"
+					@drop="pendingDrop = $event"
 					@scale="scale = $event"
 				/>
 			</div>
 
-			<aside class="w-80 shrink-0 overflow-y-auto border-l border-(--ui-border) bg-(--ui-bg) p-4 space-y-6">
-				<!-- The selected item -->
-				<section v-if="selected" aria-labelledby="designer-selected">
-					<h2 id="designer-selected" class="text-sm font-semibold mb-3">
-						{{ KIND_LABEL[selected.type] }}
-					</h2>
+			<aside class="w-80 shrink-0 flex flex-col min-h-0 border-l border-(--ui-border) bg-(--ui-bg)">
+				<!-- 1. Start: a template, then add images / a background. -->
+				<section class="shrink-0 p-4 space-y-3 border-b border-(--ui-border)" aria-label="Start">
+					<UPopover v-model:open="templatesOpen" :content="{ side: 'left', align: 'start', sideOffset: 8 }">
+						<UButton
+							block
+							color="neutral"
+							variant="outline"
+							icon="i-lucide-layout-template"
+							trailing-icon="i-lucide-chevron-down"
+							:loading="applying !== null"
+							class="justify-between"
+						>
+							Start from a template
+						</UButton>
+						<template #content>
+							<div class="w-[26rem] max-h-[75vh] overflow-y-auto p-3">
+								<div class="text-xs text-(--ui-text-muted) mb-2 px-1">
+									Replaces your design (you can undo it). Shown with your logo, colour and paper.
+								</div>
+								<div class="grid grid-cols-2 gap-2">
+									<button
+										v-for="t in DESIGN_TEMPLATES"
+										:key="t.key"
+										type="button"
+										class="group flex flex-col gap-1.5 rounded-md border border-(--ui-border) p-2 text-left transition hover:border-(--ui-primary) focus-visible:outline-2 focus-visible:outline-(--ui-primary)"
+										@click="pickTemplate(t)"
+									>
+										<div
+											class="relative w-full overflow-hidden rounded-sm bg-white ring-1 ring-black/10"
+											:style="{ aspectRatio: `${paperDims.widthMm} / ${paperDims.heightMm}` }"
+										>
+											<img v-if="templatePreviews.urls[t.key]" :src="templatePreviews.urls[t.key]" alt="" class="absolute inset-0 size-full object-contain">
+											<div v-else class="absolute inset-0 flex items-center justify-center">
+												<UIcon name="i-lucide-loader-circle" class="size-4 animate-spin text-zinc-400" />
+											</div>
+										</div>
+										<span class="text-xs font-medium">{{ t.label }}</span>
+										<span class="text-[11px] leading-snug text-(--ui-text-muted)">{{ t.description }}</span>
+									</button>
+								</div>
+							</div>
+						</template>
+					</UPopover>
 					<div class="grid grid-cols-2 gap-2">
-						<UFormField label="X (mm)">
-							<UInputNumber :model-value="round1(selected.x)" :min="0" :step="0.5" @update:model-value="setField('x', $event)" />
-						</UFormField>
-						<UFormField label="Y (mm)">
-							<UInputNumber :model-value="round1(selected.y)" :min="0" :step="0.5" @update:model-value="setField('y', $event)" />
-						</UFormField>
-						<UFormField v-if="selected.type !== 'line'" label="Width (mm)">
-							<UInputNumber :model-value="round1(selected.w)" :min="5" :step="0.5" @update:model-value="setField('w', $event)" />
-						</UFormField>
-						<UFormField v-if="selected.type === 'line'" label="Length (mm)">
-							<UInputNumber :model-value="round1(selected.length)" :min="5" :step="0.5" @update:model-value="setField('length', $event)" />
-						</UFormField>
-					</div>
-					<div class="flex flex-wrap gap-2 mt-3">
-						<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-bring-to-front" @click="apply((d) => reorderItem(d, selected!.id, 'forward'))">
-							Forward
+						<UButton block variant="soft" icon="i-lucide-image-plus" @click="pickFile('image')">
+							Add image
 						</UButton>
-						<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-send-to-back" @click="apply((d) => reorderItem(d, selected!.id, 'backward'))">
-							Back
-						</UButton>
-						<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-copy" @click="duplicateSelected()">
-							Duplicate
-						</UButton>
-						<UButton size="xs" variant="soft" color="error" icon="i-lucide-trash-2" @click="deleteSelected">
-							Delete
+						<UButton block variant="soft" icon="i-lucide-wallpaper" @click="pickFile('background')">
+							Add background
 						</UButton>
 					</div>
-					<div v-if="selected.type === 'image'" class="flex flex-wrap gap-2 mt-2">
-						<UButton size="xs" variant="soft" icon="i-lucide-replace" @click="replaceInput?.click()">
-							Replace…
-						</UButton>
-						<UButton v-if="selectedFileExt && isRasterArtwork(selectedFileExt)" size="xs" variant="soft" icon="i-lucide-crop" @click="cropSelected">
-							Crop…
-						</UButton>
-					</div>
-					<p v-else class="text-xs text-(--ui-text-muted) mt-3">
-						Editing its text and style comes with the next update.
-					</p>
-				</section>
-				<p v-else class="text-xs text-(--ui-text-muted)">
-					Click something on the page to select it. Drag to move it; drag a handle to resize it.
-				</p>
-
-				<!-- Add -->
-				<section aria-labelledby="designer-add">
-					<h2 id="designer-add" class="text-sm font-semibold mb-2">
-						Add
-					</h2>
-					<UButton icon="i-lucide-image-plus" variant="soft" @click="addInput?.click()">
-						Add image
-					</UButton>
-					<p class="text-xs text-(--ui-text-muted) mt-1.5">
-						or drop a PNG, JPEG, SVG or PDF on the page.
+					<p class="text-xs text-(--ui-text-muted)">
+						Or drop a PNG, JPEG, SVG or PDF on the page. A background covers the whole page, behind everything.
 					</p>
 				</section>
 
-				<!-- Page -->
-				<section aria-labelledby="designer-page">
-					<h2 id="designer-page" class="text-sm font-semibold mb-2">
-						Page
-					</h2>
-					<div class="grid grid-cols-2 gap-1.5" role="group" aria-label="Paper size">
-						<button
-							v-for="p in PAPER_SIZES"
-							:key="p.key"
-							type="button"
-							class="px-2 py-1.5 rounded-md border text-left text-xs transition"
-							:class="draft.design.paper === p.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border) hover:border-(--ui-primary)/50'"
-							:aria-pressed="draft.design.paper === p.key"
-							@click="setPaper(p.key)"
-						>
-							<span class="font-medium">{{ p.label }}</span>
-							<span class="block text-(--ui-text-muted) tabular-nums">{{ p.widthMm }} × {{ p.heightMm }} mm</span>
-						</button>
+				<div class="flex-1 min-h-0 overflow-y-auto">
+					<!-- 2. The selected item: its own tinted panel, so its controls never
+						read as page settings. -->
+					<section
+						v-if="selected"
+						class="m-3 rounded-lg ring-1 ring-(--ui-primary)/40 bg-(--ui-primary)/5 p-3"
+						aria-labelledby="designer-selected"
+					>
+						<div class="flex items-center gap-2 mb-3">
+							<UIcon :name="KIND_ICON[selected.type]" class="size-4 text-(--ui-primary)" />
+							<h2 id="designer-selected" class="text-sm font-semibold flex-1">
+								Selected {{ KIND_LABEL[selected.type].toLowerCase() }}
+							</h2>
+							<UButton icon="i-lucide-x" size="xs" variant="ghost" color="neutral" aria-label="Deselect" @click="selectedId = null" />
+						</div>
+						<div class="grid grid-cols-2 gap-2">
+							<UFormField label="X (mm)">
+								<UInputNumber :model-value="round1(selected.x)" :min="0" :step="0.5" @update:model-value="setField('x', $event)" />
+							</UFormField>
+							<UFormField label="Y (mm)">
+								<UInputNumber :model-value="round1(selected.y)" :min="0" :step="0.5" @update:model-value="setField('y', $event)" />
+							</UFormField>
+							<UFormField v-if="selected.type !== 'line'" label="Width (mm)">
+								<UInputNumber :model-value="round1(selected.w)" :min="5" :step="0.5" @update:model-value="setField('w', $event)" />
+							</UFormField>
+							<UFormField v-if="selected.type === 'line'" label="Length (mm)">
+								<UInputNumber :model-value="round1(selected.length)" :min="5" :step="0.5" @update:model-value="setField('length', $event)" />
+							</UFormField>
+						</div>
+						<div class="grid grid-cols-2 gap-1.5 mt-3">
+							<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-bring-to-front" @click="apply((d) => reorderItem(d, selected!.id, 'forward'))">
+								Bring forward
+							</UButton>
+							<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-send-to-back" @click="apply((d) => reorderItem(d, selected!.id, 'backward'))">
+								Send back
+							</UButton>
+							<UButton size="xs" variant="soft" color="neutral" icon="i-lucide-copy" @click="duplicateSelected()">
+								Duplicate
+							</UButton>
+							<UButton size="xs" variant="soft" color="error" icon="i-lucide-trash-2" @click="deleteSelected">
+								Delete
+							</UButton>
+							<template v-if="selected.type === 'image'">
+								<UButton size="xs" variant="soft" icon="i-lucide-replace" @click="replaceInput?.click()">
+									Replace…
+								</UButton>
+								<UButton v-if="selectedFileExt && isRasterArtwork(selectedFileExt)" size="xs" variant="soft" icon="i-lucide-crop" @click="cropSelected">
+									Crop…
+								</UButton>
+							</template>
+						</div>
+						<p v-if="selected.type !== 'image'" class="text-xs text-(--ui-text-muted) mt-3">
+							Editing its text and style comes with the next update.
+						</p>
+					</section>
+					<p v-else class="m-3 rounded-lg border border-dashed border-(--ui-border) p-3 text-xs text-(--ui-text-muted)">
+						Click something on the page to select it. Drag to move it; drag a handle to resize it.
+					</p>
+
+					<!-- 3. Page settings: apply to the whole page and every document. -->
+					<div class="px-4 pt-3 pb-1 flex items-center gap-2">
+						<span class="text-[11px] font-semibold uppercase tracking-wider text-(--ui-text-muted)">Page settings</span>
+						<span class="flex-1 h-px bg-(--ui-border)" aria-hidden="true" />
 					</div>
-					<div class="text-xs font-medium mt-4 mb-1.5">
-						Safe area (mm)
-					</div>
-					<div class="grid grid-cols-2 gap-2">
-						<UFormField v-for="side in SIDES" :key="side.key" :label="side.label">
-							<UInputNumber :model-value="round1(draft.design.margins[side.key])" :min="0" :step="0.5" @update:model-value="setMargin(side.key, $event)" />
+
+					<section class="px-4 py-3" aria-labelledby="designer-page">
+						<h2 id="designer-page" class="text-sm font-semibold mb-2">
+							Paper
+						</h2>
+						<div class="grid grid-cols-2 gap-1.5" role="group" aria-label="Paper size">
+							<button
+								v-for="p in PAPER_SIZES"
+								:key="p.key"
+								type="button"
+								class="px-2 py-1.5 rounded-md border text-left text-xs transition"
+								:class="draft.design.paper === p.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border) hover:border-(--ui-primary)/50'"
+								:aria-pressed="draft.design.paper === p.key"
+								@click="setPaper(p.key)"
+							>
+								<span class="font-medium">{{ p.label }}</span>
+								<span class="block text-(--ui-text-muted) tabular-nums">{{ p.widthMm }} × {{ p.heightMm }} mm</span>
+							</button>
+						</div>
+					</section>
+
+					<section class="px-4 py-3 border-t border-(--ui-border)" aria-labelledby="designer-safe-area">
+						<h2 id="designer-safe-area" class="text-sm font-semibold mb-2">
+							Safe area <span class="font-normal text-(--ui-text-muted)">(mm)</span>
+						</h2>
+						<div class="grid grid-cols-2 gap-2">
+							<UFormField v-for="side in SIDES" :key="side.key" :label="side.label">
+								<UInputNumber :model-value="round1(draft.design.margins[side.key])" :min="0" :step="0.5" @update:model-value="setMargin(side.key, $event)" />
+							</UFormField>
+						</div>
+						<div class="space-y-2 text-xs text-(--ui-text-muted) mt-3">
+							<div class="flex items-start gap-2">
+								<span class="mt-0.5 size-3.5 shrink-0 border border-dashed border-(--ui-primary)" aria-hidden="true" />
+								<span>Safe area — where the document itself goes. Drag its guides on the page, or type the margins.</span>
+							</div>
+							<div class="flex items-start gap-2">
+								<span class="mt-0.5 size-3.5 shrink-0 legend-printer-band ring-1 ring-red-400/40" aria-hidden="true" />
+								<span>Most printers can't print within 5 mm of the edge. Shown for reference only — artwork may run into it.</span>
+							</div>
+						</div>
+					</section>
+
+					<section class="px-4 py-3 border-t border-(--ui-border)" aria-labelledby="designer-document">
+						<h2 id="designer-document" class="text-sm font-semibold mb-2">
+							Document
+						</h2>
+						<div class="text-xs font-medium mb-1.5">
+							Document style
+						</div>
+						<div class="grid grid-cols-2 gap-1.5" role="group" aria-label="Document style">
+							<button
+								v-for="l in PDF_LAYOUTS"
+								:key="l.key"
+								type="button"
+								:title="l.description"
+								class="px-2 py-1.5 rounded-md border text-left text-xs font-medium transition"
+								:class="draft.layout === l.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border) hover:border-(--ui-primary)/50'"
+								:aria-pressed="draft.layout === l.key"
+								@click="apply((d) => d, { layout: l.key })"
+							>
+								{{ l.label }}
+							</button>
+						</div>
+						<div class="mt-4">
+							<PdfColorRow :model-value="draft.accent" @update:model-value="apply((d) => d, { accent: $event })" />
+						</div>
+						<UFormField label="Font" class="mt-4 pb-2">
+							<USelectMenu
+								:model-value="draft.font"
+								:items="fontOptions"
+								value-key="value"
+								label-key="label"
+								class="w-full"
+								@update:model-value="apply((d) => d, { font: $event as string })"
+							/>
 						</UFormField>
-					</div>
-					<div class="space-y-2 text-xs text-(--ui-text-muted) mt-3">
-						<div class="flex items-start gap-2">
-							<span class="mt-0.5 size-3.5 shrink-0 border border-dashed border-(--ui-primary)" aria-hidden="true" />
-							<span>Safe area — where the document itself goes. Drag its guides on the page, or type the margins.</span>
-						</div>
-						<div class="flex items-start gap-2">
-							<span class="mt-0.5 size-3.5 shrink-0 legend-printer-band ring-1 ring-red-400/40" aria-hidden="true" />
-							<span>Most printers can't print within 5 mm of the edge. Shown for reference only — artwork may run into it.</span>
-						</div>
-					</div>
-				</section>
-
-				<!-- Document -->
-				<section aria-labelledby="designer-document">
-					<h2 id="designer-document" class="text-sm font-semibold mb-2">
-						Document
-					</h2>
-					<div class="text-xs font-medium mb-1.5">
-						Document style
-					</div>
-					<div class="grid grid-cols-2 gap-1.5" role="group" aria-label="Document style">
-						<button
-							v-for="l in PDF_LAYOUTS"
-							:key="l.key"
-							type="button"
-							:title="l.description"
-							class="px-2 py-1.5 rounded-md border text-left text-xs font-medium transition"
-							:class="draft.layout === l.key ? 'border-(--ui-primary) bg-(--ui-primary)/5' : 'border-(--ui-border) hover:border-(--ui-primary)/50'"
-							:aria-pressed="draft.layout === l.key"
-							@click="apply((d) => d, { layout: l.key })"
-						>
-							{{ l.label }}
-						</button>
-					</div>
-					<div class="mt-4">
-						<PdfColorRow :model-value="draft.accent" @update:model-value="apply((d) => d, { accent: $event })" />
-					</div>
-					<UFormField label="Font" class="mt-4">
-						<USelectMenu
-							:model-value="draft.font"
-							:items="fontOptions"
-							value-key="value"
-							label-key="label"
-							class="w-full"
-							@update:model-value="apply((d) => d, { font: $event as string })"
-						/>
-					</UFormField>
-				</section>
-
-				<!-- Templates -->
-				<section aria-labelledby="designer-templates">
-					<h2 id="designer-templates" class="text-sm font-semibold mb-2">
-						Start from a template
-					</h2>
-					<div class="flex flex-col gap-1.5">
-						<button
-							v-for="t in DESIGN_TEMPLATES"
-							:key="t.key"
-							type="button"
-							class="px-2.5 py-2 rounded-md border border-(--ui-border) text-left transition hover:border-(--ui-primary)/50 disabled:opacity-60"
-							:disabled="applying !== null"
-							@click="pendingTemplate = t"
-						>
-							<span class="flex items-center gap-1.5 text-xs font-medium">
-								{{ t.label }}
-								<UIcon v-if="applying === t.key" name="i-lucide-loader-circle" class="size-3 animate-spin" />
-							</span>
-							<span class="block text-xs text-(--ui-text-muted)">{{ t.description }}</span>
-						</button>
-					</div>
-				</section>
+					</section>
+				</div>
 			</aside>
 		</div>
 
@@ -230,8 +268,9 @@
 			:image-blob="uploader.crop.blob"
 			:max-output="uploader.crop.maxOutput"
 			:output-type="uploader.crop.outputType"
-			title="Crop the image"
-			hint="Drag the corners to keep only the part you want. It's stored at print resolution."
+			:aspect="uploader.crop.aspect"
+			:title="uploader.crop.title"
+			:hint="uploader.crop.hint"
 			@cropped="uploader.onCropped"
 			@cancel="uploader.onCropCancel"
 		/>
@@ -250,6 +289,23 @@
 					<UButton icon="i-lucide-layout-template" @click="useTemplate">
 						Replace design
 					</UButton>
+				</div>
+			</template>
+		</UModal>
+
+		<UModal :open="pendingDrop !== null" title="Add this file as…" @update:open="(o) => { if (!o) pendingDrop = null }">
+			<template #body>
+				<div class="grid grid-cols-2 gap-3">
+					<button type="button" class="flex flex-col items-start gap-1 rounded-md border border-(--ui-border) p-3 text-left transition hover:border-(--ui-primary)" @click="addDropped('image')">
+						<UIcon name="i-lucide-image-plus" class="size-5 text-(--ui-primary)" />
+						<span class="text-sm font-medium">An image</span>
+						<span class="text-xs text-(--ui-text-muted)">A logo, seal or signature you place anywhere and size.</span>
+					</button>
+					<button type="button" class="flex flex-col items-start gap-1 rounded-md border border-(--ui-border) p-3 text-left transition hover:border-(--ui-primary)" @click="addDropped('background')">
+						<UIcon name="i-lucide-wallpaper" class="size-5 text-(--ui-primary)" />
+						<span class="text-sm font-medium">A background</span>
+						<span class="text-xs text-(--ui-text-muted)">Letterhead artwork that covers the whole page, behind everything.</span>
+					</button>
 				</div>
 			</template>
 		</UModal>
@@ -308,15 +364,16 @@
 	import { useLivePagePreview } from "~/composables/useLivePagePreview";
 	import { usePageDesign } from "~/composables/usePageDesign";
 	import { usePdfPreview } from "~/composables/usePdfPreview";
+	import { useTemplatePreviews } from "~/composables/useTemplatePreviews";
 	import { itemAssetKind, readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
-	import { addImage, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, reorderItem, replaceImage, setMargins, updateItem } from "~/lib/design-draft";
+	import { addBackground, addImage, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, reorderItem, replaceImage, setMargins, updateItem } from "~/lib/design-draft";
 	import { afterSave, canRedo, canUndo, record, redo, startHistory, undo } from "~/lib/design-history";
 	import { DESIGN_TEMPLATES } from "~/lib/design-templates";
 	import { clampItem, CSS_PX_PER_MM, setMarginValue, stepZoom } from "~/lib/designer-geometry";
 	import { designerShortcutsAllowed } from "~/lib/designer-keys";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
 	import { newItemId, parsePageDesign, scaleDesign } from "~/lib/page-design";
-	import { effectiveDesign, PAPER_SIZES } from "~/lib/page-settings";
+	import { effectiveDesign, PAPER_SIZES, resolvePaperSize } from "~/lib/page-settings";
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
 	import { sampleStationeryPreviewPayload } from "~/lib/sample-pdf";
 	import { isRasterArtwork } from "~/lib/stationery-artwork";
@@ -328,6 +385,7 @@
 	interface Draft { design: PageDesign, layout: PdfLayoutKey, accent: string, font: string }
 
 	const KIND_LABEL: Record<DesignItem["type"], string> = { image: "Image", text: "Text", page_number: "Page number", line: "Line" };
+	const KIND_ICON: Record<DesignItem["type"], string> = { image: "i-lucide-image", text: "i-lucide-type", page_number: "i-lucide-hash", line: "i-lucide-minus" };
 	const SIDES: { key: keyof MarginsMm, label: string }[] = [
 		{ key: "top", label: "Top" },
 		{ key: "bottom", label: "Bottom" },
@@ -453,18 +511,33 @@
 	const addInput = useTemplateRef<HTMLInputElement>("addInput");
 	const replaceInput = useTemplateRef<HTMLInputElement>("replaceInput");
 
-	const addFile = async (file: File) => {
-		const added = await uploader.upload(file, draft.value.design.paper);
+	type AddAs = "image" | "background";
+	// A background covers the whole page (behind everything); an image is placed
+	// at the top of the safe area for the user to move and size.
+	const addFile = async (file: File, as: AddAs) => {
+		const added = await uploader.upload(file, draft.value.design.paper, { background: as === "background" });
 		if (!added) return;
 		uploaded.value = [...uploaded.value, added.id];
-		apply((d) => addImage(d, added.id, added.ext, added.aspect));
+		apply((d) => (as === "background" ? addBackground(d, added.id, added.ext) : addImage(d, added.id, added.ext, added.aspect)));
 		selectedId.value = added.id;
+	};
+	const addAs = ref<AddAs>("image");
+	const pickFile = (as: AddAs) => {
+		addAs.value = as;
+		addInput.value?.click();
 	};
 	const onAddInput = async (e: Event) => {
 		const input = e.target as HTMLInputElement;
 		const file = input.files?.[0];
 		input.value = "";
-		if (file) await addFile(file);
+		if (file) await addFile(file, addAs.value);
+	};
+	// A file dropped on the page: ask whether it's an image or a background.
+	const pendingDrop = shallowRef<File | null>(null);
+	const addDropped = async (as: AddAs) => {
+		const file = pendingDrop.value;
+		pendingDrop.value = null;
+		if (file) await addFile(file, as);
 	};
 	const swapSelected = (added: { id: string, ext: ImageExt, aspect: number } | null) => {
 		if (!added) return;
@@ -534,6 +607,18 @@
 		fileName: () => "sample-invoice.pdf",
 		title: "Sample invoice"
 	});
+
+	// The template picker: a thumbnail per template, rendered when it opens.
+	const templatesOpen = ref(false);
+	const templatePreviews = useTemplatePreviews(() => draftSettings.value, () => currency.value);
+	watch(templatesOpen, (open) => {
+		if (open) void templatePreviews.load();
+	});
+	const pickTemplate = (t: (typeof DESIGN_TEMPLATES)[number]) => {
+		templatesOpen.value = false;
+		pendingTemplate.value = t;
+	};
+	const paperDims = computed(() => resolvePaperSize(draft.value.design.paper));
 
 	// ---- save / discard / close ---------------------------------------------------------
 	const saving = ref(false);

@@ -1,6 +1,6 @@
 import type { DesignItem, PageDesign } from "./page-design";
 import { describe, expect, it } from "vitest";
-import { addImage, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, reorderItem, replaceImage, setMargins, updateItem } from "./design-draft";
+import { addBackground, addImage, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, reorderItem, replaceImage, setMargins, updateItem } from "./design-draft";
 
 const blank: PageDesign = { version: 1, paper: "a4", margins: { top: 20, right: 18, bottom: 20, left: 18 }, items: [] };
 
@@ -92,5 +92,17 @@ describe("review fixes", () => {
 		const edge = { ...img("aaaaaa000001"), x: 170, y: 277 } as DesignItem;
 		const d = duplicateItem(withItems(edge), "aaaaaa000001", "cccccc000001");
 		expect(d.items[1]).toMatchObject({ x: 170, y: 277 });
+	});
+});
+
+describe("addBackground", () => {
+	it("covers the whole page, behind everything else", () => {
+		const d = addBackground(withItems(rule), "bgimage00001", "png");
+		expect(d.items[0]).toEqual({ type: "image", id: "bgimage00001", x: 0, y: 0, w: 210, h: 297, pages: "every", src: { kind: "file", ext: "png" }, guide: false });
+		expect(d.items[1]).toEqual(rule);
+	});
+
+	it("follows the design's paper", () => {
+		expect(addBackground({ ...blank, paper: "a5" }, "bgimage00001", "svg").items[0]).toMatchObject({ w: 148, h: 210 });
 	});
 });

@@ -28,6 +28,13 @@ export function addImage(design: PageDesign, id: string, ext: ImageExt, aspect: 
 	return { ...design, items: [...design.items, item] };
 }
 
+/** A full-page background image (file `item-<id>.<ext>`): covers the whole sheet, drawn behind everything else. */
+export function addBackground(design: PageDesign, id: string, ext: ImageExt): PageDesign {
+	const { widthMm, heightMm } = resolvePaperSize(design.paper);
+	const item: DesignItem = { type: "image", id, x: 0, y: 0, w: widthMm, h: heightMm, pages: "every", src: { kind: "file", ext }, guide: false };
+	return { ...design, items: [item, ...design.items] };
+}
+
 /** An image swapped for a new file: same place, width, pages rule and stacking; the new file's proportions and id. */
 export function replaceImage(design: PageDesign, oldId: string, newId: string, ext: ImageExt, aspect: number): PageDesign {
 	return {

@@ -19,6 +19,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { itemAssetKind, readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
 import { uploadPlan } from "~/lib/design-image";
 import { newItemId } from "~/lib/page-design";
+import { resolvePaperSize } from "~/lib/paper-sizes";
 import { artworkMimeOf, artworkPixelSize, svgAspect, svgHasLiveText } from "~/lib/stationery-artwork";
 import { useTenantsStore } from "~/stores/tenants";
 
@@ -40,7 +41,11 @@ export function useDesignImageUpload() {
 		open: false,
 		blob: null as Blob | null,
 		outputType: "image/png" as "image/png" | "image/jpeg",
-		maxOutput: artworkPixelSize("a4")
+		maxOutput: artworkPixelSize("a4"),
+		/** Locked to the page's proportions for a background; free otherwise. */
+		aspect: undefined as number | undefined,
+		title: "Crop the image",
+		hint: "Drag the corners to keep only the part you want. It's stored at print resolution."
 	});
 	let pending: { ext: ImageExt, resolve: (r: UploadedImage | null) => void } | null = null;
 
@@ -57,23 +62,33 @@ export function useDesignImageUpload() {
 	};
 
 	/** Open the crop step for a raster image; resolves when it is applied or cancelled. */
-	const cropThen = (blob: Blob, ext: ImageExt, paper: PaperSize) => new Promise<UploadedImage | null>((resolve) => {
+	const cropThen = (blob: Blob, ext: ImageExt, paper: PaperSize, background = false) => new Promise<UploadedImage | null>((resolve) => {
 		pending?.resolve(null);
 		pending = { ext, resolve };
+		const sheet = resolvePaperSize(paper);
 		crop.blob = blob;
 		crop.outputType = ext === "jpg" ? "image/jpeg" : "image/png";
 		crop.maxOutput = artworkPixelSize(paper);
+		crop.aspect = background ? sheet.widthMm / sheet.heightMm : undefined;
+		crop.title = background ? "Crop the background to the page" : "Crop the image";
+		crop.hint = background
+			? `The crop is locked to ${sheet.label}'s proportions, so the background covers the page exactly. It's stored at print resolution.`
+			: "Drag the corners to keep only the part you want. It's stored at print resolution.";
 		crop.open = true;
 	});
 
-	/** A new design image from a dropped or picked file, or null (refused, or the crop was cancelled). */
-	async function upload(file: File, paper: PaperSize): Promise<UploadedImage | null> {
+	/**
+	 * A new design image from a dropped or picked file, or null (refused, or the
+	 * crop was cancelled). `background`: a PNG / JPEG is cropped to the page's
+	 * proportions, since it will cover the whole page.
+	 */
+	async function upload(file: File, paper: PaperSize, { background = false } = {}): Promise<UploadedImage | null> {
 		const plan = uploadPlan(file.name, file.type);
 		if ("error" in plan) {
 			toast.add({ title: "Can't use that file", description: plan.error, color: "error", icon: "i-lucide-circle-alert" });
 			return null;
 		}
-		if (plan.raster) return cropThen(file, plan.ext, paper);
+		if (plan.raster) return cropThen(file, plan.ext, paper, background);
 
 		const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
 		const id = await write(plan.ext, bytes);
