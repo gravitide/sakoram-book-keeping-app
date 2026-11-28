@@ -346,7 +346,8 @@
         image(item.file, width: item.w * 1mm, height: item.h * 1mm, fit: "contain")
       }
     } else if item.type == "text" {
-      design-text(item, item.lines.map(l => [#l]).join(linebreak()))
+      // A faded line: one PDFs leave out (all its fields empty), kept by the designer.
+      design-text(item, item.lines.map(l => if l.faded { text(fill: rgb(item.color).transparentize(65%), l.text) } else [#l.text]).join(linebreak()))
     } else if item.type == "page_number" {
       if not (item.hide_single and total == 1) {
         let label = if item.format == "slash" [#n / #total] else if item.format == "number" [#n] else [Page #n of #total]

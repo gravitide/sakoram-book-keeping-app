@@ -654,7 +654,11 @@
 		}
 		: null));
 	const samplePayload = () => (draftSettings.value ? sampleStationeryPreviewPayload(draftSettings.value, currency.value, draft.value.layout) : null);
-	const preview = useLivePagePreview(samplePayload, {
+	// The page view keeps a text line whose fields are all empty, faded, so it
+	// can still be seen and selected; Preview as PDF (samplePayload) prints
+	// exactly what documents will.
+	const designerPayload = () => (draftSettings.value ? sampleStationeryPreviewPayload(draftSettings.value, currency.value, draft.value.layout, { showEmptyFields: true }) : null);
+	const preview = useLivePagePreview(designerPayload, {
 		page: () => page.value,
 		ppiFn: () => Math.min(150, Math.max(20, Math.round(scale.value * 25.4 * (window.devicePixelRatio || 1)))),
 		deps: () => uploaded.value.length

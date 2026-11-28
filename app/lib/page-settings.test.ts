@@ -85,7 +85,7 @@ describe("buildPageSettings", () => {
 			y: 13,
 			w: 140,
 			pages: "every",
-			lines: ["Gravitide"],
+			lines: [{ text: "Gravitide", faded: false }],
 			font: "Inter",
 			size: 9,
 			bold: true,
@@ -128,5 +128,25 @@ describe("buildLayoutAndPage", () => {
 describe("paper sizes", () => {
 	it("lists the four sheets, A4 first", () => {
 		expect(PAPER_SIZES.map((p) => p.key)).toEqual(["a4", "a5", "us-letter", "us-legal"]);
+	});
+});
+
+describe("buildPageSettings showEmptyFields (the designer)", () => {
+	const onlyWebsite: PageDesign = {
+		version: 1,
+		paper: "a4",
+		margins: { top: 50, right: 18, bottom: 30, left: 18 },
+		items: [{ type: "text", id: "website00001", x: 18, y: 13, w: 140, pages: "every", text: "{website}", style: STYLE }]
+	};
+	const s = settings({ pdf_design: JSON.stringify(onlyWebsite) });
+
+	it("leaves a text box whose fields are all empty out of PDFs", () => {
+		expect(buildPageSettings(s).items).toEqual([]);
+	});
+
+	it("keeps it, faded with the field's label, in the designer", () => {
+		const items = buildPageSettings(s, { showEmptyFields: true }).items;
+		expect(items).toHaveLength(1);
+		expect(items[0]).toMatchObject({ type: "text", lines: [{ text: "Website", faded: true }] });
 	});
 });
