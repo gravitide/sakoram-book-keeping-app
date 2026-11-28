@@ -128,8 +128,8 @@
 
 		<HelpSection title="Which pages" icon="i-lucide-files">
 			<p>
-				Every item has a <strong>Pages</strong> setting: <strong>Every page</strong>, <strong>First page</strong> only, or
-				<strong>After the first</strong> (a smaller header on continuation pages, for example). Use the
+				Every item has a <strong>Pages</strong> setting: <strong>All pages</strong>, the <strong>First page</strong> only, or
+				<strong>Later pages</strong>: every page after the first (a smaller header on continuation pages, for example). Use the
 				<strong>Page 1 / Page 2</strong> switch in the toolbar to see each.
 			</p>
 			<p>

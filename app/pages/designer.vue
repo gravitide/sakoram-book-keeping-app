@@ -738,9 +738,9 @@
 
 	// Which pages an item is drawn on.
 	const PAGES_OPTIONS: { value: PagesRule, label: string }[] = [
-		{ value: "every", label: "Every page" },
+		{ value: "every", label: "All pages" },
 		{ value: "first", label: "First page" },
-		{ value: "not_first", label: "After the first" }
+		{ value: "not_first", label: "Later pages" }
 	];
 	/** The selected item overlaps the safe area (the canvas badge's rule, on the estimated text height). */
 	const selectedOverlaps = computed(() => (selected.value ? overlapWarning(selected.value, shownDesign.value) : false));
