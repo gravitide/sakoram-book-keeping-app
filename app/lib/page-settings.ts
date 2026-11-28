@@ -61,6 +61,8 @@ export interface PageSettingsOverride {
 	omitItems?: boolean
 	/** The page designer: keep the text lines whose fields are all empty, faded, instead of leaving them out. */
 	showEmptyFields?: boolean
+	/** The page designer: draw guide-only images (a scan of pre-printed paper) so things can be lined up against them. Never in a document. */
+	showGuides?: boolean
 }
 
 type Settings = Partial<CompanySettingsRow> | null;
@@ -82,12 +84,12 @@ export function effectiveDesign(settings: Settings): PageDesign {
 	return stored ? scaleDesign(stored, paper) : designTemplate(DEFAULT_DESIGN_TEMPLATE, paper, defaultIds()).design;
 }
 
-function payloadFor(item: DesignItem, values: Record<string, string>, accent: string, hasLogo: boolean, keepEmpty: boolean): PageItemPayload | null {
+function payloadFor(item: DesignItem, values: Record<string, string>, accent: string, hasLogo: boolean, keepEmpty: boolean, showGuides: boolean): PageItemPayload | null {
 	const colour = (c: string) => (c === "accent" ? accent : c);
 	const { id, x, y, pages } = item;
 	switch (item.type) {
 		case "image":
-			if (item.guide || !item.src) return null;
+			if ((item.guide && !showGuides) || !item.src) return null;
 			if (item.src.kind === "company_logo" && !hasLogo) return null;
 			return item.src.kind === "company_logo"
 				? { type: "image", id, x, y, w: item.w, h: item.h, pages, src: "company_logo" }
@@ -111,7 +113,7 @@ export function buildPageSettings(settings: Settings, override?: PageSettingsOve
 	const hasLogo = Boolean(settings?.logo_path);
 	const items = override?.omitItems
 		? []
-		: design.items.map((item) => payloadFor(item, values, accent, hasLogo, Boolean(override?.showEmptyFields))).filter((i): i is PageItemPayload => i !== null);
+		: design.items.map((item) => payloadFor(item, values, accent, hasLogo, Boolean(override?.showEmptyFields), Boolean(override?.showGuides))).filter((i): i is PageItemPayload => i !== null);
 	return { paper: design.paper, margins: { ...design.margins }, items };
 }
 

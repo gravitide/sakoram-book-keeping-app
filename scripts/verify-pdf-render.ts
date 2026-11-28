@@ -222,6 +222,12 @@ const withArtwork = (ext: "svg" | "png" | "jpg" | "pdf"): Partial<CompanySetting
 	const items = design.items.map((i): DesignItem => (i.type === "image" ? { ...i, id: ARTWORK_ID, src: { kind: "file", ext } } : i));
 	return withDesign({ ...design, items });
 };
+/** The Pre-printed paper template with fixture artwork as its scan: still guide-only (never printed). */
+const withGuideScan = (): Partial<CompanySettingsRow> => {
+	const design = templateDesign("preprinted");
+	const items = design.items.map((i): DesignItem => (i.type === "image" ? { ...i, id: ARTWORK_ID, src: { kind: "file", ext: "png" } } : i));
+	return withDesign({ ...design, items });
+};
 /** Classic plus an image on the first page only and a rule on every page after it. */
 const withPagesRules = (): Partial<CompanySettingsRow> => {
 	const design = templateDesign("classic");
@@ -697,6 +703,8 @@ const cases: Case[] = [
 	// The designer's page view: a business with no website, phone or email
 	// keeps those letterhead lines, faded and labelled (showEmptyFields).
 	{ ...docCase("designer-faded-fields", sampleStationeryPreviewPayload(settingsFor(sparseDetails), currency, "classic", { showEmptyFields: true })), multipage: true, pages: 2 },
+	// The designer draws a guide scan (pre-printed paper) to line things up against.
+	{ ...docCase("designer-guide-scan", sampleStationeryPreviewPayload(settingsFor(withGuideScan()), currency, "classic", { showGuides: true })), multipage: true, pages: 2 },
 	// Every text style, a vertical line, and the other page-number formats.
 	{ ...docCase("design-styles-slash", invoice(settingsFor(withStyles("slash")), 45)), multipage: true },
 	{ ...docCase("design-styles-number", invoice(settingsFor(withStyles("number")), 45)), multipage: true },

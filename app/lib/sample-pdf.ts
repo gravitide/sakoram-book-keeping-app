@@ -142,8 +142,8 @@ const previewLines = (count: number) => Array.from({ length: count }, (_, i) => 
  * The Stationery editor's sample: an itemised invoice on the business's own
  * paper, Stationery and branding, always exactly two pages long (see above).
  */
-/** `opts.showEmptyFields`: the page designer's view (page-settings.ts PageSettingsOverride). */
-export function sampleStationeryPreviewPayload(settings: CompanySettingsRow | null, currency: SampleCurrency, layoutKey: PdfLayoutKey, opts: { showEmptyFields?: boolean } = {}) {
+/** `opts.showEmptyFields` / `opts.showGuides`: the page designer's view (page-settings.ts PageSettingsOverride). */
+export function sampleStationeryPreviewPayload(settings: CompanySettingsRow | null, currency: SampleCurrency, layoutKey: PdfLayoutKey, opts: { showEmptyFields?: boolean, showGuides?: boolean } = {}) {
 	const common = base(settings, currency, layoutKey, opts);
 	const lines = previewLines(previewLineCount(common.page));
 	const noSym = (c: number) => formatMoney(c, { code: currency.code, withSymbol: false });
