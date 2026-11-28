@@ -8,7 +8,7 @@
 //
 // Pure, store-free, relative imports only (vitest).
 
-import type { DesignFont, DesignItem, ImageExt, MarginsMm, PageDesign } from "./page-design";
+import type { DesignFont, DesignItem, ImageExt, MarginsMm, PageDesign, PagesRule } from "./page-design";
 import { INK, MUTED, textStyle } from "./design-templates";
 import { clampItem } from "./designer-geometry";
 import { imageFileIds } from "./page-design";
@@ -72,6 +72,29 @@ export function addLine(design: PageDesign, id: string): PageDesign {
 	const safe = safeArea(design);
 	const at = freeSpot(design, safe.x, safe.y + NEW_ITEM_INSET_MM);
 	return append(design, { type: "line", id, ...at, length: safe.w, vertical: false, thickness: 0.75, color: "accent", pages: "every" });
+}
+
+/** An item drawn on `pages`: every page, the first only, or every page after the first. */
+export function setItemPages(design: PageDesign, id: string, pages: PagesRule): PageDesign {
+	return { ...design, items: design.items.map((i) => (i.id === id ? { ...i, pages } : i)) };
+}
+
+/** An image marked guide-only (shown in the designer, never printed) or back to printed; anything else is left alone. */
+export function setImageGuide(design: PageDesign, id: string, guide: boolean): PageDesign {
+	const item = design.items.find((i) => i.id === id);
+	if (item?.type !== "image") return design;
+	return { ...design, items: design.items.map((i) => (i.id === id ? { ...item, guide } : i)) };
+}
+
+/**
+ * An empty image slot filled with an uploaded file (`item-<newId>.<ext>`): it keeps
+ * its box, pages rule, guide flag and stacking (Typst fits the image inside the
+ * box). Anything but an empty slot is left alone.
+ */
+export function fillSlot(design: PageDesign, slotId: string, newId: string, ext: ImageExt): PageDesign {
+	const slot = design.items.find((i) => i.id === slotId);
+	if (slot?.type !== "image" || slot.src !== null) return design;
+	return { ...design, items: design.items.map((i) => (i.id === slotId ? { ...slot, id: newId, src: { kind: "file", ext } } : i)) };
 }
 
 /** A line turned horizontal or vertical from the same start, shortened to fit the page that way. */

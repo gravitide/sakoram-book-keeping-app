@@ -1,6 +1,6 @@
 import type { DesignItem, PageDesign } from "./page-design";
 import { describe, expect, it } from "vitest";
-import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, hasPageNumber, NEW_TEXT, reorderItem, replaceImage, setLineVertical, setMargins, updateItem } from "./design-draft";
+import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, fillSlot, hasPageNumber, NEW_TEXT, reorderItem, replaceImage, setImageGuide, setItemPages, setLineVertical, setMargins, updateItem } from "./design-draft";
 
 const blank: PageDesign = { version: 1, paper: "a4", margins: { top: 20, right: 18, bottom: 20, left: 18 }, items: [] };
 
@@ -161,5 +161,32 @@ describe("duplicateItem on a page number", () => {
 		const pn: DesignItem = { type: "page_number", id: "pagenum00001", x: 152, y: 288, w: 40, pages: "every", format: "page_of_total", hide_single: true, style: { font: "Akt", size: 7, bold: false, italic: false, color: "#6b7280", align: "right" } };
 		const d = withItems(pn);
 		expect(duplicateItem(d, "pagenum00001", "pagenum00002")).toBe(d);
+	});
+});
+
+describe("setItemPages / setImageGuide", () => {
+	it("sets an item's pages rule", () => {
+		expect(setItemPages(withItems(rule), "rule00000001", "first").items[0]!.pages).toBe("first");
+	});
+
+	it("marks an image guide-only, and leaves anything else alone", () => {
+		expect(setImageGuide(withItems(img("aaaaaa000001")), "aaaaaa000001", true).items[0]).toMatchObject({ guide: true });
+		const d = withItems(rule);
+		expect(setImageGuide(d, "rule00000001", true)).toBe(d);
+	});
+});
+
+describe("fillSlot", () => {
+	const slot: DesignItem = { type: "image", id: "slot00000001", x: 0, y: 0, w: 210, h: 297, pages: "every", src: null, guide: true };
+
+	it("fills an empty slot in place, keeping its box, pages rule and guide flag", () => {
+		const d = fillSlot(withItems(rule, slot), "slot00000001", "scan00000001", "png");
+		expect(d.items[1]).toEqual({ type: "image", id: "scan00000001", x: 0, y: 0, w: 210, h: 297, pages: "every", src: { kind: "file", ext: "png" }, guide: true });
+		expect(d.items[0]).toEqual(rule);
+	});
+
+	it("leaves an image that already has a file alone", () => {
+		const d = withItems(img("aaaaaa000001"));
+		expect(fillSlot(d, "aaaaaa000001", "bbbbbb000001", "png")).toBe(d);
 	});
 });

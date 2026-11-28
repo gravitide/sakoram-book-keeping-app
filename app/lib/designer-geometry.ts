@@ -11,6 +11,7 @@
 
 import type { DesignItem, MarginsMm, PageDesign } from "./page-design";
 import type { PaperSize } from "./paper-sizes";
+import { itemOnPage } from "./page-design";
 import { resolvePaperSize } from "./paper-sizes";
 
 /** A CSS pixel is 1/96 inch, so this many px is one millimetre at 100 %. */
@@ -109,6 +110,29 @@ export function itemBox(item: DesignItem, measuredH?: number): MmRect {
 				: { x: item.x, y: item.y - t / 2, w: item.length, h: t };
 		}
 	}
+}
+
+/**
+ * Whether `box` overlaps the safe area (where the document prints), with a
+ * positive area: an edge resting on a margin doesn't count. The designer
+ * warns, but allows it (watermarks overlap on purpose).
+ */
+export function overlapsSafeArea(box: MmRect, design: PageDesign): boolean {
+	const { widthMm, heightMm } = resolvePaperSize(design.paper);
+	const m = design.margins;
+	const w = Math.min(box.x + box.w, widthMm - m.right) - Math.max(box.x, m.left);
+	const h = Math.min(box.y + box.h, heightMm - m.bottom) - Math.max(box.y, m.top);
+	return w > 0 && h > 0;
+}
+
+/** The topmost empty image slot drawn on `page` under the point (mm), or null. */
+export function slotAt(design: PageDesign, page: 1 | 2, xMm: number, yMm: number): string | null {
+	for (let k = design.items.length - 1; k >= 0; k--) {
+		const i = design.items[k]!;
+		if (i.type !== "image" || i.src !== null || !itemOnPage(i.pages, page)) continue;
+		if (xMm >= i.x && xMm <= i.x + i.w && yMm >= i.y && yMm <= i.y + i.h) return i.id;
+	}
+	return null;
 }
 
 /** The resize handles an item offers. */
