@@ -52,7 +52,19 @@
 		</div>
 
 		<div class="flex-1 min-h-0 flex">
-			<div class="flex-1 min-w-0">
+			<div class="flex-1 min-w-0 relative">
+				<!-- After a paper change: everything was scaled, so look it over. -->
+				<UAlert
+					v-if="paperNoteLabel"
+					class="absolute top-3 left-1/2 -translate-x-1/2 z-50 w-max max-w-[90%] shadow-md"
+					color="warning"
+					variant="subtle"
+					icon="i-lucide-scaling"
+					:title="`Check your design for ${paperNoteLabel}`"
+					description="Everything was scaled to fit the new paper."
+					close
+					@update:open="(o) => { if (!o) paperNote = null }"
+				/>
 				<PageDesignerCanvas
 					:design="shownDesign"
 					:selected-id="selectedId"
@@ -256,6 +268,33 @@
 						<!-- Actions, grouped by what they act on: the stacking order, the
 							image's file, then the item itself (copy / remove) as a quiet footer. -->
 						<div class="mt-4 space-y-3">
+							<UAlert
+								v-if="selectedOverlaps"
+								color="warning"
+								variant="subtle"
+								icon="i-lucide-triangle-alert"
+								:ui="{ title: 'text-xs font-normal' }"
+								title="Overlaps the safe area. The document prints on top of it, which is fine for a watermark."
+							/>
+							<div>
+								<div id="designer-pages" class="text-[11px] font-medium text-(--ui-text-muted) mb-1">
+									Pages
+								</div>
+								<div class="segmented" role="group" aria-labelledby="designer-pages">
+									<button
+										v-for="r in PAGES_OPTIONS"
+										:key="r.value"
+										type="button"
+										:aria-pressed="selected.pages === r.value"
+										@click="apply((d) => setItemPages(d, selected!.id, r.value))"
+									>
+										{{ r.label }}
+									</button>
+								</div>
+								<p v-if="!itemOnPage(selected.pages, page)" class="text-[11px] text-(--ui-text-muted) mt-1">
+									Not on page {{ page }}. Switch to Page {{ page === 1 ? 2 : 1 }} to see it on the page.
+								</p>
+							</div>
 							<div>
 								<div id="designer-layer" class="text-[11px] font-medium text-(--ui-text-muted) mb-1">
 									Layer
@@ -289,6 +328,14 @@
 										Crop…
 									</button>
 								</div>
+								<USwitch
+									class="mt-3"
+									size="sm"
+									:model-value="selected.guide"
+									label="Guide only — not printed"
+									description="For lining things up with pre-printed paper: shown here, never printed."
+									@update:model-value="apply((d) => setImageGuide(d, selected!.id, $event))"
+								/>
 							</div>
 							<div class="flex items-center justify-between pt-2 border-t border-(--ui-primary)/15">
 								<UButton
@@ -494,7 +541,7 @@
 	//
 	// Spec: docs/superpowers/specs/2026-11-27-page-designer-design.md.
 	import type { DesignTemplateKey } from "~/lib/design-templates";
-	import type { DesignColor, DesignFont, DesignItem, ImageExt, MarginsMm, PageDesign, PageNumberFormat, TextStyle } from "~/lib/page-design";
+	import type { DesignColor, DesignFont, DesignItem, ImageExt, MarginsMm, PageDesign, PageNumberFormat, PagesRule, TextStyle } from "~/lib/page-design";
 	import type { PaperSize } from "~/lib/paper-sizes";
 	import type { PdfLayoutKey } from "~/lib/pdf-layouts";
 	import { useActiveCurrency } from "~/composables/useActiveCurrency";
@@ -504,13 +551,13 @@
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { useTemplatePreviews } from "~/composables/useTemplatePreviews";
 	import { itemAssetKind, readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
-	import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, fillSlot, hasPageNumber, reorderItem, replaceImage, setLineVertical, setMargins, updateItem } from "~/lib/design-draft";
+	import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, fillSlot, hasPageNumber, reorderItem, replaceImage, setImageGuide, setItemPages, setLineVertical, setMargins, updateItem } from "~/lib/design-draft";
 	import { canRedo, canUndo, historyAfterSave, record, redo, startHistory, undo } from "~/lib/design-history";
 	import { DESIGN_TEMPLATES } from "~/lib/design-templates";
-	import { ACTUAL_ZOOM_LEVELS, clampItem, CSS_PX_PER_MM, setMarginValue, stepActualZoom, zoomForActual } from "~/lib/designer-geometry";
+	import { ACTUAL_ZOOM_LEVELS, clampItem, CSS_PX_PER_MM, overlapWarning, setMarginValue, stepActualZoom, zoomForActual } from "~/lib/designer-geometry";
 	import { designerShortcutsAllowed } from "~/lib/designer-keys";
 	import { BUNDLED_FONTS, isBundledFont } from "~/lib/fonts";
-	import { DESIGN_FONTS, newItemId, parsePageDesign, scaleDesign } from "~/lib/page-design";
+	import { DESIGN_FONTS, itemOnPage, newItemId, parsePageDesign, scaleDesign } from "~/lib/page-design";
 	import { insertToken } from "~/lib/page-design-text";
 	import { effectiveDesign, PAPER_SIZES, resolvePaperSize } from "~/lib/page-settings";
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
@@ -639,9 +686,25 @@
 	};
 
 	// ---- page & document ------------------------------------------------------------
+	// "Check your design for <paper>": shown after a paper change until it's
+	// dismissed, saved, or undone back to another paper.
+	const paperNote = ref<PaperSize | null>(null);
+	const paperNoteLabel = computed(() =>
+		(paperNote.value && paperNote.value === draft.value.design.paper ? PAPER_SIZES.find((p) => p.key === paperNote.value)?.label ?? null : null));
 	const setPaper = (paper: PaperSize) => {
-		if (draft.value.design.paper !== paper) apply((d) => scaleDesign(d, paper));
+		if (draft.value.design.paper === paper) return;
+		apply((d) => scaleDesign(d, paper));
+		paperNote.value = paper;
 	};
+
+	// Which pages an item is drawn on.
+	const PAGES_OPTIONS: { value: PagesRule, label: string }[] = [
+		{ value: "every", label: "Every page" },
+		{ value: "first", label: "First page" },
+		{ value: "not_first", label: "After the first" }
+	];
+	/** The selected item overlaps the safe area (the canvas badge's rule, on the estimated text height). */
+	const selectedOverlaps = computed(() => (selected.value ? overlapWarning(selected.value, shownDesign.value) : false));
 	const setMargin = (side: keyof MarginsMm, value: number | null | undefined) => {
 		if (typeof value !== "number" || !Number.isFinite(value)) return;
 		apply((d) => setMargins(d, setMarginValue(d.margins, side, value, d.paper)));
@@ -946,6 +1009,7 @@
 			// A fresh history: the files this save deleted can't be undone back.
 			// Anything typed while the save ran is kept (it shows as unsaved).
 			history.value = historyAfterSave(history.value, started, final);
+			paperNote.value = null;
 			if ("__TAURI_INTERNALS__" in window) {
 				const { emitTo } = await import("@tauri-apps/api/event");
 				await emitTo("main", "page-design:saved").catch(() => { /* main may be closing */ });
