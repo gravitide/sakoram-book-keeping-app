@@ -93,6 +93,15 @@ describe("itemBox", () => {
 		expect(itemBox(line())).toEqual({ x: 18, y: 39, w: 174, h: 2 });
 		expect(itemBox(line({ vertical: true, x: 100, y: 50, length: 80 }))).toEqual({ x: 99, y: 50, w: 2, h: 80 });
 	});
+
+	it("uses a text box's measured height when the canvas has one", () => {
+		expect(itemBox(text(), 30).h).toBe(30);
+		expect(itemBox(text(), 0).h).toBe(itemBox(text()).h);
+	});
+
+	it("ignores a measured height for a line", () => {
+		expect(itemBox(line(), 30)).toEqual(itemBox(line()));
+	});
 });
 
 describe("handlesFor", () => {

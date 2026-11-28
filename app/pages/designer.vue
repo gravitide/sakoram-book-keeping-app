@@ -62,7 +62,9 @@
 					:page="page"
 					:zoom="zoom"
 					:pan="handTool"
+					:field-values="fieldValues"
 					@select="selectedId = $event"
+					@edit="editItem"
 					@change="live = $event"
 					@commit="commitLive"
 					@drop="pendingDrop = $event"
@@ -407,6 +409,7 @@
 	import { newItemId, parsePageDesign, scaleDesign } from "~/lib/page-design";
 	import { effectiveDesign, PAPER_SIZES, resolvePaperSize } from "~/lib/page-settings";
 	import { PDF_LAYOUTS, resolveLayoutKey } from "~/lib/pdf-layouts";
+	import { tokenValuesFromSettings } from "~/lib/pdf-tokens";
 	import { sampleStationeryPreviewPayload } from "~/lib/sample-pdf";
 	import { isRasterArtwork } from "~/lib/stationery-artwork";
 	import { useSettingsStore } from "~/stores/settings";
@@ -485,6 +488,12 @@
 
 	// ---- selection ------------------------------------------------------------------
 	const selectedId = ref<string | null>(null);
+	/** Company field values, for the canvas to measure text boxes the way they print. */
+	const fieldValues = computed(() => tokenValuesFromSettings(settings.settings));
+	/** Double-clicked on the page: select it (its editor is in the side panel). */
+	const editItem = (id: string) => {
+		selectedId.value = id;
+	};
 	const selected = computed(() => shownDesign.value.items.find((i) => i.id === selectedId.value) ?? null);
 	const selectedFileExt = computed<ImageExt | null>(() =>
 		(selected.value?.type === "image" && selected.value.src?.kind === "file" ? selected.value.src.ext : null));
