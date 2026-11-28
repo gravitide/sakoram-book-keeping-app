@@ -76,6 +76,8 @@
 					:zoom="zoom"
 					:pan="handTool"
 					:field-values="fieldValues"
+					:image-urls="imageUrls"
+					:accent-hex="accentHex"
 					@select="selectedId = $event"
 					@edit="editItem"
 					@change="live = $event"
@@ -953,6 +955,38 @@
 		.filter((i) => i.locked)
 		.map((i) => ({ id: i.id, icon: i.type === "image" && lockedLabel(i) === "Background" ? "i-lucide-wallpaper" : KIND_ICON[i.type], label: lockedLabel(i) }))
 		.reverse());
+
+	// ---- image files for the canvas ------------------------------------------------------
+	// A dragged image is drawn from its own file (PageDesignerCanvas ghosts), so
+	// each movable image's file is read once into a browser URL. Locked items and
+	// PDFs never need one.
+	const IMAGE_MIME: Partial<Record<ImageExt, string>> = { png: "image/png", jpg: "image/jpeg", svg: "image/svg+xml" };
+	const imageUrls = reactive<Record<string, string>>({});
+	const movableImages = computed(() => shownDesign.value.items.flatMap((i) =>
+		(i.type === "image" && i.src?.kind === "file" && !i.locked && IMAGE_MIME[i.src.ext] ? [{ id: i.id, mime: IMAGE_MIME[i.src.ext]! }] : [])));
+	watch(() => movableImages.value.map((m) => m.id).join(","), async () => {
+		const tenantId = tenants.activeTenantId;
+		if (!tenantId || !("__TAURI_INTERNALS__" in window)) return;
+		const wanted = movableImages.value;
+		for (const id of Object.keys(imageUrls)) {
+			if (!wanted.some((m) => m.id === id)) {
+				URL.revokeObjectURL(imageUrls[id]!);
+				delete imageUrls[id];
+			}
+		}
+		for (const m of wanted) {
+			if (imageUrls[m.id]) continue;
+			try {
+				const [, bytes] = await readBusinessAsset(tenantId, itemAssetKind(m.id));
+				imageUrls[m.id] = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: m.mime }));
+			} catch {
+				// No preview while dragging; the render still shows it.
+			}
+		}
+	}, { immediate: true });
+	onBeforeUnmount(() => {
+		for (const url of Object.values(imageUrls)) URL.revokeObjectURL(url);
+	});
 
 	// ---- text, page numbers and lines ------------------------------------------------
 	const accentHex = computed(() => pdfThemeHex(draftSettings.value));
