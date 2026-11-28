@@ -267,3 +267,21 @@ export function setMarginValue(margins: MarginsMm, side: keyof MarginsMm, value:
 	const extent = side === "top" || side === "bottom" ? page.heightMm : page.widthMm;
 	return { ...margins, [side]: clamp(value, 0, extent - margins[OPPOSITE[side]] - MIN_SAFE_AREA_MM) };
 }
+
+/**
+ * The strip along each edge most printers can't print on. Drawn hatched on the
+ * designer's page as INFORMATION only: nothing snaps to it and nothing is
+ * refused for crossing it (a full-page background is meant to bleed into it).
+ */
+export const PRINTER_BAND_MM = 5;
+
+/** The four printer-band strips (top, bottom, left, right; corners counted once). */
+export function printerBandRects(page: PageDims): MmRect[] {
+	const b = PRINTER_BAND_MM;
+	return [
+		{ x: 0, y: 0, w: page.widthMm, h: b },
+		{ x: 0, y: page.heightMm - b, w: page.widthMm, h: b },
+		{ x: 0, y: b, w: b, h: page.heightMm - 2 * b },
+		{ x: page.widthMm - b, y: b, w: b, h: page.heightMm - 2 * b }
+	];
+}

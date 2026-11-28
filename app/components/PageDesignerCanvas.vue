@@ -63,9 +63,19 @@
 					<UIcon name="i-lucide-loader-circle" class="size-4 animate-spin text-zinc-400" />
 				</div>
 
+				<!-- The printer band: most printers can't print within 5 mm of the
+					edge. Information only — nothing snaps to it or is refused for
+					crossing it. -->
+				<div
+					v-for="(band, i) in printerBands"
+					:key="i"
+					class="absolute designer-printer-band pointer-events-none"
+					:style="band"
+				/>
+
 				<!-- The safe area: where the document's own content goes. -->
 				<div
-					class="absolute border border-dashed border-(--ui-primary)/50 pointer-events-none"
+					class="absolute border border-dashed border-(--ui-primary) pointer-events-none"
 					:style="safeAreaStyle"
 				/>
 
@@ -124,10 +134,18 @@
 					@pointercancel="onPointerUp"
 					@keydown="onGuideKey(g.side, $event)"
 				>
+					<!-- The guide runs edge to edge, so the safe area reads across
+						the whole page (as rulers would draw it). -->
 					<span
 						class="bg-(--ui-primary) transition-opacity"
-						:class="[g.axis === 'y' ? 'h-px w-full' : 'w-px h-full', drag?.kind === 'guide' && drag.side === g.side ? 'opacity-100' : 'opacity-0 group-hover:opacity-80 group-focus-visible:opacity-100']"
+						:class="[g.axis === 'y' ? 'h-px w-full' : 'w-px h-full', draggingGuide(g.side) ? 'opacity-100' : 'opacity-50 group-hover:opacity-100 group-focus-visible:opacity-100']"
 					/>
+					<span
+						class="absolute whitespace-nowrap rounded bg-(--ui-primary) px-1.5 py-0.5 text-[10px] font-medium text-white tabular-nums pointer-events-none transition-opacity"
+						:class="[GUIDE_LABEL_POSITION[g.side], draggingGuide(g.side) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100']"
+					>
+						{{ g.label }} {{ formatMm(design.margins[g.side]) }} mm
+					</span>
 				</div>
 			</div>
 		</div>
@@ -143,7 +161,7 @@
 	import type { Handle } from "~/lib/designer-geometry";
 	import type { DesignItem, MarginsMm, PageDesign } from "~/lib/page-design";
 	import { updateItem } from "~/lib/design-draft";
-	import { dragMargin, fitScale, handlesFor, itemBox, mmToPx, moveItem, nudgeItem, resizeItem, rulerTicks, SNAP_DISTANCE_PX } from "~/lib/designer-geometry";
+	import { dragMargin, fitScale, handlesFor, itemBox, mmToPx, moveItem, nudgeItem, printerBandRects, resizeItem, rulerTicks, SNAP_DISTANCE_PX } from "~/lib/designer-geometry";
 	import { formatMm, itemOnPage } from "~/lib/page-design";
 	import { resolvePaperSize } from "~/lib/paper-sizes";
 
@@ -183,6 +201,13 @@
 		{ side: "left", label: "Left", axis: "x" },
 		{ side: "right", label: "Right", axis: "x" }
 	];
+	// Where each guide's readout sits, so it never covers the edge it measures.
+	const GUIDE_LABEL_POSITION: Record<keyof MarginsMm, string> = {
+		top: "top-full mt-1 left-1/2 -translate-x-1/2",
+		bottom: "bottom-full mb-1 left-1/2 -translate-x-1/2",
+		left: "left-full ml-1 top-1/2 -translate-y-1/2",
+		right: "right-full mr-1 top-1/2 -translate-y-1/2"
+	};
 	const KIND_LABEL: Record<DesignItem["type"], string> = { image: "Image", text: "Text", page_number: "Page number", line: "Line" };
 
 	// ---- zoom -------------------------------------------------------------------
@@ -234,6 +259,11 @@
 			};
 		}));
 
+	const printerBands = computed(() => printerBandRects(paper.value).map((r) => {
+		const s = scale.value;
+		return { left: `${r.x * s}px`, top: `${r.y * s}px`, width: `${r.w * s}px`, height: `${r.h * s}px` };
+	}));
+
 	const guides = computed(() => SIDES.map((g) => {
 		const m = props.design.margins;
 		const W = paper.value.widthMm;
@@ -247,6 +277,7 @@
 		= | { kind: "item", id: string, handle: Handle | "move", x: number, y: number, item: DesignItem, design: PageDesign, moved: boolean }
 			| { kind: "guide", side: keyof MarginsMm, x: number, y: number, design: PageDesign, moved: boolean };
 	const drag = ref<Drag | null>(null);
+	const draggingGuide = (side: keyof MarginsMm) => drag.value?.kind === "guide" && drag.value.side === side;
 	const threshold = (e: PointerEvent) => (e.altKey ? 0 : SNAP_DISTANCE_PX / scale.value);
 
 	const onItemPointerDown = (id: string, handle: Handle | "move", e: PointerEvent) => {
@@ -323,3 +354,9 @@
 		if (file) emit("drop", file);
 	};
 </script>
+
+<style scoped>
+	.designer-printer-band {
+		background: repeating-linear-gradient(45deg, rgb(239 68 68 / 0.16) 0 3px, transparent 3px 7px);
+	}
+</style>

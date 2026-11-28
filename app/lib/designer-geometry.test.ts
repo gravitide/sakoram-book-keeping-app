@@ -11,6 +11,8 @@ import {
 	mmToPx,
 	moveItem,
 	nudgeItem,
+	PRINTER_BAND_MM,
+	printerBandRects,
 	pxToMm,
 	resizeItem,
 	rulerTicks,
@@ -195,5 +197,17 @@ describe("typed values (review fixes)", () => {
 		expect(setMarginValue(m, "top", 500, "a4").top).toBe(297 - 20 - 40);
 		expect(setMarginValue(m, "left", -3, "a4").left).toBe(0);
 		expect(setMarginValue(m, "right", 25.5, "a4").right).toBe(25.5);
+	});
+});
+
+describe("printerBandRects", () => {
+	it("is a 5 mm strip along each edge, the corners counted once", () => {
+		expect(PRINTER_BAND_MM).toBe(5);
+		expect(printerBandRects(A4)).toEqual([
+			{ x: 0, y: 0, w: 210, h: 5 },
+			{ x: 0, y: 292, w: 210, h: 5 },
+			{ x: 0, y: 5, w: 5, h: 287 },
+			{ x: 205, y: 5, w: 5, h: 287 }
+		]);
 	});
 });

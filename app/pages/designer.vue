@@ -148,6 +148,16 @@
 							<UInputNumber :model-value="round1(draft.design.margins[side.key])" :min="0" :step="0.5" @update:model-value="setMargin(side.key, $event)" />
 						</UFormField>
 					</div>
+					<div class="space-y-2 text-xs text-(--ui-text-muted) mt-3">
+						<div class="flex items-start gap-2">
+							<span class="mt-0.5 size-3.5 shrink-0 border border-dashed border-(--ui-primary)" aria-hidden="true" />
+							<span>Safe area — where the document itself goes. Drag its guides on the page, or type the margins.</span>
+						</div>
+						<div class="flex items-start gap-2">
+							<span class="mt-0.5 size-3.5 shrink-0 legend-printer-band ring-1 ring-red-400/40" aria-hidden="true" />
+							<span>Most printers can't print within 5 mm of the edge. Shown for reference only — artwork may run into it.</span>
+						</div>
+					</div>
 				</section>
 
 				<!-- Document -->
@@ -660,3 +670,9 @@
 		for (const off of unlisten) off();
 	});
 </script>
+
+<style scoped>
+	.legend-printer-band {
+		background: repeating-linear-gradient(45deg, rgb(239 68 68 / 0.3) 0 2px, transparent 2px 4px);
+	}
+</style>
