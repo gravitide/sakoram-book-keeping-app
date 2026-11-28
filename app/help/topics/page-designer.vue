@@ -35,7 +35,10 @@
 					<strong>Image</strong>: a logo, seal or signature (PNG, JPEG, SVG or the first page of a PDF). It keeps its
 					proportions when you resize it, and PNG and JPEG images can be cropped.
 				</li>
-				<li><strong>Background</strong>: artwork that covers the whole page, behind everything else.</li>
+				<li>
+					<strong>Background</strong>: artwork that covers the whole page, behind everything else. A design has one: adding
+					another replaces it. It's locked as soon as it's in.
+				</li>
 				<li>
 					<strong>Text</strong>: your own words plus <strong>company fields</strong> that fill in from Company settings.
 					Pick a font, size, bold, italic, alignment and colour. The width is fixed and the text wraps.
@@ -48,8 +51,7 @@
 			</ul>
 			<p>
 				You can also drop a file straight onto the page: Sakoram asks whether it's an image or a background. On the
-				Pre-printed paper template it also offers <strong>A scan of your pre-printed paper</strong>. A background added to the
-				Full-page background template takes the template's place for it.
+				Pre-printed paper template it also offers <strong>A scan of your pre-printed paper</strong>.
 			</p>
 			<p>Use <strong>Insert field</strong> above a text box's text to add a company field:</p>
 			<div class="overflow-x-auto rounded-lg border border-(--ui-border) bg-(--ui-bg)">

@@ -1,6 +1,6 @@
 import type { DesignItem, PageDesign } from "./page-design";
 import { describe, expect, it } from "vitest";
-import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, emptyBackgroundSlot, fileCopyForDuplicate, filesToRemove, fillSlot, hasPageNumber, NEW_TEXT, reorderItem, replaceImage, setImageGuide, setItemLocked, setItemPages, setLineVertical, setMargins, updateItem } from "./design-draft";
+import { addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, fillSlot, hasPageNumber, NEW_TEXT, reorderItem, replaceImage, setBackground, setImageGuide, setItemLocked, setItemPages, setLineVertical, setMargins, updateItem } from "./design-draft";
 
 const blank: PageDesign = { version: 1, paper: "a4", margins: { top: 20, right: 18, bottom: 20, left: 18 }, items: [] };
 
@@ -92,18 +92,6 @@ describe("review fixes", () => {
 		const edge = { ...img("aaaaaa000001"), x: 170, y: 277 } as DesignItem;
 		const d = duplicateItem(withItems(edge), "aaaaaa000001", "cccccc000001");
 		expect(d.items[1]).toMatchObject({ x: 170, y: 277 });
-	});
-});
-
-describe("addBackground", () => {
-	it("covers the whole page, behind everything else, locked", () => {
-		const d = addBackground(withItems(rule), "bgimage00001", "png");
-		expect(d.items[0]).toEqual({ type: "image", id: "bgimage00001", x: 0, y: 0, w: 210, h: 297, pages: "every", src: { kind: "file", ext: "png" }, guide: false, locked: true });
-		expect(d.items[1]).toEqual(rule);
-	});
-
-	it("follows the design's paper", () => {
-		expect(addBackground({ ...blank, paper: "a5" }, "bgimage00001", "svg").items[0]).toMatchObject({ w: 148, h: 210 });
 	});
 });
 
@@ -199,17 +187,35 @@ describe("setItemLocked", () => {
 	});
 });
 
-describe("emptyBackgroundSlot", () => {
-	const bgSlot: DesignItem = { type: "image", id: "bgslot000001", x: 0, y: 0, w: 210, h: 297, pages: "every", src: null, guide: false };
-	const scanSlot: DesignItem = { ...bgSlot, id: "scanslot0001", guide: true };
+describe("setBackground (one per design)", () => {
+	const bg = (id: string, src: Extract<DesignItem, { type: "image" }>["src"] = { kind: "file", ext: "png" }): DesignItem =>
+		({ type: "image", id, x: 0, y: 0, w: 210, h: 297, pages: "every", src, guide: false });
+	const scan: DesignItem = { type: "image", id: "scanslot0001", x: 0, y: 0, w: 210, h: 297, pages: "every", src: null, guide: true };
 
-	it("finds a template's empty full-page background slot", () => {
-		expect(emptyBackgroundSlot(withItems(rule, bgSlot))).toBe("bgslot000001");
+	it("adds the background behind everything, locked", () => {
+		const d = setBackground(withItems(rule), "newbg0000001", "jpg");
+		expect(d.items[0]).toEqual({ type: "image", id: "newbg0000001", x: 0, y: 0, w: 210, h: 297, pages: "every", src: { kind: "file", ext: "jpg" }, guide: false, locked: true });
+		expect(d.items[1]).toEqual(rule);
 	});
 
-	it("ignores a guide (scan) slot, a small slot, and a design without one", () => {
-		expect(emptyBackgroundSlot(withItems(scanSlot))).toBeNull();
-		expect(emptyBackgroundSlot(withItems({ ...bgSlot, w: 50, h: 50 }))).toBeNull();
-		expect(emptyBackgroundSlot(withItems(rule))).toBeNull();
+	it("replaces the background already there, in its place in the stack", () => {
+		const d = setBackground(withItems(rule, bg("oldbg0000001")), "newbg0000001", "png");
+		expect(d.items.map((i) => i.id)).toEqual(["rule00000001", "newbg0000001"]);
+	});
+
+	it("replaces a template's empty background spot too", () => {
+		const d = setBackground(withItems(bg("bgslot000001", null), rule), "newbg0000001", "png");
+		expect(d.items.map((i) => i.id)).toEqual(["newbg0000001", "rule00000001"]);
+	});
+
+	it("leaves a pre-printed scan alone (it isn't a background)", () => {
+		const d = setBackground(withItems(scan), "newbg0000001", "png");
+		expect(d.items.map((i) => i.id)).toEqual(["newbg0000001", "scanslot0001"]);
+	});
+});
+
+describe("setBackground on other paper", () => {
+	it("covers the design's own sheet", () => {
+		expect(setBackground({ ...blank, paper: "a5" }, "bgimage00001", "svg").items[0]).toMatchObject({ x: 0, y: 0, w: 148, h: 210 });
 	});
 });

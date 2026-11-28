@@ -74,17 +74,6 @@ export function addLine(design: PageDesign, id: string): PageDesign {
 	return append(design, { type: "line", id, ...at, length: safe.w, vertical: false, thickness: 0.75, color: "accent", pages: "every" });
 }
 
-/**
- * A template's empty full-page background slot (Full-page background), if the
- * design has one: a new background goes there instead of in a second item.
- * Not a guide slot (Pre-printed paper's scan), which is offered by name.
- */
-export function emptyBackgroundSlot(design: PageDesign): string | null {
-	const { widthMm, heightMm } = resolvePaperSize(design.paper);
-	const slot = design.items.find((i) => i.type === "image" && i.src === null && !i.guide && i.w >= widthMm - 0.5 && i.h >= heightMm - 0.5);
-	return slot?.id ?? null;
-}
-
 /** An item locked (the designer won't select, move or edit it on the page) or unlocked. */
 export function setItemLocked(design: PageDesign, id: string, locked: boolean): PageDesign {
 	return { ...design, items: design.items.map((i) => (i.id === id ? { ...i, locked } : i)) };
@@ -137,14 +126,27 @@ export function addImage(design: PageDesign, id: string, ext: ImageExt, aspect: 
 }
 
 /**
- * A full-page background image (file `item-<id>.<ext>`): covers the whole sheet,
- * drawn behind everything else, and locked, so clicks on the page reach the
- * things in front of it.
+ * Whether an item is the design's background: a printed (not guide) image
+ * covering the whole page, with a file or an empty template spot for one.
  */
-export function addBackground(design: PageDesign, id: string, ext: ImageExt): PageDesign {
+export function isBackground(item: DesignItem, design: PageDesign): boolean {
+	const { widthMm, heightMm } = resolvePaperSize(design.paper);
+	return item.type === "image" && !item.guide && item.w >= widthMm - 0.5 && item.h >= heightMm - 0.5;
+}
+
+/**
+ * The design's one background, set to a new file (`item-<id>.<ext>`): it covers
+ * the whole sheet, locked, so clicks on the page reach what's in front. It
+ * replaces any background already there (or a template's empty spot for one),
+ * in its place in the stack; with none, it goes behind everything. A
+ * pre-printed scan (a guide) isn't a background and stays.
+ */
+export function setBackground(design: PageDesign, id: string, ext: ImageExt): PageDesign {
 	const { widthMm, heightMm } = resolvePaperSize(design.paper);
 	const item: DesignItem = { type: "image", id, x: 0, y: 0, w: widthMm, h: heightMm, pages: "every", src: { kind: "file", ext }, guide: false, locked: true };
-	return { ...design, items: [item, ...design.items] };
+	const at = Math.max(0, design.items.findIndex((i) => isBackground(i, design)));
+	const rest = design.items.filter((i) => !isBackground(i, design));
+	return { ...design, items: [...rest.slice(0, at), item, ...rest.slice(at)] };
 }
 
 /** An image swapped for a new file: same place, width, pages rule and stacking; the new file's proportions and id. */

@@ -525,7 +525,7 @@
 					<button type="button" class="flex flex-col items-start gap-1 rounded-md border border-(--ui-border) p-3 text-left transition hover:border-(--ui-primary)" @click="addDropped('background')">
 						<UIcon name="i-lucide-wallpaper" class="size-5 text-(--ui-primary)" />
 						<span class="text-sm font-medium">A background</span>
-						<span class="text-xs text-(--ui-text-muted)">Letterhead artwork that covers the whole page, behind everything.</span>
+						<span class="text-xs text-(--ui-text-muted)">{{ hasBackground ? "Replaces your background. A design has one, covering the whole page." : "Letterhead artwork that covers the whole page, behind everything." }}</span>
 					</button>
 				</div>
 			</template>
@@ -587,7 +587,7 @@
 	import { usePdfPreview } from "~/composables/usePdfPreview";
 	import { useTemplatePreviews } from "~/composables/useTemplatePreviews";
 	import { itemAssetKind, readBusinessAsset, removeBusinessAsset, saveBusinessAsset } from "~/lib/business-assets";
-	import { addBackground, addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, emptyBackgroundSlot, fileCopyForDuplicate, filesToRemove, fillSlot, hasPageNumber, reorderItem, replaceImage, setImageGuide, setItemLocked, setItemPages, setLineVertical, setMargins, updateItem } from "~/lib/design-draft";
+	import { addImage, addLine, addPageNumber, addText, deleteItem, duplicateItem, fileCopyForDuplicate, filesToRemove, fillSlot, hasPageNumber, isBackground, reorderItem, replaceImage, setBackground, setImageGuide, setItemLocked, setItemPages, setLineVertical, setMargins, updateItem } from "~/lib/design-draft";
 	import { canRedo, canUndo, historyAfterSave, record, redo, startHistory, undo } from "~/lib/design-history";
 	import { DESIGN_TEMPLATES } from "~/lib/design-templates";
 	import { ACTUAL_ZOOM_LEVELS, clampItem, CSS_PX_PER_MM, overlapWarning, setMarginValue, stepActualZoom, zoomForActual } from "~/lib/designer-geometry";
@@ -764,15 +764,17 @@
 	type AddAs = "image" | "background";
 	// A background covers the whole page (behind everything); an image is placed
 	// at the top of the safe area for the user to move and size.
+	// One background per design: a new one replaces the old (design-draft
+	// setBackground), and is locked, so it isn't selected.
 	const addFile = async (file: File, as: AddAs) => {
-		const bgSlot = as === "background" ? emptyBackgroundSlot(draft.value.design) : null;
-		if (bgSlot) return fillSlotWith(file, bgSlot);
 		const added = await uploader.upload(file, draft.value.design.paper, { background: as === "background" });
 		if (!added) return;
 		uploaded.value = [...uploaded.value, added.id];
-		apply((d) => (as === "background" ? addBackground(d, added.id, added.ext) : addImage(d, added.id, added.ext, added.aspect)));
-		selectedId.value = added.id;
+		apply((d) => (as === "background" ? setBackground(d, added.id, added.ext) : addImage(d, added.id, added.ext, added.aspect)));
+		selectedId.value = as === "background" ? null : added.id;
 	};
+	/** The design has a background already: adding one replaces it. */
+	const hasBackground = computed(() => draft.value.design.items.some((i) => i.type === "image" && i.src !== null && isBackground(i, draft.value.design)));
 	const addAs = ref<AddAs>("image");
 	const pickFile = (as: AddAs) => {
 		addAs.value = as;
